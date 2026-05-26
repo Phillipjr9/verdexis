@@ -32,9 +32,6 @@ RUN npm install --no-audit --no-fund
 # `generate` never connects. The real value is injected at runtime by
 # Render/Railway from the Postgres add-on.
 ENV DATABASE_URL="postgresql://build:build@localhost:5432/build?schema=public"
-RUN echo "=== PRISMA SCHEMA (build context) ===" \
-    && sed -n '1,220p' prisma/schema.prisma || true \
-    && echo "=== END PRISMA SCHEMA ==="
 RUN npx prisma generate
 RUN npm run build
 

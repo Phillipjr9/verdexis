@@ -1,2 +1,3 @@
 Redeploy trigger file - update to force Railway rebuild
-Timestamp: 2026-05-25T23:23:00Z
+Timestamp: 2026-05-26T15:49:00Z
+Reason: fix(prisma): schema P1012 invalid line resolved; force fresh build
