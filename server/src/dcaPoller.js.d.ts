@@ -1,1 +1,1 @@
-export declare function startDcaPoller(): void
+export declare function startDcaPoller(opts: { intervalMs: number }): void
