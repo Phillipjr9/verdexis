@@ -1,4 +1,3 @@
-// Normalized schema: cleaned up invalid truncated line that caused P1012
 generator client {
   provider = "prisma-client-js"
 }
@@ -380,4 +379,3 @@ model DcaSchedule {
   @@index([userId])
   @@index([active, nextRunAt])
 }
-
