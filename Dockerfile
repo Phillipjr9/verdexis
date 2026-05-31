@@ -2,6 +2,7 @@
 # Monorepo build: compiles the Vite frontend and the Express/Prisma API,
 # then ships a single Node container that serves the API at /api/* and
 # the SPA shell for everything else. Build context = repo root.
+# Cache invalidation: 2026-05-31 force rebuild
 
 # --- frontend build stage -------------------------------------------------
 FROM node:20-slim AS web
@@ -24,6 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-cert
     && rm -rf /var/lib/apt/lists/*
 # Cache-bust marker: updating REDEPLOY_TRIGGER.txt now invalidates the api
 # build cache even when server source files are unchanged.
+# Force refresh: 2026-05-31T23:59:59Z
 COPY REDEPLOY_TRIGGER.txt ./REDEPLOY_TRIGGER.txt
 # Copy the full server directory before installing to ensure any changes
 # to server files (package.json, prisma schema, .d.ts stubs) invalidate
