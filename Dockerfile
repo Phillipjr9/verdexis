@@ -22,6 +22,9 @@ FROM node:20-slim AS api
 WORKDIR /api
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+# Cache-bust marker: updating REDEPLOY_TRIGGER.txt now invalidates the api
+# build cache even when server source files are unchanged.
+COPY REDEPLOY_TRIGGER.txt ./REDEPLOY_TRIGGER.txt
 # Copy the full server directory before installing to ensure any changes
 # to server files (package.json, prisma schema, .d.ts stubs) invalidate
 # the npm install cache layer on rebuild. This guarantees the build uses
