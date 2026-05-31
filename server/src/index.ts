@@ -32,7 +32,7 @@ import adminRoutes from './routes/admin.js'
 import referralRoutes from './routes/referral.js'
 import dcaRoutes from './routes/dca.js'
 import { startAlertPoller } from './alertPoller.js'
-import { startDcaPoller } from './dcaPoller.js'
+import { startDcaPoller } from './dcaPoller'
 import { startKeepAlive } from './keepAlive.js'
 import { isDbUnavailableError } from './dbError.js'
 
