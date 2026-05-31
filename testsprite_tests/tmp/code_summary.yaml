@@ -1,0 +1,269 @@
+version: "2"
+type: frontend
+tech_stack:
+  - TypeScript
+  - React 18
+  - Vite 7
+  - React Router 6
+  - TailwindCSS
+  - shadcn/ui (Radix)
+  - Highcharts + Recharts
+  - WalletConnect / wagmi (web3)
+  - Express + Prisma + PostgreSQL backend on :4000
+routes:
+  - path: /
+    file: app/src/pages/Home.tsx
+    auth_required: false
+    description: Marketing home page with login/signup CTAs
+  - path: /dashboard
+    file: app/src/pages/Dashboard.tsx
+    auth_required: true
+    description: User portfolio dashboard with holdings, wallet balances, performance metrics
+  - path: /trading
+    file: app/src/pages/Trading.tsx
+    auth_required: false
+    description: Trading interface (admins blocked from placing trades)
+  - path: /markets
+    file: app/src/pages/Markets.tsx
+    auth_required: false
+    description: Crypto/stock market browser
+  - path: /wallet
+    file: app/src/pages/Wallet.tsx
+    auth_required: true
+    description: Wallet, deposits, withdrawals, transfers, convert
+  - path: /activity
+    file: app/src/pages/Activity.tsx
+    auth_required: true
+    description: Transaction & trade history
+  - path: /settings
+    file: app/src/pages/Settings.tsx
+    auth_required: true
+    description: Profile, security, notifications, prefs
+  - path: /alerts
+    file: app/src/pages/Alerts.tsx
+    auth_required: true
+    description: Price alerts management
+  - path: /goals
+    file: app/src/pages/Goals.tsx
+    auth_required: true
+    description: Savings/investment goals
+  - path: /asset/:id
+    file: app/src/pages/AssetDetail.tsx
+    auth_required: false
+    description: Individual asset detail/chart page
+  - path: /kyc
+    file: app/src/pages/KYC.tsx
+    auth_required: true
+    description: KYC verification submission
+  - path: /referral
+    file: app/src/pages/Referral.tsx
+    auth_required: true
+    description: Referral program dashboard
+  - path: /paper-trading
+    file: app/src/pages/PaperTrading.tsx
+    auth_required: true
+    description: Simulated trading
+  - path: /dca
+    file: app/src/pages/DCAScheduler.tsx
+    auth_required: true
+    description: Dollar-cost averaging scheduler
+  - path: /rebalance
+    file: app/src/pages/Rebalance.tsx
+    auth_required: true
+    description: Portfolio rebalancing
+  - path: /tax
+    file: app/src/pages/TaxHarvesting.tsx
+    auth_required: true
+    description: Tax-loss harvesting
+  - path: /staking
+    file: app/src/pages/Staking.tsx
+    auth_required: true
+    description: Staking management
+  - path: /admin
+    file: app/src/pages/Dashboard.tsx
+    auth_required: true
+    description: Admin landing (admin only)
+  - path: /admin/users
+    file: app/src/pages/AdminUsers.tsx
+    auth_required: true
+    description: Admin user management
+  - path: /admin/users/:id
+    file: app/src/pages/AdminUserDetail.tsx
+    auth_required: true
+    description: Individual user admin view (fee proofs approve/reject)
+  - path: /admin/deposits
+    file: app/src/pages/AdminDeposits.tsx
+    auth_required: true
+    description: Pending deposits queue
+  - path: /verify-email
+    file: app/src/pages/VerifyEmail.tsx
+    auth_required: false
+    description: Email verification handler
+  - path: /reset
+    file: app/src/pages/ResetPassword.tsx
+    auth_required: false
+    description: Password reset handler
+features:
+  - name: User Signup & Login
+    description: Email+password authentication with optional phone, KYC banner, email verification flow
+    files:
+      - app/src/components/AuthModal.tsx
+      - app/src/lib/api.ts
+    entry_route: /
+    user_interactions:
+      - Click Login or Sign Up CTA on Home
+      - Fill email, password (and phone on signup)
+      - Submit form
+      - See validation errors or land on /dashboard
+    api_calls:
+      - method: POST
+        endpoint: /api/auth/signup
+      - method: POST
+        endpoint: /api/auth/login
+      - method: POST
+        endpoint: /api/auth/send-verification
+      - method: POST
+        endpoint: /api/auth/verify-email
+    auth_required: false
+  - name: Dashboard Holdings & Performance
+    description: Combined holdings view (Holding table + non-fiat WalletBalance merged by symbol), donut chart, performance KPIs reflecting merged list
+    files:
+      - app/src/pages/Dashboard.tsx
+      - app/src/lib/portfolioStore.ts
+    entry_route: /dashboard
+    user_interactions:
+      - View net worth and KPI tiles
+      - Switch chart range (1D / 1W / 1M / 1Y / ALL)
+      - View Holdings list (one row per crypto symbol, deduped across trades and wallet balances)
+      - View Wallet card (fiat balances only)
+    api_calls:
+      - method: GET
+        endpoint: /api/holdings
+      - method: GET
+        endpoint: /api/wallet/balances
+      - method: GET
+        endpoint: /api/wallet/transactions
+      - method: GET
+        endpoint: /api/trades
+    auth_required: true
+  - name: Trading (Buy/Sell)
+    description: Place market trades against authoritative server-fetched price; admin accounts blocked
+    files:
+      - app/src/pages/Trading.tsx
+      - app/src/lib/portfolioStore.ts
+    entry_route: /trading
+    user_interactions:
+      - Pick asset
+      - Pick side (buy/sell) and amount
+      - Submit order
+      - See balance/holding update on dashboard
+    api_calls:
+      - method: POST
+        endpoint: /api/trades
+    auth_required: true
+  - name: Wallet Operations (deposit/withdraw/convert/transfer)
+    description: Deposit address generation, withdrawal with inverse processing-fee schedule, currency convert, user-to-user transfer; bonus-locked & email-verified gates enforced
+    files:
+      - app/src/pages/Wallet.tsx
+    entry_route: /wallet
+    user_interactions:
+      - Generate deposit address
+      - Submit withdrawal request and see processing fee
+      - Convert between currencies
+      - Transfer to another user
+    api_calls:
+      - method: POST
+        endpoint: /api/wallet/withdraw
+      - method: POST
+        endpoint: /api/wallet/convert
+      - method: POST
+        endpoint: /api/wallet/transfer
+      - method: POST
+        endpoint: /api/wallet/transactions
+    auth_required: true
+  - name: Fee Proof Upload & Admin Approval
+    description: User uploads withdrawal-fee or bonus-unlock fee payment proof; admin approves/rejects (bonus_unlock approval no longer auto-clears the lock)
+    files:
+      - app/src/pages/Wallet.tsx
+      - app/src/pages/AdminUserDetail.tsx
+      - app/src/pages/AdminDashboard.tsx
+      - app/src/lib/feeProofs.ts
+    entry_route: /wallet
+    user_interactions:
+      - Upload fee payment proof
+      - Admin views pending proofs panel and approves/rejects
+    api_calls: []
+    auth_required: true
+  - name: Price Alerts
+    description: Create, edit, delete price alerts that fire client-side via polling
+    files:
+      - app/src/pages/Alerts.tsx
+      - app/src/components/AlertChecker.tsx
+    entry_route: /alerts
+    user_interactions:
+      - Create alert by symbol + threshold
+      - Toggle alert on/off
+      - Delete alert
+    api_calls:
+      - method: GET
+        endpoint: /api/alerts
+      - method: POST
+        endpoint: /api/alerts
+      - method: DELETE
+        endpoint: /api/alerts/:id
+    auth_required: true
+  - name: KYC Submission
+    description: Upload KYC documents; status flips Verified badge when approved
+    files:
+      - app/src/pages/KYC.tsx
+      - app/src/components/VerifiedBadge.tsx
+    entry_route: /kyc
+    user_interactions:
+      - Fill personal info
+      - Upload ID document
+      - Submit
+    api_calls:
+      - method: POST
+        endpoint: /api/kyc
+    auth_required: true
+  - name: DCA Scheduler
+    description: Schedule recurring buys; admin accounts blocked
+    files:
+      - app/src/pages/DCAScheduler.tsx
+    entry_route: /dca
+    user_interactions:
+      - Create DCA schedule
+      - Run schedule manually
+      - Pause/delete schedule
+    api_calls:
+      - method: POST
+        endpoint: /api/dca
+      - method: POST
+        endpoint: /api/dca/:id/run
+    auth_required: true
+  - name: Profile & Security Settings
+    description: Update profile (protected prefs keys stripped server-side), change password, manage 2FA
+    files:
+      - app/src/pages/Settings.tsx
+    entry_route: /settings
+    user_interactions:
+      - Edit profile fields
+      - Change password
+      - Toggle 2FA
+    api_calls:
+      - method: PATCH
+        endpoint: /api/profile
+    auth_required: true
+known_limitations:
+  - issue: Admin accounts cannot place trades or schedule DCA (returns 403 admin_no_trade)
+    location: server/src/routes/trades.ts, server/src/routes/dca.ts
+    impact: Admin test users will see banner and toast on Trading page; tests should use a non-admin user for trade flows
+  - issue: Bonus-locked users blocked from withdraw/transfer/convert until manual admin clear
+    location: server/src/routes/wallet.ts
+    impact: Tests touching wallet flows must use a user without bonusLocked flag
+  - issue: Email verification required for withdrawals
+    location: server/src/routes/wallet.ts
+    impact: Test user must have emailVerified=true
+  - issue: Pre-existing inline-style lint warnings in Dashboard.tsx
+    location: app/src/pages/Dashboard.tsx
+    impact: Lint warnings only, do not block tests

@@ -1,0 +1,93 @@
+import asyncio
+import re
+from playwright import async_api
+from playwright.async_api import expect
+
+async def run_test():
+    pw = None
+    browser = None
+    context = None
+
+    try:
+        # Start a Playwright session in asynchronous mode
+        pw = await async_api.async_playwright().start()
+
+        # Launch a Chromium browser in headless mode with custom arguments
+        browser = await pw.chromium.launch(
+            headless=True,
+            args=[
+                "--window-size=1280,720",
+                "--disable-dev-shm-usage",
+                "--ipc=host",
+                "--single-process"
+            ],
+        )
+
+        # Create a new browser context (like an incognito window)
+        context = await browser.new_context()
+        # Wider default timeout to match the agent's DOM-stability budget;
+        # auto-waiting Playwright APIs (expect, locator.wait_for) inherit this.
+        context.set_default_timeout(15000)
+
+        # Open a new page in the browser context
+        page = await context.new_page()
+
+        # Interact with the page elements to simulate user flow
+        # -> navigate
+        await page.goto("http://localhost:5173")
+        try:
+            await page.wait_for_load_state("domcontentloaded", timeout=5000)
+        except Exception:
+            pass
+        
+        # -> Click 'Accept' on the cookie banner to dismiss it so header controls (Log In / Sign Up) become available.
+        # button "Accept"
+        elem = page.locator("xpath=/html/body/div/div[2]/div/div[2]/button[2]").nth(0)
+        await elem.wait_for(state="visible", timeout=10000)
+        await elem.click()
+        
+        # -> Click the 'Try again' button to reload the page content and attempt to recover from the runtime error so header/login controls become available.
+        # button "Try again"
+        elem = page.locator("xpath=/html/body/div/div/div/div/div[2]/button").nth(0)
+        await elem.wait_for(state="visible", timeout=10000)
+        await elem.click()
+        
+        # -> Click the 'Reload and clear cache' button to force a full reload and clear cached data, attempting to recover from the runtime error so header/login controls become available.
+        # button "Reload and clear cache"
+        elem = page.locator("xpath=/html/body/div/div/div/div/div[2]/button[2]").nth(0)
+        await elem.wait_for(state="visible", timeout=10000)
+        await elem.click()
+        
+        # -> Navigate directly to /login (http://localhost:5173/login) as specified by the test steps to open the login flow.
+        await page.goto("http://localhost:5173/login")
+        try:
+            await page.wait_for_load_state("domcontentloaded", timeout=5000)
+        except Exception:
+            pass
+        
+        # -> Attempt to open the login route directly by navigating to /login so the Auth modal can be triggered (or surface useful UI errors).
+        await page.goto("http://localhost:5173/login")
+        try:
+            await page.wait_for_load_state("domcontentloaded", timeout=5000)
+        except Exception:
+            pass
+        
+        # --> Assertions to verify final state
+        assert await page.locator("xpath=//*[contains(., 'Last run: Just now')]").nth(0).is_visible(), "The schedule execution should be reflected in the list showing Last run: Just now after manual run"
+        assert await page.locator("xpath=//*[contains(., 'Run now')]").nth(0).is_visible(), "The schedule should remain visible in the list after execution so the Run now control is still available"
+        
+        # --> Test blocked by environment/access constraints during agent run
+        # Reason: TEST BLOCKED The test could not be run — the application shows a runtime error that prevents reaching the login and DCA features. Observations: - The page displays a runtime error: "Cannot read properties of undefined (reading 'length')". - Clicking 'Try again' and 'Reload and clear cache' did not recover the app; the error persists and the page remains stuck. - Header controls (Log In / Sign U...
+        raise AssertionError("Test blocked during agent run: " + "TEST BLOCKED The test could not be run \u2014 the application shows a runtime error that prevents reaching the login and DCA features. Observations: - The page displays a runtime error: \"Cannot read properties of undefined (reading 'length')\". - Clicking 'Try again' and 'Reload and clear cache' did not recover the app; the error persists and the page remains stuck. - Header controls (Log In / Sign U..." + " — the exported script cannot reproduce a PASS in this environment.")
+        await asyncio.sleep(5)
+
+    finally:
+        if context:
+            await context.close()
+        if browser:
+            await browser.close()
+        if pw:
+            await pw.stop()
+
+asyncio.run(run_test())
+    

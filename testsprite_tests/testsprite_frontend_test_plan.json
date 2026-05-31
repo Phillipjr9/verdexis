@@ -1,0 +1,1848 @@
+[
+  {
+    "id": "TC001",
+    "title": "Sign up and enter the dashboard",
+    "description": "A new user can create an account from the home page and land on the authenticated dashboard after successful registration.",
+    "category": "User Authentication",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Choose to sign up"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the phone number field with a valid phone number"
+      },
+      {
+        "type": "action",
+        "description": "Submit the form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user lands on the dashboard"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify portfolio content is visible"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC002",
+    "title": "Withdraw funds from the wallet",
+    "description": "This verifies an eligible authenticated user can enter withdrawal details, submit a request, and see the withdrawal recorded in wallet history.",
+    "category": "Wallet Operations",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the login credentials with {{LOGIN_USER}} and {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Open the wallet page"
+      },
+      {
+        "type": "action",
+        "description": "Choose to withdraw funds"
+      },
+      {
+        "type": "action",
+        "description": "Fill in a valid withdrawal amount"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the withdrawal destination details"
+      },
+      {
+        "type": "action",
+        "description": "Submit the withdrawal request"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the withdrawal appears in wallet activity"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the withdrawal request is reflected in the wallet history"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC003",
+    "title": "Place a buy trade and see it reflected",
+    "description": "A retail trader can buy an asset from the trading page and see the trade confirmation with updated portfolio activity.",
+    "category": "Trading",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /trading"
+      },
+      {
+        "type": "action",
+        "description": "Select an asset"
+      },
+      {
+        "type": "action",
+        "description": "Choose to buy"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the trade amount with a valid amount"
+      },
+      {
+        "type": "action",
+        "description": "Submit the order"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a trade confirmation is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify portfolio activity is updated"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC004",
+    "title": "Place a sell trade and see it reflected",
+    "description": "A retail trader can sell an asset from the trading page and see the trade confirmation with updated portfolio activity.",
+    "category": "Trading",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /trading"
+      },
+      {
+        "type": "action",
+        "description": "Select an asset"
+      },
+      {
+        "type": "action",
+        "description": "Choose to sell"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the trade amount with a valid amount"
+      },
+      {
+        "type": "action",
+        "description": "Submit the order"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a trade confirmation is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify portfolio activity is updated"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC005",
+    "title": "Review dashboard holdings and performance",
+    "description": "An authenticated user can review portfolio KPIs, holdings, wallet balances, and portfolio performance from the dashboard.",
+    "category": "Dashboard Holdings & Performance",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /dashboard"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify portfolio performance data is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify holdings and wallet balances are visible"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC006",
+    "title": "Open the wallet and review balances",
+    "description": "This verifies an authenticated user can open the wallet page and view current balances.",
+    "category": "Wallet Operations",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the login credentials with {{LOGIN_USER}} and {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Open the wallet page"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify wallet balances are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify wallet funding options are available"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC007",
+    "title": "Generate a deposit address in the wallet",
+    "description": "This verifies a wallet user can request a deposit address and review it on the wallet page.",
+    "category": "Wallet Operations",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the login credentials with {{LOGIN_USER}} and {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Open the wallet page"
+      },
+      {
+        "type": "action",
+        "description": "Generate a deposit address"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a deposit address is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the wallet balance view remains available"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC008",
+    "title": "Convert funds in the wallet",
+    "description": "This verifies a wallet user can convert between currencies and see the updated balances afterward.",
+    "category": "Wallet Operations",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the login credentials with {{LOGIN_USER}} and {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Open the wallet page"
+      },
+      {
+        "type": "action",
+        "description": "Choose to convert currency"
+      },
+      {
+        "type": "action",
+        "description": "Select a source currency"
+      },
+      {
+        "type": "action",
+        "description": "Select a destination currency"
+      },
+      {
+        "type": "action",
+        "description": "Fill in a valid conversion amount"
+      },
+      {
+        "type": "action",
+        "description": "Submit the conversion"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify updated balances are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the conversion appears in wallet history"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC009",
+    "title": "Transfer funds to another user",
+    "description": "This verifies a wallet user can send a transfer to another recipient and see the transfer recorded afterward.",
+    "category": "Wallet Operations",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the login credentials with {{LOGIN_USER}} and {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Open the wallet page"
+      },
+      {
+        "type": "action",
+        "description": "Choose to transfer funds"
+      },
+      {
+        "type": "action",
+        "description": "Fill in another user as the recipient"
+      },
+      {
+        "type": "action",
+        "description": "Fill in a valid transfer amount"
+      },
+      {
+        "type": "action",
+        "description": "Submit the transfer"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the transfer appears in wallet history"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the wallet balance changes are displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC010",
+    "title": "Browse the market list and open an asset detail",
+    "description": "This verifies a user can browse markets, search for an asset, and open its detail view to inspect market information.",
+    "category": "Market Browser and Asset Detail",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /markets"
+      },
+      {
+        "type": "action",
+        "description": "Search for an asset by name or symbol"
+      },
+      {
+        "type": "action",
+        "description": "Open the asset from the market list"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the asset detail view is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify market information for the selected asset is displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC011",
+    "title": "Create a price alert",
+    "description": "This test verifies that a user can create a new price alert and see it added to the alerts list.",
+    "category": "Price Alerts",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /alerts"
+      },
+      {
+        "type": "action",
+        "description": "Create a new alert by selecting a symbol and threshold"
+      },
+      {
+        "type": "action",
+        "description": "Save the alert"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the new alert appears in the alerts list"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC012",
+    "title": "Update profile details successfully",
+    "description": "An authenticated user can edit profile information and see the updated profile settings saved.",
+    "category": "Profile and Security Settings",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /settings"
+      },
+      {
+        "type": "action",
+        "description": "Edit the profile information"
+      },
+      {
+        "type": "action",
+        "description": "Save the changes"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the updated profile settings are shown"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC013",
+    "title": "Submit KYC information",
+    "description": "This test verifies that an authenticated user can submit KYC details and see the submission status update.",
+    "category": "KYC Submission",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /kyc"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the personal information fields"
+      },
+      {
+        "type": "action",
+        "description": "Upload an identity document"
+      },
+      {
+        "type": "action",
+        "description": "Submit the KYC form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the submission status is visible"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC014",
+    "title": "View an asset detail page from a direct asset route",
+    "description": "This verifies a user can land on an asset detail page and review chart and price information for a specific asset.",
+    "category": "Market Browser and Asset Detail",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /asset/bitcoin"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the asset chart is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify price data for the asset is displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC015",
+    "title": "Change password successfully",
+    "description": "An authenticated user can submit a password change and see confirmation that the password was updated.",
+    "category": "Profile and Security Settings",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /settings"
+      },
+      {
+        "type": "action",
+        "description": "Change the password"
+      },
+      {
+        "type": "action",
+        "description": "Submit the update"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a password change confirmation is visible"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC016",
+    "title": "Review merged holdings and recent activity",
+    "description": "An authenticated user can see deduplicated crypto holdings alongside recent trades and wallet activity summaries on the dashboard.",
+    "category": "Dashboard Holdings & Performance",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /dashboard"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify merged holdings are visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify recent activity summaries are visible"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC017",
+    "title": "Save security preference changes",
+    "description": "An authenticated user can toggle security preferences and see the updated security state saved.",
+    "category": "Profile and Security Settings",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /settings"
+      },
+      {
+        "type": "action",
+        "description": "Toggle a security preference"
+      },
+      {
+        "type": "action",
+        "description": "Save the changes"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the updated security state is shown"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC018",
+    "title": "Search the market list for a specific asset",
+    "description": "This verifies a user can filter the market list by entering an asset name or symbol and see matching results.",
+    "category": "Market Browser and Asset Detail",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /markets"
+      },
+      {
+        "type": "action",
+        "description": "Search for a specific asset by name or symbol"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify matching market results are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify unrelated results are not shown in the filtered view"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC019",
+    "title": "Show verified status after KYC submission",
+    "description": "This test verifies that a user who has completed KYC sees the verified account status in the account flow.",
+    "category": "KYC Submission",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /settings"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the account verification state is visible"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC020",
+    "title": "Switch dashboard chart range",
+    "description": "An authenticated user can change the dashboard chart range and see the portfolio chart update accordingly.",
+    "category": "Dashboard Holdings & Performance",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /dashboard"
+      },
+      {
+        "type": "action",
+        "description": "Switch the dashboard chart range"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the portfolio chart updates"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the selected performance summary is visible"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC021",
+    "title": "Review transaction and trade history",
+    "description": "This verifies an authenticated user can open the activity page and review a chronological record of account actions.",
+    "category": "Transaction and Trade Activity",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the login credentials with {{LOGIN_USER}} and {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Open the activity page"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify transaction and trade history entries are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify amounts, symbols, and timestamps are visible in the history view"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC022",
+    "title": "Create a savings or investment goal",
+    "description": "This test verifies that a user can create a goal with details and a target amount and see it added to the goals list.",
+    "category": "Savings and Investment Goals",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /goals"
+      },
+      {
+        "type": "action",
+        "description": "Create a new savings or investment goal"
+      },
+      {
+        "type": "action",
+        "description": "Enter the goal details and target amount"
+      },
+      {
+        "type": "action",
+        "description": "Save the goal"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the new goal appears in the goals list"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC023",
+    "title": "Create a recurring DCA schedule",
+    "description": "An authenticated user can create a recurring buy schedule and see it appear in the schedule list.",
+    "category": "DCA Scheduler",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /dca"
+      },
+      {
+        "type": "action",
+        "description": "Create a recurring buy schedule with a valid asset, amount, and cadence"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the new schedule appears in the schedule list"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the schedule is shown as active"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC024",
+    "title": "Toggle a price alert",
+    "description": "This test verifies that a user can turn an existing alert on or off and see its status change in the list.",
+    "category": "Price Alerts",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /alerts"
+      },
+      {
+        "type": "action",
+        "description": "Toggle an existing alert on or off"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the alert status changes in the list"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC025",
+    "title": "Create a simulated paper trade",
+    "description": "An authenticated user can place a simulated buy or sell order and see the paper portfolio update.",
+    "category": "Paper Trading",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /paper-trading"
+      },
+      {
+        "type": "action",
+        "description": "Select a valid asset"
+      },
+      {
+        "type": "action",
+        "description": "Enter a valid simulated order amount"
+      },
+      {
+        "type": "action",
+        "description": "Submit the simulated order"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the simulated order appears in the paper trading activity"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the simulated portfolio updates"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC026",
+    "title": "Review and submit a portfolio rebalance",
+    "description": "An authenticated user can review current allocations, submit a rebalance plan, and see the portfolio allocation update.",
+    "category": "Portfolio Rebalancing",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the portfolio rebalancing link"
+      },
+      {
+        "type": "action",
+        "description": "Choose a rebalance target"
+      },
+      {
+        "type": "action",
+        "description": "Submit the rebalance plan"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the allocation update is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the rebalance plan is reflected in the page"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC027",
+    "title": "Run a DCA schedule manually",
+    "description": "An authenticated user can manually run an existing DCA schedule and see the execution reflected in the schedule list.",
+    "category": "DCA Scheduler",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /dca"
+      },
+      {
+        "type": "action",
+        "description": "Open an existing schedule"
+      },
+      {
+        "type": "action",
+        "description": "Run the schedule manually"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the schedule execution is reflected in the list"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the schedule remains visible after execution"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC028",
+    "title": "Start a staking position",
+    "description": "An authenticated user can choose a staking action, confirm it, and see the staking position update.",
+    "category": "Staking Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the staking management link"
+      },
+      {
+        "type": "action",
+        "description": "Choose a staking action"
+      },
+      {
+        "type": "action",
+        "description": "Confirm the staking change"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the staking position update is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a success confirmation is visible"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC029",
+    "title": "Reject invalid login credentials",
+    "description": "An existing user sees validation feedback and does not enter the app when login credentials are incorrect.",
+    "category": "User Authentication",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Choose to log in"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with an invalid email"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with an incorrect password"
+      },
+      {
+        "type": "action",
+        "description": "Submit the form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify login validation feedback is visible"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC030",
+    "title": "Delete a price alert",
+    "description": "This test verifies that a user can delete an alert and see it removed from the alerts list.",
+    "category": "Price Alerts",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /alerts"
+      },
+      {
+        "type": "action",
+        "description": "Delete an alert"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the alert is removed from the list"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC031",
+    "title": "Submit a tax-loss harvesting action",
+    "description": "An authenticated user can select an eligible tax-loss harvesting action, submit it, and see the strategy reflected in the plan.",
+    "category": "Tax-Loss Harvesting",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the tax-loss harvesting link"
+      },
+      {
+        "type": "action",
+        "description": "Select an eligible asset action"
+      },
+      {
+        "type": "action",
+        "description": "Submit the harvesting action"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the tax strategy is reflected in the plan"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a success confirmation is visible"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC032",
+    "title": "Pause an existing DCA schedule",
+    "description": "An authenticated user can pause an existing recurring buy schedule and see its status change in the list.",
+    "category": "DCA Scheduler",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /dca"
+      },
+      {
+        "type": "action",
+        "description": "Open an existing schedule"
+      },
+      {
+        "type": "action",
+        "description": "Pause the schedule"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the schedule status changes to paused"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the paused schedule remains listed"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC033",
+    "title": "View tax-loss harvesting opportunities",
+    "description": "An authenticated user can open tax-loss harvesting, review available opportunities, and see eligible asset actions in the plan.",
+    "category": "Tax-Loss Harvesting",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the tax-loss harvesting link"
+      },
+      {
+        "type": "action",
+        "description": "Review tax-loss harvesting opportunities"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify eligible asset actions are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the tax strategy plan is visible"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC034",
+    "title": "Update goal progress",
+    "description": "This test verifies that a user can contribute toward an existing goal and see its progress update.",
+    "category": "Savings and Investment Goals",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /goals"
+      },
+      {
+        "type": "action",
+        "description": "Review existing goals"
+      },
+      {
+        "type": "action",
+        "description": "Update progress by contributing toward a goal"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the goal progress changes"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC035",
+    "title": "Review staking options and current positions",
+    "description": "An authenticated user can open staking management and see available staking options alongside current positions.",
+    "category": "Staking Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the staking management link"
+      },
+      {
+        "type": "action",
+        "description": "Review available staking options and current positions"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify available staking options are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify current staking positions are displayed"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC036",
+    "title": "Delete an existing DCA schedule",
+    "description": "An authenticated user can delete an existing recurring buy schedule and no longer see it in the schedule list.",
+    "category": "DCA Scheduler",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /dca"
+      },
+      {
+        "type": "action",
+        "description": "Open an existing schedule"
+      },
+      {
+        "type": "action",
+        "description": "Delete the schedule"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the deleted schedule no longer appears in the schedule list"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the schedule management view updates accordingly"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC037",
+    "title": "Prevent saving an invalid profile update",
+    "description": "An authenticated user sees profile validation feedback when submitting incomplete or invalid profile information and no changes are saved.",
+    "category": "Profile and Security Settings",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /settings"
+      },
+      {
+        "type": "action",
+        "description": "Clear a required profile field"
+      },
+      {
+        "type": "action",
+        "description": "Save the changes"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a profile validation error is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the profile settings remain unchanged"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC038",
+    "title": "Switch between paper buy and sell order modes",
+    "description": "An authenticated user can change the paper trading order side and see the order form reflect the selected mode.",
+    "category": "Paper Trading",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /paper-trading"
+      },
+      {
+        "type": "action",
+        "description": "Select a valid asset"
+      },
+      {
+        "type": "action",
+        "description": "Switch the order side"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the selected order mode is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the order form remains ready for submission"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC039",
+    "title": "Adjust an existing staking position",
+    "description": "An authenticated user can modify a staking position and see the updated position reflected in staking management.",
+    "category": "Staking Management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Click the staking management link"
+      },
+      {
+        "type": "action",
+        "description": "Choose a staking adjustment action"
+      },
+      {
+        "type": "action",
+        "description": "Confirm the staking change"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the staking position update is displayed"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC040",
+    "title": "View an empty DCA scheduler state",
+    "description": "An authenticated user with no schedules can open the DCA page and see an empty state instead of schedule entries.",
+    "category": "DCA Scheduler",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /dca"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an empty state message is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify no schedule entries are displayed"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC041",
+    "title": "Reject a weak sign up password",
+    "description": "A new user cannot continue registration when the chosen password does not meet the minimum strength requirements.",
+    "category": "User Authentication",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Choose to sign up"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with a short password"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the phone number field with a valid phone number"
+      },
+      {
+        "type": "action",
+        "description": "Submit the form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a password validation error is visible"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC042",
+    "title": "Block an oversized trade amount",
+    "description": "A trader sees validation feedback and cannot submit an order when the trade amount exceeds the available balance.",
+    "category": "Trading",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /trading"
+      },
+      {
+        "type": "action",
+        "description": "Select an asset"
+      },
+      {
+        "type": "action",
+        "description": "Choose to buy"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the trade amount with an amount larger than the available balance"
+      },
+      {
+        "type": "action",
+        "description": "Submit the order"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a trade validation error is visible"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC043",
+    "title": "Block admin users from creating DCA schedules",
+    "description": "An admin user is prevented from creating DCA schedules and sees the admin restriction state on the page.",
+    "category": "DCA Scheduler",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /dca"
+      },
+      {
+        "type": "action",
+        "description": "Attempt to create a recurring buy schedule"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an admin restriction message is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify schedule creation controls are unavailable"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC044",
+    "title": "Prevent invalid DCA schedule creation",
+    "description": "An authenticated user sees validation feedback when trying to create a DCA schedule without complete required details.",
+    "category": "DCA Scheduler",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /dca"
+      },
+      {
+        "type": "action",
+        "description": "Attempt to create a recurring buy schedule without completing the required fields"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a validation error is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify no new schedule is added to the list"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC045",
+    "title": "Prevent invalid paper trade submission",
+    "description": "An authenticated user sees validation feedback when submitting a paper trade without the required inputs.",
+    "category": "Paper Trading",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /paper-trading"
+      },
+      {
+        "type": "action",
+        "description": "Attempt to submit a simulated order without selecting an asset or amount"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a validation error is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify no simulated order is created"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC046",
+    "title": "Create a paper trade with a zero or negative amount blocked",
+    "description": "An authenticated user is prevented from submitting a paper trade with an invalid amount and sees validation feedback.",
+    "category": "Paper Trading",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the email field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /paper-trading"
+      },
+      {
+        "type": "action",
+        "description": "Select a valid asset"
+      },
+      {
+        "type": "action",
+        "description": "Enter an invalid order amount"
+      },
+      {
+        "type": "action",
+        "description": "Submit the simulated order"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an amount validation error is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify no paper trade is added"
+      }
+    ],
+    "priority": "Low"
+  }
+]
