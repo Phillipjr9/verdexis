@@ -1,3 +1,3 @@
 Redeploy trigger file - update to force Railway rebuild
-Timestamp: 2026-05-31T23:59:00Z
-Reason: chore(redeploy): force clean rebuild after stale Prisma P1012 log surfaced
+Timestamp: 2026-05-31T23:59:59Z
+Reason: chore(redeploy): force clean build with dca import fixes and prisma sync
