@@ -222,19 +222,25 @@ app.use((err: Error, req: express.Request, res: express.Response, _next: express
   })
 })
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`[verdexis-api] listening on http://0.0.0.0:${PORT} (LAN reachable)`)
-  if (env.ALERT_POLL_ENABLED) {
-    startAlertPoller({ intervalMs: env.ALERT_POLL_INTERVAL_MS })
-  }
-  // DCA cron: every minute. Reuses ALERT_POLL_ENABLED as the master kill
-  // switch since both are background pollers; the interval is fixed at 60s
-  // (no point checking more often than that for a daily-resolution feature).
-  if (env.ALERT_POLL_ENABLED) {
-    startDcaPoller({ intervalMs: 60_000 })
-  }
-  startKeepAlive()
-  // Best-effort: ensure ADMIN_EMAILS users are promoted on every boot.
-  // Runs after listen so it never blocks healthchecks.
-  promoteAllAdminEmails().catch((e) => console.error('[verdexis-api] admin bootstrap failed:', e))
-})
+// Export the app for serverless deployment (Vercel)
+export default app
+
+// Only listen if running directly (not when imported by Vercel serverless)
+if (import.meta.url === `file://${process.argv[1]}`) {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`[verdexis-api] listening on http://0.0.0.0:${PORT} (LAN reachable)`)
+    if (env.ALERT_POLL_ENABLED) {
+      startAlertPoller({ intervalMs: env.ALERT_POLL_INTERVAL_MS })
+    }
+    // DCA cron: every minute. Reuses ALERT_POLL_ENABLED as the master kill
+    // switch since both are background pollers; the interval is fixed at 60s
+    // (no point checking more often than that for a daily-resolution feature).
+    if (env.ALERT_POLL_ENABLED) {
+      startDcaPoller({ intervalMs: 60_000 })
+    }
+    startKeepAlive()
+    // Best-effort: ensure ADMIN_EMAILS users are promoted on every boot.
+    // Runs after listen so it never blocks healthchecks.
+    promoteAllAdminEmails().catch((e) => console.error('[verdexis-api] admin bootstrap failed:', e))
+  })
+}
