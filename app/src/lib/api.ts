@@ -156,7 +156,7 @@ export const api = {
       body: JSON.stringify({ currentPassword, newPassword }),
     }),
   sendVerification: () =>
-    request<{ ok: boolean }>('/api/auth/send-verification', { method: 'POST' }),
+    request<{ ok: boolean; alreadyVerified?: boolean; devLink?: string }>('/api/auth/send-verification', { method: 'POST' }),
   verifyEmail: (token: string) =>
     request<{ user: ApiUser }>('/api/auth/verify-email', {
       method: 'POST',

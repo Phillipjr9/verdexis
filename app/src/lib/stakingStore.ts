@@ -53,32 +53,53 @@ export const stakingStore = {
     return p
   },
   unstake(id: string) { save(load().filter((p) => p.id !== id)) },
-  totalsUsd(): { totalPrincipalUsd: number; totalRewardsUsd: number; totalValueUsd: number } {
+  totalsUsd(): { 
+    staked: number
+    pending: number
+    blendedApy: number
+    annualYield: number
+    totalPrincipalUsd: number
+    totalRewardsUsd: number
+    totalValueUsd: number
+  } {
     const positions = load()
     let totalPrincipal = 0
     let totalRewards = 0
+    let totalApy = 0
     
     for (const p of positions) {
       const price = priceForAsset(p.asset)
       totalPrincipal += p.principal * price
       const reward = pendingRewardFor(p)
       totalRewards += reward.rewardAsset * price
+      totalApy += p.apy * p.principal * price // weighted APY
     }
     
+    const blendedApy = totalPrincipal > 0 ? totalApy / totalPrincipal : 0
+    const annualYield = totalPrincipal * blendedApy
+    
     return {
+      staked: totalPrincipal,
+      pending: totalRewards,
+      blendedApy,
+      annualYield,
       totalPrincipalUsd: totalPrincipal,
       totalRewardsUsd: totalRewards,
       totalValueUsd: totalPrincipal + totalRewards,
     }
   },
-  projectStakedUsd(): number {
+  projectStakedUsd(years: number): number {
     const positions = load()
-    let total = 0
+    let projection = 0
+    
     for (const p of positions) {
       const price = priceForAsset(p.asset)
-      total += p.principal * price
+      const principal = p.principal * price
+      const compounded = principal * Math.pow(1 + p.apy, years)
+      projection += compounded
     }
-    return total
+    
+    return projection
   },
 }
 
