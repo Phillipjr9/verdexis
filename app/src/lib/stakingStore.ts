@@ -47,6 +47,39 @@ export const stakingStore = {
     return p
   },
   remove(id: string) { save(load().filter((p) => p.id !== id)) },
+  stake(input: Omit<StakingPosition, 'id' | 'startedAt'>): StakingPosition {
+    const p: StakingPosition = { ...input, id: `s_${Date.now()}`, startedAt: new Date().toISOString() }
+    save([...load(), p])
+    return p
+  },
+  unstake(id: string) { save(load().filter((p) => p.id !== id)) },
+  totalsUsd(): { totalPrincipalUsd: number; totalRewardsUsd: number; totalValueUsd: number } {
+    const positions = load()
+    let totalPrincipal = 0
+    let totalRewards = 0
+    
+    for (const p of positions) {
+      const price = priceForAsset(p.asset)
+      totalPrincipal += p.principal * price
+      const reward = pendingRewardFor(p)
+      totalRewards += reward.rewardAsset * price
+    }
+    
+    return {
+      totalPrincipalUsd: totalPrincipal,
+      totalRewardsUsd: totalRewards,
+      totalValueUsd: totalPrincipal + totalRewards,
+    }
+  },
+  projectStakedUsd(): number {
+    const positions = load()
+    let total = 0
+    for (const p of positions) {
+      const price = priceForAsset(p.asset)
+      total += p.principal * price
+    }
+    return total
+  },
 }
 
 export function pendingRewardFor(p: StakingPosition): { rewardAsset: number; nextPayoutInDays: number } {
@@ -58,6 +91,19 @@ export function pendingRewardFor(p: StakingPosition): { rewardAsset: number; nex
   // Reward since the last payout cycle:
   const sinceLast = totalAccrued - (cyclesElapsed * p.principal * p.apy * (p.payoutFrequencyDays / 365))
   return { rewardAsset: Math.max(0, sinceLast), nextPayoutInDays }
+}
+
+// Mock price feed for staking assets. In production, this would query a real API.
+export function priceForAsset(asset: string): number {
+  const prices: Record<string, number> = {
+    ETH: 2500,
+    SOL: 180,
+    USDC: 1,
+    BTC: 63000,
+    AVAX: 45,
+    POLYGON: 0.8,
+  }
+  return prices[asset] || 0
 }
 
 export const STAKING_EVENT = EVENT

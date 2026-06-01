@@ -60,7 +60,7 @@ export default function VerifyEmail() {
           </Link>
           {state === 'error' && (
             <button
-              onClick={() => api.sendVerification().then(() => setMessage('A new verification link was sent. Check your notifications.')).catch((e) => setMessage((e as Error)?.message || 'Could not send link.'))}
+              onClick={() => api.sendVerification().then(() => setMessage('A new verification link was sent. Check your notifications.')).catch((e: unknown) => setMessage((e as Error)?.message || 'Could not send link.'))}
               className="text-[11px] text-[#737373] hover:text-[#E5E5E5] transition-colors"
             >
               Send a new verification link

@@ -155,6 +155,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ currentPassword, newPassword }),
     }),
+  sendVerification: () =>
+    request<{ ok: boolean }>('/api/auth/send-verification', { method: 'POST' }),
+  verifyEmail: (token: string) =>
+    request<{ user: ApiUser }>('/api/auth/verify-email', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    }),
   exportData: () => {
     const headers: Record<string, string> = {}
     const t = getToken()
