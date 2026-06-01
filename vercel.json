@@ -22,12 +22,5 @@
       "src": "/(.*)",
       "dest": "/index.html"
     }
-  ],
-  "env": {
-    "PRISMA_DATABASE_URL": "@prisma_database_url",
-    "JWT_SECRET": "@jwt_secret",
-    "JWT_EXPIRES_IN": "7d",
-    "CORS_ORIGIN": "https://<your-domain>",
-    "NODE_ENV": "production"
-  }
+  ]
 }
