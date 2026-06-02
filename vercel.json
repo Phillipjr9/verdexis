@@ -1,5 +1,7 @@
 {
   "version": 2,
+  "buildCommand": "npm --prefix app run build",
+  "outputDirectory": "app/dist",
   "builds": [
     {
       "src": "api/[...path].ts",
