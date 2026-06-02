@@ -20,7 +20,10 @@
       "dest": "/api/[...path].ts"
     },
     {
-      "src": "^/(.*)$",
+      "handle": "filesystem"
+    },
+    {
+      "src": "^/(?!api/|assets/)(.*)$",
       "dest": "/index.html"
     }
   ]
