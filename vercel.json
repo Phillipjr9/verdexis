@@ -20,9 +20,6 @@
       "dest": "/api/[...path].ts"
     },
     {
-      "handle": "filesystem"
-    },
-    {
       "src": "^/(.*)$",
       "dest": "/index.html"
     }
