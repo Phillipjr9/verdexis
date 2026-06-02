@@ -20,10 +20,18 @@
       "dest": "/api/[...path].ts"
     },
     {
+      "src": "^/favicon\\.svg$",
+      "status": 200
+    },
+    {
+      "src": "^/.*\\.(js|css|svg|png|jpg|jpeg|gif|ico|woff|woff2|ttf)$",
+      "status": 200
+    },
+    {
       "handle": "filesystem"
     },
     {
-      "src": "^/[^.]*$",
+      "src": "^/.*$",
       "dest": "/index.html"
     }
   ]
