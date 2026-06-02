@@ -6,6 +6,10 @@
     {
       "src": "api/[...path].ts",
       "use": "@vercel/node"
+    },
+    {
+      "src": "app/dist/**",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
@@ -14,8 +18,11 @@
       "dest": "/api/[...path].ts"
     },
     {
+      "handle": "filesystem"
+    },
+    {
       "src": "^/(.*)$",
-      "dest": "/index.html"
+      "dest": "/app/dist/index.html"
     }
   ]
 }
