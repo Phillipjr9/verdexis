@@ -1006,7 +1006,16 @@ const alertSchema = z.object({
 router.post('/users/:id/alerts', async (req: AuthedRequest, res) => {
   const parsed = alertSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input' }); return }
-  const a = await prisma.priceAlert.create({ data: { userId: req.params.id, ...parsed.data } })
+  // Explicitly pass required fields to ensure type safety
+  const alertData = {
+    userId: req.params.id,
+    symbol: parsed.data.symbol,
+    name: parsed.data.name,
+    direction: parsed.data.direction,
+    target: parsed.data.target,
+    active: parsed.data.active,
+  }
+  const a = await prisma.priceAlert.create({ data: alertData })
   await audit(req.userId!, 'alert.create', req.params.id, parsed.data)
   res.json({ alert: a })
 })
@@ -1053,10 +1062,16 @@ router.post('/broadcast', async (req: AuthedRequest, res) => {
   const parsed = notifSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input' }); return }
   const users = await prisma.user.findMany({ where: { suspended: false }, select: { id: true } })
+  // Explicitly pass required fields to ensure type safety
+  const notificationData = {
+    kind: parsed.data.kind,
+    title: parsed.data.title,
+    body: parsed.data.body ?? undefined,
+  }
   await prisma.notification.createMany({
-    data: users.map((u) => ({ userId: u.id, ...parsed.data })),
+    data: users.map((u) => ({ userId: u.id, ...notificationData })),
   })
-  await audit(req.userId!, 'notification.broadcast', null, { count: users.length, ...parsed.data })
+  await audit(req.userId!, 'notification.broadcast', null, { count: users.length, ...notificationData })
   res.json({ ok: true, count: users.length })
 })
 
