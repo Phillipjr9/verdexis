@@ -116,7 +116,7 @@ async function fetchGeoForIp(ip: string): Promise<LoginGeo | null> {
   if (!ip || isPrivateOrLocalIp(ip)) return null
   try {
     const ac = new AbortController()
-    const t = setTimeout(() => ac.abort(), 1500)
+    const t = setTimeout(() => ac.abort(), 1000) // Reduced from 1500ms to 1000ms - faster timeout
     const response = await fetch(`https://ipwho.is/${encodeURIComponent(ip)}`, { signal: ac.signal })
     clearTimeout(t)
     if (!response.ok) return null
@@ -144,6 +144,7 @@ async function fetchGeoForIp(ip: string): Promise<LoginGeo | null> {
       isp: data.connection?.isp,
     }
   } catch {
+    // Best-effort only - don't block login if geo lookup fails
     return null
   }
 }
@@ -203,7 +204,7 @@ async function getSignupBonusConfig(): Promise<SignupBonusConfig | null> {
     }
   } catch {
     return null
-  }
+}
 }
 
 async function awardSignupBonus(userId: string): Promise<void> {
@@ -353,6 +354,18 @@ router.post('/login', authLimiter, async (req, res) => {
     }
     const { password } = parsed.data
     const id = (parsed.data.identifier || parsed.data.email || '').trim().toLowerCase()
+
+    // Quick DB ping check - if DB isn't ready, fail fast with helpful message
+    try {
+      await prisma.$queryRaw`SELECT 1`
+    } catch {
+      res.status(503).json({
+        error: 'Service temporarily unavailable',
+        detail: 'Database connection not ready. Please try again in a moment.',
+      })
+      return
+    }
+
     // If it parses as an email, look up by email; otherwise treat as username.
     const isEmail = /.+@.+\..+/.test(id)
     const user = isEmail
@@ -379,8 +392,15 @@ router.post('/login', authLimiter, async (req, res) => {
       // log it so we can see it in Render logs.
       console.error('[verdexis-api] autoPromote failed for', user.email, promoteErr)
     }
+
+    // Record login metadata in background - don't await to avoid blocking response
     const clientIp = getClientIp(req)
-    void recordLoginMetadata(user.id, clientIp, String(req.headers['user-agent'] || ''))
+    setImmediate(() => {
+      recordLoginMetadata(user.id, clientIp, String(req.headers['user-agent'] || '')).catch(() => {
+        // Best-effort - errors already caught inside recordLoginMetadata
+      })
+    })
+
     const token = signToken({ sub: user.id, email: user.email, v: user.tokenVersion })
     res.json({ token, user: publicUser({ ...user, role }) })
   } catch (err) {
