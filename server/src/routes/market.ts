@@ -278,6 +278,12 @@ async function cgFetch(pathAndQuery: string, ttlMs: number, timeoutMs = 6000): P
     throw lastError || new Error('CoinGecko API failed')
   })()
   cgInflight.set(pathAndQuery, promise)
+  // Clean up inflight cache when promise settles (success or error)
+  promise.finally(() => {
+    cgInflight.delete(pathAndQuery)
+  }).catch(() => {
+    // Suppress unhandled rejection
+  })
   return promise
 }
 
