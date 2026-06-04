@@ -22,11 +22,15 @@
     "DATABASE_URL",
     "JWT_SECRET",
     "NODE_ENV",
+    "PORT",
     "CORS_ORIGIN",
     "APP_BASE_URL",
     "COINGECKO_API_KEY",
+    "COINGECKO_API_TIER",
     "ALPHA_VANTAGE_KEY",
-    "FINNHUB_API_KEY"
+    "FINNHUB_API_KEY",
+    "TWELVE_DATA_API_KEY",
+    "ADMIN_EMAILS"
   ],
   "routes": [
     {
