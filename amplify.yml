@@ -1,0 +1,26 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - cd app
+        - npm ci
+    build:
+      commands:
+        - npm run build
+  artifacts:
+    baseDirectory: app/dist
+    files:
+      - '**/*'
+backend:
+  phases:
+    build:
+      commands:
+        - cd server
+        - npm ci
+        - npx prisma generate
+        - npm run build
+  artifacts:
+    baseDirectory: server/dist
+    files:
+      - '**/*'
