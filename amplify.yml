@@ -17,7 +17,7 @@ backend:
     build:
       commands:
         - cd server
-        - npm install --ignore-scripts
+        - npm install
         - npx prisma generate
         - npm run build
   artifacts:
