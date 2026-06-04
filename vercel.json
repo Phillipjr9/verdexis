@@ -13,7 +13,7 @@
       "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
-        "buildCommand": "npm run install:all && npm run build",
+        "buildCommand": "npm run install:all && npx prisma generate --skip-engine-check && npm run build",
         "distDir": "app/dist"
       }
     }
