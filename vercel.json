@@ -1,6 +1,14 @@
 {
   "version": 2,
+  "buildCommand": "npm run install:all && npm run build",
   "builds": [
+    {
+      "src": "server/src/index.ts",
+      "use": "@vercel/node",
+      "config": {
+        "install": "cd server && npm install && npx prisma generate"
+      }
+    },
     {
       "src": "api/[...path].ts",
       "use": "@vercel/node"
@@ -9,7 +17,7 @@
       "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
-        "buildCommand": "npm run build",
+        "buildCommand": "cd app && npm install && npm run build",
         "distDir": "app/dist"
       }
     }
@@ -17,7 +25,7 @@
   "routes": [
     {
       "src": "^/api/(.*)$",
-      "dest": "/api/[...path].ts"
+      "dest": "/server/src/index.ts"
     },
     {
       "src": "^/favicon\\.svg$",
@@ -26,9 +34,6 @@
     {
       "src": "^/.*\\.(js|css|svg|png|jpg|jpeg|gif|ico|woff|woff2|ttf)$",
       "status": 200
-    },
-    {
-      "handle": "filesystem"
     },
     {
       "src": "^/.*$",
