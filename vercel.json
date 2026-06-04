@@ -1,13 +1,9 @@
 {
   "version": 2,
-  "buildCommand": "npm run install:all && npm run build",
   "builds": [
     {
       "src": "server/src/index.ts",
-      "use": "@vercel/node",
-      "config": {
-        "install": "cd server && npm install && npx prisma generate"
-      }
+      "use": "@vercel/node"
     },
     {
       "src": "api/[...path].ts",
@@ -17,7 +13,7 @@
       "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
-        "buildCommand": "cd app && npm install && npm run build",
+        "buildCommand": "npm run install:all && npm run build",
         "distDir": "app/dist"
       }
     }
