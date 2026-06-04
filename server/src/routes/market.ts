@@ -256,17 +256,26 @@ async function cgFetch(pathAndQuery: string, ttlMs: number, timeoutMs = 6000): P
   const existing = cgInflight.get(pathAndQuery)
   if (existing) return existing
   const promise = (async () => {
-    try {
-      const data = await httpsGetJson(`${CG_BASE}${pathAndQuery}`, timeoutMs, CG_HEADERS)
-      cgCache.set(pathAndQuery, { data, ts: Date.now() })
-      return data
-    } catch (err) {
-      // On error, return stale cache if we have it; otherwise rethrow.
-      if (cached) return cached.data
-      throw err
-    } finally {
-      cgInflight.delete(pathAndQuery)
+    let lastError: Error | null = null
+    // Retry with exponential backoff: 200ms, 400ms, 800ms (total up to 1.4s)
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const data = await httpsGetJson(`${CG_BASE}${pathAndQuery}`, timeoutMs, CG_HEADERS)
+        cgCache.set(pathAndQuery, { data, ts: Date.now() })
+        return data
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err))
+        // Don't retry on 4xx errors (not our fault), only 5xx / network errors
+        if (lastError.message.includes('HTTP 4')) throw lastError
+        // Exponential backoff before retry
+        if (attempt < 2) {
+          await new Promise(r => setTimeout(r, 200 * Math.pow(2, attempt)))
+        }
+      }
     }
+    // After retries exhausted, return stale cache if we have it; otherwise throw last error
+    if (cached) return cached.data
+    throw lastError || new Error('CoinGecko API failed')
   })()
   cgInflight.set(pathAndQuery, promise)
   return promise
