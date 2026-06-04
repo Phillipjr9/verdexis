@@ -18,6 +18,16 @@
       }
     }
   ],
+  "buildEnv": [
+    "DATABASE_URL",
+    "JWT_SECRET",
+    "NODE_ENV",
+    "CORS_ORIGIN",
+    "APP_BASE_URL",
+    "COINGECKO_API_KEY",
+    "ALPHA_VANTAGE_KEY",
+    "FINNHUB_API_KEY"
+  ],
   "routes": [
     {
       "src": "^/api/(.*)$",
