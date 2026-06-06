@@ -1,53 +1,28 @@
 {
+  "$schema": "http://json-schema.org/draft-04/vercel",
   "version": 2,
   "builds": [
     {
-      "src": "server/src/index.ts",
+      "src": "api/[!path].ts",
       "use": "@vercel/node"
     },
     {
-      "src": "api/[...path].ts",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "buildCommand": "npm run install:all && npx prisma generate --skip-engine-check && npm run build",
-        "distDir": "app/dist"
-      }
+      "src": "app/dist",
+      "use": "@vercel/static"
     }
-  ],
-  "buildEnv": [
-    "DATABASE_URL",
-    "JWT_SECRET",
-    "NODE_ENV",
-    "PORT",
-    "CORS_ORIGIN",
-    "APP_BASE_URL",
-    "COINGECKO_API_KEY",
-    "COINGECKO_API_TIER",
-    "ALPHA_VANTAGE_KEY",
-    "FINNHUB_API_KEY",
-    "TWELVE_DATA_API_KEY",
-    "ADMIN_EMAILS"
   ],
   "routes": [
     {
-      "src": "^/api/(.*)$",
-      "dest": "/server/src/index.ts"
+      "src": "^/api/(.*)",
+      "dest": "/api/$1"
     },
     {
-      "src": "^/favicon\\.svg$",
-      "status": 200
+      "src": "^/static/(.*)",
+      "dest": "/app/dist/static/$1"
     },
     {
-      "src": "^/.*\\.(js|css|svg|png|jpg|jpeg|gif|ico|woff|woff2|ttf)$",
-      "status": 200
-    },
-    {
-      "src": "^/.*$",
-      "dest": "/index.html"
+      "src": "^/.*",
+      "dest": "/app/dist/index.html"
     }
   ]
 }
