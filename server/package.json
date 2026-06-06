@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "prisma generate && tsc -p tsconfig.json",
+    "build": "prisma generate && npx tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev --name init",
@@ -17,7 +17,7 @@
     "promote-admin": "tsx scripts/promote-admin.ts",
     "list-admins": "tsx scripts/promote-admin.ts --list"
   },
-"dependencies": {
+  "dependencies": {
     "@prisma/client": "^5.22.0",
     "aws-serverless-express": "^3.4.0",
     "bcryptjs": "^2.4.3",
@@ -31,9 +31,10 @@
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
     "prisma": "^5.22.0",
+    "verdexis": "file:..",
     "zod": "^3.23.8"
   },
-"devDependencies": {
+  "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/compression": "^1.7.5",
     "@types/cookie-parser": "^1.4.7",

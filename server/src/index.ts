@@ -145,7 +145,13 @@ async function initializeDatabase(): Promise<void> {
 
 initializeDatabase()
 
-app.get('/api/health', (_req, res) => {
+app.get('/api/health', async (_req, res) => {
+  // DB_READY tracks whether async prisma.$connect() succeeded at boot.
+  // In serverless this is always false (new function instance each request).
+  // But auth routes do on-demand DB checks, so the real DB status depends on those.
+  // Always report the actual DB_READY state, not a hardcoded "production" value.
+  const dbReady = DB_READY
+  const dbStatus = dbReady ? 'Ready' : 'Unavailable'
   res.json({
     ok: true,
     service: 'verdexis-api',
@@ -154,8 +160,8 @@ app.get('/api/health', (_req, res) => {
     uptimeSec: Math.round((Date.now() - SERVER_BOOT_TIME) / 1000),
     nodeVersion: process.version,
     bootedAt: new Date(SERVER_BOOT_TIME).toISOString(),
-    database: DB_READY ? 'Ready' : 'Unavailable',
-    databaseReady: DB_READY,
+    database: dbStatus,
+    databaseReady: dbReady,
   })
 })
 

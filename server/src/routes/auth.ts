@@ -355,10 +355,13 @@ router.post('/login', authLimiter, async (req, res) => {
     const { password } = parsed.data
     const id = (parsed.data.identifier || parsed.data.email || '').trim().toLowerCase()
 
-    // Quick DB ping check - if DB isn't ready, fail fast with helpful message
+// Quick DB ping check - if DB connection was closed (e.g. cold start in serverless),
+    // try to reconnect on-demand instead of failing immediately.
     try {
+      await prisma.$connect()
       await prisma.$queryRaw`SELECT 1`
-    } catch {
+    } catch (dbErr) {
+      console.error('[verdexis-api] DB check failed:', dbErr)
       res.status(503).json({
         error: 'Service temporarily unavailable',
         detail: 'Database connection not ready. Please try again in a moment.',
