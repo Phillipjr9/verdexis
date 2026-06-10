@@ -81,12 +81,6 @@ model User {
   dcaSchedules  DcaSchedule[]
 }
 
-// Self-custody wallets a user has linked. A user can attach multiple
-// addresses (e.g. one MetaMask + one Trust mobile + one hardware wallet)
-// and pick which one is the "primary" \u2014 that one is mirrored back into
-// the legacy User.walletAddress / walletChainId / walletProvider fields
-// for backward compat with everywhere that still reads from there
-// (deposit attribution, admin user detail page, etc.).
 model WalletLink {
   id          String   @id @default(cuid())
   userId      String
