@@ -24,10 +24,17 @@ router.get('/', requireAuth, async (req: AuthedRequest, res) => {
 router.post('/', requireAuth, async (req: AuthedRequest, res) => {
   const parsed = upsertSchema.safeParse(req.body)
   if (!parsed.success) {
-    res.status(400).json({ error: 'Invalid input' })
+    res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() })
     return
   }
   const { symbol, name, amount, avgPrice, type } = parsed.data
+  
+  // Additional safety: prevent negative holdings
+  if (amount < 0 || avgPrice < 0) {
+    res.status(400).json({ error: 'Amount and avgPrice cannot be negative' })
+    return
+  }
+  
   const holding = await prisma.holding.upsert({
     where: { userId_symbol: { userId: req.userId!, symbol } },
     create: { userId: req.userId!, symbol, name, amount, avgPrice, type },

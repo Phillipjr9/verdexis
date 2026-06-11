@@ -37,10 +37,16 @@ router.get('/', requireAuth, async (req: AuthedRequest, res) => {
 router.post('/', requireAuth, tradeLimiter, idempotency(), async (req: AuthedRequest, res) => {
   const parsed = tradeSchema.safeParse(req.body)
   if (!parsed.success) {
-    res.status(400).json({ error: 'Invalid input' })
+    res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() })
     return
   }
   let { symbol, name, side, amount, price, type } = parsed.data
+
+  // Validate positive amounts after parsing
+  if (amount <= 0 || price <= 0) {
+    res.status(400).json({ error: 'Amount and price must be positive' })
+    return
+  }
 
   // Optional: forward to Alpaca paper. If it fills, use the actual fill
   // price/qty so the local books match the broker. Failures fall through

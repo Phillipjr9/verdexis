@@ -15,6 +15,9 @@ export default class ErrorBoundary extends Component<Props, State> {
     if (/null is not an object|Cannot read propert(?:y|ies) of (?:null|undefined)/i.test(msg)) {
       msg = 'A piece of data was missing from the server response. ' + msg
     }
+    // Sanitize potential sensitive information from error messages
+    msg = msg.replace(/Bearer [A-Za-z0-9._-]+/g, 'Bearer [REDACTED]')
+    msg = msg.replace(/token["']?\s*:\s*["'][^"']+["']/gi, 'token: [REDACTED]')
     return { hasError: true, message: msg }
   }
 
@@ -34,7 +37,8 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   private hardReload = () => {
     try {
-      const keep = new Set(['verdexis:token', 'verdexis:admin', 'verdexis:user'])
+      // Keep auth tokens but clear all other cached data
+      const keep = new Set(['verdexis_token', 'verdexis_auth', 'verdexis_avatar'])
       const drop: string[] = []
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i)

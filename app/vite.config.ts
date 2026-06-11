@@ -23,7 +23,7 @@ function versionJsonPlugin(): Plugin {
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: './',
+  base: '/',
   define: {
     __BUILD_ID__: JSON.stringify(BUILD_ID),
   },

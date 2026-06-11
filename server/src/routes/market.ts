@@ -56,7 +56,7 @@ function httpsGetJson(url: string, timeoutMs: number, extraHeaders: Record<strin
         method: 'GET',
         headers: {
           accept: 'application/json',
-          'user-agent': 'verdexis/0.1 (+https://verdexis.local)',
+          'user-agent': 'verdexis/0.1 (+https://verdexis.app)',
           connection: 'close',
           ...extraHeaders,
         },
@@ -72,11 +72,18 @@ function httpsGetJson(url: string, timeoutMs: number, extraHeaders: Record<strin
         res.on('data', (c) => chunks.push(c))
         res.on('end', () => {
           try {
-            resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')))
+            const body = Buffer.concat(chunks).toString('utf8')
+            // Prevent potential security issues with large responses
+            if (body.length > 10_000_000) {
+              reject(new Error('Response too large'))
+              return
+            }
+            resolve(JSON.parse(body))
           } catch (e) {
             reject(e)
           }
         })
+        res.on('error', reject)
       },
     )
     req.setTimeout(timeoutMs, () => req.destroy(new Error('timeout')))
