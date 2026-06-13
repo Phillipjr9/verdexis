@@ -1,0 +1,85 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Description: VERDEXIS Express API Backend on Lambda
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+    Description: Environment name
+
+Globals:
+  Function:
+    Timeout: 30
+    Runtime: nodejs20.x
+    MemorySize: 1024
+    EphemeralStorage:
+      Size: 512
+    Tracing: Active
+
+Resources:
+  VerdexisApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: verdexis-api
+      CodeUri: server/
+      Handler: dist/lambda.handler
+      Runtime: nodejs20.x
+      Environment:
+        Variables:
+          DATABASE_URL: !Sub '{{resolve:secretsmanager:verdexis/database:SecretString:url}}'
+          JWT_SECRET: !Sub '{{resolve:secretsmanager:verdexis/jwt:SecretString:secret}}'
+          NODE_ENV: !Ref Environment
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref VerdexisApi
+            Path: /{proxy+}
+            Method: ANY
+        RootEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref VerdexisApi
+            Path: /
+            Method: ANY
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:verdexis/*'
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+
+  VerdexisApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: verdexis-api
+      StageName: !Ref Environment
+      TracingEnabled: true
+      MethodSettings:
+        - ResourcePath: '/**'
+          HttpMethod: '*'
+          MetricsEnabled: true
+          DataTraceEnabled: true
+          LoggingLevel: INFO
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub 'https://${VerdexisApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+  
+  FunctionArn:
+    Description: Lambda function ARN
+    Value: !GetAtt VerdexisApiFunction.Arn
+
+  ApiId:
+    Description: API Gateway ID
+    Value: !Ref VerdexisApi
