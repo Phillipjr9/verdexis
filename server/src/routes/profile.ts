@@ -7,13 +7,18 @@ const router = Router()
 
 const profileSchema = z.object({
   name: z.string().min(1).max(80).optional(),
-  username: z.string().min(3).max(40).regex(/^[a-zA-Z0-9_.-]+$/).toLowerCase().nullable().optional(),
+  username: z.string().min(3).max(40).regex(/^[a-z0-9_.-]+$/i).toLowerCase().nullable().optional(),
   avatar: z.string().nullable().optional(), // data URL or null to remove
   prefs: z.record(z.unknown()).optional(),
   twoFactor: z.boolean().optional(),
 })
 
 router.patch('/', requireAuth, async (req: AuthedRequest, res) => {
+  const userId = req.userId
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
   const parsed = profileSchema.safeParse(req.body)
   if (!parsed.success) {
     res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() })
@@ -29,11 +34,18 @@ router.patch('/', requireAuth, async (req: AuthedRequest, res) => {
 
   if (parsed.data.name !== undefined) data.name = parsed.data.name
   if (parsed.data.username !== undefined) {
-    if (parsed.data.username) {
-      const taken = await prisma.user.findFirst({ where: { username: parsed.data.username, NOT: { id: req.userId! } } })
-      if (taken) { res.status(409).json({ error: 'That username is already taken' }); return }
-    }
     data.username = parsed.data.username
+    try {
+      // Database uniqueness constraint will enforce this atomically
+      // Prevents TOCTOU race condition where two requests could both think username is available
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      if (msg.includes('P2002') || msg.includes('Unique constraint')) {
+        res.status(409).json({ error: 'That username is already taken' })
+        return
+      }
+      throw e
+    }
   }
   if (parsed.data.avatar !== undefined) {
     if (parsed.data.avatar && parsed.data.avatar.length > 1_000_000) {
@@ -45,7 +57,7 @@ router.patch('/', requireAuth, async (req: AuthedRequest, res) => {
   if (parsed.data.prefs !== undefined) data.prefs = JSON.stringify(parsed.data.prefs)
   if (parsed.data.twoFactor !== undefined) data.twoFactor = parsed.data.twoFactor
 
-  const user = await prisma.user.update({ where: { id: req.userId! }, data })
+  const user = await prisma.user.update({ where: { id: userId }, data })
   let prefs: unknown = {}
   try {
     prefs = user.prefs ? JSON.parse(user.prefs) : {}
@@ -66,7 +78,12 @@ router.patch('/', requireAuth, async (req: AuthedRequest, res) => {
 })
 
 router.delete('/', requireAuth, async (req: AuthedRequest, res) => {
-  await prisma.user.delete({ where: { id: req.userId! } })
+  const userId = req.userId
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
+  await prisma.user.delete({ where: { id: userId } })
   res.json({ ok: true })
 })
 

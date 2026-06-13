@@ -2,6 +2,7 @@ import { Router } from 'express'
 import rateLimit from 'express-rate-limit'
 import { z } from 'zod'
 import { requireAuth, type AuthedRequest } from '../auth.js'
+import { VALIDATION_LIMITS } from '../errorHandler.js'
 
 const router: Router = Router()
 
@@ -17,9 +18,9 @@ const aiLimiter = rateLimit({
 })
 
 const chatSchema = z.object({
-  query: z.string().min(1).max(2000),
-  persona: z.string().max(40).optional(),
-  context: z.string().max(4000).optional(),
+  query: z.string().min(1).max(VALIDATION_LIMITS.QUERY_MAX),
+  persona: z.string().max(VALIDATION_LIMITS.PERSONA_MAX).optional(),
+  context: z.string().max(VALIDATION_LIMITS.CONTEXT_MAX).optional(),
 })
 
 /**

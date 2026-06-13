@@ -43,8 +43,13 @@ router.get('/', async (_req, res) => {
 // GET /api/reviews/me — what the signed-in user has on file (so the form can
 // prefill the existing rating + text instead of pretending it's a fresh post).
 router.get('/me', requireAuth, async (req: AuthedRequest, res) => {
+  const userId = req.userId
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
   const review = await prisma.review.findUnique({
-    where: { userId: req.userId! },
+    where: { userId },
     select: { id: true, rating: true, text: true, authorName: true, authorAvatar: true, approved: true, createdAt: true, updatedAt: true },
   })
   res.json({ review })
@@ -53,22 +58,27 @@ router.get('/me', requireAuth, async (req: AuthedRequest, res) => {
 // POST /api/reviews — upsert. Pins the user's current name+avatar so renaming
 // later doesn't silently rewrite the homepage testimonial.
 router.post('/', requireAuth, reviewWriteLimiter, async (req: AuthedRequest, res) => {
+  const userId = req.userId
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
   const parse = upsertSchema.safeParse(req.body)
   if (!parse.success) {
     res.status(400).json({ error: 'Invalid input', details: parse.error.flatten() })
     return
   }
   const user = await prisma.user.findUnique({
-    where: { id: req.userId! },
+    where: { id: userId },
     select: { name: true, avatar: true, suspended: true },
   })
   if (!user) { res.status(404).json({ error: 'User not found' }); return }
   if (user.suspended) { res.status(403).json({ error: 'Account suspended' }); return }
 
   const review = await prisma.review.upsert({
-    where: { userId: req.userId! },
+    where: { userId },
     create: {
-      userId: req.userId!,
+      userId,
       rating: parse.data.rating,
       text: parse.data.text,
       authorName: user.name,
@@ -87,7 +97,12 @@ router.post('/', requireAuth, reviewWriteLimiter, async (req: AuthedRequest, res
 
 // DELETE /api/reviews/me — let the user retract their own review.
 router.delete('/me', requireAuth, async (req: AuthedRequest, res) => {
-  await prisma.review.deleteMany({ where: { userId: req.userId! } })
+  const userId = req.userId
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
+  await prisma.review.deleteMany({ where: { userId } })
   res.json({ ok: true })
 })
 

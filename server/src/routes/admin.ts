@@ -67,7 +67,15 @@ async function audit(actorId: string, action: string, targetUserId: string | nul
       },
     })
   } catch (e) {
-    console.error('[admin audit] failed:', e)
+    const errorMsg = e instanceof Error ? e.message : String(e)
+    console.error('[admin audit] CRITICAL: audit logging failed', {
+      action,
+      error: errorMsg,
+      timestamp: new Date().toISOString(),
+      actor: actorId,
+      target: targetUserId,
+    })
+    // TODO: Send alert to admin monitoring in production
   }
 }
 
@@ -86,13 +94,18 @@ function readLastLoginMeta(prefsJson: string | null): {
   } | null
 } {
   try {
-    const prefs = prefsJson ? JSON.parse(prefsJson) as Record<string, unknown> : {}
-    const security = (prefs.security && typeof prefs.security === 'object') ? prefs.security as Record<string, unknown> : null
-    const last = (security?.lastLogin && typeof security.lastLogin === 'object') ? security.lastLogin as Record<string, unknown> : null
-    const geo = (last?.geo && typeof last.geo === 'object') ? last.geo as Record<string, unknown> : null
+    if (!prefsJson) return { lastLoginAt: null, lastLoginIp: null, lastLoginGeo: null }
+    
+    const prefs = JSON.parse(prefsJson)
+    if (!prefs || typeof prefs !== 'object') return { lastLoginAt: null, lastLoginIp: null, lastLoginGeo: null }
+    
+    const security = prefs.security && typeof prefs.security === 'object' ? prefs.security : null
+    const lastLogin = security?.lastLogin && typeof security.lastLogin === 'object' ? security.lastLogin : null
+    const geo = lastLogin?.geo && typeof lastLogin.geo === 'object' ? lastLogin.geo : null
+    
     return {
-      lastLoginAt: typeof last?.at === 'string' ? last.at : null,
-      lastLoginIp: typeof last?.ip === 'string' ? last.ip : null,
+      lastLoginAt: typeof lastLogin?.at === 'string' ? lastLogin.at : null,
+      lastLoginIp: typeof lastLogin?.ip === 'string' ? lastLogin.ip : null,
       lastLoginGeo: geo ? {
         country: typeof geo.country === 'string' ? geo.country : undefined,
         countryCode: typeof geo.countryCode === 'string' ? geo.countryCode : undefined,
@@ -104,7 +117,8 @@ function readLastLoginMeta(prefsJson: string | null): {
         isp: typeof geo.isp === 'string' ? geo.isp : undefined,
       } : null,
     }
-  } catch {
+  } catch (e) {
+    console.error('[readLastLoginMeta] failed to parse prefs:', e instanceof Error ? e.message : String(e))
     return { lastLoginAt: null, lastLoginIp: null, lastLoginGeo: null }
   }
 }
@@ -182,6 +196,10 @@ router.get('/users', async (req, res) => {
       },
     }),
   ])
+  if (!Array.isArray(users)) {
+    res.status(500).json({ error: 'Invalid database response' })
+    return
+  }
   const hydrated = users.map((u) => {
     const { lastLoginAt, lastLoginIp, lastLoginGeo } = readLastLoginMeta(u.prefs)
     const { prefs: _prefs, ...rest } = u
@@ -424,7 +442,25 @@ router.patch('/users/:id', async (req: AuthedRequest, res) => {
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() }); return }
   const data: Record<string, unknown> = { ...parsed.data }
   if ('prefs' in data) data.prefs = JSON.stringify(data.prefs ?? {})
-  if (typeof parsed.data.createdAt === 'string') data.createdAt = new Date(parsed.data.createdAt)
+  
+  // Validate createdAt is not in the future
+  if (typeof parsed.data.createdAt === 'string') {
+    const ts = new Date(parsed.data.createdAt)
+    const now = new Date()
+    
+    if (isNaN(ts.getTime())) {
+      res.status(400).json({ error: 'createdAt is not a valid date' })
+      return
+    }
+    
+    if (ts.getTime() > now.getTime()) {
+      res.status(400).json({ error: 'createdAt cannot be in the future' })
+      return
+    }
+    
+    data.createdAt = ts
+  }
+  
   // Don't let admin demote themselves to last-admin and lock everyone out.
   if (parsed.data.role === 'user' && id === req.userId!) {
     const otherAdmins = await prisma.user.count({ where: { role: 'admin', NOT: { id } } })

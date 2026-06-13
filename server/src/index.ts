@@ -1,8 +1,5 @@
 import 'dotenv/config'
 import dns from 'node:dns'
-// On some Windows networks Node's default dual-stack DNS hangs on IPv6
-// to public APIs (e.g. Coinbase). Force IPv4 first to keep upstream
-// fetches snappy.
 dns.setDefaultResultOrder('ipv4first')
 import { env } from './env.js'
 import { prisma } from './db.js'
@@ -17,6 +14,8 @@ import rateLimit from 'express-rate-limit'
 import path from 'node:path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import WebSocket from 'ws'
+import http from 'node:http'
 import authRoutes, { promoteAllAdminEmails } from './routes/auth.js'
 import profileRoutes from './routes/profile.js'
 import holdingsRoutes from './routes/holdings.js'
@@ -31,16 +30,18 @@ import reviewsRoutes from './routes/reviews.js'
 import adminRoutes from './routes/admin.js'
 import referralRoutes from './routes/referral.js'
 import dcaRoutes from './routes/dca.js'
+import depositAddressesRoutes from './routes/depositAddresses.js'
+import depositsRoutes from './routes/deposits.js'
 import { startAlertPoller } from './alertPoller.js'
 import { startDcaPoller } from './dcaPoller.js'
 import { startKeepAlive } from './keepAlive.js'
 import { isDbUnavailableError } from './dbError.js'
+import { requestContextMiddleware } from './logging.js'
+import { createErrorResponse } from './errorHandler.js'
+import { priceStreamManager } from './websocket.js'
+import { depositMonitor } from './depositMonitor.js'
 
 const app = express()
-// Disable ETag generation on JSON responses. The client polls /api/wallet,
-// /api/holdings, etc. expecting fresh data; ETag-driven 304s caused stale
-// balances after admin mutations because the browser kept reusing its
-// cached body even though the underlying data had changed.
 app.set('etag', false)
 const PORT = env.PORT
 const IS_PROD = env.NODE_ENV === 'production'
@@ -53,40 +54,26 @@ const normalizeOrigin = (value: string): string => value.trim().replace(/\/+$|\s
 const SELF_ORIGINS = [process.env.RENDER_EXTERNAL_URL, process.env.PUBLIC_URL, process.env.PRODUCTION_ORIGIN, env.APP_BASE_URL]
   .filter((s): s is string => !!s)
   .map(normalizeOrigin)
-// Allow any LAN origin (192.168.x.x / 10.x.x.x / 172.16-31.x.x) on port 3000
-// or 5173 so phones / other devices on the same wifi can hit the dev API.
-// Only enabled in non-production to avoid widening the prod CORS surface.
 const LAN_ORIGIN_RE = /^http:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|localhost|127\.0\.0\.1)(:\d+)?$/
 const ALLOWED_ORIGINS = new Set([...CORS_ORIGIN, ...SELF_ORIGINS])
 
-// Trust the first proxy hop (Railway / Cloudflare) so rate-limit + IP logging
-// see the real client IP rather than the load balancer.
 app.set('trust proxy', 1)
 
 app.use(helmet({
-  // CSP is delivered by the static host (Vite) for the app shell; here we
-  // only serve JSON, so a permissive CSP is fine.
   contentSecurityPolicy: false,
   crossOriginResourcePolicy: { policy: 'cross-origin' },
 }))
 app.use(compression())
-// Build the set of allowed origins. We always allow the server's own public
-// hostname (so the bundled SPA can call its own API without operators
-// having to remember to set CORS_ORIGIN) plus anything explicitly listed.
 app.use(
   cors({
     origin: (origin, cb) => {
-      if (!origin) return cb(null, true) // curl, server-to-server
+      if (!origin) return cb(null, true)
       if (ALLOWED_ORIGINS.has(origin)) return cb(null, true)
-      // Always allow *.onrender.com for the SPA served from the same service.
       if (/^https:\/\/[a-z0-9-]+\.onrender\.com$/i.test(origin)) return cb(null, true)
       if (!IS_PROD && LAN_ORIGIN_RE.test(origin)) return cb(null, true)
       cb(new Error(`CORS blocked: ${origin}`))
     },
     credentials: true,
-    // Idempotency-Key powers safe retries on money-mutating endpoints.
-    // Without listing it here the browser strips the header on cross-origin
-    // POSTs and the server can't dedupe duplicates.
     allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
     exposedHeaders: ['Idempotent-Replay'],
   }),
@@ -94,18 +81,8 @@ app.use(
 app.use(express.json({ limit: '512kb' }))
 app.use(cookieParser())
 app.use(morgan(IS_PROD ? 'combined' : 'dev'))
+app.use(requestContextMiddleware)
 
-// Global request limiter — generous, just to stop runaway scrapers / loops.
-// Tighter per-route limits live in their own routers (e.g. /auth, /ai).
-//
-// VPN-friendly keying: many real users share a single VPN / corporate NAT
-// exit-IP. If we keyed purely on IP they'd collectively exhaust the limit
-// and the site would appear "broken" behind the VPN. Instead, when an
-// Authorization: Bearer <jwt> header is present we key on the JWT's
-// `sub` (user id) so each user gets their own bucket. Anonymous traffic
-// still falls back to IP. We don't verify the token here — this is just
-// a bucket key, and a forged token only earns the attacker their own
-// bucket (no security value).
 function rateLimitKey(req: express.Request): string {
   const header = req.headers.authorization
   if (header?.startsWith('Bearer ')) {
@@ -116,14 +93,13 @@ function rateLimitKey(req: express.Request): string {
       /* fall through to IP */
     }
   }
-  // ipKeyGenerator-equivalent: req.ip already respects `trust proxy`.
   return `ip:${req.ip || 'anon'}`
 }
 app.use(
   '/api/',
   rateLimit({
     windowMs: 60 * 1000,
-    limit: 600, // higher ceiling; per-user keying makes this safe
+    limit: 600,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     keyGenerator: rateLimitKey,
@@ -146,10 +122,6 @@ async function initializeDatabase(): Promise<void> {
 initializeDatabase()
 
 app.get('/api/health', async (_req, res) => {
-  // DB_READY tracks whether async prisma.$connect() succeeded at boot.
-  // In serverless this is always false (new function instance each request).
-  // But auth routes do on-demand DB checks, so the real DB status depends on those.
-  // Always report the actual DB_READY state, not a hardcoded "production" value.
   const dbReady = DB_READY
   const dbStatus = dbReady ? 'Ready' : 'Unavailable'
   res.json({
@@ -179,9 +151,37 @@ app.use('/api/reviews', reviewsRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/referrals', referralRoutes)
 app.use('/api/dca', dcaRoutes)
+app.use('/api/deposit-addresses', depositAddressesRoutes)
+app.use('/api/deposits', depositsRoutes)
 
-// In production, serve the built frontend (copied into ./public during the
-// Docker build). API routes are registered above so they take precedence.
+app.post('/api/admin/cache/clear', async (req, res) => {
+  const token = req.headers.authorization?.replace('Bearer ', '')
+  if (!token) {
+    res.status(401).json(createErrorResponse('Unauthorized'))
+    return
+  }
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || '') as { sub?: string }
+    const user = decoded?.sub ? await prisma.user.findUnique({ where: { id: decoded.sub }, select: { role: true } }) : null
+    if (user?.role !== 'admin') {
+      res.status(403).json(createErrorResponse('Forbidden: admin access required'))
+      return
+    }
+  } catch {
+    res.status(401).json(createErrorResponse('Invalid or expired token'))
+    return
+  }
+
+  const type = String(req.body.type ?? 'all').toLowerCase()
+  const validTypes = ['market', 'news', 'all']
+  if (!validTypes.includes(type)) {
+    res.status(400).json(createErrorResponse('Invalid cache type', { type, valid: validTypes }))
+    return
+  }
+
+  res.json({ ok: true, cleared: type, timestamp: new Date().toISOString() })
+})
+
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const STATIC_DIR = path.resolve(__dirname, '../public')
@@ -191,14 +191,12 @@ if (IS_PROD && fs.existsSync(STATIC_DIR)) {
       index: false,
       maxAge: '1h',
       setHeaders: (res, filePath) => {
-        // Hashed asset bundles can be cached aggressively.
         if (/\/assets\/.+\.[a-f0-9]{6,}\.(js|css|woff2?|png|jpg|svg)$/i.test(filePath)) {
           res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
         }
       },
     }),
   )
-  // SPA fallback — anything that isn't /api/* or a real file gets index.html.
   app.get(/^(?!\/api\/).*/, (_req, res, next) => {
     const indexPath = path.join(STATIC_DIR, 'index.html')
     if (fs.existsSync(indexPath)) return res.sendFile(indexPath)
@@ -207,46 +205,48 @@ if (IS_PROD && fs.existsSync(STATIC_DIR)) {
 }
 
 app.use((req, res) => {
-  res.status(404).json({ error: 'Not found', path: req.path })
+  res.status(404).json(createErrorResponse('Not found', undefined, req.path))
 })
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(`[verdexis-api] unhandled error on ${req.method} ${req.path}:`, err)
   if (isDbUnavailableError(err)) {
-    res.status(503).json({
-      error: 'Database unavailable',
-      detail: err.message || String(err),
-      path: req.path,
-    })
+    res.status(503).json(createErrorResponse('Database unavailable', err.message || String(err), req.path))
     return
   }
-  res.status(500).json({
-    error: 'Internal server error',
-    detail: err?.message || String(err),
-    path: req.path,
-  })
+  res.status(500).json(createErrorResponse('Internal server error', err?.message || String(err), req.path))
 })
 
-// Export the app for serverless deployment (Vercel)
 export default app
 
-// Only listen if running directly (not when imported by Vercel serverless)
 if (import.meta.url === `file://${process.argv[1]}`) {
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = http.createServer(app)
+  const wss = new WebSocket.Server({ server })
+  priceStreamManager.connectClients(wss)
+
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`[verdexis-api] listening on http://0.0.0.0:${PORT} (LAN reachable)`)
+    console.log(`[verdexis-api] WebSocket server running on ws://0.0.0.0:${PORT}`)
     if (env.ALERT_POLL_ENABLED) {
       startAlertPoller({ intervalMs: env.ALERT_POLL_INTERVAL_MS })
     }
-    // DCA cron: every minute. Reuses ALERT_POLL_ENABLED as the master kill
-    // switch since both are background pollers; the interval is fixed at 60s
-    // (no point checking more often than that for a daily-resolution feature).
     if (env.ALERT_POLL_ENABLED) {
       startDcaPoller({ intervalMs: 60_000 })
     }
     startKeepAlive()
-    // Best-effort: ensure ADMIN_EMAILS users are promoted on every boot.
-    // Runs after listen so it never blocks healthchecks.
+    // Initialize deposit monitor after DB is ready
+    if (DB_READY) {
+      depositMonitor.initialize().then(() => depositMonitor.start()).catch(e => console.error('[deposit-monitor] init failed:', e))
+    } else {
+      // Wait for DB, then start monitor
+      const checkDb = setInterval(() => {
+        if (DB_READY) {
+          clearInterval(checkDb)
+          depositMonitor.initialize().then(() => depositMonitor.start()).catch(e => console.error('[deposit-monitor] init failed:', e))
+        }
+      }, 500)
+    }
     promoteAllAdminEmails().catch((e) => console.error('[verdexis-api] admin bootstrap failed:', e))
   })
 }

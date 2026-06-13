@@ -45,7 +45,7 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
     return
   }
   const payload = verifyToken(token)
-  if (!payload) {
+  if (!payload || !payload.sub) {
     res.status(401).json({ error: 'Invalid or expired token' })
     return
   }

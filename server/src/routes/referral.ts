@@ -15,8 +15,13 @@ const router = Router()
  * Get current user's referral summary (code, earnings, counts)
  */
 router.get('/me', requireAuth, async (req: AuthedRequest, res) => {
+  const userId = req.userId
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
   try {
-    const summary = await getReferralSummary(req.userId!)
+    const summary = await getReferralSummary(userId)
     res.json(summary)
   } catch (e) {
     res.status(500).json({ error: 'Failed to fetch referral summary' })
@@ -28,8 +33,13 @@ router.get('/me', requireAuth, async (req: AuthedRequest, res) => {
  * Get all referrals for the current user with details
  */
 router.get('/list', requireAuth, async (req: AuthedRequest, res) => {
+  const userId = req.userId
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
   try {
-    const referrals = await getUserReferrals(req.userId!)
+    const referrals = await getUserReferrals(userId)
     res.json({
       referrals,
       count: referrals.length,
@@ -47,6 +57,11 @@ router.get('/list', requireAuth, async (req: AuthedRequest, res) => {
  * a deposit transaction, not exposed to the client directly.
  */
 router.post('/confirm-deposit', requireAuth, async (req: AuthedRequest, res) => {
+  const userId = req.userId
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
   const { amount } = req.body as { amount?: number }
 
   if (!amount || amount < 50) {
@@ -55,7 +70,7 @@ router.post('/confirm-deposit', requireAuth, async (req: AuthedRequest, res) => 
   }
 
   try {
-    await activateReferralOnDeposit(req.userId!, amount)
+    await activateReferralOnDeposit(userId, amount)
     res.json({ success: true, message: 'Referral activated and bonuses created' })
   } catch (e) {
     res.status(500).json({ error: 'Failed to activate referral' })
@@ -67,9 +82,14 @@ router.post('/confirm-deposit', requireAuth, async (req: AuthedRequest, res) => 
  * Get all pending and credited bonuses for the current user
  */
 router.get('/bonuses', requireAuth, async (req: AuthedRequest, res) => {
+  const userId = req.userId
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
   try {
     const bonuses = await prisma.referralBonus.findMany({
-      where: { userId: req.userId! },
+      where: { userId },
       orderBy: { createdAt: 'desc' },
     })
 
@@ -105,8 +125,13 @@ router.post('/claim-bonus', requireAuth, async (req: AuthedRequest, res) => {
   }
 
   // Verify the bonus belongs to this user
+  const userId = req.userId
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
   const bonus = await prisma.referralBonus.findUnique({ where: { id: bonusId } })
-  if (!bonus || bonus.userId !== req.userId!) {
+  if (!bonus || bonus.userId !== userId) {
     res.status(403).json({ error: 'Bonus not found or access denied' })
     return
   }

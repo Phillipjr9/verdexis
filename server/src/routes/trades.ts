@@ -5,29 +5,37 @@ import { prisma } from '../db.js'
 import { requireAuth, type AuthedRequest } from '../auth.js'
 import { brokerEnabled, submitPaperOrder } from '../broker.js'
 import { idempotency } from '../idempotency.js'
+import { sendError, VALIDATION_LIMITS, isValidSymbol, isValidAmount } from '../errorHandler.js'
 
 const router = Router()
 
+// Money-mutation endpoints get tighter rate limits. Adjusted: 20/min instead of 30
+// to balance security with usability for active traders
 const tradeLimiter = rateLimit({
   windowMs: 60 * 1000,
-  limit: 30,
+  limit: 20,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   keyGenerator: (req) => (req as AuthedRequest).userId || req.ip || 'anon',
 })
 
 const tradeSchema = z.object({
-  symbol: z.string().min(1).max(20),
-  name: z.string().min(1).max(120).optional(),
+  symbol: z.string().min(VALIDATION_LIMITS.SYMBOL_MIN).max(VALIDATION_LIMITS.SYMBOL_LENGTH),
+  name: z.string().min(1).max(VALIDATION_LIMITS.ASSET_NAME_LENGTH).optional(),
   side: z.enum(['buy', 'sell']),
-  amount: z.number().positive(),
-  price: z.number().positive(),
+  amount: z.number().positive().min(VALIDATION_LIMITS.MIN_AMOUNT).max(VALIDATION_LIMITS.MAX_AMOUNT),
+  price: z.number().positive().min(VALIDATION_LIMITS.MIN_AMOUNT).max(VALIDATION_LIMITS.MAX_AMOUNT),
   type: z.enum(['crypto', 'stock', 'etf']).default('crypto'),
 })
 
 router.get('/', requireAuth, async (req: AuthedRequest, res) => {
+  const userId = req.userId
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
   const trades = await prisma.trade.findMany({
-    where: { userId: req.userId! },
+    where: { userId },
     orderBy: { createdAt: 'desc' },
     take: 100,
   })
@@ -35,6 +43,11 @@ router.get('/', requireAuth, async (req: AuthedRequest, res) => {
 })
 
 router.post('/', requireAuth, tradeLimiter, idempotency(), async (req: AuthedRequest, res) => {
+  const userId = req.userId
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
   const parsed = tradeSchema.safeParse(req.body)
   if (!parsed.success) {
     res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() })
@@ -65,7 +78,7 @@ router.post('/', requireAuth, tradeLimiter, idempotency(), async (req: AuthedReq
   const result = await prisma.$transaction(async (tx) => {
     // 1. Adjust USD balance
     const usd = await tx.walletBalance.findUnique({
-      where: { userId_currency: { userId: req.userId!, currency: 'USD' } },
+      where: { userId_currency: { userId, currency: 'USD' } },
     })
     const currentUsd = usd?.available ?? 0
     if (side === 'buy' && currentUsd < total) {
@@ -73,9 +86,9 @@ router.post('/', requireAuth, tradeLimiter, idempotency(), async (req: AuthedReq
     }
     const nextUsd = side === 'buy' ? currentUsd - total : currentUsd + total
     await tx.walletBalance.upsert({
-      where: { userId_currency: { userId: req.userId!, currency: 'USD' } },
+      where: { userId_currency: { userId, currency: 'USD' } },
       create: {
-        userId: req.userId!,
+        userId,
         currency: 'USD',
         symbol: '$',
         balance: nextUsd,
@@ -86,7 +99,7 @@ router.post('/', requireAuth, tradeLimiter, idempotency(), async (req: AuthedReq
 
     // 2. Adjust holding
     const existing = await tx.holding.findUnique({
-      where: { userId_symbol: { userId: req.userId!, symbol } },
+      where: { userId_symbol: { userId, symbol } },
     })
     const currentAmt = existing?.amount ?? 0
     if (side === 'sell' && currentAmt < amount) {
@@ -100,9 +113,9 @@ router.post('/', requireAuth, tradeLimiter, idempotency(), async (req: AuthedReq
 
     if (nextAmt > 0) {
       await tx.holding.upsert({
-        where: { userId_symbol: { userId: req.userId!, symbol } },
+        where: { userId_symbol: { userId, symbol } },
         create: {
-          userId: req.userId!,
+          userId,
           symbol,
           name: name || symbol,
           amount: nextAmt,
@@ -116,7 +129,7 @@ router.post('/', requireAuth, tradeLimiter, idempotency(), async (req: AuthedReq
     }
 
     const trade = await tx.trade.create({
-      data: { userId: req.userId!, symbol, side, amount, price, total },
+      data: { userId, symbol, side, amount, price, total },
     })
     return { trade }
   }).catch((err: Error & { status?: number }) => ({ error: err.message, status: err.status || 500 }))

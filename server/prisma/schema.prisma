@@ -10,63 +10,48 @@ datasource db {
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
-  username     String?  @unique  // optional handle for sign-in (alternative to email)
-  // Human-friendly investment account identifier, e.g. "VDX-9F4A2B1C".
-  // Generated automatically on user creation; surfaced in admin UI and to the user.
+  username     String?  @unique
   investmentId String?  @unique
   name         String
   passwordHash String
-  avatar       String?  // data URL or remote URL
-  prefs        String?  // JSON blob: { currency, theme, notifications, ... }
+  avatar       String?
+  prefs        String?
   twoFactor    Boolean  @default(false)
-  role         String   @default("user")  // 'user' | 'admin'
+  role         String   @default("user")
   suspended    Boolean  @default(false)
   suspendedReason String?
-  // Soft "hold" — less drastic than suspended. Login still works but
-  // money-movement endpoints (withdraw / transfer) are blocked when active.
-  // holdType controls scope: 'all' (block everything monetary), 'withdraw'
-  // (block only withdraws), or 'transfer' (block only transfers).
   holdActive   Boolean  @default(false)
-  holdType     String?  // 'all' | 'withdraw' | 'transfer'
-  holdReason   String?  // canonical short code (see admin reasons list)
-  holdNote     String?  // optional free-form note from the admin who placed it
+  holdType     String?
+  holdReason   String?
+  holdNote     String?
   holdAt       DateTime?
-  // KYC review queue
-  kycStatus    String   @default("none")  // 'none' | 'pending' | 'approved' | 'rejected'
+  kycStatus    String   @default("none")
   kycNotes     String?
   kycReviewedAt DateTime?
   kycReviewedBy String?
-  // Email verification — required before withdrawals are unlocked. New users
-  // start unverified and receive a token via /api/auth/send-verification.
   emailVerified   Boolean   @default(false)
   emailVerifiedAt DateTime?
-  // Per-user money-movement caps (USD-equivalent). 0 / null = unlimited.
   dailyWithdrawLimit  Float?
   monthlyWithdrawLimit Float?
   dailyTransferLimit  Float?
   monthlyTransferLimit Float?
-  // Comma-separated CIDR / IP list. Empty / null = no allowlist enforced.
   ipAllowlist  String?
-  // Linked self-custody wallet (EIP-1193 / WalletConnect). Persisted so the
-  // user sees their address everywhere they're signed in, and so deposit
-  // attribution doesn't depend on a single browser's localStorage.
   walletAddress  String?
-  walletChainId  String?  // EIP-155 hex, e.g. "0x1"
-  walletProvider String?  // human label, e.g. "MetaMask", "WalletConnect"
+  walletChainId  String?
+  walletProvider String?
   walletLinkedAt DateTime?
-  tokenVersion Int      @default(0)        // bump to invalidate outstanding JWTs
-  // Referral program fields
-  referralCode String?  @unique            // unique code for this user to share (e.g., "VERDX-AB12")
-  referrerId   String?                     // id of the user who referred this user
+  tokenVersion Int      @default(0)
+  referralCode String?  @unique
+  referrerId   String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   emailVerifications EmailVerification[]
-
   holdings      Holding[]
   walletBalances WalletBalance[]
   transactions  Transaction[]
   trades        Trade[]
+  orders        Order[]
   resetTokens   PasswordReset[]
   watchlist     Watchlist[]
   alerts        PriceAlert[]
@@ -76,8 +61,8 @@ model User {
   reviews       Review[]
   adminAudits   AdminAudit[]   @relation("AdminActor")
   audited       AdminAudit[]   @relation("AdminTarget")
-  referrals     Referral[]     @relation("Referrer")        // people this user referred
-  referralBonuses ReferralBonus[] // bonuses earned from referrals
+  referrals     Referral[]     @relation("Referrer")
+  referralBonuses ReferralBonus[]
   dcaSchedules  DcaSchedule[]
 }
 
@@ -85,16 +70,10 @@ model WalletLink {
   id          String   @id @default(cuid())
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  // Lower-cased EVM address (0x...).
   address     String
-  // EIP-155 hex chain id, e.g. "0x1". Optional because some users may link
-  // a wallet without specifying a chain (we read chainId at send-tx time).
   chainId     String?
-  // Human label of the wallet provider, e.g. "MetaMask", "WalletConnect".
   provider    String?
-  // Optional user-set nickname shown in the picker, e.g. "Cold storage".
   label       String?
-  // Exactly one link per user is the active / mirrored one.
   isPrimary   Boolean  @default(false)
   linkedAt    DateTime @default(now())
 
@@ -102,10 +81,6 @@ model WalletLink {
   @@index([userId, isPrimary])
 }
 
-// On-chain deposit attempt the user kicked off from their linked wallet.
-// The frontend captures the tx hash + chain immediately on submit; the
-// admin (or future chain-watcher job) verifies the tx on a block explorer
-// and credits the user's WalletBalance once it has enough confirmations.
 model PendingDeposit {
   id          String   @id @default(cuid())
   userId      String
@@ -211,6 +186,36 @@ model Trade {
   @@index([userId, createdAt])
 }
 
+model Order {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbol           String
+  side             String
+  type             String
+  status           String   @default("open")
+  basePrice        Float
+  amount           Float
+  filledAmount     Float    @default(0)
+  limitPrice       Float?
+  stopPrice        Float?
+  trailAmount      Float?
+  trailType        String?
+  takeProfitPrice  Float?
+  stopLossPrice    Float?
+  timeInForce      String   @default("GTC")
+  parentOrderId    String?
+  expiresAt        DateTime?
+  filledAt         DateTime?
+  cancelledAt      DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([userId, status, createdAt])
+  @@index([symbol, status])
+  @@index([parentOrderId])
+}
+
 model Watchlist {
   id        String   @id @default(cuid())
   userId    String
@@ -267,10 +272,6 @@ model AdminAudit {
   @@index([targetUserId, createdAt])
 }
 
-// Generic key/value store for admin-managed app settings.
-// Currently used for the deposit instructions blob (wire / crypto / web3
-// destination addresses) so they're shared across devices and persist
-// instead of living only in one admin's localStorage.
 model AppSetting {
   key       String   @id
   value     String
@@ -279,12 +280,6 @@ model AppSetting {
   createdAt DateTime @default(now())
 }
 
-// Public testimonial / review left by a real user. Surfaced on the
-// marketing homepage. One row per user (upserted on POST) so the same
-// person can update their review without spawning duplicates. We pin
-// the user's name + avatar at write-time so renaming/avatar changes
-// don't retroactively rewrite the homepage testimonial unless the
-// user explicitly re-submits.
 model Review {
   id        String   @id @default(cuid())
   userId    String   @unique
@@ -300,9 +295,6 @@ model Review {
   @@index([approved, createdAt])
 }
 
-// Referral tracking: links a referrer to a referee. Created when the referred user
-// signs up using the referrer's code. Bonus creation is separate (ReferralBonus model)
-// and is triggered only after the referee makes their first deposit.
 model Referral {
   id        String   @id @default(cuid())
   referrerId String
@@ -322,9 +314,6 @@ model Referral {
   @@index([status])
 }
 
-// Referral bonus tracking: stores info about bonuses awarded from referrals.
-// Created when both a Referral becomes 'active' (referee deposits) AND the bonus
-// is actually awarded (credited to user account or pending for later payout).
 model ReferralBonus {
   id           String   @id @default(cuid())
   userId       String
@@ -342,30 +331,21 @@ model ReferralBonus {
   @@index([status])
 }
 
-
-// Recurring dollar-cost-average buy schedule. The dca-poller (server-side
-// cron) wakes every minute and fires any active schedule whose nextRunAt
-// has passed — debits USD wallet, upserts the holding with weighted-avg
-// cost basis, writes a Trade row, and updates lastRunAt + nextRunAt.
 model DcaSchedule {
   id            String   @id @default(cuid())
   userId        String
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  asset         String   // symbol e.g. BTC
-  assetId       String   // CoinGecko id e.g. bitcoin
+  asset         String
+  assetId       String
   name          String
   amountUsd     Float
   intervalDays  Int
   active        Boolean  @default(true)
-  // Cumulative bookkeeping so the UI can show invested / acquired / runs
-  // without recomputing from Trade history every render.
   totalInvested Float    @default(0)
   totalAcquired Float    @default(0)
   runs          Int      @default(0)
   lastRunAt     DateTime?
-  // Authoritative next-fire time. Set on create, updated after each run.
   nextRunAt     DateTime
-  // Set when a tick is skipped (e.g. insufficient USD). Cleared on success.
   lastSkipReason String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

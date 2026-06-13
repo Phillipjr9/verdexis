@@ -5,8 +5,13 @@ import { requireAuth, type AuthedRequest } from '../auth.js'
 const router: Router = Router()
 
 router.get('/', requireAuth, async (req: AuthedRequest, res) => {
+  const userId = req.userId
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
   const notifications = await prisma.notification.findMany({
-    where: { userId: req.userId! },
+    where: { userId },
     orderBy: { createdAt: 'desc' },
     take: 50,
   })
@@ -15,17 +20,27 @@ router.get('/', requireAuth, async (req: AuthedRequest, res) => {
 })
 
 router.post('/read', requireAuth, async (req: AuthedRequest, res) => {
+  const userId = req.userId
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
   await prisma.notification.updateMany({
-    where: { userId: req.userId!, read: false },
+    where: { userId, read: false },
     data: { read: true },
   })
   res.json({ ok: true })
 })
 
 router.delete('/:id', requireAuth, async (req: AuthedRequest, res) => {
+  const userId = req.userId
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
   try {
     const n = await prisma.notification.findUnique({ where: { id: req.params.id } })
-    if (!n || n.userId !== req.userId) { res.status(404).json({ error: 'Not found' }); return }
+    if (!n || n.userId !== userId) { res.status(404).json({ error: 'Not found' }); return }
     await prisma.notification.delete({ where: { id: req.params.id } })
     res.json({ ok: true })
   } catch {

@@ -5,6 +5,7 @@ import { prisma } from '../db.js'
 import type { Prisma } from '@prisma/client'
 import { requireAuth, requireAdmin, type AuthedRequest } from '../auth.js'
 import { idempotency } from '../idempotency.js'
+import { sendError, VALIDATION_LIMITS, isValidSymbol, isValidAmount, isValidCurrency } from '../errorHandler.js'
 
 const router = Router()
 
@@ -43,10 +44,10 @@ router.get('/me/deposit-addresses', requireAuth, async (req: AuthedRequest, res)
 
 const txSchema = z.object({
   kind: z.enum(['deposit', 'withdraw', 'transfer', 'dividend', 'interest']),
-  currency: z.string().min(1).max(20),
+  currency: z.string().min(VALIDATION_LIMITS.CURRENCY_LENGTH).max(VALIDATION_LIMITS.CURRENCY_LENGTH),
   symbol: z.string().min(1).max(8).default('$'),
-  amount: z.number().positive(),
-  reference: z.string().max(200).optional(),
+  amount: z.number().positive().min(VALIDATION_LIMITS.MIN_AMOUNT).max(VALIDATION_LIMITS.MAX_AMOUNT),
+  reference: z.string().max(VALIDATION_LIMITS.REFERENCE_MAX).optional(),
 })
 
 // Transaction kinds that *credit* the wallet. Only admins can post these
@@ -261,11 +262,11 @@ router.post('/transactions', requireAuth, moneyLimiter, idempotency(), async (re
 // Both legs are recorded as `transfer` (completed) so neither side sits in
 // the deposit-approval queue. Funds never leave the platform.
 const convertSchema = z.object({
-  fromCurrency: z.string().min(1).max(20),
-  fromAmount: z.number().positive(),
+  fromCurrency: z.string().min(1).max(VALIDATION_LIMITS.CURRENCY_LENGTH),
+  fromAmount: z.number().positive().min(VALIDATION_LIMITS.MIN_AMOUNT).max(VALIDATION_LIMITS.MAX_AMOUNT),
   fromSymbol: z.string().min(1).max(8).default('$'),
-  toCurrency: z.string().min(1).max(20),
-  toAmount: z.number().positive(),
+  toCurrency: z.string().min(1).max(VALIDATION_LIMITS.CURRENCY_LENGTH),
+  toAmount: z.number().positive().min(VALIDATION_LIMITS.MIN_AMOUNT).max(VALIDATION_LIMITS.MAX_AMOUNT),
   toSymbol: z.string().min(1).max(8).default('$'),
 })
 
@@ -364,10 +365,10 @@ router.post('/convert', requireAuth, moneyLimiter, idempotency(), async (req: Au
 // withdraw or transfer transaction. Atomic: either both sides update or
 // neither does.
 const userTransferSchema = z.object({
-  recipientEmail: z.string().email(),
-  currency: z.string().min(1).max(20),
-  amount: z.number().positive(),
-  note: z.string().max(200).optional(),
+  recipientEmail: z.string().email().max(VALIDATION_LIMITS.EMAIL_MAX_LENGTH),
+  currency: z.string().min(1).max(VALIDATION_LIMITS.CURRENCY_LENGTH),
+  amount: z.number().positive().min(VALIDATION_LIMITS.MIN_AMOUNT).max(VALIDATION_LIMITS.MAX_AMOUNT),
+  note: z.string().max(VALIDATION_LIMITS.NOTE_LENGTH).optional(),
 })
 
 router.post('/transfer', requireAuth, moneyLimiter, idempotency(), async (req: AuthedRequest, res) => {

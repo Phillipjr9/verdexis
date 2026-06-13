@@ -114,7 +114,7 @@ class MarketDataService {
   private cryptoCacheDuration = 20000        // live crypto list refreshes faster
   private ohlcCacheDuration = 60000          // OHLC bars don't tick every second
   private apiFailedUntil = 0                 // cooldown timestamp; 0 = healthy
-  private apiCooldownMs = 45000              // back off this long after a failure, then retry
+  private apiCooldownMs = 15000              // back off only 15 seconds after failure
 
   private isApiCoolingDown(): boolean {
     return Date.now() < this.apiFailedUntil
@@ -174,21 +174,28 @@ class MarketDataService {
   async getCryptoList(): Promise<CryptoQuote[]> {
     const cacheKey = 'crypto_list'
     const cached = this.getCached<CryptoQuote[]>(cacheKey, this.cryptoCacheDuration)
-    if (cached) return cached
+    if (cached) {
+      console.log('[marketData] returning cached crypto list:', cached.length, 'coins')
+      return cached
+    }
 
     if (this.isApiCoolingDown()) {
+      console.warn('[marketData] API in cooldown, checking for stale cache...')
       const stale = this.cache.get(cacheKey)?.data as CryptoQuote[] | undefined
-      return stale ?? []
+      if (stale && stale.length > 0) {
+        console.log('[marketData] returning stale cache:', stale.length, 'coins')
+        return stale
+      }
+      console.warn('[marketData] no stale cache available')
+      return []
     }
 
     try {
+      console.log('[marketData] fetching fresh crypto list...')
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 5000)
 
       const response = await fetch(
-        // 250 coins by market cap — the max CoinGecko returns per page, and
-        // what the server proxy clamps to. Earlier values (20, then 100)
-        // left the Trading and Markets pages feeling sparse.
         `${CG_PROXY}/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1&sparkline=true`,
         { signal: controller.signal }
       )
@@ -205,14 +212,20 @@ class MarketDataService {
       }
 
       const sanitized = sanitizeCryptoList(data)
+      console.log('[marketData] fetched', sanitized.length, 'coins, caching...')
       this.setCache(cacheKey, sanitized)
       return sanitized
     } catch (error) {
-      console.warn('CoinGecko API failed; returning empty crypto list:', error)
+      console.error('[marketData] getCryptoList failed:', error)
       this.markApiFailed()
       // Reuse the last good cached value if we have one; otherwise empty.
       const stale = this.cache.get(cacheKey)?.data as CryptoQuote[] | undefined
-      return stale ?? []
+      if (stale && stale.length > 0) {
+        console.log('[marketData] fallback to stale cache:', stale.length, 'coins')
+        return stale
+      }
+      console.warn('[marketData] no data available, returning empty')
+      return []
     }
   }
 

@@ -13,18 +13,28 @@ const alertSchema = z.object({
 })
 
 router.get('/', requireAuth, async (req: AuthedRequest, res) => {
+  const userId = req.userId
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
   const alerts = await prisma.priceAlert.findMany({
-    where: { userId: req.userId! },
+    where: { userId },
     orderBy: { createdAt: 'desc' },
   })
   res.json({ alerts })
 })
 
 router.post('/', requireAuth, async (req: AuthedRequest, res) => {
+  const userId = req.userId
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
   const parse = alertSchema.safeParse(req.body)
   if (!parse.success) { res.status(400).json({ error: 'Invalid input', details: parse.error.flatten() }); return }
   const alert = await prisma.priceAlert.create({
-    data: { ...parse.data, userId: req.userId! },
+    data: { ...parse.data, userId },
   })
   res.json({ alert })
 })
@@ -47,9 +57,13 @@ const checkSchema = z.object({
 })
 
 router.post('/check', requireAuth, async (req: AuthedRequest, res) => {
+  const userId = req.userId
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
   const parse = checkSchema.safeParse(req.body)
   if (!parse.success) { res.status(400).json({ error: 'Invalid input' }); return }
-  const userId = req.userId!
   const active = await prisma.priceAlert.findMany({ where: { userId, active: true, triggered: false } })
   const triggered: typeof active = []
   for (const alert of active) {
