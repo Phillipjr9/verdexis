@@ -5,13 +5,19 @@ applications:
       phases:
         preBuild:
           commands:
+            - echo "Setting NODE_ENV to development for build..."
+            - export NODE_ENV=development
             - echo "Installing all dependencies including devDependencies..."
-            - npm ci --legacy-peer-deps
+            - npm ci --include=dev
             - echo "Dependencies installed successfully"
+            - echo "Verifying vite plugins installation..."
+            - ls -la node_modules/@vitejs || echo "@vitejs not found"
         build:
           commands:
+            - echo "Adding node_modules/.bin to PATH..."
+            - export PATH="$PATH:$PWD/node_modules/.bin"
             - echo "Starting build with vite..."
-            - npx vite build
+            - npm run build
             - echo "Build completed successfully"
       artifacts:
         baseDirectory: dist
