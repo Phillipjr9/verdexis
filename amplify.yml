@@ -5,13 +5,13 @@ applications:
       phases:
         preBuild:
           commands:
-            - echo "Installing dependencies in app directory..."
-            - npm install --legacy-peer-deps
+            - echo "Installing all dependencies including devDependencies..."
+            - npm ci --legacy-peer-deps
             - echo "Dependencies installed successfully"
         build:
           commands:
             - echo "Starting build with vite..."
-            - npm run build
+            - npx vite build
             - echo "Build completed successfully"
       artifacts:
         baseDirectory: dist
