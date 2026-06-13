@@ -1,0 +1,16 @@
+api:
+  verdexis_api:
+    build_dir: server/dist
+    handler_dir: server/src
+    runtime: nodejs20.x
+    definition:
+      swagger: '3.0.0'
+      info:
+        title: VERDEXIS API
+        version: '1.0'
+      paths:
+        /api/health:
+          get:
+            responses:
+              '200':
+                description: OK
