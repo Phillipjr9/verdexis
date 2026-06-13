@@ -5,12 +5,9 @@ applications:
       phases:
         preBuild:
           commands:
-            - cd ..
-            - npm install
-            - npm run install:all
+            - npm install --legacy-peer-deps
         build:
           commands:
-            - cd app
             - npm run build
       artifacts:
         baseDirectory: dist
@@ -19,5 +16,3 @@ applications:
       cache:
         paths:
           - node_modules/**/*
-          - ../node_modules/**/*
-          - ../server/node_modules/**/*
