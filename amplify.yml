@@ -10,10 +10,8 @@ applications:
             - echo "Dependencies installed successfully"
         build:
           commands:
-            - echo "Adding node_modules/.bin to PATH..."
-            - export PATH="$PATH:$PWD/node_modules/.bin"
             - echo "Starting build with vite..."
-            - npm run build
+            - npx vite build
             - echo "Build completed successfully"
       artifacts:
         baseDirectory: dist
