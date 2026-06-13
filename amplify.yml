@@ -11,7 +11,7 @@ applications:
         build:
           commands:
             - echo "Starting build with vite..."
-            - npx vite build
+            - npm run build
             - echo "Build completed successfully"
       artifacts:
         baseDirectory: dist
