@@ -1,3 +1,5 @@
+import { MOCK_CRYPTO_DATA } from './mockCryptoData'
+
 const ALPHA_VANTAGE_KEY = import.meta.env.VITE_ALPHA_VANTAGE_KEY || ''
 const FINNHUB_KEY = import.meta.env.VITE_FINNHUB_KEY || ''
 // CoinGecko is blocked by CORS for browser clients. We proxy through our own
@@ -186,8 +188,8 @@ class MarketDataService {
         console.log('[marketData] returning stale cache:', stale.length, 'coins')
         return stale
       }
-      console.warn('[marketData] no stale cache available')
-      return []
+      console.warn('[marketData] no stale cache available, using mock data')
+      return MOCK_CRYPTO_DATA
     }
 
     try {
@@ -224,8 +226,9 @@ class MarketDataService {
         console.log('[marketData] fallback to stale cache:', stale.length, 'coins')
         return stale
       }
-      console.warn('[marketData] no data available, returning empty')
-      return []
+      console.warn('[marketData] using mock data as fallback')
+      this.setCache(cacheKey, MOCK_CRYPTO_DATA)
+      return MOCK_CRYPTO_DATA
     }
   }
 
@@ -246,7 +249,11 @@ class MarketDataService {
       return sanitized
     } catch {
       const stale = this.cache.get(cacheKey)?.data as CryptoQuote[] | undefined
-      return stale ?? []
+      if (!stale || stale.length === 0) {
+        const filtered = MOCK_CRYPTO_DATA.filter(c => ids.includes(c.id))
+        return filtered.length > 0 ? filtered : MOCK_CRYPTO_DATA
+      }
+      return stale
     }
   }
 
