@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { Toaster, toast } from 'sonner'
-import { ArrowLeft, Banknote, Coins, Shield, Trash2, Save, Wallet as WalletIcon } from 'lucide-react'
+import { ArrowLeft, Banknote, Coins, Shield, Trash2, Save, Wallet as WalletIcon, RefreshCw, CheckCircle, AlertCircle } from 'lucide-react'
 import Navigation from '../components/Navigation'
 import RequireAuth from '../components/RequireAuth'
+import { api } from '../lib/api'
 import {
   depositInstructions,
   setAdmin,
@@ -82,11 +83,85 @@ function web3For(chainId: string): Web3Payout {
 }
 
 function AdminInner() {
-  // The route is already gated by RequireAdmin (App.tsx) and the server
-  // re-checks role==='admin' on every mutation, so anyone who reaches this
-  // component is authorized. We just flip the local UI flag on mount so the
-  // editor controls render immediately — no "unlock" prompt to fight with.
   useEffect(() => { setAdmin(true) }, [])
+
+  // Amazon OAuth state
+  const [oauthStatus, setOAuthStatus] = useState<any | null>(null)
+  const [oauthLoading, setOAuthLoading] = useState(true)
+  const [authorizing, setAuthorizing] = useState(false)
+  const [pendingDeposits, setPendingDeposits] = useState<any[]>([])
+  const [confirmingId, setConfirmingId] = useState<string | null>(null)
+
+  // Load Amazon OAuth status
+  useEffect(() => {
+    loadOAuthStatus()
+    loadPendingDeposits()
+  }, [])
+
+  const loadOAuthStatus = async () => {
+    try {
+      const response = await api.get('/admin/amazon-oauth/status')
+      setOAuthStatus(response)
+    } catch (error) {
+      console.error('Failed to load OAuth status:', error)
+      setOAuthStatus({ configured: false, message: 'Failed to load status' })
+    } finally {
+      setOAuthLoading(false)
+    }
+  }
+
+  const loadPendingDeposits = async () => {
+    try {
+      const response = await api.get('/admin/deposits/pending')
+      const sellerCentralOnly = (response.deposits || []).filter((d: any) =>
+        d.reference?.toLowerCase().includes('sellercentral')
+      )
+      setPendingDeposits(sellerCentralOnly)
+    } catch (error) {
+      console.error('Failed to load pending deposits:', error)
+    }
+  }
+
+  const handleAuthorize = async () => {
+    try {
+      setAuthorizing(true)
+      const response = await api.get('/amazon-oauth/authorize')
+      window.open(response.authUrl, '_blank')
+      toast.success('Authorization page opened. Complete the flow in the new tab.')
+      setTimeout(loadOAuthStatus, 3000)
+    } catch (error) {
+      toast.error('Failed to get authorization URL')
+    } finally {
+      setAuthorizing(false)
+    }
+  }
+
+  const handleConfirmDeposit = async (depositId: string, userEmail: string) => {
+    try {
+      setConfirmingId(depositId)
+      await api.post(`/admin/deposits/${depositId}/confirm-sellercentral`, {
+        autoVerify: true,
+        notify: true,
+      })
+      toast.success(`Deposit confirmed for ${userEmail}`)
+      loadPendingDeposits()
+    } catch (error) {
+      toast.error(`Failed to confirm deposit: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setConfirmingId(null)
+    }
+  }
+
+  const handleClearTokens = async () => {
+    if (!window.confirm('Are you sure? This will clear all stored Amazon OAuth tokens.')) return
+    try {
+      await api.post('/admin/amazon-oauth/clear', {})
+      toast.success('OAuth tokens cleared')
+      loadOAuthStatus()
+    } catch (error) {
+      toast.error('Failed to clear tokens')
+    }
+  }
 
   // Currency being edited
   const [wireCurrency, setWireCurrency] = useState<FiatCurrency>('USD')
@@ -98,9 +173,6 @@ function AdminInner() {
   const [web3Form, setWeb3Form] = useState<Web3Payout>(() => web3For('default'))
 
   useEffect(() => onDepositInstructionsChanged(() => { /* re-render on store change */ }), [])
-
-  // On first mount, pull the canonical blob from the server so admin sees
-  // what every other device sees (and isn't editing a stale local cache).
   useEffect(() => { void hydrateFromServer() }, [])
 
   function saveWire(e: FormEvent) {
@@ -154,9 +226,6 @@ function AdminInner() {
     void persistRemote('Removed')
   }
 
-  /** Sync the latest local copy up to the server so the change reaches
-   *  the database (audit trail + cross-device propagation). Falls back to
-   *  a warning toast if the server rejects (e.g. not signed in as admin). */
   async function persistRemote(successMessage: string) {
     const ok = await pushToServer()
     if (ok) toast.success(successMessage)
@@ -310,6 +379,118 @@ function AdminInner() {
                 </div>
               </form>
             </section>
+
+            {/* AMAZON OAUTH SECTION */}
+            <section className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6 lg:col-span-2">
+              <div className="flex items-center gap-3 mb-5">
+                <Shield className="w-5 h-5 text-[#FF9900]" />
+                <h2 className="text-base font-medium text-[#E5E5E5]">Amazon Seller Partner API</h2>
+              </div>
+
+              {oauthLoading ? (
+                <div className="flex items-center justify-center h-24">
+                  <div className="text-center">
+                    <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#0C8B44]" />
+                    <p className="text-[#A0A0A0] text-sm">Loading settings...</p>
+                  </div>
+                </div>
+              ) : oauthStatus?.configured ? (
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3 bg-[#0C8B44]/10 border border-[#0C8B44]/30 rounded-lg p-4">
+                    <CheckCircle className="w-5 h-5 text-[#0C8B44] mt-0.5 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-[#E5E5E5]">Connected</p>
+                      <p className="text-xs text-[#A0A0A0] mt-1">
+                        Seller ID: <span className="font-mono">{oauthStatus.sellingPartnerId}</span>
+                      </p>
+                      <p className="text-xs text-[#A0A0A0]">
+                        Connected: {new Date(oauthStatus.obtainedAt || '').toLocaleString()}
+                      </p>
+                      <p className="text-xs text-[#737373] mt-1 font-mono">
+                        Token: {oauthStatus.refreshToken}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={loadOAuthStatus}
+                      className="px-3 py-2 rounded-lg bg-[#1a1a1a] border border-[#ffffff10] text-sm text-[#A0A0A0] hover:text-[#E5E5E5] transition-colors flex items-center justify-center gap-2"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Refresh
+                    </button>
+                    <button
+                      onClick={handleClearTokens}
+                      className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-400 hover:text-red-300 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3 bg-[#F57C00]/10 border border-[#F57C00]/30 rounded-lg p-4">
+                    <AlertCircle className="w-5 h-5 text-[#F57C00] mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium text-[#E5E5E5]">Not Connected</p>
+                      <p className="text-xs text-[#A0A0A0] mt-1">
+                        {oauthStatus?.message || 'Amazon Seller Partner API is not yet authorized.'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleAuthorize}
+                    disabled={authorizing}
+                    className="w-full px-4 py-3 rounded-lg bg-[#FF9900] text-white text-sm font-medium hover:bg-[#e68900] disabled:opacity-50 transition-colors"
+                  >
+                    {authorizing ? 'Opening authorization...' : 'Authorize Amazon Account'}
+                  </button>
+                  <p className="text-xs text-[#737373]">
+                    Click the button to authorize your Amazon Seller Central account. You'll be taken to Amazon's authorization page where you can grant access.
+                  </p>
+                </div>
+              )}
+            </section>
+
+            {/* PENDING SELLERCENTRAL DEPOSITS */}
+            {oauthStatus?.configured && (
+              <section className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6 lg:col-span-2">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-base font-medium text-[#E5E5E5]">Pending SellerCentral Deposits</h2>
+                  <span className="text-sm text-[#737373]">{pendingDeposits.length} pending</span>
+                </div>
+
+                {pendingDeposits.length === 0 ? (
+                  <p className="text-sm text-[#737373] text-center py-8">No pending SellerCentral deposits</p>
+                ) : (
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {pendingDeposits.map((deposit: any) => (
+                      <div key={deposit.id} className="flex items-center justify-between bg-[#1a1a1a] border border-[#ffffff10] rounded-lg p-4">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-[#E5E5E5]">
+                            {deposit.user.name || deposit.user.email}
+                          </p>
+                          <p className="text-xs text-[#737373] mt-0.5">
+                            ${deposit.amount.toLocaleString()} {deposit.currency}
+                          </p>
+                          <p className="text-[10px] text-[#555] mt-1">
+                            {new Date(deposit.createdAt).toLocaleString()}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleConfirmDeposit(deposit.id, deposit.user.email)}
+                          disabled={confirmingId === deposit.id}
+                          className="ml-4 px-3 py-2 rounded-lg bg-[#0C8B44] text-white text-xs font-medium hover:bg-[#0a7539] disabled:opacity-50 transition-colors whitespace-nowrap shrink-0"
+                        >
+                          {confirmingId === deposit.id ? 'Confirming...' : 'Confirm'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
           </div>
       </div>
     </div>

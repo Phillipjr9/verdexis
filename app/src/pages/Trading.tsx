@@ -28,6 +28,14 @@ const TRADING_FEE_RATE = TRADING_FEE_BPS / 10_000
 interface Level { price: number; size: number }
 interface PublicTrade { id: number; time: string; price: number; size: number; side: 'buy' | 'sell' }
 
+function showOrderFilled(side: OrderSide, symbol: string, qty: number, price: number, venue?: string) {
+  const action = side === 'buy' ? 'Bought' : 'Sold'
+  const total = qty * price
+  toast.success(`${action} ${qty} ${symbol}`, {
+    description: `at $${price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · Total $${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}${venue ? ` via ${venue}` : ''}`,
+  })
+}
+
 export default function Trading() {
   const [cryptoData, setCryptoData] = useState<CryptoQuote[]>([])
   const [selectedCrypto, setSelectedCrypto] = useState<CryptoQuote | null>(null)
@@ -669,7 +677,7 @@ export default function Trading() {
             </div>
 
             {isAuthenticated && (
-              <div className="mt-6">
+              <div className="mt-6 lg:col-span-12">
                 <WatchlistPanel
                   availableSymbols={cryptoData.map((c) => ({ symbol: c.symbol || c.id, name: c.name || c.id }))}
                   onSelect={(s) => {

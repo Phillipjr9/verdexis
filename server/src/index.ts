@@ -14,7 +14,7 @@ import rateLimit from 'express-rate-limit'
 import path from 'node:path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import WebSocket from 'ws'
+import { WebSocketServer } from 'ws'
 import http from 'node:http'
 import authRoutes, { promoteAllAdminEmails } from './routes/auth.js'
 import profileRoutes from './routes/profile.js'
@@ -222,7 +222,7 @@ export default app
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const server = http.createServer(app)
-  const wss = new WebSocket.Server({ server })
+  const wss = new WebSocketServer({ server })
   priceStreamManager.connectClients(wss)
 
   server.listen(PORT, '0.0.0.0', () => {

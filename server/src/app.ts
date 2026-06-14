@@ -31,6 +31,8 @@ import referralRoutes from './routes/referral.js'
 import dcaRoutes from './routes/dca.js'
 import depositAddressesRoutes from './routes/depositAddresses.js'
 import depositsRoutes from './routes/deposits.js'
+import amazonOAuthRoutes from './routes/amazon-oauth.js'
+import advancedOrdersRoutes from './routes/advancedOrders.js'
 import { isDbUnavailableError } from './dbError.js'
 import { requestContextMiddleware } from './logging.js'
 import { createErrorResponse } from './errorHandler.js'
@@ -148,6 +150,8 @@ app.use('/api/referrals', referralRoutes)
 app.use('/api/dca', dcaRoutes)
 app.use('/api/deposit-addresses', depositAddressesRoutes)
 app.use('/api/deposits', depositsRoutes)
+app.use('/api/oauth', amazonOAuthRoutes)
+app.use('/api/trades/advanced', advancedOrdersRoutes)
 
 app.post('/api/admin/cache/clear', async (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '')
