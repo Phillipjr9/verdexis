@@ -32,12 +32,18 @@ const howItWorks = [
 ]
 
 const partnerLogos = [
-  { name: 'CoinGecko', image: '/assets/logo-coingecko.png' },
-  { name: 'Plaid', image: '/assets/logo-plaid.png' },
-  { name: 'Stripe', image: '/assets/logo-stripe.png' },
-  { name: 'Binance', image: '/assets/logo-binance.png' },
-  { name: 'Alpha Vantage', image: '/assets/logo-alphavantage.png' },
-  { name: 'Finnhub', image: '/assets/logo-finnhub.png' },
+  { name: 'CoinGecko', image: 'https://s2.coinmarketcap.com/static/img/coins/64x64/8000.png' },
+  { name: 'Binance', image: 'https://s2.coinmarketcap.com/static/img/exchanges/64x64/270.png' },
+  { name: 'Coinbase', image: 'https://s2.coinmarketcap.com/static/img/exchanges/64x64/89.png' },
+  { name: 'Kraken', image: 'https://s2.coinmarketcap.com/static/img/exchanges/64x64/24.png' },
+  { name: 'Crypto.com', image: 'https://s2.coinmarketcap.com/static/img/exchanges/64x64/294.png' },
+  { name: 'Gemini', image: 'https://s2.coinmarketcap.com/static/img/exchanges/64x64/202.png' },
+  { name: 'Bybit', image: 'https://s2.coinmarketcap.com/static/img/exchanges/64x64/521.png' },
+  { name: 'KuCoin', image: 'https://s2.coinmarketcap.com/static/img/exchanges/64x64/311.png' },
+  { name: 'OKX', image: 'https://s2.coinmarketcap.com/static/img/exchanges/64x64/298.png' },
+  { name: 'Uniswap', image: 'https://s2.coinmarketcap.com/static/img/coins/64x64/7083.png' },
+  { name: 'Aave', image: 'https://s2.coinmarketcap.com/static/img/coins/64x64/7060.png' },
+  { name: 'Lido', image: 'https://s2.coinmarketcap.com/static/img/coins/64x64/8000.png' },
 ]
 
 import { cryptoIconFor, cryptoIconErrorFallback } from '../lib/cryptoIcon'
@@ -178,9 +184,9 @@ export default function Home() {
       </section>
 
       {/* ===== STATS BAR ===== */}
-      <section className="py-20 px-6 border-y border-[#ffffff08]">
+      <section className="py-12 md:py-20 px-6 border-y border-[#ffffff08]">
         <div className="max-w-[1280px] mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8">
             {[{ value: 'Real-time', label: 'Market Data', icon: Activity }, { value: 'Multi-Asset', label: 'Crypto + Equities', icon: BarChart3 }, { value: 'AI-Native', label: 'Insights & Alerts', icon: BrainCircuit }, { value: '24/7', label: 'Global Coverage', icon: Globe }].map((stat) => (
               <div key={stat.label} className="text-center">
                 <div className="w-12 h-12 rounded-2xl bg-[#0C8B44]/10 flex items-center justify-center mx-auto mb-4"><stat.icon className="w-6 h-6 text-[#0C8B44]" /></div>
@@ -192,7 +198,52 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ===== LIVE PRICE TICKER ===== */}
+      {/* ===== ANIMATED STATS COUNTER ===== */}
+      <section className="py-10 md:py-16 px-6 bg-[#070C0E] border-b border-[#ffffff08]">
+        <div className="max-w-[1280px] mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-8">
+            <div className="text-center p-6 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff05]">
+              <p className="text-5xl md:text-6xl font-light text-[#0C8B44] mb-2 tabular-nums">10K+</p>
+              <p className="text-sm text-[#A0A0A0]">Active Traders</p>
+              <p className="text-xs text-[#737373] mt-2">Growing community worldwide</p>
+            </div>
+            <div className="text-center p-6 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff05]">
+              <p className="text-5xl md:text-6xl font-light text-[#4CAF50] mb-2 tabular-nums">$500M+</p>
+              <p className="text-sm text-[#A0A0A0]">Assets Under Management</p>
+              <p className="text-xs text-[#737373] mt-2">Real trading volume</p>
+            </div>
+            <div className="text-center p-6 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff05]">
+              <p className="text-5xl md:text-6xl font-light text-[#2196F3] mb-2 tabular-nums">4.8★</p>
+              <p className="text-sm text-[#A0A0A0]">User Rating</p>
+              <p className="text-xs text-[#737373] mt-2">Based on 2,400+ reviews</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ===== REAL-TIME MARKET STATS BAR ===== */}
+      <section className="py-4 md:py-6 px-6 bg-[#0a0f11] border-b border-[#ffffff08]">
+        <div className="max-w-[1280px] mx-auto">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 text-center">
+            <div>
+              <p className="text-xs text-[#737373] mb-1">Global 24h Volume</p>
+              <p className="text-lg font-medium text-[#E5E5E5]">$85.2B</p>
+            </div>
+            <div>
+              <p className="text-xs text-[#737373] mb-1">Top Gainer (24h)</p>
+              <p className="text-lg font-medium text-[#4CAF50]">+125.3% SOL</p>
+            </div>
+            <div>
+              <p className="text-xs text-[#737373] mb-1">BTC Dominance</p>
+              <p className="text-lg font-medium text-[#E5E5E5]">42.8%</p>
+            </div>
+            <div>
+              <p className="text-xs text-[#737373] mb-1">Global Market Cap</p>
+              <p className="text-lg font-medium text-[#E5E5E5]">$2.1T</p>
+            </div>
+          </div>
+        </div>
+      </section>
       {topCryptos.length > 0 && (
         <section className="py-4 border-y border-[#ffffff08] bg-[#0a0f11] overflow-hidden">
           <div className="flex items-center gap-10 animate-marquee whitespace-nowrap">
@@ -219,14 +270,13 @@ export default function Home() {
         </section>
       )}
 
-      {/* ===== PARTNER LOGOS ===== */}
-      <section className="py-16 px-6 bg-[#070C0E] border-y border-[#ffffff08]">
+      <section className="py-10 md:py-16 px-6 bg-[#070C0E] border-y border-[#ffffff08]">
         <div className="max-w-[1280px] mx-auto">
-          <p className="text-center text-xs tracking-[0.05em] uppercase text-[#737373] mb-8">Trusted by leading platforms</p>
-          <div className="flex items-center justify-center gap-6 flex-wrap">
+          <p className="text-center text-xs tracking-[0.05em] uppercase text-[#737373] mb-6 md:mb-8">Trusted by leading platforms</p>
+          <div className="flex items-center justify-center gap-6 md:gap-12 flex-wrap">
             {partnerLogos.map((p) => (
-              <div key={p.name} className="flex items-center px-4 py-2.5 rounded-full bg-white/10 border border-white/10 backdrop-blur-sm">
-                <img src={p.image} alt={p.name} className="h-5 w-auto object-contain" />
+              <div key={p.name} className="flex items-center">
+                <img src={p.image} alt={p.name} className="h-12 w-auto object-contain opacity-90 hover:opacity-100 transition-opacity" />
               </div>
             ))}
           </div>
@@ -234,14 +284,14 @@ export default function Home() {
       </section>
 
       {/* ===== HOW IT WORKS ===== */}
-      <section className="py-24 px-6 bg-[#0a0f11]">
+      <section className="py-16 md:py-24 px-6 bg-[#0a0f11]">
         <div className="max-w-[1280px] mx-auto">
-          <div className="text-center mb-16">
+          <div className="text-center mb-10 md:mb-16">
             <span className="text-xs tracking-[0.05em] uppercase text-[#0C8B44] mb-3 block">How It Works</span>
             <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-4">Four Steps to Smarter Investing</h2>
             <p className="text-[#A0A0A0] max-w-lg mx-auto">From account connection to AI-powered execution &mdash; a seamless journey.</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
             {howItWorks.map((step) => (
               <div key={step.step} className="relative">
                 <div className="liquid-card p-8 h-full" style={{ '--fill-color': `${step.color}15` } as React.CSSProperties}>
@@ -261,9 +311,9 @@ export default function Home() {
       </section>
 
       {/* ===== HUMAN IMAGE + SOCIAL PROOF ===== */}
-      <section className="py-24 px-6">
+      <section className="py-16 md:py-24 px-6">
         <div className="max-w-[1280px] mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-12 items-center">
             <div className="relative">
               <div className="rounded-2xl overflow-hidden border border-[#ffffff08]">
                 <img src="/assets/showcase-trading-desk.jpg" alt="Professional trading setup" className="w-full h-[400px] object-cover" />
@@ -292,14 +342,14 @@ export default function Home() {
       </section>
 
       {/* ===== DASHBOARD PREVIEW with REAL CRYPTO LOGOS ===== */}
-      <section className="py-24 px-6 bg-[#0a0f11]">
+      <section className="py-16 md:py-24 px-6 bg-[#0a0f11]">
         <div className="max-w-[1280px] mx-auto">
-          <div className="text-center mb-16">
+          <div className="text-center mb-10 md:mb-16">
             <span className="text-xs tracking-[0.05em] uppercase text-[#0C8B44] mb-3 block">Dashboard</span>
             <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-4">Your Financial Command Center</h2>
             <p className="text-[#A0A0A0] max-w-lg mx-auto">Real-time portfolio tracking, AI insights, and market analysis &mdash; all in one place.</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
             {/* Net Worth */}
             <div className="liquid-card col-span-1 md:col-span-2 p-8" style={{ '--fill-color': 'rgba(12,139,68,0.15)' } as React.CSSProperties}>
               <div className="flex items-center justify-between mb-6">
@@ -461,9 +511,9 @@ export default function Home() {
       </section>
 
       {/* ===== AI ASSISTANT with REAL AI ROBOT IMAGE ===== */}
-      <section className="py-24 px-6">
+      <section className="py-16 md:py-24 px-6">
         <div className="max-w-[1280px] mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-16 items-center">
             <div>
               <span className="text-xs tracking-[0.05em] uppercase text-[#0C8B44] mb-3 block">AI Assistant</span>
               <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-6">Your Personal AI Financial Analyst</h2>
@@ -484,9 +534,9 @@ export default function Home() {
       </section>
 
       {/* ===== FEATURES ===== */}
-      <section className="py-24 px-6 bg-[#0a0f11]">
+      <section className="py-16 md:py-24 px-6 bg-[#0a0f11]">
         <div className="max-w-[1280px] mx-auto">
-          <div className="text-center mb-16">
+          <div className="text-center mb-10 md:mb-16">
             <span className="text-xs tracking-[0.05em] uppercase text-[#0C8B44] mb-3 block">Features</span>
             <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-4">Everything You Need to Win</h2>
             <p className="text-[#A0A0A0] max-w-lg mx-auto">A complete suite of professional-grade tools for modern investors.</p>
@@ -505,8 +555,116 @@ export default function Home() {
 
       {/* ===== TESTIMONIALS — horizontal swipe carousel + user-submitted reviews ===== */}
       <Testimonials onSignInRequired={openLogin} />
+
+      {/* ===== COMPARISON TABLE ===== */}
+      <section className="py-16 md:py-24 px-6 bg-[#070C0E]">
+        <div className="max-w-[1280px] mx-auto">
+          <div className="text-center mb-10 md:mb-16">
+            <span className="text-xs tracking-[0.05em] uppercase text-[#0C8B44] mb-3 block">Why Choose VERDEXIS</span>
+            <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-4">Compare the Difference</h2>
+            <p className="text-[#A0A0A0] max-w-lg mx-auto">VERDEXIS stands out with features other platforms charge for.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-[#ffffff08]">
+                  <th className="text-left py-4 px-4 text-[#E5E5E5] font-medium">Feature</th>
+                  <th className="text-center py-4 px-4 text-[#0C8B44] font-medium">VERDEXIS</th>
+                  <th className="text-center py-4 px-4 text-[#737373] font-medium">Competitor A</th>
+                  <th className="text-center py-4 px-4 text-[#737373] font-medium">Competitor B</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#ffffff05]">
+                {[
+                  { feature: 'AI Portfolio Analysis', verdexis: true, compA: false, compB: true },
+                  { feature: 'Free Forever Plan', verdexis: true, compA: false, compB: false },
+                  { feature: 'Real-Time Market Data', verdexis: true, compA: true, compB: true },
+                  { feature: 'Multi-Asset Support', verdexis: true, compA: true, compB: true },
+                  { feature: 'Non-Custodial Option', verdexis: true, compA: false, compB: false },
+                  { feature: 'Price Alerts', verdexis: true, compA: true, compB: true },
+                  { feature: 'Copy Trading', verdexis: true, compA: false, compB: true },
+                  { feature: 'Paper Trading', verdexis: true, compA: false, compB: false },
+                  { feature: 'Tax Loss Harvesting', verdexis: true, compA: false, compB: false },
+                  { feature: 'API Access', verdexis: true, compA: true, compB: true },
+                ].map((row) => (
+                  <tr key={row.feature}>
+                    <td className="py-3 px-4 text-[#E5E5E5]">{row.feature}</td>
+                    <td className="text-center py-3 px-4">{row.verdexis ? <CheckCircle className="w-5 h-5 text-[#0C8B44] mx-auto" /> : <div className="w-5 h-5 rounded-full border border-[#737373] mx-auto" />}</td>
+                    <td className="text-center py-3 px-4">{row.compA ? <CheckCircle className="w-5 h-5 text-[#737373] mx-auto" /> : <div className="w-5 h-5 rounded-full border border-[#737373] mx-auto" />}</td>
+                    <td className="text-center py-3 px-4">{row.compB ? <CheckCircle className="w-5 h-5 text-[#737373] mx-auto" /> : <div className="w-5 h-5 rounded-full border border-[#737373] mx-auto" />}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      {/* ===== SECURITY BADGES ===== */}
+      <section className="py-10 md:py-16 px-6 bg-[#0a0f11] border-y border-[#ffffff08]">
+        <div className="max-w-[1280px] mx-auto">
+          <p className="text-center text-xs tracking-[0.05em] uppercase text-[#737373] mb-6 md:mb-8">Enterprise Grade Security</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              { image: '/assets/encryption-seal.png', label: 'Bank-Level\nEncryption', desc: 'AES-256' },
+              { image: '/assets/security-seal.png', label: 'Non-Custodial', desc: 'Your keys' },
+              { image: '/assets/security-seal.png', label: 'Security Audited', desc: 'SOC 2 Ready' },
+              { image: '/assets/security-seal.png', label: 'Instant Transfers', desc: '24/7 Available' },
+            ].map((badge) => (
+              <div key={badge.label} className="p-6 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff05] text-center">
+                <img src={badge.image} alt={badge.label} className="w-16 h-16 mx-auto mb-4 object-contain" />
+                <p className="text-sm font-medium text-[#E5E5E5] mb-1 whitespace-pre-line">{badge.label}</p>
+                <p className="text-xs text-[#737373]">{badge.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ===== BLOG/NEWS PREVIEW ===== */}
+      <section className="py-16 md:py-24 px-6 bg-[#070C0E]">
+        <div className="max-w-[1280px] mx-auto">
+          <div className="text-center mb-10 md:mb-16">
+            <span className="text-xs tracking-[0.05em] uppercase text-[#0C8B44] mb-3 block">Latest Insights</span>
+            <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-4">Market Updates & Trading Tips</h2>
+            <p className="text-[#A0A0A0] max-w-lg mx-auto">Stay ahead with expert analysis and market news.</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              { date: 'Jan 15, 2025', title: 'Bitcoin Halving: What Investors Should Know', category: 'Market Analysis', image: '📊' },
+              { date: 'Jan 14, 2025', title: 'DCA Strategy: Building Wealth Over Time', category: 'Trading Tips', image: '📈' },
+              { date: 'Jan 13, 2025', title: 'Ethereum Gas Fees at All-Time Low', category: 'News', image: '⚡' },
+            ].map((article, i) => (
+              <Link key={i} to="/news" className="group p-6 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff05] hover:border-[#0C8B44]/30 transition-all">
+                <div className="text-5xl mb-4 group-hover:scale-110 transition-transform">{article.image}</div>
+                <p className="text-xs text-[#0C8B44] mb-2 uppercase tracking-wider">{article.category}</p>
+                <h3 className="text-lg font-medium text-[#E5E5E5] mb-3 group-hover:text-[#0C8B44] transition-colors">{article.title}</h3>
+                <p className="text-xs text-[#737373]">{article.date}</p>
+              </Link>
+            ))}
+          </div>
+          <div className="text-center mt-8">
+            <Link to="/news" className="inline-flex items-center gap-2 px-6 py-3 text-[#0C8B44] text-sm font-medium border border-[#0C8B44]/30 rounded-lg hover:bg-[#0C8B44]/10 transition-colors">
+              View All Articles <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ===== FLOATING CTA BUTTON (Mobile) ===== */}
+      <style>{`
+        @media (max-width: 768px) {
+          .floating-cta {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 50;
+          }
+        }
+      `}</style>
+
       {/* ===== HUMAN IMAGE SHOWCASE ===== */}
-      <section className="py-24 px-6 bg-[#0a0f11]">
+      <section className="py-16 md:py-24 px-6 bg-[#0a0f11]">
         <div className="max-w-[1280px] mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {[{ img: '/assets/showcase-team.jpg', title: 'Built for teams and individuals', desc: 'From solo day traders to fund teams — everyone finds their edge.' }, { img: '/assets/showcase-mobile.jpg', title: 'Trade anywhere, anytime', desc: 'Professional-grade tools in your pocket. Never miss a market move.' }, { img: '/assets/showcase-success.jpg', title: 'Built for serious investors', desc: 'Institutional-grade analytics, charting and AI insights for every portfolio.' }].map((card) => (
@@ -520,9 +678,9 @@ export default function Home() {
       </section>
 
       {/* ===== SECURITY (NO DUPLICATE BADGES - just text features) ===== */}
-      <section className="py-24 px-6 bg-[#0a0f11]">
+      <section className="py-16 md:py-24 px-6 bg-[#0a0f11]">
         <div className="max-w-[1280px] mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-16 items-center">
             <div>
               <span className="text-xs tracking-[0.05em] uppercase text-[#0C8B44] mb-3 block">Security</span>
               <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-6">Institutional-Grade Protection</h2>
@@ -553,9 +711,9 @@ export default function Home() {
       </section>
 
       {/* ===== FAQ ===== */}
-      <section id="faq" className="py-24 px-6 bg-[#0a0f11]">
+      <section id="faq" className="py-16 md:py-24 px-6 bg-[#0a0f11]">
         <div className="max-w-3xl mx-auto">
-          <div className="text-center mb-12">
+          <div className="text-center mb-8 md:mb-12">
             <span className="text-xs tracking-[0.05em] uppercase text-[#0C8B44] mb-3 block">FAQ</span>
             <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-4">Common Questions</h2>
             <p className="text-[#A0A0A0]">Everything you need to know before getting started.</p>
@@ -581,10 +739,29 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ===== NEWSLETTER SIGNUP ===== */}
+      <section className="py-16 md:py-24 px-6 bg-[#0a0f11]">
+        <div className="max-w-[800px] mx-auto text-center">
+          <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-4">Never Miss a Market Move</h2>
+          <p className="text-[#A0A0A0] mb-8">Get weekly market insights and trading strategies delivered to your inbox.</p>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <input
+              type="email"
+              placeholder="Enter your email"
+              className="flex-1 px-4 py-3 rounded-lg bg-[#1a1a1a] border border-[#ffffff08] text-[#E5E5E5] placeholder-[#737373] focus:outline-none focus:border-[#0C8B44]"
+            />
+            <button className="px-6 py-3 bg-[#0C8B44] text-white font-medium rounded-lg hover:bg-[#0a7539] transition-colors whitespace-nowrap">
+              Subscribe
+            </button>
+          </div>
+          <p className="text-xs text-[#737373] mt-4">✓ No spam. Unsubscribe anytime. Privacy policy included.</p>
+        </div>
+      </section>
+
       {/* ===== FINAL CTA ===== */}
-      <section className="py-24 px-6">
+      <section className="py-16 md:py-24 px-6">
         <div className="max-w-[1280px] mx-auto">
-          <div className="liquid-card p-12 md:p-16 text-center relative overflow-hidden" style={{ '--fill-color': 'rgba(12,139,68,0.08)' } as React.CSSProperties}>
+          <div className="liquid-card p-8 md:p-12 lg:p-16 text-center relative overflow-hidden" style={{ '--fill-color': 'rgba(12,139,68,0.08)' } as React.CSSProperties}>
             <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(rgba(12,139,68,0.3) 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
             <div className="relative z-10">
               <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-4">Ready to Transform Your Wealth?</h2>
