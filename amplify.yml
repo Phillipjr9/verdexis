@@ -7,8 +7,6 @@ applications:
           commands:
             - echo "Setting NODE_ENV to production for build..."
             - export NODE_ENV=production
-            - echo "Setting API URL to Elastic Beanstalk backend..."
-            - export VITE_API_URL=https://verdexis-api-env.eba-dcptnmmg.us-east-1.elasticbeanstalk.com/api
             - echo "Installing all dependencies including devDependencies..."
             - npm ci --include=dev
             - echo "Dependencies installed successfully"
