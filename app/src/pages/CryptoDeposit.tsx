@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import Navigation from '../components/Navigation'
 import { toast, Toaster } from 'sonner'
-import { Copy, QrCode, AlertCircle, ChevronLeft, Check, ExternalLink } from 'lucide-react'
+import { Copy, QrCode, AlertCircle, ChevronLeft, Check, ExternalLink, Clock, Bell, BellOff, Shield, TrendingUp } from 'lucide-react'
 import { api, getToken } from '../lib/api'
 import QRCode from 'qrcode'
 
@@ -13,14 +13,79 @@ interface DepositAddress {
   minDeposit: number
   confirmations: number
   note?: string
+  alternateNetworks?: Array<{ network: string; address?: string; minDeposit: number }>
+}
+
+interface PendingDeposit {
+  id: string
+  asset: string
+  amount: number
+  address: string
+  txHash: string
+  confirmations: number
+  requiredConfirmations: number
+  status: 'pending' | 'confirmed' | 'credited'
+  timestamp: Date
 }
 
 const CRYPTO_ASSETS = [
-  { symbol: 'BTC', name: 'Bitcoin', network: 'Bitcoin', minDeposit: 0.0001, confirmations: 3, icon: '₿' },
-  { symbol: 'ETH', name: 'Ethereum', network: 'Ethereum', minDeposit: 0.001, confirmations: 12, icon: 'Ξ' },
-  { symbol: 'SOL', name: 'Solana', network: 'Solana', minDeposit: 0.01, confirmations: 1, icon: '◎' },
-  { symbol: 'USDT', name: 'Tether', network: 'Ethereum (ERC-20)', minDeposit: 1, confirmations: 12, icon: '₮' },
-  { symbol: 'USDC', name: 'USD Coin', network: 'Ethereum (ERC-20)', minDeposit: 1, confirmations: 12, icon: '$' },
+  { 
+    symbol: 'BTC', 
+    name: 'Bitcoin', 
+    network: 'Bitcoin', 
+    minDeposit: 0.0001, 
+    confirmations: 3, 
+    icon: '₿',
+    limits: { daily: 10, monthly: 100 },
+  },
+  { 
+    symbol: 'ETH', 
+    name: 'Ethereum', 
+    network: 'Ethereum (ERC-20)', 
+    minDeposit: 0.001, 
+    confirmations: 12, 
+    icon: 'Ξ',
+    limits: { daily: 50, monthly: 500 },
+    alternateNetworks: [
+      { network: 'Arbitrum', minDeposit: 0.001 },
+      { network: 'Optimism', minDeposit: 0.001 },
+    ],
+  },
+  { 
+    symbol: 'SOL', 
+    name: 'Solana', 
+    network: 'Solana', 
+    minDeposit: 0.01, 
+    confirmations: 1, 
+    icon: '◎',
+    limits: { daily: 1000, monthly: 10000 },
+  },
+  { 
+    symbol: 'USDT', 
+    name: 'Tether', 
+    network: 'Ethereum (ERC-20)', 
+    minDeposit: 1, 
+    confirmations: 12, 
+    icon: '₮',
+    limits: { daily: 50000, monthly: 500000 },
+    alternateNetworks: [
+      { network: 'Tron (TRC-20)', minDeposit: 1 },
+      { network: 'BSC (BEP-20)', minDeposit: 1 },
+    ],
+  },
+  { 
+    symbol: 'USDC', 
+    name: 'USD Coin', 
+    network: 'Ethereum (ERC-20)', 
+    minDeposit: 1, 
+    confirmations: 12, 
+    icon: '$',
+    limits: { daily: 50000, monthly: 500000 },
+    alternateNetworks: [
+      { network: 'Polygon', minDeposit: 1 },
+      { network: 'Arbitrum', minDeposit: 1 },
+    ],
+  },
 ]
 
 export default function CryptoDeposit() {
@@ -30,6 +95,11 @@ export default function CryptoDeposit() {
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('')
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [selectedNetwork, setSelectedNetwork] = useState<string>('')
+  const [pendingDeposits, setPendingDeposits] = useState<PendingDeposit[]>([])
+  const [showHistory, setShowHistory] = useState(false)
+  const [emailNotifications, setEmailNotifications] = useState(true)
+  const [verificationTier, setVerificationTier] = useState<'unverified' | 'basic' | 'advanced'>('basic')
 
   useEffect(() => {
     if (!getToken()) {
@@ -37,48 +107,81 @@ export default function CryptoDeposit() {
       return
     }
     loadDepositAddress()
-  }, [selectedAsset])
+    loadPendingDeposits()
+    loadUserPreferences()
+  }, [selectedAsset, selectedNetwork])
 
   const loadDepositAddress = async () => {
     setLoading(true)
     try {
-      // Try to get existing deposit address from API
       const res = await api.getMyDepositAddresses()
+      const network = selectedNetwork || selectedAsset.network
       
       if (res.addresses && res.addresses[selectedAsset.symbol]) {
         const addr = res.addresses[selectedAsset.symbol]
         setDepositAddress({
           asset: selectedAsset.symbol,
           address: addr.address || generateMockAddress(selectedAsset.symbol),
-          network: selectedAsset.network,
+          network,
           minDeposit: selectedAsset.minDeposit,
           confirmations: selectedAsset.confirmations,
           note: addr.note,
+          alternateNetworks: selectedAsset.alternateNetworks,
         })
       } else {
-        // Generate mock address for demo
         setDepositAddress({
           asset: selectedAsset.symbol,
           address: generateMockAddress(selectedAsset.symbol),
-          network: selectedAsset.network,
+          network,
           minDeposit: selectedAsset.minDeposit,
           confirmations: selectedAsset.confirmations,
           note: 'This is a demo address. In production, this would be your unique deposit address.',
+          alternateNetworks: selectedAsset.alternateNetworks,
         })
       }
     } catch (err) {
       console.error('Failed to load deposit address:', err)
-      // Fallback to mock address
       setDepositAddress({
         asset: selectedAsset.symbol,
         address: generateMockAddress(selectedAsset.symbol),
-        network: selectedAsset.network,
+        network: selectedNetwork || selectedAsset.network,
         minDeposit: selectedAsset.minDeposit,
         confirmations: selectedAsset.confirmations,
         note: 'Demo address - backend unavailable',
+        alternateNetworks: selectedAsset.alternateNetworks,
       })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadPendingDeposits = async () => {
+    try {
+      setPendingDeposits([
+        {
+          id: '1',
+          asset: 'BTC',
+          amount: 0.05,
+          address: 'bc1q...',
+          txHash: '0x1234...5678',
+          confirmations: 2,
+          requiredConfirmations: 3,
+          status: 'pending',
+          timestamp: new Date(Date.now() - 15 * 60 * 1000),
+        },
+      ])
+    } catch (err) {
+      console.error('Failed to load pending deposits:', err)
+    }
+  }
+
+  const loadUserPreferences = async () => {
+    try {
+      const prefs = JSON.parse(localStorage.getItem('verdexis_prefs') || '{}')
+      setEmailNotifications(prefs.emailAlerts !== false)
+      setVerificationTier('basic')
+    } catch (err) {
+      console.error('Failed to load preferences:', err)
     }
   }
 
@@ -125,6 +228,44 @@ export default function CryptoDeposit() {
     toast.success('QR code downloaded')
   }
 
+  const toggleNotifications = async () => {
+    const newValue = !emailNotifications
+    setEmailNotifications(newValue)
+    try {
+      const prefs = JSON.parse(localStorage.getItem('verdexis_prefs') || '{}')
+      prefs.emailAlerts = newValue
+      localStorage.setItem('verdexis_prefs', JSON.stringify(prefs))
+      if (getToken()) {
+        await api.patchProfile({ prefs })
+      }
+      toast.success(newValue ? 'Email notifications enabled' : 'Email notifications disabled')
+    } catch (err) {
+      console.error('Failed to update notifications:', err)
+    }
+  }
+
+  const getDepositLimits = () => {
+    const tierLimits = {
+      unverified: { daily: 500, monthly: 2000 },
+      basic: { daily: 10000, monthly: 50000 },
+      advanced: { daily: 100000, monthly: 1000000 },
+    }
+    return tierLimits[verificationTier]
+  }
+
+  const formatTimeAgo = (date: Date) => {
+    const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
+    if (seconds < 60) return `${seconds}s ago`
+    const minutes = Math.floor(seconds / 60)
+    if (minutes < 60) return `${minutes}m ago`
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return `${hours}h ago`
+    const days = Math.floor(hours / 24)
+    return `${days}d ago`
+  }
+
+  const limits = getDepositLimits()
+
   return (
     <div className="min-h-screen bg-[#070C0E]">
       <Toaster position="top-right" theme="dark" />
@@ -140,12 +281,40 @@ export default function CryptoDeposit() {
             >
               <ChevronLeft className="w-4 h-4" /> Back to Wallet
             </button>
-            <h1 className="text-3xl md:text-4xl font-light tracking-[-0.03em] text-[#E5E5E5]">
-              Deposit Crypto
-            </h1>
-            <p className="text-sm text-[#737373] mt-1">
-              Send crypto to your Verdexis wallet
-            </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl md:text-4xl font-light tracking-[-0.03em] text-[#E5E5E5]">
+                  Deposit Crypto
+                </h1>
+                <p className="text-sm text-[#737373] mt-1">
+                  Send crypto to your Verdexis wallet
+                </p>
+              </div>
+              <button
+                onClick={toggleNotifications}
+                className="flex items-center gap-2 px-4 py-2 bg-[#1a1a1a] border border-[#ffffff08] rounded-lg hover:border-[#0C8B44]/30 transition-colors"
+                title={emailNotifications ? 'Disable email notifications' : 'Enable email notifications'}
+              >
+                {emailNotifications ? <Bell className="w-4 h-4 text-[#0C8B44]" /> : <BellOff className="w-4 h-4 text-[#737373]" />}
+                <span className="text-xs text-[#A0A0A0]">Notifications</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Verification Tier & Limits */}
+          <div className="glass-card p-4 mb-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Shield className={`w-5 h-5 ${verificationTier === 'advanced' ? 'text-[#0C8B44]' : verificationTier === 'basic' ? 'text-[#2196F3]' : 'text-[#737373]'}`} />
+              <div>
+                <p className="text-sm font-medium text-[#E5E5E5] capitalize">{verificationTier} Verification</p>
+                <p className="text-xs text-[#737373]">Daily: ${limits.daily.toLocaleString()} • Monthly: ${limits.monthly.toLocaleString()}</p>
+              </div>
+            </div>
+            {verificationTier !== 'advanced' && (
+              <Link to="/kyc" className="text-xs text-[#0C8B44] hover:text-[#00E676] transition-colors flex items-center gap-1">
+                <TrendingUp className="w-3 h-3" /> Upgrade
+              </Link>
+            )}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -157,7 +326,7 @@ export default function CryptoDeposit() {
                   {CRYPTO_ASSETS.map((asset) => (
                     <button
                       key={asset.symbol}
-                      onClick={() => setSelectedAsset(asset)}
+                      onClick={() => { setSelectedAsset(asset); setSelectedNetwork('') }}
                       className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${
                         selectedAsset.symbol === asset.symbol
                           ? 'bg-[#0C8B44]/15 border border-[#0C8B44]/30'
@@ -181,12 +350,90 @@ export default function CryptoDeposit() {
 
             {/* Deposit Instructions */}
             <div className="lg:col-span-2 space-y-6">
+              {/* Pending Deposits */}
+              {pendingDeposits.length > 0 && (
+                <div className="glass-card p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-medium text-[#E5E5E5] flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-[#FF9800]" />
+                      Pending Deposits ({pendingDeposits.length})
+                    </h3>
+                    <button
+                      onClick={() => setShowHistory(!showHistory)}
+                      className="text-xs text-[#0C8B44] hover:text-[#00E676] transition-colors"
+                    >
+                      {showHistory ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                  {showHistory && (
+                    <div className="space-y-3">
+                      {pendingDeposits.map((deposit) => (
+                        <div key={deposit.id} className="p-4 rounded-lg bg-[#0a0e10] border border-[#ffffff08]">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-[#E5E5E5]">
+                                {deposit.amount} {deposit.asset}
+                              </span>
+                              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                deposit.status === 'confirmed' ? 'bg-[#4CAF50]/20 text-[#4CAF50]' :
+                                deposit.status === 'credited' ? 'bg-[#0C8B44]/20 text-[#0C8B44]' :
+                                'bg-[#FF9800]/20 text-[#FF9800]'
+                              }`}>
+                                {deposit.status === 'pending' ? `${deposit.confirmations}/${deposit.requiredConfirmations}` : deposit.status}
+                              </span>
+                            </div>
+                            <span className="text-xs text-[#737373]">{formatTimeAgo(deposit.timestamp)}</span>
+                          </div>
+                          <p className="text-xs text-[#737373] font-mono truncate">TX: {deposit.txHash}</p>
+                          <div className="mt-2 w-full bg-[#1a1a1a] rounded-full h-1.5">
+                            <div 
+                              className="bg-[#0C8B44] h-1.5 rounded-full transition-all" 
+                              style={{ width: `${(deposit.confirmations / deposit.requiredConfirmations) * 100}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {loading ? (
                 <div className="glass-card p-8 flex items-center justify-center">
                   <div className="w-6 h-6 border-2 border-[#0C8B44] border-t-transparent rounded-full animate-spin" />
                 </div>
               ) : depositAddress ? (
                 <>
+                  {/* Network Selection */}
+                  {depositAddress.alternateNetworks && depositAddress.alternateNetworks.length > 0 && (
+                    <div className="glass-card p-6">
+                      <h3 className="text-sm font-medium text-[#E5E5E5] mb-3">Select Network</h3>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => setSelectedNetwork('')}
+                          className={`p-3 rounded-lg text-left transition-colors ${
+                            !selectedNetwork ? 'bg-[#0C8B44]/15 border border-[#0C8B44]/30' : 'bg-[#0a0e10] border border-[#ffffff08]'
+                          }`}
+                        >
+                          <p className="text-sm text-[#E5E5E5]">{selectedAsset.network}</p>
+                          <p className="text-xs text-[#737373]">Min: {selectedAsset.minDeposit}</p>
+                        </button>
+                        {depositAddress.alternateNetworks.map((net) => (
+                          <button
+                            key={net.network}
+                            onClick={() => setSelectedNetwork(net.network)}
+                            className={`p-3 rounded-lg text-left transition-colors ${
+                              selectedNetwork === net.network ? 'bg-[#0C8B44]/15 border border-[#0C8B44]/30' : 'bg-[#0a0e10] border border-[#ffffff08]'
+                            }`}
+                          >
+                            <p className="text-sm text-[#E5E5E5]">{net.network}</p>
+                            <p className="text-xs text-[#737373]">Min: {net.minDeposit}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* QR Code */}
                   <div className="glass-card p-6">
                     <div className="flex flex-col items-center">
