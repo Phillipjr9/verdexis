@@ -65,6 +65,7 @@ model User {
   referrals     Referral[]     @relation("Referrer")
   referralBonuses ReferralBonus[]
   dcaSchedules  DcaSchedule[]
+  passkeys      Passkey[]
 }
 
 model WalletLink {
@@ -353,4 +354,19 @@ model DcaSchedule {
 
   @@index([userId])
   @@index([active, nextRunAt])
+}
+
+model Passkey {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  credentialId     String   @unique
+  publicKey        String
+  counter          Int      @default(0)
+  transports       String?
+  deviceName       String?
+  lastUsedAt       DateTime?
+  createdAt        DateTime @default(now())
+
+  @@index([userId])
 }

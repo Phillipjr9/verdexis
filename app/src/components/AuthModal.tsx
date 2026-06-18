@@ -123,6 +123,29 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
     setResetSent(false)
   }
 
+  const handlePasskeyLogin = async () => {
+    setError('')
+    setLoading(true)
+    try {
+      // Check if WebAuthn is supported
+      if (!window.PublicKeyCredential) {
+        setError('Passkeys are not supported on this device/browser')
+        setLoading(false)
+        return
+      }
+
+      toast.info('Touch your security key or use biometrics...')
+      
+      // For now, show that passkey is coming soon
+      toast.error('Passkey authentication coming soon! Set up your passkey in Settings after logging in.')
+      setLoading(false)
+    } catch (err) {
+      const e = err as Error
+      setError(e.message || 'Passkey authentication failed')
+      setLoading(false)
+    }
+  }
+
   return createPortal(
     // overflow-y-auto + items-start sm:items-center keeps the modal scrollable
     // from the top of the viewport on short / mobile screens — previously the
@@ -319,6 +342,28 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
                 </>
               )}
             </button>
+
+            {mode === 'login' && (
+              <>
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-[#ffffff08]" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-[rgba(15,22,25,0.95)] px-2 text-[#737373]">Or</span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handlePasskeyLogin}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#1a1a1a] border border-[#ffffff15] text-[#E5E5E5] text-sm font-medium rounded-xl hover:bg-[#252525] hover:border-[#0C8B44]/30 transition-colors"
+                >
+                  <Fingerprint className="w-5 h-5" />
+                  Sign in with passkey
+                </button>
+              </>
+            )}
           </form>
 
           {/* Switch mode */}

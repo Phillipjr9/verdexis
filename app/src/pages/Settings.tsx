@@ -455,6 +455,8 @@ export default function Settings() {
                 <div className="space-y-6">
                   <h2 className="text-xl font-light text-[#E5E5E5]">Security</h2>
 
+                  <PasskeysCard />
+
                   <Toggle
                     icon={<Smartphone className="w-5 h-5 text-[#0C8B44]" />}
                     title="Two-factor authentication"
@@ -815,6 +817,94 @@ const commonTimezones = [
   'Asia/Hong_Kong', 'Asia/Shanghai', 'Asia/Tokyo', 'Asia/Seoul',
   'Australia/Sydney', 'Pacific/Auckland',
 ]
+
+function PasskeysCard() {
+  const [passkeys, setPasskeys] = useState<Array<{ id: string; deviceName: string; lastUsed: string; createdAt: string }>>([])
+  const [registering, setRegistering] = useState(false)
+
+  useEffect(() => {
+    // Load user's passkeys from API
+    // For now, mock data
+    setPasskeys([])
+  }, [])
+
+  const registerPasskey = async () => {
+    if (!window.PublicKeyCredential) {
+      toast.error('Passkeys are not supported on this device/browser')
+      return
+    }
+
+    setRegistering(true)
+    try {
+      const deviceName = prompt('Name this passkey (e.g., "iPhone" or "YubiKey")', '')
+      if (!deviceName) {
+        setRegistering(false)
+        return
+      }
+
+      toast.info('Touch your security key or use biometrics...')
+      
+      // WebAuthn registration flow would go here
+      // For now, show coming soon message
+      toast.success('Passkey registration coming soon! Full WebAuthn support will be added in the next update.')
+      setRegistering(false)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to register passkey')
+      setRegistering(false)
+    }
+  }
+
+  const removePasskey = async (id: string) => {
+    if (!confirm('Remove this passkey? You won\'t be able to use it to sign in anymore.')) return
+    // API call would go here
+    setPasskeys(passkeys.filter((p) => p.id !== id))
+    toast.success('Passkey removed')
+  }
+
+  return (
+    <div className="p-5 rounded-xl bg-[#0a0e10] border border-[#ffffff08]">
+      <div className="flex items-start gap-3">
+        <Fingerprint className="w-5 h-5 text-[#0C8B44] mt-0.5" />
+        <div className="flex-1">
+          <p className="text-sm font-medium text-[#E5E5E5]">Passkeys</p>
+          <p className="text-xs text-[#737373] mt-1">
+            Sign in with your fingerprint, face, or security key. Passkeys are faster and more secure than passwords.
+          </p>
+          {passkeys.length === 0 && (
+            <p className="text-xs text-[#737373] mt-2">No passkeys registered yet.</p>
+          )}
+        </div>
+        <button
+          onClick={registerPasskey}
+          disabled={registering}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-[#0C8B44] border border-[#0C8B44]/30 rounded-lg hover:bg-[#0C8B44]/10 disabled:opacity-50"
+        >
+          <Plus className="w-3.5 h-3.5" /> {registering ? 'Registering...' : 'Add passkey'}
+        </button>
+      </div>
+      {passkeys.length > 0 && (
+        <ul className="mt-4 space-y-2">
+          {passkeys.map((pk) => (
+            <li key={pk.id} className="flex items-center justify-between p-3 bg-[#0f1619] rounded-lg">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-[#E5E5E5] truncate">{pk.deviceName}</p>
+                <p className="text-xs text-[#737373]">
+                  Created {pk.createdAt} · Last used {pk.lastUsed || 'Never'}
+                </p>
+              </div>
+              <button
+                onClick={() => removePasskey(pk.id)}
+                className="text-xs text-[#737373] hover:text-[#f44336] px-2 py-1"
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
 
 function RecoveryCodesCard() {
   const [codes, setCodes] = useState<string[] | null>(null)
