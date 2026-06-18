@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: verdexis-backend
+    runtime: node
+    plan: free
+    buildCommand: cd server && npm install && DATABASE_URL="postgresql://skip:skip@skip/skip" npm run build
+    startCommand: cd server && npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: CORS_ORIGIN
+        value: https://main.d28t5x0lqjdtjj.amplifyapp.com
+      - key: APP_BASE_URL
+        value: https://main.d28t5x0lqjdtjj.amplifyapp.com
