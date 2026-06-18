@@ -33,9 +33,8 @@ router.post('/', requireAuth, async (req: AuthedRequest, res) => {
   }
   const parse = alertSchema.safeParse(req.body)
   if (!parse.success) { res.status(400).json({ error: 'Invalid input', details: parse.error.flatten() }); return }
-  const alert = await prisma.priceAlert.create({
-    data: { ...parse.data, userId },
-  })
+  const alertData: any = { ...parse.data, userId }
+  const alert = await prisma.priceAlert.create({ data: alertData })
   res.json({ alert })
 })
 

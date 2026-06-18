@@ -33,9 +33,10 @@ router.post('/', requireAuth, async (req: AuthedRequest, res) => {
   const parse = watchSchema.safeParse(req.body)
   if (!parse.success) { res.status(400).json({ error: 'Invalid input', details: parse.error.flatten() }); return }
   try {
+    const watchData: any = { ...parse.data, userId }
     const item = await prisma.watchlist.upsert({
       where: { userId_symbol: { userId, symbol: parse.data.symbol } },
-      create: { ...parse.data, userId },
+      create: watchData,
       update: { name: parse.data.name, type: parse.data.type },
     })
     res.json({ item })

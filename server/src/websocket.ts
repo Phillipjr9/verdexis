@@ -1,4 +1,4 @@
-import WebSocket from 'ws'
+import WebSocket, { WebSocketServer } from 'ws'
 import https from 'node:https'
 import { env } from './env.js'
 
@@ -25,7 +25,7 @@ class PriceStreamManager {
 
   constructor() {}
 
-  public connectClients(wss: WebSocket.Server) {
+  public connectClients(wss: WebSocketServer) {
     wss.on('connection', (ws: WebSocket) => {
       const subscription: ClientSubscription = {
         symbols: new Set(),

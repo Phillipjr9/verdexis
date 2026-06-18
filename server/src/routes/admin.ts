@@ -1018,7 +1018,8 @@ router.post('/users/:id/trades', async (req: AuthedRequest, res) => {
   const parsed = tradeSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input' }); return }
   const total = parsed.data.amount * parsed.data.price
-  const t = await prisma.trade.create({ data: { userId: req.params.id, ...parsed.data, total } })
+  const tradeData: any = { userId: req.params.id, ...parsed.data, total }
+  const t = await prisma.trade.create({ data: tradeData })
   await audit(req.userId!, 'trade.create', req.params.id, parsed.data)
   res.json({ trade: t })
 })
@@ -1081,7 +1082,8 @@ const notifSchema = z.object({
 router.post('/users/:id/notifications', async (req: AuthedRequest, res) => {
   const parsed = notifSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input' }); return }
-  const n = await prisma.notification.create({ data: { userId: req.params.id, ...parsed.data } })
+  const notifData: any = { userId: req.params.id, ...parsed.data }
+  const n = await prisma.notification.create({ data: notifData })
   await audit(req.userId!, 'notification.create', req.params.id, parsed.data)
   res.json({ notification: n })
 })
