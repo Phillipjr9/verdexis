@@ -1,19 +1,14 @@
 import { Router } from 'express'
-import { authenticateToken } from '../auth.js'
+import { requireAuth, type AuthedRequest } from '../auth.js'
 import { prisma } from '../db.js'
-import type { Request } from 'express'
-
-interface AuthRequest extends Request {
-  user?: { id: string }
-}
 
 const router = Router()
 
 // List user's passkeys
-router.get('/', authenticateToken, async (req: AuthRequest, res) => {
+router.get('/', requireAuth, async (req: AuthedRequest, res) => {
   try {
     const passkeys = await prisma.passkey.findMany({
-      where: { userId: req.user!.id },
+      where: { userId: req.userId! },
       select: {
         id: true,
         credentialId: true,
@@ -39,7 +34,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res) => {
 })
 
 // Start passkey registration (generate challenge)
-router.post('/register/options', authenticateToken, async (req: AuthRequest, res) => {
+router.post('/register/options', requireAuth, async (req: AuthedRequest, res) => {
   try {
     // WebAuthn registration would generate a challenge here
     // For now, return a placeholder response
@@ -54,7 +49,7 @@ router.post('/register/options', authenticateToken, async (req: AuthRequest, res
 })
 
 // Complete passkey registration (verify credential)
-router.post('/register/verify', authenticateToken, async (req: AuthRequest, res) => {
+router.post('/register/verify', requireAuth, async (req: AuthedRequest, res) => {
   try {
     res.json({
       success: false,
@@ -93,7 +88,7 @@ router.post('/auth/verify', async (req, res) => {
 })
 
 // Remove a passkey
-router.delete('/:id', authenticateToken, async (req: AuthRequest, res) => {
+router.delete('/:id', requireAuth, async (req: AuthedRequest, res) => {
   try {
     const { id } = req.params
 
@@ -106,7 +101,7 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res) => {
       return res.status(404).json({ error: 'Passkey not found' })
     }
 
-    if (passkey.userId !== req.user!.id) {
+    if (passkey.userId !== req.userId) {
       return res.status(403).json({ error: 'Not authorized' })
     }
 
