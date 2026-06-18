@@ -324,6 +324,10 @@ export const api = {
       { method: 'POST', body: JSON.stringify(payload) },
     ),
   deleteMyReview: () => request<{ ok: boolean }>('/api/reviews/me', { method: 'DELETE' }),
+
+  // Passkeys
+  getPasskeys: () => request<{ passkeys: Array<{ id: string; deviceName: string; lastUsed: string; createdAt: string }> }>('/api/passkeys'),
+  deletePasskey: (id: string) => request<{ success: boolean }>(`/api/passkeys/${id}`, { method: 'DELETE' }),
 }
 
 /**
