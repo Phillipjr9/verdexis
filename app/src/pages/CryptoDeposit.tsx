@@ -117,39 +117,23 @@ export default function CryptoDeposit() {
       const res = await api.getMyDepositAddresses()
       const network = selectedNetwork || selectedAsset.network
       
-      if (res.addresses && res.addresses[selectedAsset.symbol]) {
-        const addr = res.addresses[selectedAsset.symbol]
+      if (res.addresses && res.addresses.cryptos && res.addresses.cryptos[selectedAsset.symbol]) {
+        const addr = res.addresses.cryptos[selectedAsset.symbol]
         setDepositAddress({
           asset: selectedAsset.symbol,
-          address: addr.address || generateMockAddress(selectedAsset.symbol),
-          network,
+          address: addr.address,
+          network: addr.network || network,
           minDeposit: selectedAsset.minDeposit,
           confirmations: selectedAsset.confirmations,
-          note: addr.note,
+          note: addr.notes,
           alternateNetworks: selectedAsset.alternateNetworks,
         })
       } else {
-        setDepositAddress({
-          asset: selectedAsset.symbol,
-          address: generateMockAddress(selectedAsset.symbol),
-          network,
-          minDeposit: selectedAsset.minDeposit,
-          confirmations: selectedAsset.confirmations,
-          note: 'This is a demo address. In production, this would be your unique deposit address.',
-          alternateNetworks: selectedAsset.alternateNetworks,
-        })
+        setDepositAddress(null)
       }
     } catch (err) {
       console.error('Failed to load deposit address:', err)
-      setDepositAddress({
-        asset: selectedAsset.symbol,
-        address: generateMockAddress(selectedAsset.symbol),
-        network: selectedNetwork || selectedAsset.network,
-        minDeposit: selectedAsset.minDeposit,
-        confirmations: selectedAsset.confirmations,
-        note: 'Demo address - backend unavailable',
-        alternateNetworks: selectedAsset.alternateNetworks,
-      })
+      setDepositAddress(null)
     } finally {
       setLoading(false)
     }
@@ -157,19 +141,9 @@ export default function CryptoDeposit() {
 
   const loadPendingDeposits = async () => {
     try {
-      setPendingDeposits([
-        {
-          id: '1',
-          asset: 'BTC',
-          amount: 0.05,
-          address: 'bc1q...',
-          txHash: '0x1234...5678',
-          confirmations: 2,
-          requiredConfirmations: 3,
-          status: 'pending',
-          timestamp: new Date(Date.now() - 15 * 60 * 1000),
-        },
-      ])
+      // Load actual pending deposits from backend
+      // For now, show empty until backend implements this endpoint
+      setPendingDeposits([])
     } catch (err) {
       console.error('Failed to load pending deposits:', err)
     }
@@ -193,23 +167,7 @@ export default function CryptoDeposit() {
     }
   }, [depositAddress])
 
-  const generateMockAddress = (symbol: string): string => {
-    const prefixes: Record<string, string> = {
-      BTC: 'bc1q',
-      ETH: '0x',
-      SOL: '',
-      USDT: '0x',
-      USDC: '0x',
-    }
-    const prefix = prefixes[symbol] || '0x'
-    const length = symbol === 'BTC' ? 42 : symbol === 'SOL' ? 44 : 40
-    const chars = '0123456789abcdef'
-    let addr = prefix
-    for (let i = prefix.length; i < length; i++) {
-      addr += chars[Math.floor(Math.random() * chars.length)]
-    }
-    return addr
-  }
+
 
   const copyAddress = () => {
     if (!depositAddress) return
@@ -402,6 +360,25 @@ export default function CryptoDeposit() {
                 <div className="glass-card p-8 flex items-center justify-center">
                   <div className="w-6 h-6 border-2 border-[#0C8B44] border-t-transparent rounded-full animate-spin" />
                 </div>
+              ) : !depositAddress ? (
+                <div className="glass-card p-8">
+                  <div className="flex flex-col items-center justify-center text-center space-y-4">
+                    <AlertCircle className="w-12 h-12 text-[#FF9800]" />
+                    <div>
+                      <h3 className="text-lg font-medium text-[#E5E5E5] mb-2">No Deposit Address Assigned</h3>
+                      <p className="text-sm text-[#737373] max-w-md">
+                        Your deposit address for {selectedAsset.symbol} has not been configured yet.
+                        Please contact support to set up your personalized deposit address.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => window.open('https://wa.me/17196798790', '_blank')}
+                      className="px-6 py-3 bg-[#0C8B44] text-white rounded-lg hover:bg-[#0a7539] transition-colors"
+                    >
+                      Contact Support
+                    </button>
+                  </div>
+                </div>
               ) : depositAddress ? (
                 <>
                   {/* Network Selection */}
@@ -498,7 +475,8 @@ export default function CryptoDeposit() {
                           <li>Minimum deposit: <span className="text-[#E5E5E5] font-medium">{depositAddress.minDeposit} {selectedAsset.symbol}</span></li>
                           <li>Requires <span className="text-[#E5E5E5] font-medium">{depositAddress.confirmations} network confirmations</span> before credit</li>
                           <li>Sending any other asset or using a different network will result in permanent loss</li>
-                          {depositAddress.note && <li className="text-[#FF9800]">{depositAddress.note}</li>}
+                          <li>This address is unique to your account - do not share it</li>
+                          {depositAddress.note && <li className="text-[#0C8B44]">{depositAddress.note}</li>}
                         </ul>
                       </div>
                     </div>

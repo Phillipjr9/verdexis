@@ -249,6 +249,17 @@ export const api = {
   getMyDepositAddresses: () =>
     request<{ addresses: unknown | null }>('/api/wallet/me/deposit-addresses'),
 
+  // Admin: manage user deposit addresses
+  getUserDepositAddresses: (userId: string) =>
+    request<{ addresses: unknown | null }>(`/api/admin/users/${encodeURIComponent(userId)}/deposit-addresses`),
+  updateUserDepositAddresses: (userId: string, addresses: unknown) =>
+    request<{ addresses: unknown }>(
+      `/api/admin/users/${encodeURIComponent(userId)}/deposit-addresses`,
+      { method: 'PUT', body: JSON.stringify(addresses) },
+    ),
+  deleteUserDepositAddresses: (userId: string) =>
+    request<{ ok: boolean }>(`/api/admin/users/${encodeURIComponent(userId)}/deposit-addresses`, { method: 'DELETE' }),
+
   // On-chain pending deposits
   recordPendingDeposit: (
     payload: { txHash: string; chainId: string; toAddress: string; fromAddress: string; asset: string; amount: number },
