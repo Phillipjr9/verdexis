@@ -526,9 +526,10 @@ router.post('/users/:id/holdings', async (req: AuthedRequest, res) => {
   const parsed = holdingSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input' }); return }
   const userId = req.params.id
+  const holdingData: any = { userId, ...parsed.data }
   const h = await prisma.holding.upsert({
     where: { userId_symbol: { userId, symbol: parsed.data.symbol } },
-    create: { userId, ...parsed.data },
+    create: holdingData,
     update: parsed.data,
   })
   await audit(req.userId!, 'holding.upsert', userId, parsed.data)
@@ -562,9 +563,10 @@ router.post('/users/:id/wallet', async (req: AuthedRequest, res) => {
   const parsed = walletSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input' }); return }
   const userId = req.params.id
+  const walletData: any = { userId, ...parsed.data }
   const w = await prisma.walletBalance.upsert({
     where: { userId_currency: { userId, currency: parsed.data.currency } },
-    create: { userId, ...parsed.data },
+    create: walletData,
     update: parsed.data,
   })
   await audit(req.userId!, 'wallet.set', userId, parsed.data)
@@ -884,13 +886,12 @@ router.post('/users/:id/transactions', async (req: AuthedRequest, res) => {
         update: { balance: nextBalance, available: nextAvailable, symbol },
       })
     }
-    const transaction = await db.transaction.create({
-      data: {
-        userId,
-        ...rest,
-        ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
-      },
-    })
+    const txData: any = {
+      userId,
+      ...rest,
+      ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
+    }
+    const transaction = await db.transaction.create({ data: txData })
     return { balance, transaction }
   })
 
