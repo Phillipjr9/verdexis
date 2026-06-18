@@ -61,6 +61,7 @@ const Changelog = lazy(() => import('./pages/Changelog'))
 const AdminSettings = lazy(() => import('./pages/AdminSettings'))
 const AdvancedOrders = lazy(() => import('./pages/AdvancedOrders'))
 const OrderHistory = lazy(() => import('./pages/OrderHistory'))
+const CryptoDeposit = lazy(() => import('./pages/CryptoDeposit'))
 
 function PageFallback() {
   return (
@@ -144,6 +145,7 @@ function RoutedPages() {
           <Route path="/integrations" element={<RequireAuth><Integrations /></RequireAuth>} />
           <Route path="/advanced-orders" element={<RequireAuth><AdvancedOrders /></RequireAuth>} />
           <Route path="/order-history" element={<RequireAuth><OrderHistory /></RequireAuth>} />
+          <Route path="/deposit/crypto" element={<RequireAuth><CryptoDeposit /></RequireAuth>} />
           <Route path="/changelog" element={<Changelog />} />
           <Route path="/reset" element={<ResetPassword />} />
           <Route path="*" element={<NotFound />} />
