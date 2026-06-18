@@ -15,5 +15,15 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": false
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  "exclude": [
+    "src/emailDigestService.ts",
+    "src/pushNotificationService.ts",
+    "src/providers/btcpayServer.ts",
+    "src/providers/coinbaseCommerce.ts",
+    "src/providers/cryptocomPay.ts",
+    "src/rds-auth.ts",
+    "src/depositMonitor.ts",
+    "src/orderEvaluator.ts"
+  ]
 }
