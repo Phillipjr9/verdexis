@@ -39,7 +39,7 @@ import { isDbUnavailableError } from './dbError.js'
 import { requestContextMiddleware } from './logging.js'
 import { createErrorResponse } from './errorHandler.js'
 import { priceStreamManager } from './websocket.js'
-import { depositMonitor } from './depositMonitor.js'
+// import { depositMonitor } from './depositMonitor.js' // Disabled: optional feature
 
 const app = express()
 app.set('etag', false)
@@ -236,17 +236,18 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     }
     startKeepAlive()
     // Initialize deposit monitor after DB is ready
-    if (DB_READY) {
-      depositMonitor.initialize().then(() => depositMonitor.start()).catch(e => console.error('[deposit-monitor] init failed:', e))
-    } else {
-      // Wait for DB, then start monitor
-      const checkDb = setInterval(() => {
-        if (DB_READY) {
-          clearInterval(checkDb)
-          depositMonitor.initialize().then(() => depositMonitor.start()).catch(e => console.error('[deposit-monitor] init failed:', e))
-        }
-      }, 500)
-    }
+    // DISABLED: optional feature
+    // if (DB_READY) {
+    //   depositMonitor.initialize().then(() => depositMonitor.start()).catch(e => console.error('[deposit-monitor] init failed:', e))
+    // } else {
+    //   // Wait for DB, then start monitor
+    //   const checkDb = setInterval(() => {
+    //     if (DB_READY) {
+    //       clearInterval(checkDb)
+    //       depositMonitor.initialize().then(() => depositMonitor.start()).catch(e => console.error('[deposit-monitor] init failed:', e))
+    //     }
+    //   }, 500)
+    // }
     promoteAllAdminEmails().catch((e) => console.error('[verdexis-api] admin bootstrap failed:', e))
   })
 }

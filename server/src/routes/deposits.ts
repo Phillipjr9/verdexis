@@ -2,7 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../db.js'
 import { requireAuth, type AuthedRequest } from '../auth.js'
-import { depositMonitor } from '../depositMonitor.js'
+// import { depositMonitor } from '../depositMonitor.js' // Disabled: optional feature
 
 const router = Router()
 
@@ -48,7 +48,8 @@ router.post('/initiate', requireAuth, async (req: AuthedRequest, res) => {
 
     // Register address for on-chain monitoring
     // Monitor will detect transaction and auto-credit user wallet
-    depositMonitor.registerDeposit(pendingDeposit.id, toAddress, userId, currency)
+    // DISABLED: optional feature
+    // depositMonitor.registerDeposit(pendingDeposit.id, toAddress, userId, currency)
 
     res.json({
       deposit_id: pendingDeposit.id,
