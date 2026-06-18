@@ -6,7 +6,7 @@ import {
   User, Shield, Bell, Palette, Globe, Key, LogOut, Mail,
   Smartphone, Check, ChevronRight, Trash2, Camera, Download, AtSign,
   Building2, Wallet as WalletIcon, Eye, EyeOff, TrendingUp, Plug, Lock,
-  Phone, FileText, Plus,
+  Phone, FileText, Plus, Fingerprint,
 } from 'lucide-react'
 import { fileToAvatarDataUrl, getAvatar, updateProfile } from '../lib/userProfile'
 import { applyTheme } from '../lib/themeApplier'
@@ -819,46 +819,60 @@ const commonTimezones = [
 ]
 
 function PasskeysCard() {
-  const [passkeys, setPasskeys] = useState<Array<{ id: string; deviceName: string; lastUsed: string; createdAt: string }>>([])
+  const [passkeys, setPasskeys] = useState<Array<{ id: string; deviceName: string; lastUsedAt: string | null; createdAt: string }>>([])
   const [registering, setRegistering] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Load user's passkeys from API
-    // For now, mock data
-    setPasskeys([])
+    loadPasskeys()
   }, [])
 
+  async function loadPasskeys() {
+    try {
+      const { listPasskeys } = await import('../lib/passkeys')
+      const list = await listPasskeys()
+      setPasskeys(list)
+    } catch (err) {
+      console.error('Failed to load passkeys:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const registerPasskey = async () => {
-    if (!window.PublicKeyCredential) {
+    const { isPasskeySupported, registerPasskey: register } = await import('../lib/passkeys')
+    
+    if (!isPasskeySupported()) {
       toast.error('Passkeys are not supported on this device/browser')
       return
     }
 
+    const deviceName = prompt('Name this passkey (e.g., "iPhone" or "YubiKey")', '')
+    if (!deviceName?.trim()) return
+
     setRegistering(true)
     try {
-      const deviceName = prompt('Name this passkey (e.g., "iPhone" or "YubiKey")', '')
-      if (!deviceName) {
-        setRegistering(false)
-        return
-      }
-
       toast.info('Touch your security key or use biometrics...')
-      
-      // WebAuthn registration flow would go here
-      // For now, show coming soon message
-      toast.success('Passkey registration coming soon! Full WebAuthn support will be added in the next update.')
-      setRegistering(false)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to register passkey')
+      const passkey = await register(deviceName.trim())
+      setPasskeys([...passkeys, { ...passkey, lastUsedAt: null, createdAt: new Date().toISOString() }])
+      toast.success('Passkey registered successfully')
+    } catch (err: any) {
+      toast.error(err?.error || err?.message || 'Failed to register passkey')
+    } finally {
       setRegistering(false)
     }
   }
 
   const removePasskey = async (id: string) => {
     if (!confirm('Remove this passkey? You won\'t be able to use it to sign in anymore.')) return
-    // API call would go here
-    setPasskeys(passkeys.filter((p) => p.id !== id))
-    toast.success('Passkey removed')
+    try {
+      const { deletePasskey } = await import('../lib/passkeys')
+      await deletePasskey(id)
+      setPasskeys(passkeys.filter((p) => p.id !== id))
+      toast.success('Passkey removed')
+    } catch (err: any) {
+      toast.error(err?.error || err?.message || 'Failed to remove passkey')
+    }
   }
 
   return (
@@ -870,26 +884,27 @@ function PasskeysCard() {
           <p className="text-xs text-[#737373] mt-1">
             Sign in with your fingerprint, face, or security key. Passkeys are faster and more secure than passwords.
           </p>
-          {passkeys.length === 0 && (
+          {loading && <p className="text-xs text-[#737373] mt-2">Loading...</p>}
+          {!loading && passkeys.length === 0 && (
             <p className="text-xs text-[#737373] mt-2">No passkeys registered yet.</p>
           )}
         </div>
         <button
           onClick={registerPasskey}
-          disabled={registering}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-[#0C8B44] border border-[#0C8B44]/30 rounded-lg hover:bg-[#0C8B44]/10 disabled:opacity-50"
+          disabled={registering || loading}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-[#0C8B44] border border-[#0C8B44]/30 rounded-lg hover:bg-[#0C8B44]/10 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Plus className="w-3.5 h-3.5" /> {registering ? 'Registering...' : 'Add passkey'}
         </button>
       </div>
-      {passkeys.length > 0 && (
+      {!loading && passkeys.length > 0 && (
         <ul className="mt-4 space-y-2">
           {passkeys.map((pk) => (
             <li key={pk.id} className="flex items-center justify-between p-3 bg-[#0f1619] rounded-lg">
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-[#E5E5E5] truncate">{pk.deviceName}</p>
                 <p className="text-xs text-[#737373]">
-                  Created {pk.createdAt} · Last used {pk.lastUsed || 'Never'}
+                  Created {new Date(pk.createdAt).toLocaleDateString()} · Last used {pk.lastUsedAt ? new Date(pk.lastUsedAt).toLocaleDateString() : 'Never'}
                 </p>
               </div>
               <button

@@ -127,8 +127,9 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
     setError('')
     setLoading(true)
     try {
-      // Check if WebAuthn is supported
-      if (!window.PublicKeyCredential) {
+      const { isPasskeySupported, authenticateWithPasskey } = await import('../lib/passkeys')
+      
+      if (!isPasskeySupported()) {
         setError('Passkeys are not supported on this device/browser')
         setLoading(false)
         return
@@ -136,12 +137,18 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
 
       toast.info('Touch your security key or use biometrics...')
       
-      // For now, show that passkey is coming soon
-      toast.error('Passkey authentication coming soon! Set up your passkey in Settings after logging in.')
+      const { token, user } = await authenticateWithPasskey(form.email || undefined)
+      setToken(token)
+      setStoredUser(user)
+      toast.success('Welcome back')
       setLoading(false)
-    } catch (err) {
-      const e = err as Error
-      setError(e.message || 'Passkey authentication failed')
+      onClose()
+      window.dispatchEvent(new Event('storage'))
+      window.dispatchEvent(new Event('verdexis:profile'))
+      navigate('/dashboard', { replace: true })
+    } catch (err: any) {
+      const msg = err?.error || err?.message || 'Passkey authentication failed'
+      setError(msg)
       setLoading(false)
     }
   }

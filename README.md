@@ -25,6 +25,14 @@ VERDEXIS is a premium fintech platform that combines AI-powered trading, portfol
 
 ## Features
 
+### Security & Authentication
+- **Passkeys (WebAuthn)**: Passwordless login with biometrics or hardware keys
+- **2FA Support**: Time-based one-time passwords (TOTP)
+- **JWT Authentication**: Secure token-based auth with 7-day expiry
+- **Password Reset**: Email-based password recovery
+- **Session Management**: Sign out all other devices
+- **Email Verification**: Verify email addresses for security alerts
+
 ### 1. Home Page (Landing)
 - **3D Hero**: Sierpinski tetrahedron rendered in Three.js with custom shaders
 - **Text Scramble Effect**: Animated character decoding for hero title
@@ -84,10 +92,11 @@ VERDEXIS is a premium fintech platform that combines AI-powered trading, portfol
 - **GSAP** + ScrollTrigger (animations)
 - **Lucide React** (icons)
 - **React Router DOM** (routing)
+- **SimpleWebAuthn** (passkeys/WebAuthn)
 
 ## Database Schema
 Full PostgreSQL schema in `ARCHITECTURE.md` including:
-- Users (auth, 2FA, KYC)
+- Users (auth, 2FA, KYC, Passkeys)
 - Wallets (multi-currency)
 - Transactions (deposit/withdraw/transfer)
 - Orders (trading)
@@ -95,16 +104,18 @@ Full PostgreSQL schema in `ARCHITECTURE.md` including:
 - AI Chat History & Insights
 - Watchlists & Alerts
 - Audit Log
+- Passkeys (WebAuthn credentials)
 
 ## API Endpoints
 Complete REST API specification in `ARCHITECTURE.md`:
-- Authentication (register, login, 2FA, password reset)
+- Authentication (register, login, 2FA, password reset, passkeys)
 - Market Data (stocks, crypto, news)
 - Trading (orders, orderbook)
 - Portfolio (holdings, performance, allocation)
 - Wallet (deposit, withdraw, transfer)
 - AI Assistant (chat, insights)
 - Alerts (price alerts)
+- Passkeys (register, authenticate, manage)
 
 ## File Structure
 ```
@@ -189,6 +200,8 @@ APP_BASE_URL=http://localhost:5173
 | GET | `/api/health` | Service heartbeat |
 | POST | `/api/auth/signup` | Create account, returns JWT |
 | POST | `/api/auth/login` | Returns JWT |
+| POST | `/api/passkeys/auth/options` | Start passkey authentication |
+| POST | `/api/passkeys/auth/verify` | Complete passkey authentication |
 | POST | `/api/auth/forgot` | Request password reset link (logged to server console in dev) |
 | POST | `/api/auth/reset` | Submit `{ token, password }` |
 | GET | `/api/auth/me` | Current user (requires Bearer token) |
@@ -199,6 +212,10 @@ APP_BASE_URL=http://localhost:5173
 | GET | `/api/wallet` | Balances + last 50 transactions |
 | POST | `/api/wallet/transactions` | Deposit / withdraw / transfer (atomic) |
 | GET / POST | `/api/trades` | List / execute trades (adjusts balances + holdings atomically) |
+| GET | `/api/passkeys` | List user's passkeys |
+| POST | `/api/passkeys/register/options` | Start passkey registration |
+| POST | `/api/passkeys/register/verify` | Complete passkey registration |
+| DELETE | `/api/passkeys/:id` | Remove a passkey |
 
 Auth via `Authorization: Bearer <jwt>` header. Tokens are issued for 7 days.
 
