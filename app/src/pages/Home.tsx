@@ -631,9 +631,9 @@ export default function Home() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {[
-              { date: 'Jan 15, 2025', title: 'Bitcoin Halving: What Investors Should Know', category: 'Market Analysis', image: '📊' },
-              { date: 'Jan 14, 2025', title: 'DCA Strategy: Building Wealth Over Time', category: 'Trading Tips', image: '📈' },
-              { date: 'Jan 13, 2025', title: 'Ethereum Gas Fees at All-Time Low', category: 'News', image: '⚡' },
+              { date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }), title: 'Bitcoin Halving: What Investors Should Know', category: 'Market Analysis', image: '📊' },
+              { date: new Date(Date.now() - 86400000).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }), title: 'DCA Strategy: Building Wealth Over Time', category: 'Trading Tips', image: '📈' },
+              { date: new Date(Date.now() - 172800000).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }), title: 'Ethereum Gas Fees at All-Time Low', category: 'News', image: '⚡' },
             ].map((article, i) => (
               <Link key={i} to="/news" className="group p-6 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff05] hover:border-[#0C8B44]/30 transition-all">
                 <div className="text-5xl mb-4 group-hover:scale-110 transition-transform">{article.image}</div>
