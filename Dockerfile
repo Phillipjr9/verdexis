@@ -19,6 +19,7 @@ RUN npm install --legacy-peer-deps && \
 COPY server/src ./server/src
 COPY server/tsconfig.json ./server/
 COPY server/prisma ./server/prisma
+COPY server/scripts ./server/scripts
 
 # Build
 RUN cd server && npm run build && cd ..
@@ -26,5 +27,5 @@ RUN cd server && npm run build && cd ..
 # Run migrations and start server
 EXPOSE 4000
 
-# Run migrations at startup then start the server
-CMD cd server && npx prisma migrate deploy && cd .. && node server/dist/index.js
+# Resolve failed migration, run migrations, then start server
+CMD cd server && (npx prisma migrate resolve --rolled-back 20260120000000_seed_admin_treasury || true) && npx prisma migrate deploy && cd .. && node server/dist/index.js
