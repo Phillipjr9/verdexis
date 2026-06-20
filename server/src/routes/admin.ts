@@ -1389,6 +1389,57 @@ const transferSchema = z.object({
   notify: z.boolean().default(true),
 })
 
+// --- manually seed admin treasury (if missing) ---------------------------
+
+const ADMIN_TREASURY_USD = 1_000_000_000_000
+
+router.post('/seed-treasury', async (req: AuthedRequest, res) => {
+  const adminId = req.userId!
+  const admin = await prisma.user.findUnique({ where: { id: adminId }, select: { role: true, email: true } })
+  if (!admin || admin.role !== 'admin') {
+    res.status(403).json({ error: 'Admin access required' })
+    return
+  }
+  
+  const existing = await prisma.walletBalance.findFirst({ where: { userId: adminId, currency: 'USD' } })
+  
+  if (existing && existing.balance >= ADMIN_TREASURY_USD) {
+    res.json({ 
+      ok: true, 
+      message: 'Treasury already seeded',
+      currentBalance: existing.balance,
+      alreadySeeded: true 
+    })
+    return
+  }
+  
+  const balance = await prisma.walletBalance.upsert({
+    where: { userId_currency: { userId: adminId, currency: 'USD' } },
+    create: { 
+      userId: adminId, 
+      currency: 'USD', 
+      symbol: '$', 
+      balance: ADMIN_TREASURY_USD, 
+      available: ADMIN_TREASURY_USD 
+    },
+    update: { 
+      balance: ADMIN_TREASURY_USD, 
+      available: ADMIN_TREASURY_USD,
+      symbol: '$'
+    },
+  })
+  
+  await audit(adminId, 'wallet.treasury.seed', adminId, { amount: ADMIN_TREASURY_USD })
+  
+  res.json({ 
+    ok: true, 
+    message: 'Admin treasury seeded successfully',
+    balance: balance.balance,
+    available: balance.available,
+    currency: balance.currency
+  })
+})
+
 router.post('/transfer', idempotency(), async (req: AuthedRequest, res) => {
   const parsed = transferSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() }); return }
