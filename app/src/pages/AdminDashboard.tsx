@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 
 export default function AdminDashboard() {
+  // Admin dashboard with treasury seeding
   return (
     <div className="min-h-screen bg-[#070C0E]">
       <Navigation />
