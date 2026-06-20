@@ -32,6 +32,10 @@ import referralRoutes from './routes/referral.js'
 import dcaRoutes from './routes/dca.js'
 import depositAddressesRoutes from './routes/depositAddresses.js'
 import depositsRoutes from './routes/deposits.js'
+import amazonOAuthRoutes from './routes/amazon-oauth.js'
+import advancedOrdersRoutes from './routes/advancedOrders.js'
+import passkeysRoutes from './routes/passkeys.js'
+import kycRoutes from './routes/kyc.js'
 import { startAlertPoller } from './alertPoller.js'
 import { startDcaPoller } from './dcaPoller.js'
 import { startKeepAlive } from './keepAlive.js'
@@ -153,6 +157,10 @@ app.use('/api/referrals', referralRoutes)
 app.use('/api/dca', dcaRoutes)
 app.use('/api/deposit-addresses', depositAddressesRoutes)
 app.use('/api/deposits', depositsRoutes)
+app.use('/api/oauth', amazonOAuthRoutes)
+app.use('/api/trades/advanced', advancedOrdersRoutes)
+app.use('/api/passkeys', passkeysRoutes)
+app.use('/api/kyc', kycRoutes)
 
 app.post('/api/admin/cache/clear', async (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '')
