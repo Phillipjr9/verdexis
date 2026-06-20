@@ -357,9 +357,19 @@ router.post('/login', authLimiter, async (req, res) => {
 
     // If it parses as an email, look up by email; otherwise treat as username.
     const isEmail = /.+@.+\..+/.test(id)
-    const user = isEmail
-      ? await prisma.user.findUnique({ where: { email: id } })
-      : await prisma.user.findUnique({ where: { username: id } })
+    let user
+    try {
+      user = isEmail
+        ? await prisma.user.findUnique({ where: { email: id } })
+        : await prisma.user.findUnique({ where: { username: id } })
+    } catch (dbError) {
+      console.error('[verdexis-api] Database error during login:', dbError)
+      res.status(503).json({ 
+        error: 'Service temporarily unavailable', 
+        detail: 'Database connection issue. Please try again in a moment.' 
+      })
+      return
+    }
     if (!user) {
       res.status(401).json({ error: 'Invalid credentials' })
       return
