@@ -29,6 +29,7 @@ export function AdminConsoleContent({ onPendingDepositsLoaded }: { onPendingDepo
   const [onchain, setOnchain] = useState<Awaited<ReturnType<typeof adminApi.listOnchainDeposits>>['pendingDeposits']>([])
   const [onchainLoading, setOnchainLoading] = useState(true)
   const [busyOnchain, setBusyOnchain] = useState<string | null>(null)
+  const [seedingTreasury, setSeedingTreasury] = useState(false)
 
   useEffect(() => {
     adminApi.stats()
@@ -137,6 +138,32 @@ export function AdminConsoleContent({ onPendingDepositsLoaded }: { onPendingDepo
     }
   }
 
+  async function handleSeedTreasury() {
+    if (!confirm('This will set your admin USD balance to $1,000,000,000,000 (1 trillion). Continue?')) return
+    setSeedingTreasury(true)
+    try {
+      const token = localStorage.getItem('verdexis_token')
+      const response = await fetch('/api/admin/seed-treasury', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      const result = await response.json()
+      if (result.ok) {
+        toast.success(`Treasury seeded! You now have $${result.balance.toLocaleString()} USD`)
+        setTimeout(() => window.location.href = '/wallet', 1000)
+      } else {
+        toast.error(result.error || 'Failed to seed treasury')
+      }
+    } catch (e) {
+      toast.error((e as Error).message || 'Failed to seed treasury')
+    } finally {
+      setSeedingTreasury(false)
+    }
+  }
+
   return (
     <>
       <div className="flex items-center justify-between mb-8">
@@ -144,6 +171,14 @@ export function AdminConsoleContent({ onPendingDepositsLoaded }: { onPendingDepo
           <h1 className="text-2xl font-light text-[#E5E5E5]">Admin console</h1>
           <p className="text-xs text-[#737373]">Full operator control over every account on this instance.</p>
         </div>
+        <button
+          onClick={handleSeedTreasury}
+          disabled={seedingTreasury}
+          className="px-5 py-2.5 bg-[#0C8B44] text-white text-sm font-medium rounded-lg hover:bg-[#0a7539] transition-colors disabled:opacity-50 flex items-center gap-2"
+        >
+          <Banknote className="w-4 h-4" />
+          {seedingTreasury ? 'Seeding...' : 'Seed $1T Treasury'}
+        </button>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3 mb-8">
