@@ -5,6 +5,21 @@ declare global {
   var __prisma: PrismaClient | undefined
 }
 
+// Ensure DATABASE_URL is properly formatted
+let databaseUrl = process.env.DATABASE_URL || ''
+
+// If URL contains encoded characters, ensure it's properly formatted
+if (databaseUrl && databaseUrl.includes('%')) {
+  try {
+    // Parse the URL to ensure proper encoding
+    const url = new URL(databaseUrl)
+    // Prisma expects the URL to be properly formatted
+    databaseUrl = url.toString()
+  } catch (err) {
+    console.error('[verdexis-api] Invalid DATABASE_URL format:', err)
+  }
+}
+
 export const prisma =
   global.__prisma ||
   new PrismaClient({
@@ -12,7 +27,7 @@ export const prisma =
     errorFormat: 'minimal',
     datasources: {
       db: {
-        url: process.env.DATABASE_URL,
+        url: databaseUrl,
       },
     },
   })
@@ -24,21 +39,30 @@ let connectionAttempts = 0
 const MAX_RETRIES = 5
 
 async function ensureConnection() {
+  console.log('[verdexis-api] Attempting to connect to database...')
+  console.log('[verdexis-api] Database host:', databaseUrl.match(/@([^:]+):/)?.[1] || 'unknown')
+  
   while (connectionAttempts < MAX_RETRIES) {
     try {
       await prisma.$connect()
+      await prisma.$queryRaw`SELECT 1`
       console.log('[verdexis-api] Database connected successfully')
       return
     } catch (err) {
       connectionAttempts++
-      console.error(`[verdexis-api] Database connection attempt ${connectionAttempts}/${MAX_RETRIES} failed:`, err)
+      const errorMsg = err instanceof Error ? err.message : String(err)
+      console.error(`[verdexis-api] Database connection attempt ${connectionAttempts}/${MAX_RETRIES} failed:`, errorMsg)
       if (connectionAttempts < MAX_RETRIES) {
         const delay = Math.min(1000 * Math.pow(2, connectionAttempts), 10000)
         console.log(`[verdexis-api] Retrying in ${delay}ms...`)
         await new Promise(resolve => setTimeout(resolve, delay))
       } else {
         console.error('[verdexis-api] DATABASE CONNECTION FAILED - All retries exhausted')
-        console.error('[verdexis-api] DATABASE_URL format:', process.env.DATABASE_URL?.replace(/:\/\/[^@]+@/, '://***:***@'))
+        console.error('[verdexis-api] Check that:')
+        console.error('  1. DATABASE_URL environment variable is set correctly')
+        console.error('  2. PostgreSQL database exists and is running')
+        console.error('  3. Network allows connections to the database')
+        console.error('  4. Credentials are correct')
       }
     }
   }
