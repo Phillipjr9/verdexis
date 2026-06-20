@@ -26,4 +26,5 @@ RUN cd server && npm run build && cd ..
 # Run migrations and start server
 EXPOSE 4000
 
-CMD ["node", "server/dist/index.js"]
+# Run migrations at startup then start the server
+CMD cd server && npx prisma migrate deploy && cd .. && node server/dist/index.js
