@@ -122,7 +122,20 @@ initializeDatabase()
 
 app.get('/api/health', async (_req, res) => {
   const dbReady = DB_READY
-  const dbStatus = dbReady ? 'Ready' : 'Unavailable'
+  let dbStatus = dbReady ? 'Ready' : 'Unavailable'
+  let dbError = null
+  
+  // Try a quick DB check
+  if (!dbReady) {
+    try {
+      await prisma.$queryRaw`SELECT 1`
+      dbStatus = 'Connected'
+    } catch (err) {
+      dbStatus = 'Failed'
+      dbError = err instanceof Error ? err.message : String(err)
+    }
+  }
+  
   res.json({
     ok: true,
     service: 'verdexis-api',
@@ -133,6 +146,8 @@ app.get('/api/health', async (_req, res) => {
     bootedAt: new Date(SERVER_BOOT_TIME).toISOString(),
     database: dbStatus,
     databaseReady: dbReady,
+    databaseUrl: process.env.DATABASE_URL ? 'Set (hidden)' : 'NOT SET',
+    ...(dbError ? { databaseError: dbError } : {}),
   })
 })
 
