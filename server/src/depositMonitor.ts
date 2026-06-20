@@ -126,7 +126,7 @@ class DepositMonitor {
     depositId: string,
     node: BlockchainNode,
   ): Promise<void> {
-    const response = await this.fetchJson(`${node.rpc}/address/${address}`)
+    const response = await this.fetchJson(`${node.rpc}/address/${address}`) as any
 
     if (!response || !response.chain_stats) return
 
@@ -148,7 +148,7 @@ class DepositMonitor {
     const apiKey = process.env.ETHERSCAN_API_KEY || 'YourEtherscanAPIKey'
     const response = await this.fetchJson(
       `https://api.etherscan.io/api?module=account&action=balance&address=${address}&tag=latest&apikey=${apiKey}`,
-    )
+    ) as any
 
     if (!response || response.status !== '1') return
 
@@ -171,7 +171,7 @@ class DepositMonitor {
       id: 1,
       method: 'getBalance',
       params: [address],
-    })
+    }) as any
 
     if (!response || response.result === undefined) return
 
