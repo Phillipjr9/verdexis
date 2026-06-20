@@ -66,9 +66,11 @@ VERDEXIS is a premium fintech platform that combines AI-powered trading, portfol
 ### 5. Wallet / Banking
 - **Multi-Currency**: USD, BTC, ETH, SOL balances
 - **Transaction History**: Filtered by type with status indicators
+- **Crypto Deposits**: Automatic blockchain monitoring with QR codes
 - **Deposit**: Bank transfer (ACH) and crypto address deposit
 - **Withdraw**: Fiat and crypto withdrawals with fee display
 - **Transfer**: Cross-currency transfers with exchange rates
+- **Auto-Credit**: Crypto deposits automatically credited within minutes
 
 ## Real Market Data Integration
 

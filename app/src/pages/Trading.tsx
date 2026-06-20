@@ -213,7 +213,11 @@ export default function Trading() {
       toast.error('Please log in to trade')
       return
     }
-    if (!selectedCrypto || !amount || parseFloat(amount) <= 0) {
+    if (!selectedCrypto) {
+      toast.error('Select a market first')
+      return
+    }
+    if (!amount || parseFloat(amount) <= 0) {
       toast.error('Please enter a valid amount')
       return
     }

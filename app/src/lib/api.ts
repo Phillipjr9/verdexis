@@ -16,6 +16,8 @@ export interface ApiUser {
   suspended: boolean
   investmentId: string | null
   kycStatus: 'none' | 'pending' | 'approved' | 'rejected'
+  emailVerified?: boolean
+  emailVerifiedAt?: string | null
 }
 
 export interface ApiError {
@@ -207,6 +209,13 @@ export const api = {
     ),
   lookupRecipient: (email: string) =>
     request<{ user: { email: string; name: string | null } }>(`/api/wallet/lookup-recipient?email=${encodeURIComponent(email)}`),
+  swap: (
+    payload: { fromCurrency: string; toCurrency: string; amount: number; slippage?: number },
+  ) =>
+    request<{ debit: { id: string }; credit: { id: string }; rate: number; received: number }>(
+      '/api/wallet/swap',
+      { method: 'POST', body: JSON.stringify(payload), idempotencyKey: newIdempotencyKey() },
+    ),
 
   // Self-custody wallet linking
   getWalletLink: () =>
@@ -339,7 +348,44 @@ export const api = {
   // Passkeys
   getPasskeys: () => request<{ passkeys: Array<{ id: string; deviceName: string; lastUsed: string; createdAt: string }> }>('/api/passkeys'),
   deletePasskey: (id: string) => request<{ success: boolean }>(`/api/passkeys/${id}`, { method: 'DELETE' }),
+
+  // KYC
+  submitKyc: (payload: {
+    firstName: string
+    lastName: string
+    dob: string
+    country: string
+    ssn: string
+    addressStreet: string
+    addressCity: string
+    addressZip: string
+    idDocType: 'passport' | 'dl' | 'id'
+  }) =>
+    request<{ ok: boolean; kycStatus: string; message: string }>('/api/kyc/submit', { method: 'POST', body: JSON.stringify(payload) }),
+  getKycStatus: () =>
+    request<{
+      status: string
+      notes: string | null
+      reviewedAt: string | null
+      submitted: { firstName: string | null; lastName: string | null; country: string | null }
+      documents: { identity: boolean; address: boolean; selfie: boolean }
+    }>('/api/kyc/status'),
+  uploadKycDocument: (documentType: 'identity' | 'address' | 'selfie', file: File) => {
+    const form = new FormData()
+    form.append('document', file)
+    const headers = new Headers()
+    const token = getToken()
+    if (token) headers.set('Authorization', `Bearer ${token}`)
+    return fetch(`${BASE}/api/kyc/upload/${documentType}`, { method: 'POST', headers, body: form }).then(async (r) => {
+      const body = await r.json().catch(() => ({}))
+      if (!r.ok) throw body
+      return body as { ok: boolean; document: { id: string; type: string; fileName: string; size: number; uploadedAt: string } }
+    })
+  },
+  getKycDocuments: () =>
+    request<{ documents: Array<{ id: string; type: string; uploaded: boolean; fileName?: string; size?: number }> }>('/api/kyc/documents'),
 }
+
 
 /**
  * Best-effort API check. Returns true if the backend responds within 1s,

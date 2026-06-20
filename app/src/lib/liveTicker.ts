@@ -1,22 +1,12 @@
-﻿// Live price ticker that polls our backend proxy at /api/market/tickers.
-// The browser is often blocked from talking directly to exchange WebSockets
-// (corp firewalls, geofencing), so the server side does the upstream work
-// and caches it; the client just polls the union of subscribed coins every
-// LIVE_POLL_MS. Sub-second feel without needing a WebSocket.
+// Live price ticker — tries a backend WebSocket at /api/market/ws first,
+// falls back to HTTP polling (/api/market/tickers) after MAX_WS_ATTEMPTS
+// failures. Either path notifies subscribers on every price change.
 
-// Use the Vite dev-server proxy so the request goes to whichever host the
-// page was loaded from (localhost on desktop, 192.168.x.x on phone). Vite
-// rewrites /api -> http://localhost:4000 server-side. VITE_API_URL override
-// is honored for prod builds where the API lives on a different host.
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) || ''
 const LIVE_POLL_MS = 2_000
+const WS_RECONNECT_MS = 5_000
+const WS_TIMEOUT_MS = 10_000
 
-// Holdings are keyed by lowercase symbol ('btc') but the server's
-// /api/market/tickers endpoint expects CoinGecko ids ('bitcoin'). Without
-// this map a `liveTicker.subscribe('btc', cb)` call would ask the server
-// for `ids=btc`, get an empty response, and never fire — which is exactly
-// why dashboard prices were "frozen between refreshes". Anything we can
-// resolve here is normalized to the CoinGecko id before going on the wire.
 const SYMBOL_TO_COIN_ID: Record<string, string> = {
   btc: 'bitcoin', eth: 'ethereum', sol: 'solana', ada: 'cardano',
   xrp: 'ripple', doge: 'dogecoin', dot: 'polkadot', link: 'chainlink',
@@ -38,6 +28,11 @@ class LiveTickerService {
   private latest = new Map<string, number>()
   private timer: number | null = null
   private inflight = false
+  private ws: WebSocket | null = null
+  private wsReconnectTimer: number | null = null
+  private useWebSocket = true
+  private wsConnectionAttempts = 0
+  private readonly MAX_WS_ATTEMPTS = 3
 
   getPrice(coinId: string): number | null {
     return this.latest.get(canonical(coinId)) ?? null
@@ -46,21 +41,22 @@ class LiveTickerService {
   subscribe(coinId: string, cb: Listener): () => void {
     const id = canonical(coinId)
     let bucket = this.listeners.get(id)
-    if (!bucket) {
-      bucket = new Set()
-      this.listeners.set(id, bucket)
-    }
+    if (!bucket) { bucket = new Set(); this.listeners.set(id, bucket) }
     bucket.add(cb)
     const cached = this.latest.get(id)
     if (cached != null) cb(cached)
-    this.ensurePolling()
+    if (this.useWebSocket && this.wsConnectionAttempts < this.MAX_WS_ATTEMPTS) {
+      this.ensureWebSocket()
+    } else {
+      this.ensurePolling()
+    }
     void this.tick()
     return () => {
       const b = this.listeners.get(id)
       if (!b) return
       b.delete(cb)
       if (b.size === 0) this.listeners.delete(id)
-      if (this.listeners.size === 0) this.stopPolling()
+      if (this.listeners.size === 0) { this.stopPolling(); this.closeWebSocket() }
     }
   }
 
@@ -74,8 +70,73 @@ class LiveTickerService {
     if (this.timer != null) { window.clearInterval(this.timer); this.timer = null }
   }
 
+  private ensureWebSocket() {
+    if (this.ws != null && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) return
+    if (typeof window === 'undefined') return
+    if (this.wsConnectionAttempts >= this.MAX_WS_ATTEMPTS) {
+      this.useWebSocket = false
+      this.ensurePolling()
+      return
+    }
+    this.wsConnectionAttempts++
+    const wsUrl = API_BASE.replace(/^http/, 'ws') + '/api/market/ws'
+    try {
+      this.ws = new WebSocket(wsUrl)
+      const timeout = window.setTimeout(() => {
+        if (this.ws && this.ws.readyState !== WebSocket.OPEN) {
+          this.closeWebSocket()
+          this.useWebSocket = false
+          this.ensurePolling()
+        }
+      }, WS_TIMEOUT_MS)
+      this.ws.onopen = () => {
+        window.clearTimeout(timeout)
+        this.wsConnectionAttempts = 0
+        this.stopPolling()
+        const ids = Array.from(this.listeners.keys())
+        if (ids.length > 0 && this.ws) this.ws.send(JSON.stringify({ type: 'subscribe', ids }))
+      }
+      this.ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data as string) as { id: string; price: number }
+          if (typeof data.price !== 'number' || !isFinite(data.price)) return
+          const prev = this.latest.get(data.id)
+          if (prev === data.price) return
+          this.latest.set(data.id, data.price)
+          const bucket = this.listeners.get(data.id)
+          if (bucket) for (const cb of bucket) cb(data.price)
+        } catch { /* ignore malformed messages */ }
+      }
+      this.ws.onerror = () => {
+        window.clearTimeout(timeout)
+        this.useWebSocket = false
+        this.ensurePolling()
+      }
+      this.ws.onclose = () => {
+        window.clearTimeout(timeout)
+        this.ws = null
+        if (this.listeners.size > 0 && this.wsConnectionAttempts < this.MAX_WS_ATTEMPTS && this.useWebSocket) {
+          this.wsReconnectTimer = window.setTimeout(() => this.ensureWebSocket(), WS_RECONNECT_MS)
+        } else if (this.listeners.size > 0) {
+          this.useWebSocket = false
+          this.ensurePolling()
+        }
+      }
+    } catch {
+      this.useWebSocket = false
+      this.ensurePolling()
+    }
+  }
+
+  private closeWebSocket() {
+    if (this.wsReconnectTimer != null) { window.clearTimeout(this.wsReconnectTimer); this.wsReconnectTimer = null }
+    if (this.ws != null) { this.ws.close(); this.ws = null }
+  }
+
   private async tick() {
     if (this.inflight) return
+    // Skip polling while WebSocket is healthy
+    if (this.ws?.readyState === WebSocket.OPEN) return
     const ids = Array.from(this.listeners.keys())
     if (ids.length === 0) return
     this.inflight = true

@@ -9,7 +9,9 @@ interface BlockchainNode {
   decimals: number
 }
 
-// Public RPC endpoints (no auth required)
+// Public RPC endpoints (no auth required for basic usage)
+// For production, set these in .env for better rate limits:
+// ETHERSCAN_API_KEY, BLOCKCHAIR_API_KEY, SOLANA_RPC_URL
 const BLOCKCHAIN_NODES: Record<string, BlockchainNode> = {
   bitcoin: {
     network: 'bitcoin',
@@ -19,13 +21,15 @@ const BLOCKCHAIN_NODES: Record<string, BlockchainNode> = {
   },
   ethereum: {
     network: 'ethereum',
-    rpc: 'https://eth.infura.io/v3/9aa3d95b3bc440fa88ea12eaa4456161',
+    rpc: process.env.INFURA_PROJECT_ID 
+      ? `https://mainnet.infura.io/v3/${process.env.INFURA_PROJECT_ID}`
+      : 'https://eth.llamarpc.com', // Free public RPC fallback
     explorer: 'https://etherscan.io',
     decimals: 18,
   },
   solana: {
     network: 'solana',
-    rpc: 'https://api.mainnet-beta.solana.com',
+    rpc: process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com',
     explorer: 'https://solscan.io',
     decimals: 9,
   },
@@ -38,20 +42,33 @@ class DepositMonitor {
 
   async initialize(): Promise<void> {
     console.log('[deposit-monitor] initializing...')
-    // Load pending deposits to monitor
-    const pendingDeposits = await prisma.pendingDeposit.findMany({
-      where: { status: 'pending' },
+    // Load all users with assigned deposit addresses to monitor
+    const users = await prisma.user.findMany({
+      select: { id: true, prefs: true },
     })
 
-    for (const deposit of pendingDeposits) {
-      this.monitoredAddresses.set(deposit.toAddress, {
-        userId: deposit.userId,
-        currency: deposit.asset,
-        depositId: deposit.id,
-      })
+    for (const user of users) {
+      if (!user.prefs) continue
+      try {
+        const prefs = JSON.parse(user.prefs) as { depositAddresses?: { cryptos?: Record<string, { currency: string; address: string }> } }
+        const cryptos = prefs.depositAddresses?.cryptos
+        if (!cryptos) continue
+
+        for (const [symbol, addr] of Object.entries(cryptos)) {
+          if (addr.address && addr.currency) {
+            this.monitoredAddresses.set(addr.address, {
+              userId: user.id,
+              currency: addr.currency,
+              depositId: '', // Not using pending deposits
+            })
+          }
+        }
+      } catch (err) {
+        console.error(`[deposit-monitor] failed to parse prefs for user ${user.id}:`, err)
+      }
     }
 
-    console.log(`[deposit-monitor] loaded ${this.monitoredAddresses.size} pending deposits`)
+    console.log(`[deposit-monitor] loaded ${this.monitoredAddresses.size} deposit addresses`)
   }
 
   start(): void {
@@ -128,8 +145,9 @@ class DepositMonitor {
     depositId: string,
     node: BlockchainNode,
   ): Promise<void> {
+    const apiKey = process.env.ETHERSCAN_API_KEY || 'YourEtherscanAPIKey'
     const response = await this.fetchJson(
-      `https://api.etherscan.io/api?module=account&action=balance&address=${address}&tag=latest&apikey=YourEtherscanAPIKey`,
+      `https://api.etherscan.io/api?module=account&action=balance&address=${address}&tag=latest&apikey=${apiKey}`,
     )
 
     if (!response || response.status !== '1') return
@@ -165,62 +183,79 @@ class DepositMonitor {
   }
 
   private async creditDeposit(depositId: string, userId: string, currency: string, amount: number): Promise<void> {
-    const deposit = await prisma.pendingDeposit.findUnique({
-      where: { id: depositId },
+    // Check if we already recorded this deposit recently (prevent duplicates)
+    const recentDeposit = await prisma.transaction.findFirst({
+      where: {
+        userId,
+        currency,
+        kind: 'deposit',
+        amount,
+        createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) }, // Within last hour
+      },
     })
 
-    if (!deposit || deposit.status !== 'pending') return
-
-    // Verify amount matches expected deposit amount (with some tolerance for fees)
-    if (Math.abs(amount - deposit.amount) > deposit.amount * 0.01) {
-      console.warn(`[deposit-monitor] amount mismatch: expected ${deposit.amount}, got ${amount}`)
+    if (recentDeposit) {
+      console.log(`[deposit-monitor] duplicate deposit detected for user ${userId}, skipping`)
       return
     }
 
-    // Credit user's wallet
-    const walletBalance = await prisma.walletBalance.findUnique({
-      where: {
-        userId_currency: {
+    // Credit user's wallet atomically
+    await prisma.$transaction(async (tx) => {
+      const walletBalance = await tx.walletBalance.findUnique({
+        where: {
+          userId_currency: {
+            userId,
+            currency,
+          },
+        },
+      })
+
+      const newBalance = (walletBalance?.balance || 0) + amount
+      const newAvailable = (walletBalance?.available || 0) + amount
+      const symbol = currency === 'USD' ? '$' : currency
+
+      await tx.walletBalance.upsert({
+        where: {
+          userId_currency: {
+            userId,
+            currency,
+          },
+        },
+        create: {
           userId,
           currency,
+          symbol,
+          balance: newBalance,
+          available: newAvailable,
         },
-      },
-    })
+        update: {
+          balance: newBalance,
+          available: newAvailable,
+        },
+      })
 
-    const newBalance = (walletBalance?.balance || 0) + amount
-    const newAvailable = (walletBalance?.available || 0) + amount
-
-    await prisma.walletBalance.upsert({
-      where: {
-        userId_currency: {
+      // Record transaction for history
+      await tx.transaction.create({
+        data: {
           userId,
+          kind: 'deposit',
           currency,
+          amount,
+          status: 'completed',
+          reference: `Crypto deposit - ${amount} ${currency} (auto-credited)`,
         },
-      },
-      create: {
-        userId,
-        currency,
-        symbol: currency,
-        balance: newBalance,
-        available: newAvailable,
-      },
-      update: {
-        balance: newBalance,
-        available: newAvailable,
-      },
-    })
+      })
 
-    // Mark deposit as completed
-    await prisma.pendingDeposit.update({
-      where: { id: depositId },
-      data: {
-        status: 'completed',
-        updatedAt: new Date(),
-      },
+      // Create notification
+      await tx.notification.create({
+        data: {
+          userId,
+          kind: 'deposit',
+          title: `${amount} ${currency} deposited`,
+          body: `Your crypto deposit has been confirmed and credited to your wallet.`,
+        },
+      })
     })
-
-    // Remove from monitoring
-    this.monitoredAddresses.delete(deposit.toAddress)
 
     console.log(`[deposit-monitor] ✓ deposited ${amount} ${currency} to user ${userId}`)
   }

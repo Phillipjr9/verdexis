@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, Shield, Upload, CheckCircle, Clock, AlertCircle, User, Camera } from 'lucide-react'
 import Navigation from '../components/Navigation'
 import RequireAuth from '../components/RequireAuth'
 import { toast } from 'sonner'
+import { api } from '../lib/api'
 
 type KycStep = 'identity' | 'address' | 'selfie' | 'review' | 'done'
 
@@ -18,11 +19,17 @@ function KYCInner() {
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [dob, setDob] = useState('')
+  const [ssn, setSSN] = useState('')
   const [country, setCountry] = useState('US')
   const [address, setAddress] = useState('')
   const [city, setCity] = useState('')
   const [zip, setZip] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [kycStatus, setKycStatus] = useState<string | null>(null)
+
+  useEffect(() => {
+    api.getKycStatus().then(s => setKycStatus(s.status)).catch(() => setKycStatus(null))
+  }, [])
 
   const steps: { key: KycStep; label: string }[] = [
     { key: 'identity', label: 'Identity' },
@@ -39,9 +46,68 @@ function KYCInner() {
 
   const submit = async () => {
     setSubmitting(true)
-    await new Promise(r => setTimeout(r, 1800))
-    setSubmitting(false)
-    setStep('done')
+    try {
+      // Validate SSN format
+      const ssnPattern = /^\d{3}-\d{2}-\d{4}$|^\d{9}$/
+      if (!ssnPattern.test(ssn)) {
+        toast.error('Invalid SSN format. Use XXX-XX-XXXX or 9 digits')
+        setSubmitting(false)
+        return
+      }
+
+      await api.submitKyc({
+        firstName,
+        lastName,
+        dob,
+        ssn,
+        country,
+        addressStreet: address,
+        addressCity: city,
+        addressZip: zip,
+        idDocType: idType as 'passport' | 'dl' | 'id',
+        documentsJson: JSON.stringify([
+          { type: 'identity', uploaded: !!idFile },
+          { type: 'address', uploaded: !!addressFile },
+          { type: 'selfie', uploaded: !!selfieFile },
+        ]),
+      })
+      setStep('done')
+      toast.success('KYC information submitted for review')
+    } catch (e) {
+      toast.error((e as Error)?.message || 'Failed to submit KYC')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (kycStatus && kycStatus !== 'none') {
+    return (
+      <div className="min-h-screen bg-[#070C0E] flex items-center justify-center">
+        <Navigation />
+        <div className="text-center pt-24 max-w-md mx-auto px-6">
+          <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{
+            background: kycStatus === 'approved' ? '#0C8B44/15' : kycStatus === 'pending' ? 'rgb(59 130 246 / 0.15)' : 'rgb(239 68 68 / 0.15)',
+          }}>
+            {kycStatus === 'approved' && <CheckCircle className="w-8 h-8 text-[#0C8B44]" />}
+            {kycStatus === 'pending' && <Clock className="w-8 h-8 text-blue-400" />}
+            {kycStatus === 'rejected' && <AlertCircle className="w-8 h-8 text-red-400" />}
+          </div>
+          <h1 className="text-2xl font-light text-[#E5E5E5] mb-2">
+            {kycStatus === 'approved' && 'Verified'}
+            {kycStatus === 'pending' && 'Verification in Progress'}
+            {kycStatus === 'rejected' && 'Verification Failed'}
+          </h1>
+          <p className="text-sm text-[#737373] mb-6">
+            {kycStatus === 'approved' && 'Your identity has been verified. You can now access all features.'}
+            {kycStatus === 'pending' && 'Your documents are under review. This usually takes 1–2 business days.'}
+            {kycStatus === 'rejected' && 'Your verification was not approved. Please contact support.'}
+          </p>
+          <Link to="/dashboard" className="inline-block px-6 py-3 bg-[#0C8B44] text-white text-xs font-medium uppercase tracking-[0.05em] rounded-xl hover:bg-[#0a7539] transition-colors">
+            Back to dashboard
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   if (step === 'done') {
@@ -113,9 +179,23 @@ function KYCInner() {
                     <input value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Doe" className="w-full px-3 py-2 text-sm bg-[#0a0f11] border border-[#ffffff10] rounded-lg text-[#E5E5E5]" />
                   </div>
                 </div>
-                <div>
-                  <label className="block text-[10px] uppercase tracking-[0.05em] text-[#737373] mb-2">Date of Birth</label>
-                  <input type="date" aria-label="Date of birth" value={dob} onChange={e => setDob(e.target.value)} className="w-full px-3 py-2 text-sm bg-[#0a0f11] border border-[#ffffff10] rounded-lg text-[#E5E5E5]" />
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-[0.05em] text-[#737373] mb-2">Date of Birth</label>
+                    <input type="date" aria-label="Date of birth" value={dob} onChange={e => setDob(e.target.value)} className="w-full px-3 py-2 text-sm bg-[#0a0f11] border border-[#ffffff10] rounded-lg text-[#E5E5E5]" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase tracking-[0.05em] text-[#737373] mb-2">Social Security Number</label>
+                    <input
+                      type="text"
+                      placeholder="XXX-XX-XXXX"
+                      value={ssn}
+                      onChange={e => setSSN(e.target.value.replace(/[^\d-]/g, '').slice(0, 11))}
+                      maxLength={11}
+                      className="w-full px-3 py-2 text-sm bg-[#0a0f11] border border-[#ffffff10] rounded-lg text-[#E5E5E5]"
+                    />
+                    <p className="text-[10px] text-[#737373] mt-1">Last 4 digits will be visible on documents</p>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-[10px] uppercase tracking-[0.05em] text-[#737373] mb-2">Country of Citizenship</label>
@@ -152,7 +232,7 @@ function KYCInner() {
                     </button>
                   )}
                 </div>
-                <button onClick={() => { if (!firstName || !lastName || !dob || !idFile) { toast.error('Complete all fields'); return } setStep('address') }} className="w-full py-2.5 bg-[#0C8B44] text-white text-xs font-medium uppercase tracking-[0.05em] rounded-lg hover:bg-[#0a7539] transition-colors">
+                <button onClick={() => { if (!firstName || !lastName || !dob || !ssn || !idFile) { toast.error('Complete all fields'); return } setStep('address') }} className="w-full py-2.5 bg-[#0C8B44] text-white text-xs font-medium uppercase tracking-[0.05em] rounded-lg hover:bg-[#0a7539] transition-colors">
                   Continue
                 </button>
               </div>
@@ -236,6 +316,7 @@ function KYCInner() {
                   { label: 'Full Name', value: `${firstName} ${lastName}` },
                   { label: 'Date of Birth', value: dob },
                   { label: 'Country', value: country },
+                  { label: 'SSN', value: `***-**-${ssn.slice(-4)}` },
                   { label: 'ID Type', value: idType },
                   { label: 'Address', value: `${address}, ${city} ${zip}` },
                   { label: 'Identity Document', value: '✓ Uploaded' },

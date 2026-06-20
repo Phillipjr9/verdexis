@@ -30,6 +30,16 @@ model User {
   kycNotes     String?
   kycReviewedAt DateTime?
   kycReviewedBy String?
+  kycFirstName  String?
+  kycLastName   String?
+  kycDob        String?
+  kycCountry    String?
+  kycSsnEncrypted String?
+  kycAddressStreet String?
+  kycAddressCity String?
+  kycAddressZip String?
+  kycIdDocType  String?
+  kycDocumentsJson String?
   emailVerified   Boolean   @default(false)
   emailVerifiedAt DateTime?
   dailyWithdrawLimit  Float?

@@ -14,7 +14,6 @@ export function OnboardingTips() {
   }, [])
 
   const tips = [
-    { title: 'Complete your profile', desc: 'Add a profile photo to increase trust' },
     { title: 'Enable 2FA', desc: 'Secure your account with two-factor authentication' },
     { title: 'Link a bank account', desc: 'Start with ACH deposits for faster funding' },
     { title: 'Check the market screener', desc: 'Browse top movers and trading opportunities' },

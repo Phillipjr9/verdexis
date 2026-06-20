@@ -61,22 +61,45 @@ export default function NetWorthChart({ series, benchmark, range, isUp, height =
       scrollbar: { enabled: false },
       tooltip: {
         backgroundColor: '#0a0f11',
-        borderColor: '#1f2937',
-        borderRadius: 8,
-        style: { color: '#E5E5E5' },
-        shadow: false,
+        borderColor: '#0C8B44',
+        borderWidth: 1,
+        borderRadius: 10,
+        style: { color: '#E5E5E5', fontSize: '11px' },
+        shadow: { color: 'rgba(0,0,0,0.3)', offsetX: 0, offsetY: 2, opacity: 0.5, width: 8 },
         xDateFormat: range === '1D' ? '%b %e, %H:%M' : '%b %e, %Y',
         valuePrefix: '$',
         valueDecimals: 2,
         split: false,
         shared: true,
+        useHTML: true,
+        formatter() {
+          const points = this.points || []
+          if (!points.length) return ''
+          let html = `<div style="padding: 4px 6px;">`
+          html += `<div style="color: #737373; font-size: 9px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em;">${Highcharts.dateFormat(range === '1D' ? '%b %e, %H:%M' : '%b %e, %Y', this.x || 0)}</div>`
+          points.forEach((p) => {
+            const color = p.series.name === 'BTC' ? '#FF9800' : accent
+            html += `<div style="display: flex; align-items: center; gap: 6px; margin-top: 2px;">`
+            html += `<span style="width: 8px; height: 8px; border-radius: 50%; background: ${color}; display: inline-block;"></span>`
+            html += `<span style="color: #E5E5E5; font-weight: 500;">${p.series.name}:</span>`
+            html += `<span style="color: ${color}; font-weight: 600; margin-left: auto;">$${(p.y || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>`
+            html += `</div>`
+          })
+          html += `</div>`
+          return html
+        },
       },
       xAxis: {
         type: 'datetime',
-        lineColor: '#ffffff10',
-        tickColor: '#ffffff10',
+        lineColor: '#ffffff15',
+        tickColor: '#ffffff15',
         labels: { style: { color: '#737373', fontSize: '10px' } },
-        crosshair: { color: '#ffffff20', dashStyle: 'Dash' },
+        crosshair: {
+          color: '#0C8B44',
+          width: 1,
+          dashStyle: 'Dot',
+          zIndex: 5,
+        },
       },
       yAxis: {
         opposite: false,

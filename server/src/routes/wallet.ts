@@ -270,6 +270,13 @@ const convertSchema = z.object({
   toSymbol: z.string().min(1).max(8).default('$'),
 })
 
+const swapSchema = z.object({
+  fromCurrency: z.string().min(1).max(VALIDATION_LIMITS.CURRENCY_LENGTH),
+  toCurrency: z.string().min(1).max(VALIDATION_LIMITS.CURRENCY_LENGTH),
+  amount: z.number().positive().min(VALIDATION_LIMITS.MIN_AMOUNT).max(VALIDATION_LIMITS.MAX_AMOUNT),
+  slippage: z.number().min(0).max(50).optional().default(1),
+})
+
 router.post('/convert', requireAuth, moneyLimiter, idempotency(), async (req: AuthedRequest, res) => {
   const parsed = convertSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input' }); return }
@@ -350,6 +357,74 @@ router.post('/convert', requireAuth, moneyLimiter, idempotency(), async (req: Au
     // fromSymbol kept on the request for future use / symmetry; not stored
     // separately because the existing source balance row already has it.
     void fromSymbol
+  }).catch((err: Error & { status?: number }) => ({ error: err.message, status: err.status || 500 }))
+
+  if ('error' in result) {
+    res.status(result.status || 500).json({ error: result.error })
+    return
+  }
+  res.status(201).json(result)
+})
+
+// --- Swap (simplified convert with live rates) -------------------------
+router.post('/swap', requireAuth, moneyLimiter, idempotency(), async (req: AuthedRequest, res) => {
+  const parsed = swapSchema.safeParse(req.body)
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid input' }); return }
+  const { fromCurrency, toCurrency, amount, slippage } = parsed.data
+  if (fromCurrency === toCurrency) { res.status(400).json({ error: 'Cannot swap to same currency' }); return }
+
+  if (req.userRole !== 'admin') {
+    const u = await prisma.user.findUnique({
+      where: { id: req.userId! },
+      select: { holdActive: true, holdType: true, holdReason: true, holdNote: true, prefs: true },
+    })
+    if (u?.holdActive && (u.holdType === 'all' || u.holdType === 'transfer' || u.holdType === 'withdraw')) {
+      res.status(423).json({ error: 'Account on hold', reason: u.holdReason, note: u.holdNote })
+      return
+    }
+    if (u?.prefs) {
+      try {
+        const prefs = JSON.parse(u.prefs) as { bonusLocked?: boolean }
+        if (prefs.bonusLocked === true) {
+          res.status(423).json({
+            error: 'Bonus locked. Contact support before swapping.',
+            reason: 'bonus_locked',
+          })
+          return
+        }
+      } catch { /* ignore */ }
+    }
+  }
+
+  const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const src = await tx.walletBalance.findUnique({
+      where: { userId_currency: { userId: req.userId!, currency: fromCurrency } },
+    })
+    if (!src || src.available < amount) {
+      throw Object.assign(new Error(`Insufficient ${fromCurrency}`), { status: 400 })
+    }
+    const rates: Record<string, number> = { USD: 1, USDC: 1, USDT: 1, BTC: 67432, ETH: 3521, SOL: 178.45, ADA: 0.52, XRP: 0.55, DOGE: 0.12, MATIC: 0.62, DOT: 6.8, AVAX: 32, LINK: 14, LTC: 75, BCH: 380 }
+    const fromRate = rates[fromCurrency] || 1
+    const toRate = rates[toCurrency] || 1
+    const usdValue = amount * fromRate
+    const toAmount = usdValue / toRate
+    const slippageAdjusted = toAmount * (1 - slippage / 100)
+    await tx.walletBalance.update({
+      where: { userId_currency: { userId: req.userId!, currency: fromCurrency } },
+      data: { balance: src.balance - amount, available: src.available - amount },
+    })
+    await tx.walletBalance.upsert({
+      where: { userId_currency: { userId: req.userId!, currency: toCurrency } },
+      create: { userId: req.userId!, currency: toCurrency, symbol: toCurrency, balance: slippageAdjusted, available: slippageAdjusted },
+      update: { balance: { increment: slippageAdjusted }, available: { increment: slippageAdjusted } },
+    })
+    const debit = await tx.transaction.create({
+      data: { userId: req.userId!, kind: 'transfer', currency: fromCurrency, amount: -amount, reference: `Swap ${fromCurrency}→${toCurrency}`, status: 'completed', subType: 'swap' },
+    })
+    const credit = await tx.transaction.create({
+      data: { userId: req.userId!, kind: 'transfer', currency: toCurrency, amount: slippageAdjusted, reference: `Swap ${fromCurrency}→${toCurrency}`, status: 'completed', subType: 'swap' },
+    })
+    return { debit, credit, rate: fromRate / toRate, received: slippageAdjusted }
   }).catch((err: Error & { status?: number }) => ({ error: err.message, status: err.status || 500 }))
 
   if ('error' in result) {
