@@ -226,3 +226,5 @@ The platform is deployed at: **https://6ourstyon7pic.kimi.page**
 
 ## License
 MIT
+" #   T r i g g e r   d e p l o y m e n t "      
+ 
