@@ -28,6 +28,8 @@ import aiRoutes from './routes/ai.js'
 import marketRoutes from './routes/market.js'
 import reviewsRoutes from './routes/reviews.js'
 import adminRoutes from './routes/admin.js'
+import adminBonusRoutes from './routes/adminBonus.js'
+import swapRoutes from './routes/swap.js'
 import referralRoutes from './routes/referral.js'
 import dcaRoutes from './routes/dca.js'
 import depositAddressesRoutes from './routes/depositAddresses.js'
@@ -168,6 +170,8 @@ app.use('/api/ai', aiRoutes)
 app.use('/api/market', marketRoutes)
 app.use('/api/reviews', reviewsRoutes)
 app.use('/api/admin', adminRoutes)
+app.use('/api/admin', adminBonusRoutes)
+app.use('/api/swap', swapRoutes)
 app.use('/api/referrals', referralRoutes)
 app.use('/api/dca', dcaRoutes)
 app.use('/api/deposit-addresses', depositAddressesRoutes)
