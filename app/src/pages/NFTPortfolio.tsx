@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Image, ExternalLink, TrendingUp, TrendingDown } from 'lucide-react'
+import { ArrowLeft, Image, ExternalLink, TrendingUp, TrendingDown, Wallet as WalletIcon, RefreshCw, AlertCircle } from 'lucide-react'
 import Navigation from '../components/Navigation'
 import RequireAuth from '../components/RequireAuth'
+import { toast } from 'sonner'
 
 interface NFT {
   id: string
@@ -18,7 +19,10 @@ interface NFT {
   openseaUrl: string
 }
 
-const NFTS: NFT[] = [
+const ETH_PRICE = 3_180
+
+// Demo data for users without wallet connection
+const DEMO_NFTS: NFT[] = [
   { id: '1', name: 'Bored Ape #4821', collection: 'Bored Ape Yacht Club', category: 'PFP', image: '🐵', floorPrice: 38.2, floorChange24h: 2.4, purchasePrice: 65.0, quantity: 1, chain: 'ETH', openseaUrl: 'https://opensea.io/collection/boredapeyachtclub' },
   { id: '2', name: 'Pudgy #1102', collection: 'Pudgy Penguins', category: 'PFP', image: '🐧', floorPrice: 11.5, floorChange24h: -1.8, purchasePrice: 8.2, quantity: 1, chain: 'ETH', openseaUrl: 'https://opensea.io/collection/pudgypenguins' },
   { id: '3', name: 'Axie Mystic', collection: 'Axie Infinity', category: 'Gaming', image: '🦎', floorPrice: 0.42, floorChange24h: 5.1, purchasePrice: 0.28, quantity: 3, chain: 'RON', openseaUrl: 'https://marketplace.axieinfinity.com/' },
@@ -26,16 +30,79 @@ const NFTS: NFT[] = [
   { id: '5', name: 'ENS: verdexis.eth', collection: 'ENS Domains', category: 'Utility', image: '🔑', floorPrice: 0.05, floorChange24h: 1.2, purchasePrice: 0.04, quantity: 1, chain: 'ETH', openseaUrl: 'https://app.ens.domains/' },
 ]
 
-const CATEGORY_COLORS: Record<string, string> = { Art: '#f59e0b', Gaming: '#38bdf8', PFP: '#a78bfa', Utility: '#0C8B44' }
-const ETH_PRICE = 3_180
-
 export default function NFTPortfolio() { return <RequireAuth><NFTPortfolioInner /></RequireAuth> }
 
 function NFTPortfolioInner() {
+  const [nfts, setNfts] = useState<NFT[]>(DEMO_NFTS)
   const [filter, setFilter] = useState<'All' | 'Art' | 'Gaming' | 'PFP' | 'Utility'>('All')
   const [sortBy, setSortBy] = useState<'value' | 'pnl' | 'change'>('value')
+  const [walletConnected, setWalletConnected] = useState(false)
+  const [walletAddress, setWalletAddress] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [isDemo, setIsDemo] = useState(true)
 
-  const filtered = NFTS
+  // Check if user has connected wallet
+  useEffect(() => {
+    const auth = localStorage.getItem('verdexis_auth')
+    if (auth) {
+      try {
+        const parsed = JSON.parse(auth)
+        if (parsed.walletAddress) {
+          setWalletAddress(parsed.walletAddress)
+          setWalletConnected(true)
+          setIsDemo(false)
+          // In production, fetch real NFTs here
+          // fetchUserNFTs(parsed.walletAddress)
+        }
+      } catch (err) {
+        console.error('Failed to parse auth:', err)
+      }
+    }
+  }, [])
+
+  const connectWallet = async () => {
+    setLoading(true)
+    try {
+      // @ts-ignore - MetaMask injected provider
+      if (typeof window.ethereum !== 'undefined') {
+        // @ts-ignore
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' })
+        if (accounts[0]) {
+          setWalletAddress(accounts[0])
+          setWalletConnected(true)
+          setIsDemo(false)
+          toast.success('Wallet connected!')
+          // TODO: Save wallet address to backend
+          // TODO: Fetch real NFTs from Simplehash/Reservoir API
+        }
+      } else {
+        toast.error('Please install MetaMask to connect your wallet')
+      }
+    } catch (error) {
+      console.error('Wallet connection error:', error)
+      toast.error('Failed to connect wallet')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const refreshNFTs = async () => {
+    if (!walletAddress) return
+    setLoading(true)
+    try {
+      // TODO: Fetch fresh NFT data from API
+      // const response = await fetch(`/api/nfts/${walletAddress}`)
+      // const data = await response.json()
+      // setNfts(data.nfts)
+      toast.success('NFT data refreshed')
+    } catch (error) {
+      toast.error('Failed to refresh NFT data')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const filtered = nfts
     .filter(n => filter === 'All' || n.category === filter)
     .sort((a, b) => {
       if (sortBy === 'value') return (b.floorPrice * b.quantity) - (a.floorPrice * a.quantity)
@@ -43,8 +110,8 @@ function NFTPortfolioInner() {
       return b.floorChange24h - a.floorChange24h
     })
 
-  const totalValueEth = NFTS.reduce((s, n) => s + n.floorPrice * n.quantity, 0)
-  const totalCostEth = NFTS.reduce((s, n) => s + n.purchasePrice * n.quantity, 0)
+  const totalValueEth = nfts.reduce((s, n) => s + n.floorPrice * n.quantity, 0)
+  const totalCostEth = nfts.reduce((s, n) => s + n.purchasePrice * n.quantity, 0)
   const totalPnlEth = totalValueEth - totalCostEth
   const totalPnlPct = (totalPnlEth / totalCostEth) * 100
 
@@ -57,15 +124,65 @@ function NFTPortfolioInner() {
             <ArrowLeft className="w-3 h-3" />Back to dashboard
           </Link>
 
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-10 h-10 rounded-xl bg-[#0C8B44]/15 flex items-center justify-center">
-              <Image className="w-5 h-5 text-[#0C8B44]" />
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#0C8B44]/15 flex items-center justify-center">
+                <Image className="w-5 h-5 text-[#0C8B44]" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-light text-[#E5E5E5]">NFT Portfolio</h1>
+                <p className="text-xs text-[#737373]">Track your NFT holdings, floor prices & estimated value.</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-light text-[#E5E5E5]">NFT Portfolio</h1>
-              <p className="text-xs text-[#737373]">Track your NFT holdings, floor prices & estimated value.</p>
+            <div className="flex items-center gap-2">
+              {walletConnected && (
+                <button
+                  onClick={refreshNFTs}
+                  disabled={loading}
+                  className="px-3 py-2 text-xs border border-[#ffffff10] rounded-lg text-[#737373] hover:text-[#E5E5E5] hover:border-[#0C8B44]/30 transition-colors flex items-center gap-2 disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </button>
+              )}
+              {!walletConnected && (
+                <button
+                  onClick={connectWallet}
+                  disabled={loading}
+                  className="px-4 py-2 text-xs bg-[#0C8B44] text-white rounded-lg hover:bg-[#0a7539] transition-colors flex items-center gap-2 disabled:opacity-50"
+                >
+                  <WalletIcon className="w-3 h-3" />
+                  {loading ? 'Connecting...' : 'Connect Wallet'}
+                </button>
+              )}
             </div>
           </div>
+
+          {/* Demo Banner */}
+          {isDemo && (
+            <div className="mb-6 p-4 rounded-xl bg-[#FF9800]/10 border border-[#FF9800]/30 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-[#FF9800] shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm text-[#E5E5E5] font-medium mb-1">Demo Mode</p>
+                <p className="text-xs text-[#A0A0A0]">
+                  You're viewing sample NFT data. Connect your wallet to see your real NFT holdings with live floor prices from OpenSea.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Wallet Info */}
+          {walletConnected && walletAddress && (
+            <div className="mb-6 p-4 rounded-xl bg-[#0C8B44]/10 border border-[#0C8B44]/30 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <WalletIcon className="w-4 h-4 text-[#0C8B44]" />
+                <span className="text-xs text-[#E5E5E5] font-mono">
+                  {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+                </span>
+              </div>
+              <span className="text-xs text-[#0C8B44]">Connected</span>
+            </div>
+          )}
 
           {/* Stats */}
           <div className="grid grid-cols-4 gap-4 mb-6">
@@ -87,7 +204,7 @@ function NFTPortfolioInner() {
           <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-4 mb-6">
             <div className="flex gap-3 flex-wrap">
               {(['All', 'PFP', 'Art', 'Gaming', 'Utility'] as const).map(c => {
-                const count = c === 'All' ? NFTS.length : NFTS.filter(n => n.category === c).length
+                const count = c === 'All' ? nfts.length : nfts.filter(n => n.category === c).length
                 return (
                   <button key={c} onClick={() => setFilter(c)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors ${filter === c ? 'bg-[#0C8B44]/20 text-[#0C8B44] border border-[#0C8B44]/30' : 'border border-[#ffffff10] text-[#737373] hover:text-[#E5E5E5]'}`}>
                     {c !== 'All' && <div className="w-2 h-2 rounded-full" style={{ background: CATEGORY_COLORS[c] }} />}

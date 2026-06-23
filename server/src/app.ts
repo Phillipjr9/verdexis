@@ -37,6 +37,7 @@ import passkeysRoutes from './routes/passkeys.js'
 import kycRoutes from './routes/kyc.js'
 import copyTradingRoutes from './routes/copyTrading.js'
 import auditRoutes from './routes/audit.js'
+import nftRoutes from './routes/nft.js'
 import { isDbUnavailableError } from './dbError.js'
 import { requestContextMiddleware } from './logging.js'
 import { createErrorResponse } from './errorHandler.js'
@@ -175,6 +176,7 @@ app.use('/api/passkeys', passkeysRoutes)
 app.use('/api/kyc', kycRoutes)
 app.use('/api/copy-trading', copyTradingRoutes)
 app.use('/api', auditRoutes)
+app.use('/api/nfts', nftRoutes)
 
 app.post('/api/admin/cache/clear', async (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '')
