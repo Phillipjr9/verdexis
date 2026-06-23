@@ -12,6 +12,8 @@ import ErrorBoundary from './components/ErrorBoundary'
 import AlertChecker from './components/AlertChecker'
 import { OnboardingTips } from './components/OnboardingTips'
 import { SessionTimeoutWarning } from './components/SessionTimeoutWarning'
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
+import { ErrorRecovery } from './components/ErrorRecovery'
 import { Toaster } from 'sonner'
 
 const Home = lazy(() => import('./pages/Home'))
@@ -74,6 +76,8 @@ function PageFallback() {
 }
 
 export default function App() {
+  useKeyboardShortcuts()
+  
   return (
     <ErrorBoundary>
       <ScrollToTop />
@@ -84,6 +88,7 @@ export default function App() {
       <CommandPalette />
       <CookieBanner />
       <OfflineToast />
+      <ErrorRecovery />
       <AlertChecker />
       <WhatsAppFab />
       <OnboardingTips />

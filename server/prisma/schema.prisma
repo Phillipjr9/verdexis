@@ -76,6 +76,12 @@ model User {
   referralBonuses ReferralBonus[]
   dcaSchedules  DcaSchedule[]
   passkeys      Passkey[]
+  
+  // Copy Trading relationships
+  traderProfile TraderProfile?
+  followers     CopyRelationship[] @relation("Trader")
+  following     CopyRelationship[] @relation("Follower")
+  copyTrades    CopyTrade[]
 }
 
 model WalletLink {
@@ -379,4 +385,79 @@ model Passkey {
   createdAt        DateTime @default(now())
 
   @@index([userId])
+}
+
+// Copy Trading Models
+model TraderProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  displayName     String
+  bio             String?
+  isPublic        Boolean  @default(false)
+  allowCopying    Boolean  @default(false)
+  minCopyAmount   Float    @default(100)
+  maxCopiers      Int      @default(100)
+  performanceFee  Float    @default(0)
+  totalPnl        Float    @default(0)
+  totalPnlPercent Float    @default(0)
+  roi30d          Float    @default(0)
+  roi90d          Float    @default(0)
+  roisAllTime     Float    @default(0)
+  winRate         Float    @default(0)
+  totalTrades     Int      @default(0)
+  totalCopiers    Int      @default(0)
+  activeCopiers   Int      @default(0)
+  rank            Int?
+  verified        Boolean  @default(false)
+  lastTradeAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([isPublic, allowCopying])
+  @@index([roi30d])
+  @@index([rank])
+}
+
+model CopyRelationship {
+  id              String   @id @default(cuid())
+  followerId      String
+  follower        User     @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  traderId        String
+  trader          User     @relation("Trader", fields: [traderId], references: [id], onDelete: Cascade)
+  allocationUsd   Float
+  allocationPercent Float  @default(100)
+  status          String   @default("active")
+  totalCopied     Float    @default(0)
+  totalPnl        Float    @default(0)
+  totalPnlPercent Float    @default(0)
+  copyCount       Int      @default(0)
+  pausedAt        DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([followerId, traderId])
+  @@index([followerId, status])
+  @@index([traderId, status])
+}
+
+model CopyTrade {
+  id              String   @id @default(cuid())
+  followerId      String
+  follower        User     @relation(fields: [followerId], references: [id], onDelete: Cascade)
+  traderId        String
+  traderTradeId   String
+  symbol          String
+  side            String
+  amount          Float
+  price           Float
+  total           Float
+  pnl             Float    @default(0)
+  pnlPercent      Float    @default(0)
+  status          String   @default("executed")
+  createdAt       DateTime @default(now())
+
+  @@index([followerId, createdAt])
+  @@index([traderId, createdAt])
+  @@index([traderTradeId])
 }

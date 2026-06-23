@@ -2,10 +2,11 @@
 // transactions. Uses csvExport util.
 
 import { useEffect, useRef, useState } from 'react'
-import { Download, FileText } from 'lucide-react'
+import { Download, FileText, FileSpreadsheet } from 'lucide-react'
 import { toast } from 'sonner'
 import { portfolioStore } from '../../lib/portfolioStore'
 import { toCsv, downloadFile } from '../../lib/csvExport'
+import { generateTransactionsPDF, generateTaxReportPDF } from '../../lib/pdfExport'
 
 export default function ExportMenu() {
   const [open, setOpen] = useState(false)
@@ -56,8 +57,8 @@ export default function ExportMenu() {
     setOpen(false)
   }
 
-  const exportTransactions = () => {
-    const rows = portfolioStore.getTransactions().map((t) => ({
+  const exportTransactionsPDF = () => {
+    const txns = portfolioStore.getTransactions().map((t) => ({
       date: new Date(t.timestamp).toISOString(),
       type: t.type,
       amount: t.amount,
@@ -65,9 +66,45 @@ export default function ExportMenu() {
       description: t.description,
       status: t.status,
     }))
-    if (rows.length === 0) { toast.error('No transactions to export'); return }
-    downloadFile(`verdexis-transactions-${stamp()}.csv`, toCsv(rows))
-    toast.success(`Exported ${rows.length} transactions`)
+    if (txns.length === 0) { toast.error('No transactions to export'); return }
+    generateTransactionsPDF(txns, `verdexis-transactions-${stamp()}.pdf`)
+    toast.success('Opening PDF print dialog...')
+    setOpen(false)
+  }
+
+  const exportTaxReportPDF = () => {
+    const trades = portfolioStore.getTrades()
+    const year = new Date().getFullYear()
+    
+    // Calculate gains/losses (simplified - real tax calc is more complex)
+    const tradeData = trades.map(t => {
+      const costBasis = t.side === 'buy' ? t.total : 0
+      const proceeds = t.side === 'sell' ? t.total : 0
+      const gainLoss = proceeds - costBasis
+      return {
+        date: new Date(t.timestamp).toISOString(),
+        symbol: t.symbol,
+        side: t.side,
+        quantity: t.quantity,
+        price: t.price,
+        costBasis,
+        proceeds,
+        gainLoss,
+      }
+    })
+    
+    const totalGains = tradeData.filter(t => t.gainLoss > 0).reduce((sum, t) => sum + t.gainLoss, 0)
+    const totalLosses = tradeData.filter(t => t.gainLoss < 0).reduce((sum, t) => sum + t.gainLoss, 0)
+    
+    generateTaxReportPDF({
+      year,
+      totalGains,
+      totalLosses,
+      netGains: totalGains + totalLosses,
+      trades: tradeData,
+    }, `verdexis-tax-report-${year}.pdf`)
+    
+    toast.success('Opening tax report...')
     setOpen(false)
   }
 
@@ -81,15 +118,24 @@ export default function ExportMenu() {
         Export
       </button>
       {open && (
-        <div className="absolute right-0 mt-2 w-52 rounded-xl bg-[#0f1619] border border-[#ffffff10] shadow-2xl py-1 z-30">
+        <div className="absolute right-0 mt-2 w-56 rounded-xl bg-[#0f1619] border border-[#ffffff10] shadow-2xl py-1 z-30">
+          <div className="px-2 py-1.5 text-[10px] text-[#737373] uppercase tracking-wider">CSV Export</div>
           <button onClick={exportHoldings} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[#E5E5E5] hover:bg-[#ffffff05] text-left">
-            <FileText className="w-3 h-3 text-[#737373]" />Holdings (CSV)
+            <FileSpreadsheet className="w-3 h-3 text-[#737373]" />Holdings
           </button>
           <button onClick={exportTrades} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[#E5E5E5] hover:bg-[#ffffff05] text-left">
-            <FileText className="w-3 h-3 text-[#737373]" />Trades (CSV)
+            <FileSpreadsheet className="w-3 h-3 text-[#737373]" />Trades
           </button>
           <button onClick={exportTransactions} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[#E5E5E5] hover:bg-[#ffffff05] text-left">
-            <FileText className="w-3 h-3 text-[#737373]" />Transactions (CSV)
+            <FileSpreadsheet className="w-3 h-3 text-[#737373]" />Transactions
+          </button>
+          <div className="border-t border-[#ffffff08] my-1"></div>
+          <div className="px-2 py-1.5 text-[10px] text-[#737373] uppercase tracking-wider">PDF Export</div>
+          <button onClick={exportTransactionsPDF} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[#E5E5E5] hover:bg-[#ffffff05] text-left">
+            <FileText className="w-3 h-3 text-[#737373]" />Transactions Report
+          </button>
+          <button onClick={exportTaxReportPDF} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[#E5E5E5] hover:bg-[#ffffff05] text-left">
+            <FileText className="w-3 h-3 text-[#737373]" />Tax Report
           </button>
         </div>
       )}

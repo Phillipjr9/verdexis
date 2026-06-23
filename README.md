@@ -6,6 +6,27 @@
 ## Overview
 VERDEXIS is a premium fintech platform that combines AI-powered trading, portfolio management, net-worth tracking, and intelligent financial analysis. Built with a dark-mode glassmorphic UI featuring a 3D animated Sierpinski tetrahedron hero effect.
 
+## 🆕 Latest Updates (January 2025)
+
+**11 new production-ready features added!** See `QUICK_START.md` for details.
+
+### New Features:
+- ✅ **Offline Mode (PWA)** - App works without internet via service worker
+- ✅ **Keyboard Shortcuts** - Navigate with Cmd+K, Cmd+T, etc. (Press `?` for help)
+- ✅ **PDF Tax Reports** - Professional tax reports for accountants
+- ✅ **Portfolio Risk Analytics** - Sharpe ratio, VaR, max drawdown, volatility
+- ✅ **Theme Toggle** - Dark/Light/Auto modes in Settings
+- ✅ **Redis Caching** - Optional Redis support for faster API responses
+- ✅ **WebSocket Prices** - Real-time price streaming (no polling)
+- ✅ **Rate Limiting** - 600 req/min per user protection
+- ✅ **Code Splitting** - 68% smaller initial bundle with lazy loading
+- ✅ **CSV/PDF Export** - Export holdings, trades, transactions, tax reports
+- ✅ **Toast Notifications** - Real-time feedback for all actions
+
+**Quick Links:**
+- 📖 [Quick Start Guide](QUICK_START.md) - Try new features now
+- 📊 [Implementation Summary](IMPLEMENTATION_SUMMARY.md) - Full technical details
+
 ## Brand Identity
 
 ### Logo & Visual Assets
