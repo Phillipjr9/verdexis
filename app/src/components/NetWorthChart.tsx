@@ -33,6 +33,8 @@ function bucketMs(range: ChartRange, points: number, startOverride?: number): { 
 
 export default function NetWorthChart({ series, benchmark, range, isUp, height = 192, startMs }: Props) {
   const accent = isUp ? '#0C8B44' : '#f44336'
+  const accentGlow = isUp ? 'rgba(12, 139, 68, 0.4)' : 'rgba(244, 67, 54, 0.4)'
+  
   const options = useMemo<Highcharts.Options>(() => {
     const { start, step } = bucketMs(range, series.length, startMs)
     const data: [number, number][] = series.map((v, i) => [start + i * step, v])
@@ -45,13 +47,13 @@ export default function NetWorthChart({ series, benchmark, range, isUp, height =
         backgroundColor: 'transparent',
         height,
         spacing: [4, 0, 4, 0],
-        animation: false,
-        // Disable trackpad/mouse-wheel zoom — on touchpads a stray two-finger
-        // gesture would silently zoom the chart and the user has no obvious
-        // way to reset it. We render our own range picker for navigation.
+        animation: { duration: 800, easing: 'easeOutCubic' },
         zooming: { mouseWheel: { enabled: false }, type: undefined },
         panning: { enabled: false, type: 'x' },
         pinchType: undefined,
+        style: {
+          fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        },
       },
       title: { text: undefined },
       credits: { enabled: false },
@@ -60,29 +62,37 @@ export default function NetWorthChart({ series, benchmark, range, isUp, height =
       navigator: { enabled: false },
       scrollbar: { enabled: false },
       tooltip: {
-        backgroundColor: '#0a0f11',
-        borderColor: '#0C8B44',
+        backgroundColor: 'rgba(10, 15, 17, 0.95)',
+        borderColor: accent,
         borderWidth: 1,
-        borderRadius: 10,
-        style: { color: '#E5E5E5', fontSize: '11px' },
-        shadow: { color: 'rgba(0,0,0,0.3)', offsetX: 0, offsetY: 2, opacity: 0.5, width: 8 },
+        borderRadius: 12,
+        style: { color: '#E5E5E5', fontSize: '11px', fontWeight: '400' },
+        shadow: {
+          color: accentGlow,
+          offsetX: 0,
+          offsetY: 4,
+          opacity: 0.6,
+          width: 12,
+        },
         xDateFormat: range === '1D' ? '%b %e, %H:%M' : '%b %e, %Y',
         valuePrefix: '$',
         valueDecimals: 2,
         split: false,
         shared: true,
         useHTML: true,
+        padding: 12,
         formatter() {
           const points = this.points || []
           if (!points.length) return ''
-          let html = `<div style="padding: 4px 6px;">`
-          html += `<div style="color: #737373; font-size: 9px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em;">${Highcharts.dateFormat(range === '1D' ? '%b %e, %H:%M' : '%b %e, %Y', this.x || 0)}</div>`
+          let html = `<div style="padding: 2px;">`
+          html += `<div style="color: #737373; font-size: 9px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600;">${Highcharts.dateFormat(range === '1D' ? '%b %e, %H:%M' : '%b %e, %Y', this.x || 0)}</div>`
           points.forEach((p) => {
             const color = p.series.name === 'BTC' ? '#FF9800' : accent
-            html += `<div style="display: flex; align-items: center; gap: 6px; margin-top: 2px;">`
-            html += `<span style="width: 8px; height: 8px; border-radius: 50%; background: ${color}; display: inline-block;"></span>`
-            html += `<span style="color: #E5E5E5; font-weight: 500;">${p.series.name}:</span>`
-            html += `<span style="color: ${color}; font-weight: 600; margin-left: auto;">$${(p.y || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>`
+            const val = p.y || 0
+            html += `<div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">`
+            html += `<span style="width: 10px; height: 10px; border-radius: 50%; background: ${color}; display: inline-block; box-shadow: 0 0 8px ${color}60;"></span>`
+            html += `<span style="color: #A0A0A0; font-weight: 500; font-size: 10px;">${p.series.name}:</span>`
+            html += `<span style="color: ${color}; font-weight: 700; margin-left: auto; font-size: 12px;">$${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>`
             html += `</div>`
           })
           html += `</div>`
@@ -93,26 +103,32 @@ export default function NetWorthChart({ series, benchmark, range, isUp, height =
         type: 'datetime',
         lineColor: '#ffffff15',
         tickColor: '#ffffff15',
-        labels: { style: { color: '#737373', fontSize: '10px' } },
+        labels: { 
+          style: { color: '#737373', fontSize: '10px', fontWeight: '500' },
+          y: 20,
+        },
         crosshair: {
-          color: '#0C8B44',
-          width: 1,
+          color: accent,
+          width: 1.5,
           dashStyle: 'Dot',
           zIndex: 5,
+          snap: true,
         },
+        gridLineWidth: 0,
       },
       yAxis: {
         opposite: false,
         gridLineColor: '#ffffff08',
-        // Breathing room so a steady balance ($50,100–$50,300) doesn't look
-        // like a roller coaster filling the entire chart height. Highstock's
-        // default crops to exact data min/max with zero padding.
+        gridLineDashStyle: 'Dot',
         startOnTick: false,
         endOnTick: false,
-        minPadding: 0.15,
-        maxPadding: 0.15,
+        minPadding: 0.12,
+        maxPadding: 0.12,
         labels: {
-          style: { color: '#737373', fontSize: '10px' },
+          align: 'left',
+          x: -5,
+          y: 4,
+          style: { color: '#737373', fontSize: '10px', fontWeight: '500' },
           formatter() {
             const n = this.value as number
             if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`
@@ -123,19 +139,42 @@ export default function NetWorthChart({ series, benchmark, range, isUp, height =
         title: { text: undefined },
       },
       plotOptions: {
-        series: { marker: { enabled: false }, animation: false },
+        series: { 
+          marker: { enabled: false }, 
+          animation: { duration: 800 },
+          states: {
+            hover: {
+              halo: {
+                size: 8,
+                opacity: 0.4,
+                attributes: { fill: accentGlow },
+              },
+            },
+          },
+        },
         area: {
           fillColor: {
             linearGradient: { x1: 0, y1: 0, x2: 0, y2: 1 },
             stops: [
-              [0, accent + '55'],
+              [0, accent + '50'],
+              [0.5, accent + '20'],
               [1, accent + '00'],
             ],
           },
-          lineWidth: 1.6,
+          lineWidth: 2,
           lineColor: accent,
-          states: { hover: { lineWidth: 2 } },
+          states: { 
+            hover: { 
+              lineWidth: 2.5,
+              halo: { size: 0 },
+            },
+          },
           threshold: null,
+          shadow: {
+            color: accentGlow,
+            width: 8,
+            offsetY: 0,
+          },
         },
       },
       series: [
