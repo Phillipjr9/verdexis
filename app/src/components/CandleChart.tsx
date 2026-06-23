@@ -1,16 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Highcharts from 'highcharts/highstock'
 import HighchartsReact from 'highcharts-react-official'
-// Auto-registering ESM modules — Highcharts 12 attaches them on import.
-import 'highcharts/indicators/indicators-all'
+// Load specific indicator modules instead of indicators-all to avoid conflicts
+import 'highcharts/indicators/rsi'
+import 'highcharts/indicators/macd'
+import 'highcharts/indicators/bb'
+import 'highcharts/indicators/acceleration-bands'
+import 'highcharts/indicators/ema'
 import AnnotationsModule from 'highcharts/modules/annotations'
 import DragPanes from 'highcharts/modules/drag-panes'
 import { marketData, type Candle, type OhlcRange } from '../lib/marketData'
 import { liveTicker } from '../lib/liveTicker'
 import { Eye, EyeOff, Pen, Trash2, TrendingUp } from 'lucide-react'
 
-AnnotationsModule(Highcharts)
-DragPanes(Highcharts)
+// Initialize modules
+try {
+  AnnotationsModule(Highcharts)
+  DragPanes(Highcharts)
+} catch (e) {
+  console.warn('[CandleChart] Module initialization warning:', e)
+}
 
 interface Props {
   coinId: string
