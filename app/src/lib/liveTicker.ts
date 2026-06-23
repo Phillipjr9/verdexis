@@ -1,6 +1,9 @@
 // Live price ticker — tries a backend WebSocket at /api/market/ws first,
 // falls back to HTTP polling (/api/market/tickers) after MAX_WS_ATTEMPTS
 // failures. Either path notifies subscribers on every price change.
+// Also feeds prices into the real-time price system for portfolio updates.
+
+import { realTimePrice } from './realTimePrice'
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) || ''
 const LIVE_POLL_MS = 2_000
@@ -105,6 +108,15 @@ class LiveTickerService {
           this.latest.set(data.id, data.price)
           const bucket = this.listeners.get(data.id)
           if (bucket) for (const cb of bucket) cb(data.price)
+          // Feed price into real-time system for portfolio updates
+          realTimePrice.updatePrice({
+            coinId: data.id,
+            symbol: data.id.toUpperCase(),
+            price: data.price,
+            change24h: 0, // Will be updated from market data
+            changePercent24h: 0,
+            timestamp: Date.now(),
+          })
         } catch { /* ignore malformed messages */ }
       }
       this.ws.onerror = () => {
@@ -152,6 +164,15 @@ class LiveTickerService {
         this.latest.set(coinId, price)
         const bucket = this.listeners.get(coinId)
         if (bucket) for (const cb of bucket) cb(price)
+        // Feed price into real-time system for portfolio updates
+        realTimePrice.updatePrice({
+          coinId,
+          symbol: coinId.toUpperCase(),
+          price,
+          change24h: 0,
+          changePercent24h: 0,
+          timestamp: Date.now(),
+        })
       }
     } catch {
       /* network blip — try again next interval */
