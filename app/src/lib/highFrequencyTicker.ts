@@ -83,7 +83,7 @@ class HighFrequencyTicker {
       if (this.ws?.readyState === WebSocket.OPEN) {
         this.ws.send(
           JSON.stringify({
-            type: 'subscribe',
+            action: 'subscribe',
             symbols: [upper],
           })
         )
@@ -91,9 +91,6 @@ class HighFrequencyTicker {
     }
   }
 
-  /**
-   * Unsubscribe from symbol updates
-   */
   private unsubscribe(symbol: string): void {
     const upper = symbol.toUpperCase()
     this.subscriptionIds.delete(upper)
@@ -101,7 +98,7 @@ class HighFrequencyTicker {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(
         JSON.stringify({
-          type: 'unsubscribe',
+          action: 'unsubscribe',
           symbols: [upper],
         })
       )
@@ -155,11 +152,11 @@ class HighFrequencyTicker {
         this.isConnecting = false
         this.reconnectAttempts = 0
 
-        // Re-subscribe to all symbols
+        // Re-subscribe to all symbols with correct message format
         if (this.subscriptionIds.size > 0) {
           this.ws!.send(
             JSON.stringify({
-              type: 'subscribe',
+              action: 'subscribe',
               symbols: Array.from(this.subscriptionIds),
             })
           )
@@ -170,12 +167,34 @@ class HighFrequencyTicker {
         try {
           const data = JSON.parse(event.data as string)
 
-          if (data.type === 'price') {
-            this.handlePriceUpdate(data)
-          } else if (data.type === 'batch') {
-            // Batch update for multiple prices
+          // Handle single price update
+          if (data.type === 'price' && data.data) {
+            const update = data.data as any
+            this.handlePriceUpdate({
+              symbol: update.symbol,
+              price: update.price,
+              bid: update.bid,
+              ask: update.ask,
+              lastUpdate: update.timestamp,
+              volume24h: update.volume24h,
+              change24h: update.change24h,
+              high24h: update.high24h,
+              low24h: update.low24h,
+            })
+          } else if (data.type === 'batch' && Array.isArray(data.prices)) {
+            // Handle batch update for multiple prices
             for (const price of data.prices) {
-              this.handlePriceUpdate(price)
+              this.handlePriceUpdate({
+                symbol: price.symbol,
+                price: price.price,
+                bid: price.bid,
+                ask: price.ask,
+                lastUpdate: price.timestamp,
+                volume24h: price.volume24h,
+                change24h: price.change24h,
+                high24h: price.high24h,
+                low24h: price.low24h,
+              })
             }
           }
         } catch (e) {
