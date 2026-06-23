@@ -63,7 +63,14 @@ export default function AssetDetail() {
     ;(async () => {
       const list = await marketData.getCryptoPrice([id])
       if (!alive) return
-      setCoin(list[0] ?? null)
+      if (list.length > 0) {
+        setCoin(list[0])
+      } else {
+        // Fallback: try to get from the full list cache
+        const fullList = await marketData.getCryptoList()
+        const fallback = fullList.find(c => c.id === id || c.symbol?.toLowerCase() === id.toLowerCase())
+        setCoin(fallback ?? null)
+      }
     })()
     return () => { alive = false }
   }, [id])
@@ -136,8 +143,8 @@ export default function AssetDetail() {
       toast.error('Enter an amount first')
       return
     }
-    if (!coin) {
-      toast.error('Market data not loaded')
+    if (!coin || !price || price <= 0) {
+      toast.error('Market data unavailable. Please try again in a moment.')
       return
     }
     if (!getToken()) {
@@ -247,14 +254,25 @@ export default function AssetDetail() {
 
           {/* Price strip */}
           <div className="flex items-baseline gap-3 mb-6 flex-wrap">
-            <p className="text-3xl sm:text-4xl font-light text-[#E5E5E5] tabular-nums">
-              ${fmtPrice(price)}
-            </p>
-            <p className={`text-sm font-medium flex items-center gap-1 ${changePos ? 'text-[#4CAF50]' : 'text-[#f44336]'}`}>
-              {changePos ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-              {changePos ? '+' : ''}{change.toFixed(2)}%
-            </p>
-            <p className="text-xs text-[#737373]">24h</p>
+            {price > 0 ? (
+              <>
+                <p className="text-3xl sm:text-4xl font-light text-[#E5E5E5] tabular-nums">
+                  ${fmtPrice(price)}
+                </p>
+                <p className={`text-sm font-medium flex items-center gap-1 ${changePos ? 'text-[#4CAF50]' : 'text-[#f44336]'}`}>
+                  {changePos ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+                  {changePos ? '+' : ''}{change.toFixed(2)}%
+                </p>
+                <p className="text-xs text-[#737373]">24h</p>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 border-2 border-[#0C8B44] border-t-transparent rounded-full animate-spin" />
+                  <p className="text-lg text-[#737373]">Loading market data…</p>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
