@@ -3,10 +3,16 @@ import { z } from 'zod'
 import multer from 'multer'
 import rateLimit from 'express-rate-limit'
 import csrf from 'csurf'
-import { prisma } from '../db.js'
 import { requireAuth, type AuthedRequest } from '../auth.js'
-import { encryptSsn, validateSsn } from '../kycService.js'
+import { encryptSsn, validateSsn } from '../kycServiceEnhanced.js'
 import { storeDocument } from '../documentService.js'
+
+let prisma: any = null
+
+// Export setter for prisma
+export function setPrisma(p: any) {
+  prisma = p
+}
 
 const router = Router()
 
@@ -15,6 +21,7 @@ declare global {
   namespace Express {
     interface Request {
       csrfToken(): string
+      userId?: string
     }
   }
 }
@@ -26,7 +33,7 @@ const csrfProtection = csrf({ cookie: false })
 const kycSubmitLimiter = rateLimit({
   windowMs: 24 * 60 * 60 * 1000,
   max: 10,
-  keyGenerator: (req) => (req.user as any)?.id || req.ip,
+  keyGenerator: (req) => req.userId || req.ip!,
   message: 'Too many KYC submissions. Try again later.',
   standardHeaders: true,
   legacyHeaders: false,
@@ -36,7 +43,7 @@ const kycSubmitLimiter = rateLimit({
 const documentUploadLimiter = rateLimit({
   windowMs: 24 * 60 * 60 * 1000,
   max: 100,
-  keyGenerator: (req) => (req.user as any)?.id || req.ip,
+  keyGenerator: (req) => req.userId || req.ip!,
   message: 'Too many document uploads. Try again later.',
   standardHeaders: true,
   legacyHeaders: false,

@@ -1,12 +1,16 @@
 import crypto from 'node:crypto'
 import { env } from './env.js'
 
-let prisma: any
-try {
-  const dbModule = await import('./db.js')
-  prisma = dbModule.prisma
-} catch (e) {
-  prisma = null
+/**
+ * KYC Service - Encryption and Tier Management
+ * Note: Prisma is injected by caller to allow optional usage
+ */
+
+let prisma: any = null
+
+// Export setter for prisma
+export function setPrisma(p: any) {
+  prisma = p
 }
 
 // Encryption key from env or JWT secret
