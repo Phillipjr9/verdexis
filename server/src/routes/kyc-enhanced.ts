@@ -499,4 +499,5 @@ router.get('/tier', requireAuth, async (req: AuthedRequest, res) => {
 })
 
 export default router
-export { KYC_TIERS, KycTier }
+export { KYC_TIERS }
+export type { KycTier }

@@ -1,4 +1,22 @@
-import * as Sentry from '@sentry/node'
+let Sentry: any
+try {
+  Sentry = await import('@sentry/node')
+} catch (e) {
+  // Sentry not installed - create no-op implementations
+  Sentry = {
+    init: () => {},
+    Handlers: { requestHandler: () => (req: any, res: any, next: any) => next(), errorHandler: () => (error: any, req: any, res: any, next: any) => next(error) },
+    Integrations: { Http: () => ({}) },
+    startTransaction: () => ({ setData: () => {}, end: () => {} }),
+    startSpan: () => ({ end: () => {} }),
+    captureException: () => '',
+    captureMessage: () => '',
+    setUser: () => {},
+    addBreadcrumb: () => {},
+    getClient: () => ({}),
+  }
+}
+
 import { Express, Request, Response, NextFunction } from 'express'
 
 /**

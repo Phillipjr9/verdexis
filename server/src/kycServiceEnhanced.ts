@@ -33,9 +33,6 @@ export interface EncryptedKyc {
   idDocType: string
 }
 
-/**
- * KYC Tier Configuration
- */
 export const KYC_TIER_CONFIG = {
   UNVERIFIED: {
     name: 'Unverified',
