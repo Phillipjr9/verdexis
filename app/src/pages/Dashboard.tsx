@@ -14,6 +14,8 @@ import GoalsProgressCard from '../components/dashboard/GoalsProgressCard'
 import CategoryBreakdownCard from '../components/dashboard/CategoryBreakdownCard'
 import StakingCard from '../components/dashboard/StakingCard'
 import DcaCard from '../components/dashboard/DcaCard'
+import TradingAttribution from '../components/dashboard/TradingAttribution'
+import ComplianceBadge from '../components/ComplianceBadge'
 import GreetingHeader from '../components/dashboard/GreetingHeader'
 import CurrencySelector from '../components/dashboard/CurrencySelector'
 import ExportMenu from '../components/dashboard/ExportMenu'
@@ -843,6 +845,7 @@ export default function Dashboard() {
               <div className="flex-1 h-px bg-gradient-to-r from-[#ffffff10] to-transparent" />
             </div>
           )}
+          {isAuthenticated && !isAdminRole && <ComplianceBadge />}
           {isAuthenticated && (() => {
             const health = computePortfolioHealth({
               holdings,
@@ -877,6 +880,13 @@ export default function Dashboard() {
               </div>
             )
           })()}
+
+          {/* Trading Attribution - Today's Performance */}
+          {isAuthenticated && !isAdminRole && !hiddenWidgets.has('tradingAttribution') && (
+            <div className="mb-6">
+              <TradingAttribution />
+            </div>
+          )}
 
           {/* Performance Metrics — inspired by Wealthfolio analytics */}
           {isAuthenticated && (

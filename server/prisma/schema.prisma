@@ -258,9 +258,15 @@ model PriceAlert {
   active     Boolean  @default(true)
   triggered  Boolean  @default(false)
   triggeredAt DateTime?
+  alertType  String   @default("price")
+  technicalIndicator String?
+  percentageChange Float?
+  timeWindow Int      @default(24)
+  portfolioTarget Float?
   createdAt  DateTime @default(now())
 
   @@index([userId, active])
+  @@index([alertType, active])
 }
 
 model Notification {

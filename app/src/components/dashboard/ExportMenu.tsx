@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { portfolioStore } from '../../lib/portfolioStore'
 import { toCsv, downloadFile } from '../../lib/csvExport'
 import { generateTransactionsPDF, generateTaxReportPDF } from '../../lib/pdfExport'
+import { generateAuditTrailPDF } from '../../lib/auditExport'
 
 export default function ExportMenu() {
   const [open, setOpen] = useState(false)
@@ -108,6 +109,30 @@ export default function ExportMenu() {
     setOpen(false)
   }
 
+  const exportAuditTrail = async () => {
+    const token = localStorage.getItem('token')
+    if (!token) { toast.error('Authentication required'); return }
+    
+    try {
+      const res = await fetch('/api/audit-trail', {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      
+      if (!res.ok) {
+        toast.error('Failed to fetch audit data')
+        return
+      }
+      
+      const data = await res.json()
+      generateAuditTrailPDF(data)
+      toast.success('Opening audit trail...')
+      setOpen(false)
+    } catch (error) {
+      console.error('Audit trail export error:', error)
+      toast.error('Failed to generate audit trail')
+    }
+  }
+
   return (
     <div className="relative" ref={ref}>
       <button
@@ -136,6 +161,9 @@ export default function ExportMenu() {
           </button>
           <button onClick={exportTaxReportPDF} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[#E5E5E5] hover:bg-[#ffffff05] text-left">
             <FileText className="w-3 h-3 text-[#737373]" />Tax Report
+          </button>
+          <button onClick={exportAuditTrail} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[#E5E5E5] hover:bg-[#ffffff05] text-left">
+            <FileText className="w-3 h-3 text-[#737373]" />Audit Trail
           </button>
         </div>
       )}
