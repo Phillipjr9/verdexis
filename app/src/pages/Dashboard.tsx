@@ -845,7 +845,11 @@ export default function Dashboard() {
               <div className="flex-1 h-px bg-gradient-to-r from-[#ffffff10] to-transparent" />
             </div>
           )}
-          {isAuthenticated && !isAdminRole && <ComplianceBadge />}
+          {isAuthenticated && !isAdminRole && (
+            <div className="mb-4">
+              <ComplianceBadge />
+            </div>
+          )}
           {isAuthenticated && (() => {
             const health = computePortfolioHealth({
               holdings,

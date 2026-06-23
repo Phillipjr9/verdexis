@@ -43,12 +43,9 @@ export default function ComplianceBadge() {
             </div>
           </div>
           
-          <a
-            href="/legal/insurance"
-            className="text-emerald-400 hover:text-emerald-300 text-sm mt-3 inline-block transition-colors"
-          >
-            View Insurance Policy Details →
-          </a>
+          <p className="text-xs text-slate-400 mt-3">
+            Learn more in <a href="/legal" className="text-emerald-400 hover:text-emerald-300 transition-colors">Legal</a> or <a href="/disclosures" className="text-emerald-400 hover:text-emerald-300 transition-colors">Disclosures</a>.
+          </p>
         </div>
       </div>
     </div>
