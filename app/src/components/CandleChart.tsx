@@ -1,25 +1,52 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Highcharts from 'highcharts/highstock'
 import HighchartsReact from 'highcharts-react-official'
-// Load specific indicator modules instead of indicators-all to avoid conflicts
-import 'highcharts/indicators/rsi'
-import 'highcharts/indicators/macd'
-import 'highcharts/indicators/bb'
-import 'highcharts/indicators/acceleration-bands'
-import 'highcharts/indicators/ema'
-import AnnotationsModule from 'highcharts/modules/annotations'
-import DragPanes from 'highcharts/modules/drag-panes'
+// Load specific indicator modules - with fallbacks
+let indicatorsLoaded = false
+const loadIndicators = () => {
+  if (indicatorsLoaded) return
+  try {
+    require('highcharts/indicators/rsi')
+    require('highcharts/indicators/macd')
+    require('highcharts/indicators/bb')
+    require('highcharts/indicators/acceleration-bands')
+    require('highcharts/indicators/ema')
+    indicatorsLoaded = true
+  } catch (e) {
+    console.warn('[CandleChart] Some indicators unavailable:', e)
+  }
+}
+
+let annotationsLoaded = false
+let dragPanesLoaded = false
+
+const loadModules = () => {
+  try {
+    if (!annotationsLoaded) {
+      const AnnotationsModule = require('highcharts/modules/annotations')
+      AnnotationsModule(Highcharts)
+      annotationsLoaded = true
+    }
+  } catch (e) {
+    console.warn('[CandleChart] Annotations unavailable:', e)
+  }
+  try {
+    if (!dragPanesLoaded) {
+      const DragPanes = require('highcharts/modules/drag-panes')
+      DragPanes(Highcharts)
+      dragPanesLoaded = true
+    }
+  } catch (e) {
+    console.warn('[CandleChart] Drag panes unavailable:', e)
+  }
+}
+
+loadIndicators()
+loadModules()
+
 import { marketData, type Candle, type OhlcRange } from '../lib/marketData'
 import { liveTicker } from '../lib/liveTicker'
 import { Eye, EyeOff, Pen, Trash2, TrendingUp } from 'lucide-react'
-
-// Initialize modules
-try {
-  AnnotationsModule(Highcharts)
-  DragPanes(Highcharts)
-} catch (e) {
-  console.warn('[CandleChart] Module initialization warning:', e)
-}
 
 interface Props {
   coinId: string
