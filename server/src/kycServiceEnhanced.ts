@@ -1,6 +1,13 @@
 import crypto from 'node:crypto'
 import { env } from './env.js'
-import { prisma } from './db.js'
+
+let prisma: any
+try {
+  const dbModule = await import('./db.js')
+  prisma = dbModule.prisma
+} catch (e) {
+  prisma = null
+}
 
 // Encryption key from env or JWT secret
 const ENCRYPTION_KEY = (() => {
@@ -133,6 +140,7 @@ export function maskSsn(ssn: string): string {
  * Determine KYC tier based on documents and status
  */
 export async function determineTier(userId: string): Promise<string> {
+  if (!prisma) return 'UNVERIFIED'
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -175,6 +183,7 @@ export async function determineTier(userId: string): Promise<string> {
  * Update user tier and limits
  */
 export async function updateUserTier(userId: string): Promise<string> {
+  if (!prisma) return 'UNVERIFIED'
   const tier = await determineTier(userId)
   const tierConfig = KYC_TIER_CONFIG[tier as keyof typeof KYC_TIER_CONFIG]
 

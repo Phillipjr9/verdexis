@@ -46,6 +46,8 @@ model User {
   monthlyWithdrawLimit Float?
   dailyTransferLimit  Float?
   monthlyTransferLimit Float?
+  kycTier     String   @default("UNVERIFIED")
+  kycTierUpdatedAt DateTime?
   ipAllowlist  String?
   walletAddress  String?
   walletChainId  String?

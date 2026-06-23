@@ -2,7 +2,6 @@ let Queue: any
 try {
   Queue = (await import('bull')).default
 } catch (e) {
-  // Bull not installed - will fallback to no-op
   Queue = class {
     constructor(name: string, url?: string) {}
     async add(data: any, opts?: any) { return { id: Math.random() } }
@@ -10,7 +9,14 @@ try {
     on(event: string, handler: any) {}
   }
 }
-import { prisma } from './db.js'
+
+let prisma: any
+try {
+  const dbModule = await import('./db.js')
+  prisma = dbModule.prisma
+} catch (e) {
+  prisma = null
+}
 
 /**
  * VERDEXIS Job Queue System

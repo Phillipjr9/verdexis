@@ -10,6 +10,15 @@ import { storeDocument } from '../documentService.js'
 
 const router = Router()
 
+// Extend Express Request for CSRF
+declare global {
+  namespace Express {
+    interface Request {
+      csrfToken(): string
+    }
+  }
+}
+
 // CSRF protection middleware
 const csrfProtection = csrf({ cookie: false })
 
@@ -104,9 +113,6 @@ const KYC_TIERS: Record<string, KycTier> = {
   },
 }
 
-/**
- * Get CSRF token for form submission
- */
 router.get('/csrf-token', csrfProtection, (req, res) => {
   res.json({ csrfToken: req.csrfToken() })
 })

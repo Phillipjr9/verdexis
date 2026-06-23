@@ -1,5 +1,12 @@
-import { prisma } from './db.js'
 import { Request, Response, NextFunction } from 'express'
+
+let prisma: any
+try {
+  const dbModule = await import('./db.js')
+  prisma = dbModule.prisma
+} catch (e) {
+  prisma = null
+}
 
 /**
  * VERDEXIS Database Query Optimizer & Monitoring
