@@ -1,7 +1,6 @@
 import path from "path"
 import react from "@vitejs/plugin-react"
 import { defineConfig, type Plugin } from "vite"
-import { inspectAttr } from 'kimi-plugin-inspect-react'
 
 const BUILD_ID = `${Date.now()}`
 
@@ -27,7 +26,7 @@ export default defineConfig({
   define: {
     __BUILD_ID__: JSON.stringify(BUILD_ID),
   },
-  plugins: [inspectAttr(), react(), versionJsonPlugin()],
+  plugins: [react(), versionJsonPlugin()],
   server: {
     host: true, // bind 0.0.0.0 so the dev server is reachable from other LAN devices (phone, tablet, other laptop)
     port: 3000,
