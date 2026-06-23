@@ -20,6 +20,7 @@ const STATIC_ITEMS: Item[] = [
   { label: 'Settings', to: '/settings', group: 'Pages' },
   { label: 'Price Alerts', to: '/alerts', group: 'Pages' },
   { label: 'Financial Goals', to: '/goals', group: 'Pages' },
+  { label: 'Stress Testing', to: '/stress-test', group: 'Tools', hint: 'Monte Carlo' },
   { label: 'Help & Docs', to: '/about', group: 'Pages' },
 ]
 

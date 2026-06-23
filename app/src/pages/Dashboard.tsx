@@ -988,6 +988,7 @@ export default function Dashboard() {
                       { label: 'Withdraw', icon: ArrowUpRight, path: '/wallet?action=withdraw', color: '#f44336', desc: 'Cash out' },
                       { label: 'Transfer', icon: ArrowRight, path: '/wallet?action=transfer', color: '#00838F', desc: 'Send funds' },
                       { label: 'Trade', icon: BarChart3, path: '/trading', color: '#FF9800', desc: 'Buy / Sell' },
+                      { label: 'Stress Test', icon: AlertTriangle, path: '/stress-test', color: '#f44336', desc: 'Monte Carlo' },
                       { label: 'Convert', icon: Repeat, path: '/wallet?action=convert', color: '#26A69A', desc: 'Swap assets' },
                       { label: 'Stake', icon: Coins, path: '/wallet?action=stake', color: '#8E24AA', desc: 'Earn yield' },
                       { label: 'Activity', icon: History, path: '/activity', color: '#5C6BC0', desc: 'Transaction log' },

@@ -68,6 +68,7 @@ const OrderHistory = lazy(() => import('./pages/OrderHistory'))
 const CryptoDeposit = lazy(() => import('./pages/CryptoDeposit'))
 const AdminDepositAddresses = lazy(() => import('./pages/AdminDepositAddresses'))
 const Swap = lazy(() => import('./pages/Swap'))
+const StressTesting = lazy(() => import('./pages/StressTesting'))
 
 function PageFallback() {
   return (
@@ -158,6 +159,7 @@ function RoutedPages() {
           <Route path="/order-history" element={<RequireAuth><OrderHistory /></RequireAuth>} />
           <Route path="/deposit/crypto" element={<RequireAuth><CryptoDeposit /></RequireAuth>} />
           <Route path="/swap" element={<RequireAuth><Swap /></RequireAuth>} />
+          <Route path="/stress-test" element={<RequireAuth><StressTesting /></RequireAuth>} />
           <Route path="/admin/deposit-addresses" element={<RequireAdmin><AdminDepositAddresses /></RequireAdmin>} />
           <Route path="/changelog" element={<Changelog />} />
           <Route path="/reset" element={<ResetPassword />} />
