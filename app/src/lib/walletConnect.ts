@@ -38,87 +38,97 @@ export function getWalletConnectProvider(): Promise<Eip1193Provider | null> {
   if (cached) return cached
   cached = (async () => {
     try {
-      const mod = await import('@walletconnect/ethereum-provider')
-      const provider = await mod.EthereumProvider.init({
-        projectId: WC_PROJECT_ID,
-        // Chains we will optionally request to switch to. WalletConnect requires
-        // at least one. Ethereum mainnet is the safe default.
-        chains: [1],
-        // Additional chains we support — wallets supporting EIP-5792 / chain
-        // switching can hop to any of these without a fresh session.
-        optionalChains: [137, 42161, 10, 8453, 56, 43114, 11155111],
-        // Show WalletConnect's own modal everywhere — it has the rich
-        // wallet list (MetaMask/Trust/Rainbow/OKX/Bitget/Binance + 300+).
-        // On mobile it deep-links into the chosen wallet; on desktop it
-        // shows a QR code.
-        showQrModal: true,
-        // Pin the major wallets to the top of the WC modal. All IDs verified
-        // against https://explorer-api.walletconnect.com/v3/wallets — using
-        // an unknown ID here silently breaks the recommended list.
-        //
-        // `explorerRecommendedWalletIds` controls the desktop "recommended"
-        // row. On mobile the modal sorts by region and ignores this, which
-        // is why MetaMask/Trust/Rainbow weren't appearing at the top of the
-        // phone modal — we pin them explicitly via `mobileWallets` (verified
-        // deep-links from the explorer API). `walletImages` supplies the
-        // logos that go with those entries.
-        qrModalOptions: {
-          themeMode: 'dark' as const,
-          enableExplorer: true,
-          explorerRecommendedWalletIds: [
-            'c57ca95b47569778a828d19178114f4db188b89b763c899ba0be274e97267d96', // MetaMask
-            '4622a2b2d6af1c9844944291e5e7351a6aa24cd7b23099efac1b2fd875da31a0', // Trust Wallet
-            'fd20dc426fb37566d803205b19bbc1d4096b248ac04548e3cfb6b3a38bd033aa', // Coinbase Wallet
-            '1ae92b26df02f0abca6304df07debccd18262fdf5fe82daa81593582dac9a369', // Rainbow
-            '971e689d0a5be527bac79629b4ee9b925e82208e5168b733496a09c0faed0709', // OKX Wallet
-            '38f5d18bd8522c244bdd70cb4a68e0e718865155811c043f052fb9f1c51de662', // Bitget Wallet
-            '8a0ee50d1f22f6651afcae7eb4253e52a3310b90af5daef78a8c4929a9bb99d4', // Binance Wallet
-          ],
-          mobileWallets: [
-            {
-              id: 'c57ca95b47569778a828d19178114f4db188b89b763c899ba0be274e97267d96',
-              name: 'MetaMask',
-              links: { native: 'metamask://', universal: 'https://metamask.app.link' },
+      // Add a global timeout to the entire init process. If WalletConnect
+      // relay is slow or network is bad, we fail fast instead of hanging forever.
+      const initPromise = (async () => {
+        const mod = await import('@walletconnect/ethereum-provider')
+        const provider = await mod.EthereumProvider.init({
+          projectId: WC_PROJECT_ID,
+          // Chains we will optionally request to switch to. WalletConnect requires
+          // at least one. Ethereum mainnet is the safe default.
+          chains: [1],
+          // Additional chains we support — wallets supporting EIP-5792 / chain
+          // switching can hop to any of these without a fresh session.
+          optionalChains: [137, 42161, 10, 8453, 56, 43114, 11155111],
+          // Show WalletConnect's own modal everywhere — it has the rich
+          // wallet list (MetaMask/Trust/Rainbow/OKX/Bitget/Binance + 300+).
+          // On mobile it deep-links into the chosen wallet; on desktop it
+          // shows a QR code.
+          showQrModal: true,
+          // Pin the major wallets to the top of the WC modal. All IDs verified
+          // against https://explorer-api.walletconnect.com/v3/wallets — using
+          // an unknown ID here silently breaks the recommended list.
+          //
+          // `explorerRecommendedWalletIds` controls the desktop "recommended"
+          // row. On mobile the modal sorts by region and ignores this, which
+          // is why MetaMask/Trust/Rainbow weren't appearing at the top of the
+          // phone modal — we pin them explicitly via `mobileWallets` (verified
+          // deep-links from the explorer API). `walletImages` supplies the
+          // logos that go with those entries.
+          qrModalOptions: {
+            themeMode: 'dark' as const,
+            enableExplorer: true,
+            explorerRecommendedWalletIds: [
+              'c57ca95b47569778a828d19178114f4db188b89b763c899ba0be274e97267d96', // MetaMask
+              '4622a2b2d6af1c9844944291e5e7351a6aa24cd7b23099efac1b2fd875da31a0', // Trust Wallet
+              'fd20dc426fb37566d803205b19bbc1d4096b248ac04548e3cfb6b3a38bd033aa', // Coinbase Wallet
+              '1ae92b26df02f0abca6304df07debccd18262fdf5fe82daa81593582dac9a369', // Rainbow
+              '971e689d0a5be527bac79629b4ee9b925e82208e5168b733496a09c0faed0709', // OKX Wallet
+              '38f5d18bd8522c244bdd70cb4a68e0e718865155811c043f052fb9f1c51de662', // Bitget Wallet
+              '8a0ee50d1f22f6651afcae7eb4253e52a3310b90af5daef78a8c4929a9bb99d4', // Binance Wallet
+            ],
+            mobileWallets: [
+              {
+                id: 'c57ca95b47569778a828d19178114f4db188b89b763c899ba0be274e97267d96',
+                name: 'MetaMask',
+                links: { native: 'metamask://', universal: 'https://metamask.app.link' },
+              },
+              {
+                id: '4622a2b2d6af1c9844944291e5e7351a6aa24cd7b23099efac1b2fd875da31a0',
+                name: 'Trust Wallet',
+                links: { native: 'trust://', universal: 'https://link.trustwallet.com' },
+              },
+              {
+                id: '1ae92b26df02f0abca6304df07debccd18262fdf5fe82daa81593582dac9a369',
+                name: 'Rainbow',
+                links: { native: 'rainbow://', universal: 'https://rnbwapp.com' },
+              },
+              // Note: Coinbase Wallet no longer publishes a WalletConnect
+              // mobile deep-link in the explorer (their `mobile.native` is
+              // empty), so it cannot be pinned via WC on mobile. Users on
+              // mobile must use Coinbase's own in-app browser to reach the
+              // dapp — that's a Coinbase-side limitation, not ours.
+            ],
+            walletImages: {
+              'c57ca95b47569778a828d19178114f4db188b89b763c899ba0be274e97267d96':
+                'https://explorer-api.walletconnect.com/v3/logo/md/eebe4a7f-7166-402f-92e0-1f64ca2aa800?projectId=' +
+                WC_PROJECT_ID,
+              '4622a2b2d6af1c9844944291e5e7351a6aa24cd7b23099efac1b2fd875da31a0':
+                'https://explorer-api.walletconnect.com/v3/logo/md/7677b54f-3486-46e2-4e37-bf8747814f00?projectId=' +
+                WC_PROJECT_ID,
+              '1ae92b26df02f0abca6304df07debccd18262fdf5fe82daa81593582dac9a369':
+                'https://explorer-api.walletconnect.com/v3/logo/md/7a33d7f1-3d12-4b5c-f3ee-5cd83cb1b500?projectId=' +
+                WC_PROJECT_ID,
             },
-            {
-              id: '4622a2b2d6af1c9844944291e5e7351a6aa24cd7b23099efac1b2fd875da31a0',
-              name: 'Trust Wallet',
-              links: { native: 'trust://', universal: 'https://link.trustwallet.com' },
-            },
-            {
-              id: '1ae92b26df02f0abca6304df07debccd18262fdf5fe82daa81593582dac9a369',
-              name: 'Rainbow',
-              links: { native: 'rainbow://', universal: 'https://rnbwapp.com' },
-            },
-            // Note: Coinbase Wallet no longer publishes a WalletConnect
-            // mobile deep-link in the explorer (their `mobile.native` is
-            // empty), so it cannot be pinned via WC on mobile. Users on
-            // mobile must use Coinbase's own in-app browser to reach the
-            // dapp — that's a Coinbase-side limitation, not ours.
-          ],
-          walletImages: {
-            'c57ca95b47569778a828d19178114f4db188b89b763c899ba0be274e97267d96':
-              'https://explorer-api.walletconnect.com/v3/logo/md/eebe4a7f-7166-402f-92e0-1f64ca2aa800?projectId=' +
-              WC_PROJECT_ID,
-            '4622a2b2d6af1c9844944291e5e7351a6aa24cd7b23099efac1b2fd875da31a0':
-              'https://explorer-api.walletconnect.com/v3/logo/md/7677b54f-3486-46e2-4e37-bf8747814f00?projectId=' +
-              WC_PROJECT_ID,
-            '1ae92b26df02f0abca6304df07debccd18262fdf5fe82daa81593582dac9a369':
-              'https://explorer-api.walletconnect.com/v3/logo/md/7a33d7f1-3d12-4b5c-f3ee-5cd83cb1b500?projectId=' +
-              WC_PROJECT_ID,
           },
-        },
-        metadata: {
-          name: 'Verdexis',
-          description: 'Verdexis crypto investing — connect your wallet',
-          url: typeof window !== 'undefined' ? window.location.origin : 'https://verdexis.app',
-          icons: [
-            (typeof window !== 'undefined' ? window.location.origin : '') + '/assets/logo-icon-transparent.png',
-          ],
-        },
-      })
-      // Cast to our local EIP-1193 type — the WC provider implements it.
-      return provider as unknown as Eip1193Provider
+          metadata: {
+            name: 'Verdexis',
+            description: 'Verdexis crypto investing — connect your wallet',
+            url: typeof window !== 'undefined' ? window.location.origin : 'https://verdexis.app',
+            icons: [
+              (typeof window !== 'undefined' ? window.location.origin : '') + '/assets/logo-icon-transparent.png',
+            ],
+          },
+        })
+        // Cast to our local EIP-1193 type — the WC provider implements it.
+        return provider as unknown as Eip1193Provider
+      })()
+
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('WalletConnect initialization timeout (>8s). Network may be blocked or slow.')), 8000)
+      )
+
+      return await Promise.race([initPromise, timeoutPromise])
     } catch (err) {
       // Reset cache on failure so the next click can retry. Surface to console
       // so users on mobile can inspect (Safari → Settings → Advanced → Web

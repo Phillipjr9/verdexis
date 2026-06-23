@@ -280,7 +280,11 @@ export function useWeb3() {
       // "Please call connect() before request()" because the EIP-1193
       // request layer is gated until the session exists.
       type WcEnable = { enable: () => Promise<string[]> }
-      const accounts = await (wc as unknown as WcEnable).enable()
+      const enablePromise = (wc as unknown as WcEnable).enable()
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Connection request timed out after 3 minutes. Please try again.')), 180000)
+      )
+      const accounts = await Promise.race([enablePromise, timeoutPromise])
       const chainId = normalizeChainId(await wc.request({ method: 'eth_chainId' }).catch(() => null))
       if (accounts && accounts.length > 0) {
         const addr = accounts[0]
