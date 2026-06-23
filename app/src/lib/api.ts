@@ -384,6 +384,34 @@ export const api = {
   },
   getKycDocuments: () =>
     request<{ documents: Array<{ id: string; type: string; uploaded: boolean; fileName?: string; size?: number }> }>('/api/kyc/documents'),
+
+  // Copy Trading
+  copyTrading: {
+    getLeaderboard: (period: '30d' | '90d' | 'all' = '30d') =>
+      request<{ traders: unknown[] }>(`/api/copy-trading/leaderboard?period=${period}`),
+    getTrader: (userId: string) =>
+      request<{ profile: unknown; recentTrades: unknown[] }>(`/api/copy-trading/trader/${userId}`),
+    getMyProfile: () =>
+      request<{ profile: unknown }>('/api/copy-trading/my-profile'),
+    updateMyProfile: (payload: { displayName?: string; bio?: string; isPublic?: boolean; allowCopying?: boolean; minCopyAmount?: number; maxCopiers?: number; performanceFee?: number }) =>
+      request<{ profile: unknown }>('/api/copy-trading/my-profile', { method: 'PATCH', body: JSON.stringify(payload) }),
+    getFollowing: () =>
+      request<{ following: unknown[] }>('/api/copy-trading/following'),
+    getFollowers: () =>
+      request<{ followers: unknown[] }>('/api/copy-trading/followers'),
+    follow: (traderId: string, allocationUsd: number, allocationPercent = 100) =>
+      request<{ relationship: unknown }>('/api/copy-trading/follow', {
+        method: 'POST',
+        body: JSON.stringify({ traderId, allocationUsd, allocationPercent }),
+      }),
+    unfollow: (traderId: string) =>
+      request<{ success: boolean }>('/api/copy-trading/unfollow', {
+        method: 'POST',
+        body: JSON.stringify({ traderId }),
+      }),
+    getMyCopyTrades: () =>
+      request<{ copyTrades: unknown[] }>('/api/copy-trading/my-copy-trades'),
+  },
 }
 
 

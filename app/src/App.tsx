@@ -53,6 +53,8 @@ const KYC = lazy(() => import('./pages/KYC'))
 const Achievements = lazy(() => import('./pages/Achievements'))
 const Loyalty = lazy(() => import('./pages/Loyalty'))
 const CopyTrading = lazy(() => import('./pages/CopyTrading'))
+const TraderDetail = lazy(() => import('./pages/TraderDetail'))
+const CopyTradingDashboard = lazy(() => import('./pages/CopyTradingDashboard'))
 const DCAScheduler = lazy(() => import('./pages/DCAScheduler'))
 const Rebalance = lazy(() => import('./pages/Rebalance'))
 const SubAccounts = lazy(() => import('./pages/SubAccounts'))
@@ -144,6 +146,8 @@ function RoutedPages() {
           <Route path="/achievements" element={<RequireAuth><Achievements /></RequireAuth>} />
           <Route path="/loyalty" element={<RequireAuth><Loyalty /></RequireAuth>} />
           <Route path="/copy-trading" element={<RequireAuth><CopyTrading /></RequireAuth>} />
+          <Route path="/copy-trading/trader/:userId" element={<TraderDetail />} />
+          <Route path="/copy-trading/dashboard" element={<RequireAuth><CopyTradingDashboard /></RequireAuth>} />
           <Route path="/dca" element={<RequireAuth><DCAScheduler /></RequireAuth>} />
           <Route path="/rebalance" element={<RequireAuth><Rebalance /></RequireAuth>} />
           <Route path="/accounts" element={<RequireAuth><SubAccounts /></RequireAuth>} />
