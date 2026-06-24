@@ -1,16 +1,11 @@
 // Multi-Admin Hierarchy Routes
-// Add to server/src/routes/admin.ts
-
 import { Router } from 'express'
+import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import { prisma } from '../db.js'
 import { requireAuth, requireAdmin, type AuthedRequest } from '../auth.js'
 
 const router = Router()
-
-// ============================================================================
-// ADMIN HIERARCHY MANAGEMENT
-// ============================================================================
 
 // Create a new sub-admin under current admin
 router.post('/admins/create', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
@@ -29,28 +24,27 @@ router.post('/admins/create', requireAuth, requireAdmin, async (req: AuthedReque
     return
   }
 
-  // Check if current user is an admin
+  // Check if current user is an admin with permission
   const currentAdmin = await prisma.adminHierarchy.findUnique({
     where: { adminId: req.userId! },
   })
-  if (!currentAdmin || !currentAdmin.canCreateAdmins) {
-    res.status(403).json({ error: 'You do not have permission to create admins' })
+  if (!currentAdmin?.canCreateAdmins) {
+    res.status(403).json({ error: 'No permission to create admins' })
     return
   }
 
   try {
-    // Create new admin user
     const tempPassword = Math.random().toString(36).slice(-12)
+    const passwordHash = await bcrypt.hash(tempPassword, 12)
     const newAdmin = await prisma.user.create({
       data: {
         email: parsed.data.email,
         name: parsed.data.name,
         role: 'admin',
-        passwordHash: await hashPassword(tempPassword), // Use your hashing function
+        passwordHash,
       },
     })
 
-    // Create admin hierarchy entry
     await prisma.adminHierarchy.create({
       data: {
         adminId: newAdmin.id,
@@ -68,7 +62,7 @@ router.post('/admins/create', requireAuth, requireAdmin, async (req: AuthedReque
         id: newAdmin.id,
         email: newAdmin.email,
         name: newAdmin.name,
-        tempPassword, // Send to admin to give to new admin
+        tempPassword,
       },
     })
   } catch (err) {
@@ -76,18 +70,22 @@ router.post('/admins/create', requireAuth, requireAdmin, async (req: AuthedReque
   }
 })
 
-// Get admin hierarchy (current user's admins and subordinates)
+// Get admin hierarchy
 router.get('/admins/hierarchy', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
   const adminInfo = await prisma.adminHierarchy.findUnique({
     where: { adminId: req.userId! },
     include: {
       admin: { select: { id: true, email: true, name: true } },
-      parentAdmin: { select: { id: true, email: true, name: true } },
     },
   })
 
+  if (!adminInfo) {
+    res.status(404).json({ error: 'Admin not found' })
+    return
+  }
+
   const subAdmins = await prisma.adminHierarchy.findMany({
-    where: { parentAdminId: req.userId! },
+    where: { parentAdminId: adminInfo.id },
     include: {
       admin: { select: { id: true, email: true, name: true } },
     },
@@ -109,15 +107,10 @@ router.get('/admins/hierarchy', requireAuth, requireAdmin, async (req: AuthedReq
   })
 })
 
-// ============================================================================
-// USER MANAGEMENT (assign users to admins)
-// ============================================================================
-
 // Assign user to admin
 router.post('/users/:userId/assign-admin', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
   const { adminId } = z.object({ adminId: z.string() }).parse(req.body)
 
-  // Check if current user can manage this
   const currentAdmin = await prisma.adminHierarchy.findUnique({
     where: { adminId: req.userId! },
   })
@@ -126,7 +119,6 @@ router.post('/users/:userId/assign-admin', requireAuth, requireAdmin, async (req
     return
   }
 
-  // Verify admin exists
   const admin = await prisma.user.findUnique({
     where: { id: adminId },
     select: { id: true, role: true },
@@ -155,9 +147,6 @@ router.post('/users/:userId/assign-admin', requireAuth, requireAdmin, async (req
 
 // Get users managed by admin
 router.get('/admins/:adminId/users', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
-  const adminId = req.params.adminId
-
-  // Check if requester can view this
   const currentAdmin = await prisma.adminHierarchy.findUnique({
     where: { adminId: req.userId! },
   })
@@ -167,7 +156,7 @@ router.get('/admins/:adminId/users', requireAuth, requireAdmin, async (req: Auth
   }
 
   const users = await prisma.userAdminAssignment.findMany({
-    where: { adminId },
+    where: { adminId: req.params.adminId },
     include: {
       user: {
         select: {
@@ -190,19 +179,15 @@ router.get('/admins/:adminId/users', requireAuth, requireAdmin, async (req: Auth
   })
 })
 
-// ============================================================================
-// BANK ACCOUNT MANAGEMENT
-// ============================================================================
-
-// Admin adds bank account for user
+// Add bank account for user
 router.post('/users/:userId/bank-accounts', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
   const schema = z.object({
     bankName: z.string().min(1).max(100),
     accountNumber: z.string().min(1).max(50),
-    routingNumber: z.string().max(20).optional(),
+    routingNumber: z.string().max(20).optional().nullable(),
     accountHolder: z.string().min(1).max(100),
     accountType: z.enum(['checking', 'savings']).default('checking'),
-    country: z.string().max(2).optional(),
+    country: z.string().max(2).optional().nullable(),
   })
 
   const parsed = schema.safeParse(req.body)
@@ -211,7 +196,6 @@ router.post('/users/:userId/bank-accounts', requireAuth, requireAdmin, async (re
     return
   }
 
-  // Check permissions
   const currentAdmin = await prisma.adminHierarchy.findUnique({
     where: { adminId: req.userId! },
   })
@@ -223,7 +207,12 @@ router.post('/users/:userId/bank-accounts', requireAuth, requireAdmin, async (re
   try {
     const account = await prisma.adminBankAccount.create({
       data: {
-        ...parsed.data,
+        bankName: parsed.data.bankName,
+        accountNumber: parsed.data.accountNumber,
+        accountHolder: parsed.data.accountHolder,
+        accountType: parsed.data.accountType,
+        routingNumber: parsed.data.routingNumber || undefined,
+        country: parsed.data.country || undefined,
         userId: req.params.userId,
         adminId: req.userId!,
       },
@@ -237,11 +226,8 @@ router.post('/users/:userId/bank-accounts', requireAuth, requireAdmin, async (re
 
 // Get user's bank accounts
 router.get('/users/:userId/bank-accounts', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
-  const userId = req.params.userId
-
-  // Check if admin can view this user
   const assignment = await prisma.userAdminAssignment.findFirst({
-    where: { userId, adminId: req.userId! },
+    where: { userId: req.params.userId, adminId: req.userId! },
   })
   if (!assignment) {
     res.status(403).json({ error: 'User not assigned to you' })
@@ -249,7 +235,7 @@ router.get('/users/:userId/bank-accounts', requireAuth, requireAdmin, async (req
   }
 
   const accounts = await prisma.adminBankAccount.findMany({
-    where: { userId },
+    where: { userId: req.params.userId },
     select: {
       id: true,
       bankName: true,
@@ -271,7 +257,7 @@ router.patch('/bank-accounts/:accountId', requireAuth, requireAdmin, async (req:
     bankName: z.string().max(100).optional(),
     accountHolder: z.string().max(100).optional(),
     country: z.string().max(2).optional(),
-  }).partial()
+  })
 
   const parsed = schema.safeParse(req.body)
   if (!parsed.success) {
@@ -297,18 +283,14 @@ router.delete('/bank-accounts/:accountId', requireAuth, requireAdmin, async (req
   res.json({ ok: true })
 })
 
-// ============================================================================
-// WALLET DETAIL MANAGEMENT
-// ============================================================================
-
-// Admin adds wallet details for user
+// Add wallet details for user
 router.post('/users/:userId/wallet-details', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
   const schema = z.object({
-    walletAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
-    chainId: z.string().optional(),
+    walletAddress: z.string().min(1),
+    chainId: z.string().optional().nullable(),
     walletType: z.string().default('ethereum'),
-    label: z.string().max(100).optional(),
-    notes: z.string().max(500).optional(),
+    label: z.string().max(100).optional().nullable(),
+    notes: z.string().max(500).optional().nullable(),
   })
 
   const parsed = schema.safeParse(req.body)
@@ -328,7 +310,11 @@ router.post('/users/:userId/wallet-details', requireAuth, requireAdmin, async (r
   try {
     const detail = await prisma.adminWalletDetail.create({
       data: {
-        ...parsed.data,
+        walletAddress: parsed.data.walletAddress,
+        chainId: parsed.data.chainId || undefined,
+        walletType: parsed.data.walletType,
+        label: parsed.data.label || undefined,
+        notes: parsed.data.notes || undefined,
         userId: req.params.userId,
         adminId: req.userId!,
       },
@@ -342,10 +328,8 @@ router.post('/users/:userId/wallet-details', requireAuth, requireAdmin, async (r
 
 // Get user's wallet details
 router.get('/users/:userId/wallet-details', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
-  const userId = req.params.userId
-
   const assignment = await prisma.userAdminAssignment.findFirst({
-    where: { userId, adminId: req.userId! },
+    where: { userId: req.params.userId, adminId: req.userId! },
   })
   if (!assignment) {
     res.status(403).json({ error: 'User not assigned to you' })
@@ -353,7 +337,7 @@ router.get('/users/:userId/wallet-details', requireAuth, requireAdmin, async (re
   }
 
   const details = await prisma.adminWalletDetail.findMany({
-    where: { userId },
+    where: { userId: req.params.userId },
     select: {
       id: true,
       walletAddress: true,
@@ -374,7 +358,7 @@ router.patch('/wallet-details/:detailId', requireAuth, requireAdmin, async (req:
   const schema = z.object({
     label: z.string().max(100).optional(),
     notes: z.string().max(500).optional(),
-  }).partial()
+  })
 
   const parsed = schema.safeParse(req.body)
   if (!parsed.success) {

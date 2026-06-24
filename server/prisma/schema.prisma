@@ -84,6 +84,11 @@ model User {
   followers     CopyRelationship[] @relation("Trader")
   following     CopyRelationship[] @relation("Follower")
   copyTrades    CopyTrade[]
+
+  // Admin hierarchy
+  adminHierarchy AdminHierarchy? @relation("AdminHierarchy")
+  assignedUsers  UserAdminAssignment[] @relation("AssignedUsers")
+  userAssignments UserAdminAssignment[] @relation("UserAdminAssignment")
 }
 
 model WalletLink {
@@ -468,4 +473,74 @@ model CopyTrade {
   @@index([followerId, createdAt])
   @@index([traderId, createdAt])
   @@index([traderTradeId])
+}
+
+// Multi-Admin Hierarchy Models
+model AdminHierarchy {
+  id                  String   @id @default(cuid())
+  adminId             String   @unique
+  admin               User     @relation("AdminHierarchy", fields: [adminId], references: [id], onDelete: Cascade)
+  parentAdminId       String?
+  parentAdmin         AdminHierarchy? @relation("AdminChildren", fields: [parentAdminId], references: [id], onDelete: SetNull)
+  children            AdminHierarchy[] @relation("AdminChildren")
+  canCreateAdmins     Boolean  @default(false)
+  canManageUsers      Boolean  @default(true)
+  canManageDeposits   Boolean  @default(true)
+  canManageTransactions Boolean @default(true)
+  createdBy           String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([adminId])
+  @@index([parentAdminId])
+}
+
+model UserAdminAssignment {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation("UserAdminAssignment", fields: [userId], references: [id], onDelete: Cascade)
+  adminId     String
+  admin       User     @relation("AssignedUsers", fields: [adminId], references: [id], onDelete: Cascade)
+  assignedBy  String
+  assignedAt  DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, adminId])
+  @@index([userId])
+  @@index([adminId])
+}
+
+model AdminBankAccount {
+  id            String   @id @default(cuid())
+  userId        String
+  adminId       String
+  bankName      String
+  accountNumber String
+  routingNumber String?
+  accountHolder String
+  accountType   String   @default("checking")
+  country       String?
+  verifiedAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+  @@index([adminId])
+}
+
+model AdminWalletDetail {
+  id            String   @id @default(cuid())
+  userId        String
+  adminId       String
+  walletAddress String
+  chainId       String?
+  walletType    String   @default("ethereum")
+  label         String?
+  notes         String?
+  verifiedAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+  @@index([adminId])
 }
