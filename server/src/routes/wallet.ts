@@ -527,8 +527,8 @@ router.post('/transfer', requireAuth, moneyLimiter, idempotency(), async (req: A
       where: { userId: req.userId!, kind: 'transfer', status: 'completed', createdAt: { gte: monthAgo } },
       select: { amount: true, createdAt: true },
     })
-    const monthSum = recent.reduce((s: number, t: { amount: number }) => s + t.amount, 0)
-    const daySum = recent.filter((t: { createdAt: Date }) => t.createdAt >= dayAgo).reduce((s: number, t: { amount: number }) => s + t.amount, 0)
+    const monthSum = recent.reduce((s: number, t: { amount: number }) => s + Math.abs(t.amount), 0)
+    const daySum = recent.filter((t: { createdAt: Date }) => t.createdAt >= dayAgo).reduce((s: number, t: { amount: number }) => s + Math.abs(t.amount), 0)
     if (sender.dailyTransferLimit && daySum + amount > sender.dailyTransferLimit) {
       res.status(429).json({ error: 'Daily transfer cap exceeded', limit: sender.dailyTransferLimit, used: daySum, attempted: amount })
       return
@@ -563,7 +563,7 @@ router.post('/transfer', requireAuth, moneyLimiter, idempotency(), async (req: A
     const ref = `Transfer to ${recipientLabel}${note ? ' — ' + note : ''}`
     const incomingRef = `Transfer from ${senderLabel}${note ? ' — ' + note : ''}`
     const out = await tx.transaction.create({
-      data: { userId: req.userId!, kind: 'transfer', currency, amount, reference: ref, status: 'completed' },
+      data: { userId: req.userId!, kind: 'transfer', currency, amount: -Math.abs(amount), reference: ref, status: 'completed' },
     })
     const incoming = await tx.transaction.create({
       data: { userId: recipient.id, kind: 'deposit', currency, amount, reference: incomingRef, status: 'completed', subType: 'user_transfer' },
