@@ -1,0 +1,105 @@
+// Add these models to the end of server/prisma/schema.prisma
+
+model AdminHierarchy {
+  id               String   @id @default(cuid())
+  adminId          String   @unique
+  admin            User     @relation("AdminProfile", fields: [adminId], references: [id], onDelete: Cascade)
+  
+  parentAdminId    String?
+  parentAdmin      User?    @relation("SubAdmins", fields: [parentAdminId], references: [id], onDelete: SetNull)
+  
+  // Permissions this admin has
+  canCreateAdmins        Boolean @default(false)
+  canManageUsers         Boolean @default(false)
+  canManageDeposits      Boolean @default(true)
+  canManageTransactions  Boolean @default(true)
+  
+  createdAt        DateTime @default(now())
+  createdBy        String
+  createdByUser    User     @relation("AdminCreatedBy", fields: [createdBy], references: [id], onDelete: Cascade)
+  
+  @@index([parentAdminId])
+  @@index([adminId])
+}
+
+model UserAdminAssignment {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation("UserAdmins", fields: [userId], references: [id], onDelete: Cascade)
+  
+  adminId      String
+  admin        User     @relation("AdminUsers", fields: [adminId], references: [id], onDelete: Cascade)
+  
+  assignedAt   DateTime @default(now())
+  assignedBy   String
+  assignedByUser User   @relation("AssignedBy", fields: [assignedBy], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, adminId])
+  @@index([adminId])
+  @@index([userId])
+}
+
+model AdminBankAccount {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation("UserBankAccounts", fields: [userId], references: [id], onDelete: Cascade)
+  
+  adminId         String
+  admin           User     @relation("AdminManagedBankAccounts", fields: [adminId], references: [id], onDelete: Cascade)
+  
+  bankName        String
+  accountNumber   String
+  routingNumber   String?
+  accountHolder   String
+  accountType     String   @default("checking") // checking, savings
+  country         String?
+  
+  verifiedAt      DateTime?
+  verifiedBy      String?
+  verifiedByUser  User?    @relation("VerifiedBankAccounts", fields: [verifiedBy], references: [id], onDelete: SetNull)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([adminId])
+}
+
+model AdminWalletDetail {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation("UserWalletDetails", fields: [userId], references: [id], onDelete: Cascade)
+  
+  adminId         String
+  admin           User     @relation("AdminManagedWalletDetails", fields: [adminId], references: [id], onDelete: Cascade)
+  
+  walletAddress   String
+  chainId         String?  // e.g., 0x1, 0x89
+  walletType      String   @default("ethereum") // ethereum, polygon, bitcoin, etc.
+  label           String?
+  notes           String?
+  
+  verifiedAt      DateTime?
+  verifiedBy      String?
+  verifiedByUser  User?    @relation("VerifiedWalletDetails", fields: [verifiedBy], references: [id], onDelete: SetNull)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([adminId])
+}
+
+// Update User model with new relations (add these to existing User model):
+// admins        UserAdminAssignment[] @relation("UserAdmins")
+// assignedAdmins User[]               @relation("AdminUsers", fields: [id], references: [adminId])
+// adminProfile  AdminHierarchy?       @relation("AdminProfile")
+// parentAdmins  AdminHierarchy[]      @relation("SubAdmins")
+// createdAdmins AdminHierarchy[]      @relation("AdminCreatedBy")
+// assignmentsMade UserAdminAssignment[] @relation("AssignedBy")
+// bankAccounts  AdminBankAccount[]    @relation("UserBankAccounts")
+// managedBankAccounts AdminBankAccount[] @relation("AdminManagedBankAccounts")
+// walletDetails AdminWalletDetail[]   @relation("UserWalletDetails")
+// managedWalletDetails AdminWalletDetail[] @relation("AdminManagedWalletDetails")
+// verifiedBankAccounts AdminBankAccount[] @relation("VerifiedBankAccounts")
+// verifiedWalletDetails AdminWalletDetail[] @relation("VerifiedWalletDetails")
