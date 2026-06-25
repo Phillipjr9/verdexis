@@ -113,8 +113,8 @@ function sanitizeCryptoList(raw: unknown): CryptoQuote[] {
 class MarketDataService {
   private cache: Map<string, { data: unknown; timestamp: number }> = new Map()
   private cacheDuration = 30000              // generic cache (stocks etc)
-  private cryptoCacheDuration = 20000        // live crypto list refreshes faster
-  private ohlcCacheDuration = 60000          // OHLC bars don't tick every second
+  private cryptoCacheDuration = 3000         // REDUCED: live crypto updates every 3s
+  private ohlcCacheDuration = 5000           // REDUCED: OHLC updates every 5s
   private apiFailedUntil = 0                 // cooldown timestamp; 0 = healthy
   private apiCooldownMs = 15000              // back off only 15 seconds after failure
 
@@ -176,26 +176,17 @@ class MarketDataService {
   async getCryptoList(): Promise<CryptoQuote[]> {
     const cacheKey = 'crypto_list'
     const cached = this.getCached<CryptoQuote[]>(cacheKey, this.cryptoCacheDuration)
-    if (cached) {
-      console.log('[marketData] returning cached crypto list:', cached.length, 'coins')
+    if (cached && cached.length > 0) {
+      // Return cache immediately and refresh in background
+      this.refreshCryptoListInBackground()
       return cached
     }
 
-    if (this.isApiCoolingDown()) {
-      console.warn('[marketData] API in cooldown, checking for stale cache...')
-      const stale = this.cache.get(cacheKey)?.data as CryptoQuote[] | undefined
-      if (stale && stale.length > 0) {
-        console.log('[marketData] returning stale cache:', stale.length, 'coins')
-        return stale
-      }
-      console.warn('[marketData] no stale cache available, using mock data')
-      return MOCK_CRYPTO_DATA
-    }
-
+    // Try to fetch real data first
     try {
       console.log('[marketData] fetching fresh crypto list...')
       const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 5000)
+      const timeout = setTimeout(() => controller.abort(), 3000)
 
       const response = await fetch(
         `${CG_PROXY}/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1&sparkline=true`,
@@ -220,16 +211,42 @@ class MarketDataService {
     } catch (error) {
       console.error('[marketData] getCryptoList failed:', error)
       this.markApiFailed()
-      // Reuse the last good cached value if we have one; otherwise empty.
+      // Try stale cache
       const stale = this.cache.get(cacheKey)?.data as CryptoQuote[] | undefined
       if (stale && stale.length > 0) {
-        console.log('[marketData] fallback to stale cache:', stale.length, 'coins')
+        console.log('[marketData] returning stale cache:', stale.length, 'coins')
         return stale
       }
-      console.warn('[marketData] using mock data as fallback')
-      this.setCache(cacheKey, MOCK_CRYPTO_DATA)
-      return MOCK_CRYPTO_DATA
+      // No mock data - throw error so UI can show error state
+      throw new Error('Failed to load cryptocurrency data. Please check your internet connection and try again.')
     }
+  }
+
+  private refreshCryptoListInBackground() {
+    // Non-blocking background refresh
+    Promise.resolve().then(async () => {
+      if (this.isApiCoolingDown()) return
+      try {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 3000)
+
+        const response = await fetch(
+          `${CG_PROXY}/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1&sparkline=true`,
+          { signal: controller.signal }
+        )
+        clearTimeout(timeout)
+
+        if (!response.ok) throw new Error(`Error: ${response.status}`)
+        const data = await response.json()
+        if (Array.isArray(data) && data.length > 0) {
+          const sanitized = sanitizeCryptoList(data)
+          this.setCache('crypto_list', sanitized)
+          console.log('[marketData] background refresh complete')
+        }
+      } catch (error) {
+        console.warn('[marketData] background refresh failed:', error)
+      }
+    })
   }
 
   async getCryptoPrice(ids: string[]): Promise<CryptoQuote[]> {

@@ -762,18 +762,23 @@ class AIService {
 
   private replyDeposits(): string {
     const txs = portfolioStore.getTransactions()
-    const deposits = txs.filter((t) => t.type === 'deposit').sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+    const deposits = txs.filter((t) => t.type === 'deposit').sort((a, b) => {
+      const aTime = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime()
+      const bTime = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime()
+      return bTime - aTime
+    })
     if (deposits.length === 0) return `No deposits on record yet. Once admin posts a deposit (or you fund via the Wallet page), it'll appear here with the date and reason.`
     const total = deposits.reduce((s, d) => s + Math.abs(d.amount), 0)
     const avg = total / deposits.length
-    const first = deposits[deposits.length - 1].timestamp
+    const first = deposits[deposits.length - 1].timestamp instanceof Date ? deposits[deposits.length - 1].timestamp : new Date(deposits[deposits.length - 1].timestamp)
     const lines = [
       `**${deposits.length} deposits totalling ${fmtUsd(total)}** (avg ${fmtUsd(avg)} · first on ${first.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}).`,
       '',
       'Most recent:',
     ]
     for (const d of deposits.slice(0, 8)) {
-      const when = d.timestamp.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+      const ts = d.timestamp instanceof Date ? d.timestamp : new Date(d.timestamp)
+      const when = ts.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
       const reason = d.description?.trim() ? d.description : 'no reason recorded'
       lines.push(`• ${when} — **+${fmtUsd(Math.abs(d.amount))} ${d.currency}** — ${reason} *(${d.status})*`)
     }
@@ -782,24 +787,34 @@ class AIService {
 
   private replyWithdrawals(): string {
     const txs = portfolioStore.getTransactions()
-    const w = txs.filter((t) => t.type === 'withdraw').sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+    const w = txs.filter((t) => t.type === 'withdraw').sort((a, b) => {
+      const aTime = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime()
+      const bTime = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime()
+      return bTime - aTime
+    })
     if (w.length === 0) return `No withdrawals on record.`
     const total = w.reduce((s, d) => s + Math.abs(d.amount), 0)
     const lines = [`**${w.length} withdrawals totalling ${fmtUsd(total)}**`, '', 'Most recent:']
     for (const d of w.slice(0, 8)) {
-      const when = d.timestamp.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+      const ts = d.timestamp instanceof Date ? d.timestamp : new Date(d.timestamp)
+      const when = ts.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
       lines.push(`• ${when} — **-${fmtUsd(Math.abs(d.amount))} ${d.currency}** — ${d.description || 'no note'} *(${d.status})*`)
     }
     return lines.join('\n')
   }
 
   private replyTransactions(): string {
-    const txs = [...portfolioStore.getTransactions()].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()).slice(0, 10)
+    const txs = [...portfolioStore.getTransactions()].sort((a, b) => {
+      const aTime = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime()
+      const bTime = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime()
+      return bTime - aTime
+    }).slice(0, 10)
     if (txs.length === 0) return `No wallet transactions yet.`
     const lines = ['**Last 10 wallet transactions**']
     for (const t of txs) {
+      const ts = t.timestamp instanceof Date ? t.timestamp : new Date(t.timestamp)
       const sign = t.type === 'deposit' || t.type === 'dividend' || t.type === 'interest' ? '+' : '-'
-      lines.push(`• ${t.timestamp.toLocaleDateString()} — ${t.type.padEnd(8)} ${sign}${fmtUsd(Math.abs(t.amount))} ${t.currency} — ${t.description || '—'}`)
+      lines.push(`• ${ts.toLocaleDateString()} — ${t.type.padEnd(8)} ${sign}${fmtUsd(Math.abs(t.amount))} ${t.currency} — ${t.description || '—'}`)
     }
     return lines.join('\n')
   }
@@ -1035,7 +1050,11 @@ class AIService {
       const txs = portfolioStore.getTransactions()
       const deposits = txs
         .filter((t) => t.type === 'deposit')
-        .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
+        .sort((a, b) => {
+          const aTime = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime()
+          const bTime = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime()
+          return bTime - aTime
+        })
         .slice(0, 10)
       const lines = [
         `Net worth: $${s.netWorth.toFixed(2)} (positions $${s.positionsValue.toFixed(2)}, cash $${s.cash.toFixed(2)})`,
@@ -1048,7 +1067,8 @@ class AIService {
       if (deposits.length > 0) {
         lines.push('Recent deposits:')
         for (const d of deposits) {
-          const when = d.timestamp.toISOString().slice(0, 10)
+          const ts = d.timestamp instanceof Date ? d.timestamp : new Date(d.timestamp)
+          const when = ts.toISOString().slice(0, 10)
           lines.push(`  - ${when} +${Math.abs(d.amount).toFixed(2)} ${d.currency} · ${d.description || 'no reason'} · ${d.status}`)
         }
       }

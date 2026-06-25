@@ -157,7 +157,26 @@ router.get('/stats', async (_req, res) => {
   })
 })
 
+// --- Helper: Check if Super Admin ---
+async function isSuperAdmin(userId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: true, email: true },
+  })
+  return user?.role === 'admin' && user?.email === 'admin@verdexis.com'
+}
+
+// --- Helper: Check if user is assigned to admin ---
+async function isUserAssignedToAdmin(userId: string, adminId: string): Promise<boolean> {
+  const assignment = await prisma.userAdminAssignment.findFirst({
+    where: { userId, adminId },
+  })
+  return !!assignment
+}
+
 // --- users list / search -------------------------------------------------
+// Super Admin sees ALL users
+// Sub-Admins see only their assigned users
 
 const listSchema = z.object({
   q: z.string().trim().optional(),
@@ -167,11 +186,28 @@ const listSchema = z.object({
   suspended: z.enum(['true', 'false', 'all']).default('all'),
 })
 
-router.get('/users', async (req, res) => {
+router.get('/users', async (req: AuthedRequest, res) => {
   const parsed = listSchema.safeParse(req.query)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid query' }); return }
   const { q, page, limit, role, suspended } = parsed.data
-  const where: Record<string, unknown> = {}
+  
+  const superAdmin = await isSuperAdmin(req.userId!)
+  let where: Record<string, unknown> = {}
+  
+  // Sub-admins only see their assigned users
+  if (!superAdmin) {
+    const assignments = await prisma.userAdminAssignment.findMany({
+      where: { adminId: req.userId! },
+      select: { userId: true },
+    })
+    const userIds = assignments.map(a => a.userId)
+    if (userIds.length === 0) {
+      res.json({ users: [], total: 0, page, limit })
+      return
+    }
+    where.id = { in: userIds }
+  }
+  
   if (q) {
     where.OR = [
       { email: { contains: q } },
@@ -182,6 +218,7 @@ router.get('/users', async (req, res) => {
   }
   if (role !== 'all') where.role = role
   if (suspended !== 'all') where.suspended = suspended === 'true'
+  
   const [total, users] = await Promise.all([
     prisma.user.count({ where }),
     prisma.user.findMany({
@@ -270,7 +307,7 @@ router.get('/users/:id', async (req, res) => {
   const [holdings, walletBalances, walletLinks, transactions, trades, watchlist, alerts, notifications] = await Promise.all([
     prisma.holding.findMany({ where: { userId: id }, orderBy: { symbol: 'asc' } }),
     prisma.walletBalance.findMany({ where: { userId: id }, orderBy: { currency: 'asc' } }),
-    prisma.walletLink.findMany({ where: { userId: id }, orderBy: [{ isPrimary: 'desc' }, { linkedAt: 'desc' }] }),
+    prisma.walletLink.findMany({ where: { userId: id, isPrimary: true }, orderBy: { linkedAt: 'desc' } }),
     prisma.transaction.findMany({ where: { userId: id }, orderBy: { createdAt: 'desc' }, take: 100 }),
     prisma.trade.findMany({ where: { userId: id }, orderBy: { createdAt: 'desc' }, take: 100 }),
     prisma.watchlist.findMany({ where: { userId: id }, orderBy: { symbol: 'asc' } }),
@@ -312,6 +349,15 @@ router.get('/users/:id/wallet-links', async (req, res) => {
 
 router.post('/users/:id/wallet-links', async (req: AuthedRequest, res) => {
   const userId = req.params.id
+  
+  const superAdmin = await isSuperAdmin(req.userId!)
+  const assigned = await isUserAssignedToAdmin(userId, req.userId!)
+  
+  if (!superAdmin && !assigned) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+  
   const parsed = adminWalletLinkSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() }); return }
 
@@ -617,6 +663,20 @@ const depositSchema = z.object({
 })
 
 router.post('/users/:id/deposit', idempotency(), async (req: AuthedRequest, res) => {
+  const superAdmin = await isSuperAdmin(req.userId!)
+  const assigned = await isUserAssignedToAdmin(req.params.id, req.userId!)
+  const targetIsAdmin = (await prisma.user.findUnique({ where: { id: req.params.id }, select: { role: true } }))?.role === 'admin'
+  
+  // Super admin can deposit to anyone
+  // Regular admin can deposit to assigned users
+  // Super admin can deposit to any admin (including sub-admins)
+  // Sub-admin can deposit to their assigned users (including other admins if explicitly assigned)
+  const canDeposit = superAdmin || assigned || (superAdmin && targetIsAdmin)
+  
+  if (!canDeposit) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
   const parsed = depositSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() }); return }
   const userId = req.params.id
@@ -751,6 +811,13 @@ const deductSchema = z.object({
 })
 
 router.post('/users/:id/deduct', async (req: AuthedRequest, res) => {
+  const superAdmin = await isSuperAdmin(req.userId!)
+  const assigned = await isUserAssignedToAdmin(req.params.id, req.userId!)
+  
+  if (!superAdmin && !assigned) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
   const parsed = deductSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() }); return }
   const userId = req.params.id
@@ -810,6 +877,14 @@ router.post('/users/:id/hold', async (req: AuthedRequest, res) => {
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() }); return }
   const userId = req.params.id
   if (userId === req.userId) { res.status(400).json({ error: 'Cannot place a hold on your own account' }); return }
+  
+  const superAdmin = await isSuperAdmin(req.userId!)
+  const assigned = await isUserAssignedToAdmin(userId, req.userId!)
+  
+  if (!superAdmin && !assigned) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
   const u = await prisma.user.update({
     where: { id: userId },
     data: {
@@ -1098,6 +1173,12 @@ router.delete('/notifications/:nid', async (req: AuthedRequest, res) => {
 // --- broadcast notification to all (or filtered) users -------------------
 
 router.post('/broadcast', async (req: AuthedRequest, res) => {
+  const superAdmin = await isSuperAdmin(req.userId!)
+  if (!superAdmin) {
+    res.status(404).json({ error: 'Endpoint not found' })
+    return
+  }
+  
   const parsed = notifSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input' }); return }
   const users = await prisma.user.findMany({ where: { suspended: false }, select: { id: true } })
@@ -1126,7 +1207,13 @@ const auditQuerySchema = z.object({
   q: z.string().optional(),
 })
 
-router.get('/audit', async (req, res) => {
+router.get('/audit', async (req: AuthedRequest, res) => {
+  const superAdmin = await isSuperAdmin(req.userId!)
+  if (!superAdmin) {
+    res.status(404).json({ error: 'Endpoint not found' })
+    return
+  }
+  
   const parsed = auditQuerySchema.safeParse(req.query)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid query' }); return }
   const { limit, actorId, targetUserId, action, since, until, q } = parsed.data
@@ -1152,7 +1239,13 @@ router.get('/audit', async (req, res) => {
 })
 
 // CSV export of audit log (uses the same filters)
-router.get('/audit.csv', async (req, res) => {
+router.get('/audit.csv', async (req: AuthedRequest, res) => {
+  const superAdmin = await isSuperAdmin(req.userId!)
+  if (!superAdmin) {
+    res.status(404).json({ error: 'Endpoint not found' })
+    return
+  }
+  
   const parsed = auditQuerySchema.safeParse(req.query)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid query' }); return }
   const { limit, actorId, targetUserId, action, since, until, q } = parsed.data
@@ -1219,6 +1312,12 @@ const bulkSchema = z.object({
 })
 
 router.post('/users/bulk', async (req: AuthedRequest, res) => {
+  const superAdmin = await isSuperAdmin(req.userId!)
+  if (!superAdmin) {
+    res.status(404).json({ error: 'Endpoint not found' })
+    return
+  }
+  
   const parsed = bulkSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() }); return }
   const { ids, action, reason, holdType, notify } = parsed.data
@@ -1255,6 +1354,12 @@ router.post('/users/bulk', async (req: AuthedRequest, res) => {
 // pointing back to the admin. The client banner shows "viewing as <email>".
 
 router.post('/users/:id/impersonate', async (req: AuthedRequest, res) => {
+  const superAdmin = await isSuperAdmin(req.userId!)
+  if (!superAdmin) {
+    res.status(404).json({ error: 'Endpoint not found' })
+    return
+  }
+  
   const id = req.params.id
   if (id === req.userId) { res.status(400).json({ error: 'Cannot impersonate yourself' }); return }
   const target = await prisma.user.findUnique({ where: { id }, select: { id: true, email: true, name: true, role: true, suspended: true, tokenVersion: true } })
@@ -1389,7 +1494,105 @@ const transferSchema = z.object({
   notify: z.boolean().default(true),
 })
 
-// --- manually seed admin treasury (if missing) ---------------------------
+// Cleanup: ensure only one primary wallet per user
+router.post('/users/:id/cleanup-wallets', async (req: AuthedRequest, res) => {
+  const superAdmin = await isSuperAdmin(req.userId!)
+  if (!superAdmin) {
+    res.status(404).json({ error: 'Endpoint not found' })
+    return
+  }
+  
+  const userId = req.params.id
+  
+  // Get all wallet links for this user
+  const wallets = await prisma.walletLink.findMany({
+    where: { userId },
+    orderBy: { linkedAt: 'desc' },
+  })
+  
+  if (wallets.length === 0) {
+    res.json({ ok: true, cleaned: 0 })
+    return
+  }
+  
+  // Keep only the most recent one as primary
+  const primaryId = wallets[0].id
+  
+  // Update: set all to non-primary
+  await prisma.walletLink.updateMany({
+    where: { userId },
+    data: { isPrimary: false },
+  })
+  
+  // Update: set only the most recent to primary
+  await prisma.walletLink.update({
+    where: { id: primaryId },
+    data: { isPrimary: true },
+  })
+  
+  res.json({ ok: true, cleaned: wallets.length - 1, primaryWallet: wallets[0].address })
+})
+
+// Consolidate duplicate holdings
+router.post('/users/:id/cleanup-holdings', async (req: AuthedRequest, res) => {
+  const superAdmin = await isSuperAdmin(req.userId!)
+  if (!superAdmin) {
+    res.status(404).json({ error: 'Endpoint not found' })
+    return
+  }
+  
+  const userId = req.params.id
+  
+  // Get all holdings for this user, grouped by symbol
+  const holdings = await prisma.holding.findMany({
+    where: { userId },
+    orderBy: { symbol: 'asc' },
+  })
+  
+  // Group by symbol
+  const grouped: Record<string, typeof holdings> = {}
+  holdings.forEach(h => {
+    if (!grouped[h.symbol]) grouped[h.symbol] = []
+    grouped[h.symbol].push(h)
+  })
+  
+  let merged = 0
+  
+  // Merge duplicates
+  for (const symbol in grouped) {
+    if (grouped[symbol].length > 1) {
+      const dups = grouped[symbol].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      const primary = dups[0]
+      const toMerge = dups.slice(1)
+      
+      // Calculate total amount and weighted average price
+      let totalAmount = primary.amount
+      let totalValue = primary.amount * primary.avgPrice
+      
+      for (const dup of toMerge) {
+        totalAmount += dup.amount
+        totalValue += dup.amount * dup.avgPrice
+      }
+      
+      const newAvgPrice = totalAmount > 0 ? totalValue / totalAmount : 0
+      
+      // Update primary with merged data
+      await prisma.holding.update({
+        where: { id: primary.id },
+        data: { amount: totalAmount, avgPrice: newAvgPrice },
+      })
+      
+      // Delete duplicates
+      await prisma.holding.deleteMany({
+        where: { id: { in: toMerge.map(d => d.id) } },
+      })
+      
+      merged += toMerge.length
+    }
+  }
+  
+  res.json({ ok: true, mergedCount: merged })
+})
 
 const ADMIN_TREASURY_USD = 1_000_000_000_000
 
@@ -1445,6 +1648,18 @@ router.post('/transfer', idempotency(), async (req: AuthedRequest, res) => {
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() }); return }
   const { fromUserId, toUserId, currency, amount, reason, note, allowNegative } = parsed.data
   if (fromUserId === toUserId) { res.status(400).json({ error: 'From and To must differ' }); return }
+  
+  const superAdmin = await isSuperAdmin(req.userId!)
+  
+  // Super admin can transfer from anyone
+  // Sub-admins can transfer from their assigned users (including admins if explicitly assigned)
+  if (!superAdmin) {
+    const assignedFrom = await isUserAssignedToAdmin(fromUserId, req.userId!)
+    if (!assignedFrom) {
+      res.status(404).json({ error: 'User not found' })
+      return
+    }
+  }
   const [from, to] = await Promise.all([
     prisma.user.findUnique({ where: { id: fromUserId }, select: { id: true, email: true, name: true } }),
     prisma.user.findUnique({ where: { id: toUserId }, select: { id: true, email: true, name: true } }),
@@ -1508,6 +1723,15 @@ router.post('/users/:id/fee', idempotency(), async (req: AuthedRequest, res) => 
   const parsed = feeSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() }); return }
   const userId = req.params.id
+  
+  const superAdmin = await isSuperAdmin(req.userId!)
+  const assigned = await isUserAssignedToAdmin(userId, req.userId!)
+  
+  if (!superAdmin && !assigned) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+  
   const { currency, amount, feeType, note, allowNegative } = parsed.data
   const symbol = currency === 'USD' ? '$' : currency
   const reference = `Fee (${feeType})${note ? ': ' + note : ''}`

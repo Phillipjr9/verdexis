@@ -35,6 +35,7 @@ const Disclosures = lazy(() => import('./pages/Disclosures'))
 const Help = lazy(() => import('./pages/Help'))
 const AssetDetail = lazy(() => import('./pages/AssetDetail'))
 const Activity = lazy(() => import('./pages/Activity'))
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
 const AdminDeposits = lazy(() => import('./pages/AdminDeposits'))
 const AdminUsers = lazy(() => import('./pages/AdminUsers'))
 const AdminUserDetail = lazy(() => import('./pages/AdminUserDetail'))
@@ -101,12 +102,11 @@ export default function App() {
   )
 }
 
-// Keyed wrapper so navigating between routes triggers the page-fade-in
-// animation defined in index.css. Pure presentational polish — no state.
+// Wrapper component for route-specific styling.
 function RoutedPages() {
   const location = useLocation()
   return (
-    <div key={location.pathname} className="page-fade-in">
+    <div className="page-fade-in">
       <ErrorBoundary resetKey={location.pathname} scope="this page">
       <Routes location={location}>
           <Route path="/" element={<Home />} />
@@ -127,7 +127,7 @@ function RoutedPages() {
           <Route path="/help" element={<Help />} />
           <Route path="/asset/:id" element={<AssetDetail />} />
           <Route path="/coin/:id" element={<AssetDetail />} />
-          <Route path="/admin" element={<RequireAdmin><Dashboard /></RequireAdmin>} />
+          <Route path="/admin" element={<RequireAdmin><AdminDashboard /></RequireAdmin>} />
           <Route path="/admin/users" element={<RequireAdmin><AdminUsers /></RequireAdmin>} />
           <Route path="/admin/users/:id" element={<RequireAdmin><AdminUserDetail /></RequireAdmin>} />
           <Route path="/admin/audit" element={<RequireAdmin><AdminAudit /></RequireAdmin>} />

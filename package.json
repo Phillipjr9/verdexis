@@ -8,13 +8,29 @@
     "dev:server": "npm --prefix server run dev",
     "build": "npm --prefix server run build && npm --prefix app run build",
     "install:all": "npm --prefix app install && npm --prefix server install",
-    "db:migrate": "npm --prefix server run prisma:migrate"
+    "db:migrate": "npm --prefix server run prisma:migrate",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:verbose": "jest --verbose",
+    "test:auth": "jest --testNamePattern=\"Authentication\"",
+    "test:wallet": "jest --testNamePattern=\"Wallet\"",
+    "test:trading": "jest --testNamePattern=\"Trading\"",
+    "test:portfolio": "jest --testNamePattern=\"Portfolio\"",
+    "test:health": "jest --testNamePattern=\"Health\"",
+    "test:list": "jest --listTests"
   },
   "devDependencies": {
     "@aws-amplify/backend": "^1.23.0",
     "@aws-amplify/backend-cli": "^1.8.3",
+    "@jest/globals": "^30.4.1",
+    "@types/jest": "^30.0.0",
     "@vercel/node": "^3.2.0",
     "concurrently": "^9.1.0",
+    "jest": "^30.4.2",
+    "jest-html-reporters": "^3.1.7",
+    "jest-junit": "^17.0.0",
+    "ts-jest": "^29.4.11",
     "typescript": "^5.7.2"
   },
   "dependencies": {

@@ -24,9 +24,7 @@ const userPrivateLinks = [
   { label: 'Goals', path: '/goals' },
   { label: 'Screener', path: '/screener' },
   { label: 'Calendar', path: '/calendar' },
-  { label: 'Copy', path: '/copy-trading' },
   { label: 'Learn', path: '/learn' },
-  { label: 'Paper', path: '/paper-trading' },
 ]
 
 const adminPrivateLinks = [
@@ -97,9 +95,13 @@ export default function Navigation() {
     const handleStorage = () => checkAuth()
     window.addEventListener('storage', handleStorage)
     window.addEventListener('verdexis:profile', handleStorage)
+    window.addEventListener('verdexis:kyc', handleStorage)
+    window.addEventListener('verdexis:verified', handleStorage)
     return () => {
       window.removeEventListener('storage', handleStorage)
       window.removeEventListener('verdexis:profile', handleStorage)
+      window.removeEventListener('verdexis:kyc', handleStorage)
+      window.removeEventListener('verdexis:verified', handleStorage)
     }
   }, [])
 
@@ -184,7 +186,7 @@ export default function Navigation() {
                     <ShieldCheck className="w-3 h-3" />{roleLabel}
                   </span>
                 )}
-                <span className="hidden xl:inline-flex items-center gap-1.5">
+                <span className="hidden lg:inline-flex items-center gap-1.5">
                   <span className="text-xs text-[#737373]">{userName}</span>
                   {isVerified && <VerifiedBadge />}
                 </span>

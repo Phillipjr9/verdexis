@@ -58,15 +58,34 @@ export default function ExportMenu() {
     setOpen(false)
   }
 
+  const exportTransactions = () => {
+    const rows = portfolioStore.getTransactions()
+      .filter((t) => t && t.type)
+      .map((t) => ({
+        date: t.timestamp ? new Date(t.timestamp).toISOString() : '',
+        type: t.type || '',
+        amount: t.amount || 0,
+        currency: t.currency || '',
+        description: t.description || '',
+        status: t.status || 'completed',
+      }))
+    if (rows.length === 0) { toast.error('No transactions to export'); return }
+    downloadFile(`verdexis-transactions-${stamp()}.csv`, toCsv(rows))
+    toast.success(`Exported ${rows.length} transactions`)
+    setOpen(false)
+  }
+
   const exportTransactionsPDF = () => {
-    const txns = portfolioStore.getTransactions().map((t) => ({
-      date: new Date(t.timestamp).toISOString(),
-      type: t.type,
-      amount: t.amount,
-      currency: t.currency,
-      description: t.description,
-      status: t.status,
-    }))
+    const txns = portfolioStore.getTransactions()
+      .filter((t) => t && t.type)
+      .map((t) => ({
+        date: t.timestamp ? new Date(t.timestamp).toISOString() : '',
+        type: t.type || '',
+        amount: t.amount || 0,
+        currency: t.currency || '',
+        description: t.description || '',
+        status: t.status || 'completed',
+      }))
     if (txns.length === 0) { toast.error('No transactions to export'); return }
     generateTransactionsPDF(txns, `verdexis-transactions-${stamp()}.pdf`)
     toast.success('Opening PDF print dialog...')

@@ -217,8 +217,9 @@ function MarketRow({
             <img
               src={icon}
               alt={name}
-              className="w-7 h-7 rounded-full object-cover shrink-0"
+              className="w-7 h-7 rounded-full object-cover shrink-0 bg-[#0C8B44]/10"
               onError={cryptoIconErrorFallback(symbolInitial, coin.id)}
+              loading="lazy"
             />
           ) : (
             <div className="w-7 h-7 rounded-full bg-[#0C8B44]/20 flex items-center justify-center text-[10px] font-bold text-[#0C8B44] shrink-0">
@@ -270,9 +271,21 @@ export default function Markets() {
     let cancelled = false
     const load = async (silent: boolean) => {
       if (!silent) setLoading(true)
-      const data = await marketData.getCryptoList()
-      if (cancelled) return
-      setCoins(data)
+      try {
+        const data = await marketData.getCryptoList()
+        if (cancelled) return
+        setCoins(data)
+      } catch (err) {
+        if (cancelled) return
+        const message = err instanceof Error ? err.message : 'Failed to load data'
+        console.error('[Markets] Load error:', message)
+        setCoins([])
+        // Show error via toast or notification
+        if (!silent) {
+          // Could integrate with toast notification system here
+          console.warn('[Markets] User will see empty state with error message')
+        }
+      }
       setLoading(false)
     }
     load(false)

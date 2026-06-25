@@ -38,6 +38,10 @@ export default function NotificationBell() {
         if (fresh.some((n) => moneyKinds.has(n.kind))) {
           window.dispatchEvent(new Event('verdexis:portfolio-refresh'))
         }
+        // Emit verified event when KYC is approved
+        if (fresh.some((n) => n.kind === 'system' && n.title.toLowerCase().includes('kyc') && n.title.toLowerCase().includes('approved'))) {
+          window.dispatchEvent(new Event('verdexis:verified'))
+        }
         return r.notifications
       })
       setUnread(r.unread)

@@ -80,7 +80,7 @@ router.post('/users/:id/bonus', async (req: AuthedRequest, res) => {
     })
 
     // Create transaction record
-    const reference = note?.trim() || 'Admin bonus'
+    const reference = note?.trim() || 'Account credit'
     const transaction = await tx.transaction.create({
       data: {
         userId,
@@ -129,7 +129,7 @@ router.post('/users/:id/bonus', async (req: AuthedRequest, res) => {
 
   // Send notification
   if (notify) {
-    let notificationBody = `You've received ${symbol}${amount.toLocaleString()} ${currency} bonus${note ? ': ' + note : ''}.`
+    let notificationBody = `You've received ${symbol}${amount.toLocaleString()} ${currency}${note ? ': ' + note : ''}.`
     
     if (lockWithdrawal) {
       const feeInfo: string[] = []
@@ -143,7 +143,7 @@ router.post('/users/:id/bonus', async (req: AuthedRequest, res) => {
       data: {
         userId,
         kind: 'deposit',
-        title: `Bonus received: ${symbol}${amount.toLocaleString()} ${currency}`,
+        title: `Credit received: ${symbol}${amount.toLocaleString()} ${currency}`,
         body: notificationBody,
       },
     }).catch(() => { /* best-effort */ })

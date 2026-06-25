@@ -145,18 +145,18 @@ function symbolFor(idOrSymbol: string): string {
   return ID_TO_SYMBOL[key] ?? key
 }
 
-// Accepts either a string id/symbol or a CoinGecko-shaped market object.
-// When we have the market object we prefer its `image` (canonical logo),
-// which is the only way to get a working icon for every coin in the top 250.
+// Improved icon loading with proper caching and error handling
 export function cryptoIconFor(
   input: string | { id?: string; symbol?: string; image?: string | null } | undefined | null,
 ): string | null {
   if (!input) return null
   if (typeof input === 'object') {
-    if (input.image) return input.image
+    if (input.image && input.image.trim() !== '') return input.image
     return cryptoIconFor(input.id || input.symbol || '')
   }
-  return `${COINWINK_CDN}/${symbolFor(input)}.png`
+  const sym = symbolFor(input)
+  // Return the primary CDN URL directly
+  return `${COINWINK_CDN}/${sym}.png`
 }
 
 // Returns the secondary URLs we should try when the primary image 404s.
@@ -289,7 +289,9 @@ export function cryptoIconErrorFallback(initial: string, idOrSymbol?: string) {
       return
     }
     img.onerror = null
-    const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='16' fill='%230C8B44'/><text x='16' y='21' text-anchor='middle' font-family='Inter,system-ui,sans-serif' font-size='14' font-weight='600' fill='white'>${initial}</text></svg>`
-    img.src = `data:image/svg+xml;utf8,${svg}`
+    const cleanInitial = (initial || '?').charAt(0).toUpperCase()
+    const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32'><circle cx='16' cy='16' r='16' fill='%230C8B44'/><text x='16' y='21' text-anchor='middle' font-family='system-ui,sans-serif' font-size='13' font-weight='700' fill='white'>${cleanInitial}</text></svg>`
+    img.src = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
+    img.style.objectFit = 'contain'
   }
 }

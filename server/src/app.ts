@@ -38,6 +38,7 @@ import kycRoutes from './routes/kyc.js'
 import copyTradingRoutes from './routes/copyTrading.js'
 import auditRoutes from './routes/audit.js'
 import nftRoutes from './routes/nft.js'
+import adminHierarchyRoutes from './routes/admin-hierarchy.js'
 import { isDbUnavailableError } from './dbError.js'
 import { requestContextMiddleware } from './logging.js'
 import { createErrorResponse } from './errorHandler.js'
@@ -177,6 +178,7 @@ app.use('/api/kyc', kycRoutes)
 app.use('/api/copy-trading', copyTradingRoutes)
 app.use('/api', auditRoutes)
 app.use('/api/nfts', nftRoutes)
+app.use('/api/admin/hierarchy', adminHierarchyRoutes)
 
 app.post('/api/admin/cache/clear', async (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '')

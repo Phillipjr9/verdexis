@@ -15,7 +15,8 @@
     "prisma:deploy": "prisma migrate deploy",
     "db:reset": "prisma migrate reset --force",
     "promote-admin": "tsx scripts/promote-admin.ts",
-    "list-admins": "tsx scripts/promote-admin.ts --list"
+    "list-admins": "tsx scripts/promote-admin.ts --list",
+    "init-super-admin": "tsx scripts/create-super-admin.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-rds": "^3.1068.0",

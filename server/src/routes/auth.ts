@@ -9,6 +9,7 @@ import { env } from '../env.js'
 import { generateInvestmentId } from '../investmentId.js'
 import { generateReferralCode, linkReferrer } from '../referrals.js'
 import { isDbUnavailableError } from '../dbError.js'
+import { assignUserToAdmin, isSuperAdmin } from '../lib/adminHierarchy.js'
 
 const router = Router()
 
@@ -333,14 +334,28 @@ router.post('/signup', authLimiter, async (req, res) => {
   }
   if (user.role === 'admin') await ensureAdminTreasury(user.id)
   await awardSignupBonus(user.id)
-    // Link to referrer if code provided
-    if (referrerCode) {
-      try {
-        await linkReferrer(user.id, email, referrerCode)
-      } catch {
-        // best-effort only; don't fail signup if referral linking fails
+  // Auto-assign regular users to a default admin if configured
+  if (user.role === 'user') {
+    try {
+      const defaultAdminId = process.env.DEFAULT_ADMIN_ID
+      if (defaultAdminId) {
+        const defaultAdminExists = await prisma.user.findUnique({ where: { id: defaultAdminId } })
+        if (defaultAdminExists) {
+          await assignUserToAdmin(defaultAdminId, user.id, defaultAdminId)
+        }
       }
+    } catch {
+      // best-effort only; don't fail signup if admin assignment fails
     }
+  }
+  // Link to referrer if code provided
+  if (referrerCode) {
+    try {
+      await linkReferrer(user.id, email, referrerCode)
+    } catch {
+      // best-effort only; don't fail signup if referral linking fails
+    }
+  }
   const token = signToken({ sub: user.id, email: user.email, v: user.tokenVersion })
   res.status(201).json({ token, user: publicUser(user) })
 })

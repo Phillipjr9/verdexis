@@ -1,0 +1,378 @@
+{
+  "projectName": "VERDEXIS",
+  "projectDescription": "Premium fintech platform with AI-powered trading, portfolio management, and multi-asset support",
+  "apiBaseUrl": "https://api.verdexis.com",
+  "environment": "production",
+  "testEnvironment": "http://localhost:4000",
+  "prdPath": "./PRODUCT_REQUIREMENTS_DOCUMENT.md",
+  "apiDocPath": "./API_DOCUMENTATION.md",
+  
+  "testFramework": {
+    "type": "jest",
+    "language": "typescript",
+    "outputDir": "./tests/api",
+    "coverage": {
+      "threshold": 80,
+      "includeStatements": true,
+      "includeBranches": true,
+      "includeFunctions": true,
+      "includeLines": true
+    }
+  },
+
+  "authentication": {
+    "type": "jwt",
+    "tokenHeader": "Authorization",
+    "tokenPrefix": "Bearer",
+    "expirySeconds": 604800,
+    "refreshEndpoint": "/api/auth/refresh",
+    "testCredentials": {
+      "email": "test@verdexis.com",
+      "password": "TestPassword123!"
+    }
+  },
+
+  "endpoints": {
+    "authentication": [
+      "/api/auth/signup",
+      "/api/auth/login",
+      "/api/auth/logout",
+      "/api/auth/refresh",
+      "/api/auth/forgot",
+      "/api/auth/reset",
+      "/api/auth/me",
+      "/api/auth/2fa/enable",
+      "/api/auth/2fa/disable",
+      "/api/auth/2fa/verify"
+    ],
+    "wallet": [
+      "/api/wallet",
+      "/api/wallet/transactions",
+      "/api/wallet/transactions/:id"
+    ],
+    "trading": [
+      "/api/trades",
+      "/api/trades/:id"
+    ],
+    "portfolio": [
+      "/api/holdings",
+      "/api/holdings/:id"
+    ],
+    "market": [
+      "/api/market/quotes/:symbol",
+      "/api/market/search",
+      "/api/market/chart/:symbol"
+    ],
+    "passkeys": [
+      "/api/passkeys",
+      "/api/passkeys/:id",
+      "/api/passkeys/register/options",
+      "/api/passkeys/register/verify",
+      "/api/passkeys/auth/options",
+      "/api/passkeys/auth/verify"
+    ],
+    "deposits": [
+      "/api/deposits/verify",
+      "/api/deposits/pending"
+    ],
+    "admin": [
+      "/api/admin/users",
+      "/api/admin/users/:id",
+      "/api/admin/deposits/pending",
+      "/api/admin/deposits/:id/approve"
+    ]
+  },
+
+  "testScenarios": {
+    "authentication": {
+      "enabled": true,
+      "scenarios": [
+        "user_signup",
+        "user_login",
+        "password_reset",
+        "2fa_enable",
+        "2fa_verify",
+        "passkey_registration",
+        "passkey_authentication",
+        "token_refresh",
+        "token_expiry"
+      ]
+    },
+    "wallet": {
+      "enabled": true,
+      "scenarios": [
+        "get_wallet_balance",
+        "deposit_usd_ach",
+        "deposit_crypto",
+        "withdraw_usd",
+        "withdraw_crypto",
+        "transfer_between_users",
+        "transaction_history",
+        "insufficient_balance"
+      ]
+    },
+    "trading": {
+      "enabled": true,
+      "scenarios": [
+        "buy_market_order",
+        "sell_market_order",
+        "buy_limit_order",
+        "get_trades_history",
+        "invalid_symbol",
+        "insufficient_balance_trade"
+      ]
+    },
+    "portfolio": {
+      "enabled": true,
+      "scenarios": [
+        "get_holdings",
+        "add_holding",
+        "update_holding",
+        "calculate_allocation",
+        "pnl_calculation"
+      ]
+    },
+    "market": {
+      "enabled": true,
+      "scenarios": [
+        "get_crypto_quote",
+        "get_stock_quote",
+        "search_symbol",
+        "get_chart_data",
+        "invalid_symbol_error"
+      ]
+    },
+    "deposits": {
+      "enabled": true,
+      "scenarios": [
+        "verify_on_chain_transaction",
+        "pending_deposit_flow",
+        "deposit_confirmation",
+        "deposit_rejection"
+      ]
+    }
+  },
+
+  "testData": {
+    "users": [
+      {
+        "email": "test@verdexis.com",
+        "password": "TestPassword123!",
+        "name": "Test User",
+        "role": "user"
+      },
+      {
+        "email": "admin@verdexis.com",
+        "password": "AdminPass123!",
+        "name": "Admin User",
+        "role": "admin"
+      }
+    ],
+    "currencies": ["USD", "BTC", "ETH", "SOL", "USDT", "USDC"],
+    "amounts": {
+      "small": 100,
+      "medium": 1000,
+      "large": 10000,
+      "crypto_small": 0.01,
+      "crypto_medium": 0.5,
+      "crypto_large": 2.0
+    },
+    "symbols": ["BTC", "ETH", "SOL", "AAPL", "GOOGL", "MSFT"],
+    "walletAddresses": {
+      "ethereum": "0x742d35Cc6634C0532925a3b844Bc9e7595f42438",
+      "bitcoin": "1A1z7agoat4RyoCKMYgeJ6XDBK5htzLyUH",
+      "solana": "9B5X3UUH3P5tb2D1t1ZZth7KZMgN4ygQEKyLT7F4HH4s"
+    }
+  },
+
+  "validations": {
+    "email": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$",
+    "password": "^(?=.*[A-Z])(?=.*[a-z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$",
+    "uuid": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    "ethereumAddress": "^0x[a-fA-F0-9]{40}$",
+    "bitcoinAddress": "^[13][a-km-zA-HJ-NP-Z1-9]{25,34}$",
+    "solanaAddress": "^[1-9A-HJ-NP-Za-km-z]{32,44}$",
+    "amount": "^(0|[1-9]\\d*)(\\.\\d{1,8})?$",
+    "percentage": "^(100|[0-9]{1,2})(\\.\\d{1,2})?$"
+  },
+
+  "errorCodes": {
+    "INVALID_INPUT": 400,
+    "UNAUTHORIZED": 401,
+    "FORBIDDEN": 403,
+    "NOT_FOUND": 404,
+    "CONFLICT": 409,
+    "RATE_LIMITED": 429,
+    "SERVER_ERROR": 500,
+    "SERVICE_UNAVAILABLE": 503
+  },
+
+  "rateLimit": {
+    "requestsPerMinute": 600,
+    "requestsPerSecond": 10,
+    "burstSize": 50
+  },
+
+  "timeout": {
+    "default": 30000,
+    "chart": 60000,
+    "deposit": 120000,
+    "trading": 45000
+  },
+
+  "assertions": {
+    "statusCode": true,
+    "responseSchema": true,
+    "responseTime": {
+      "enabled": true,
+      "threshold": 500
+    },
+    "dataTypes": true,
+    "fieldPresence": true,
+    "businessLogic": true
+  },
+
+  "reportingOptions": {
+    "format": ["json", "html", "junit"],
+    "outputDir": "./test-reports",
+    "includeScreenshots": false,
+    "includeLogs": true,
+    "slack": {
+      "enabled": false,
+      "webhookUrl": "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+    },
+    "email": {
+      "enabled": false,
+      "recipients": ["qa@verdexis.com"],
+      "onFailureOnly": true
+    }
+  },
+
+  "ci": {
+    "provider": "github",
+    "triggerOn": ["push", "pull_request"],
+    "requiredPassRate": 95,
+    "failureAction": "block_merge",
+    "parallelRuns": 4
+  },
+
+  "coverage": {
+    "endpoints": 95,
+    "happyPath": 100,
+    "errorCases": 90,
+    "edgeCases": 85,
+    "securityTests": 80
+  },
+
+  "excludePatterns": [
+    "/api/health",
+    "/api/status"
+  ],
+
+  "customTests": [
+    {
+      "name": "End-to-End Deposit Flow",
+      "steps": [
+        "Create user account",
+        "Add bank account",
+        "Initiate USD deposit",
+        "Verify balance updated",
+        "Confirm transaction history"
+      ],
+      "expectedResult": "Balance increases by deposit amount"
+    },
+    {
+      "name": "End-to-End Trading Flow",
+      "steps": [
+        "Get market quote",
+        "Execute buy order",
+        "Verify holdings updated",
+        "Check P&L calculation",
+        "Generate tax report"
+      ],
+      "expectedResult": "Trade recorded and holdings reflected"
+    },
+    {
+      "name": "End-to-End Withdrawal Flow",
+      "steps": [
+        "Initiate withdrawal",
+        "Submit fee proof",
+        "Admin approval",
+        "Fee credited",
+        "Withdrawal processed"
+      ],
+      "expectedResult": "Funds transferred and fee refunded"
+    }
+  ],
+
+  "securityTests": {
+    "enabled": true,
+    "tests": [
+      "sql_injection",
+      "xss_prevention",
+      "csrf_protection",
+      "authentication_bypass",
+      "authorization_bypass",
+      "rate_limiting",
+      "token_expiry",
+      "data_encryption"
+    ]
+  },
+
+  "performanceTests": {
+    "enabled": true,
+    "tests": [
+      {
+        "endpoint": "/api/holdings",
+        "method": "GET",
+        "expectedTime": 200,
+        "concurrentUsers": 100
+      },
+      {
+        "endpoint": "/api/trades",
+        "method": "POST",
+        "expectedTime": 500,
+        "concurrentUsers": 50
+      },
+      {
+        "endpoint": "/api/market/quotes/BTC",
+        "method": "GET",
+        "expectedTime": 100,
+        "concurrentUsers": 1000
+      }
+    ]
+  },
+
+  "integrations": {
+    "postman": {
+      "enabled": true,
+      "collectionUrl": "https://www.postman.com/collections/verdexis"
+    },
+    "swagger": {
+      "enabled": true,
+      "specUrl": "/api/openapi.json"
+    },
+    "slack": {
+      "enabled": false,
+      "channel": "#qa-alerts"
+    },
+    "jira": {
+      "enabled": true,
+      "projectKey": "VERD",
+      "createIssuesForFailures": true
+    }
+  },
+
+  "scheduling": {
+    "fullTestSuite": "0 2 * * *",
+    "smokeTests": "0 * * * *",
+    "securityTests": "0 0 * * 0"
+  },
+
+  "notificationSettings": {
+    "onTestFailure": true,
+    "onCoverageDecrease": true,
+    "onPerformanceDegradation": true,
+    "dailySummary": true
+  }
+}

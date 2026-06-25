@@ -1,0 +1,83 @@
+{
+  "preset": "ts-jest",
+  "testEnvironment": "node",
+  "roots": [
+    "<rootDir>/testsprite_tests"
+  ],
+  "testMatch": [
+    "**/__tests__/**/*.ts?(x)",
+    "**/?(*.)+(spec|test).ts?(x)"
+  ],
+  "moduleFileExtensions": [
+    "ts",
+    "tsx",
+    "js",
+    "jsx",
+    "json",
+    "node"
+  ],
+  "collectCoverageFrom": [
+    "**/*.ts",
+    "!**/*.d.ts",
+    "!**/node_modules/**",
+    "!**/dist/**"
+  ],
+  "coveragePathIgnorePatterns": [
+    "/node_modules/",
+    "/dist/"
+  ],
+  "transform": {
+    "^.+\\.tsx?$": "ts-jest"
+  },
+  "globals": {
+    "ts-jest": {
+      "tsconfig": {
+        "esModuleInterop": true,
+        "allowSyntheticDefaultImports": true
+      }
+    }
+  },
+  "testTimeout": 30000,
+  "setupFilesAfterEnv": [
+    "<rootDir>/testsprite_tests/setup.ts"
+  ],
+  "reporters": [
+    "default",
+    [
+      "jest-junit",
+      {
+        "outputDirectory": "./test-reports",
+        "outputName": "junit.xml",
+        "classNameTemplate": "{classname} - {title}",
+        "titleTemplate": "{classname} - {title}",
+        "ancestorSeparator": " › ",
+        "usePathAsClassName": true
+      }
+    ],
+    [
+      "jest-html-reporters",
+      {
+        "publicPath": "./test-reports",
+        "filename": "report.html",
+        "pageTitle": "VERDEXIS TestSprite Report",
+        "expand": true,
+        "openReport": false
+      }
+    ]
+  ],
+  "collectCoverage": true,
+  "coverageReporters": [
+    "text",
+    "text-summary",
+    "html",
+    "json"
+  ],
+  "coverageThreshold": {
+    "global": {
+      "branches": 80,
+      "functions": 80,
+      "lines": 80,
+      "statements": 80
+    }
+  }
+}

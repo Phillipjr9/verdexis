@@ -118,8 +118,8 @@ export default function Footer() {
             <h4 className="text-xs font-medium text-[#E5E5E5] mb-3 uppercase tracking-[0.05em]">Company</h4>
             <ul className="space-y-2 text-xs text-[#A0A0A0]">
               <li><Link to="/about" className="hover:text-[#0C8B44] transition-colors">About</Link></li>
-              <li><Link to="/about#mission" className="hover:text-[#0C8B44] transition-colors">Mission</Link></li>
-              <li><Link to="/legal#security" className="hover:text-[#0C8B44] transition-colors">Security</Link></li>
+              <li><Link to="/about" className="hover:text-[#0C8B44] transition-colors">Mission</Link></li>
+              <li><Link to="/legal" className="hover:text-[#0C8B44] transition-colors">Security</Link></li>
               <li><Link to="/disclosures" className="hover:text-[#0C8B44] transition-colors">Disclosures</Link></li>
               <li>
                 <a
@@ -151,10 +151,10 @@ export default function Footer() {
             <h4 className="text-xs font-medium text-[#E5E5E5] mb-3 uppercase tracking-[0.05em]">Markets</h4>
             <ul className="space-y-2 text-xs text-[#A0A0A0]">
               <li><Link to="/markets" className="hover:text-[#0C8B44] transition-colors">All markets</Link></li>
-              <li><Link to="/trading?symbol=BTC" className="hover:text-[#0C8B44] transition-colors">Explore crypto</Link></li>
-              <li><Link to="/trading?symbol=AAPL" className="hover:text-[#0C8B44] transition-colors">Explore stocks</Link></li>
+              <li><Link to="/trading" className="hover:text-[#0C8B44] transition-colors">Explore crypto</Link></li>
+              <li><Link to="/markets" className="hover:text-[#0C8B44] transition-colors">Explore stocks</Link></li>
               <li><Link to="/news" className="hover:text-[#0C8B44] transition-colors">Market news</Link></li>
-              <li><Link to="/dashboard#watchlist" className="hover:text-[#0C8B44] transition-colors">Watchlist</Link></li>
+              <li><Link to="/dashboard" className="hover:text-[#0C8B44] transition-colors">Watchlist</Link></li>
               <li><Link to="/dashboard" className="hover:text-[#0C8B44] transition-colors">Portfolio overview</Link></li>
               <li><Link to="/alerts" className="hover:text-[#0C8B44] transition-colors">Price alerts</Link></li>
             </ul>
@@ -176,7 +176,7 @@ export default function Footer() {
             <h4 className="text-xs font-medium text-[#E5E5E5] mb-3 uppercase tracking-[0.05em]">Support</h4>
             <ul className="space-y-2 text-xs text-[#A0A0A0]">
               <li><Link to="/help" className="hover:text-[#0C8B44] transition-colors">Help center</Link></li>
-              <li><Link to="/help#getting-started" className="hover:text-[#0C8B44] transition-colors">Getting started</Link></li>
+              <li><Link to="/help" className="hover:text-[#0C8B44] transition-colors">Getting started</Link></li>
               <li>
                 <a
                   href={WHATSAPP_URL}
@@ -189,7 +189,7 @@ export default function Footer() {
                 </a>
               </li>
               <li><Link to="/settings" className="hover:text-[#0C8B44] transition-colors">Account settings</Link></li>
-              <li><Link to="/wallet?action=deposit" className="hover:text-[#0C8B44] transition-colors">Payment methods</Link></li>
+              <li><Link to="/wallet" className="hover:text-[#0C8B44] transition-colors">Payment methods</Link></li>
             </ul>
           </div>
         </div>
@@ -198,9 +198,9 @@ export default function Footer() {
         <div className="flex flex-col md:flex-row items-center justify-between gap-3 pt-6 border-t border-[#ffffff05]">
           <p className="text-[11px] text-[#737373]">© {year} Verdexis. All rights reserved.</p>
           <div className="flex items-center gap-4 text-[11px] text-[#737373] flex-wrap justify-center">
-            <Link to="/legal#privacy" className="hover:text-[#A0A0A0] transition-colors">Privacy</Link>
-            <Link to="/legal#terms" className="hover:text-[#A0A0A0] transition-colors">Terms</Link>
-            <Link to="/legal#cookies" className="hover:text-[#A0A0A0] transition-colors">Cookie policy</Link>
+            <Link to="/legal" className="hover:text-[#A0A0A0] transition-colors">Privacy</Link>
+            <Link to="/legal" className="hover:text-[#A0A0A0] transition-colors">Terms</Link>
+            <Link to="/legal" className="hover:text-[#A0A0A0] transition-colors">Cookie policy</Link>
             <button type="button" onClick={openCookiePrefs} className="hover:text-[#A0A0A0] transition-colors">Cookie preferences</button>
             <Link to="/disclosures" className="hover:text-[#A0A0A0] transition-colors">Digital asset disclosures</Link>
           </div>
