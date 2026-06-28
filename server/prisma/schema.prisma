@@ -571,36 +571,46 @@ model TrustedDevice {
   id          String   @id @default(cuid())
   userId      String
   fingerprint String
+  deviceHash  String
   deviceName  String?
   ipAddress   String
   location    String?
   isTrusted   Boolean  @default(false)
+  trustLevel  Int      @default(0)
   lastSeenAt  DateTime @default(now())
   expiresAt   DateTime
   createdAt   DateTime @default(now())
 
   @@index([userId])
+  @@index([deviceHash])
   @@index([isTrusted, expiresAt])
 }
 
 model UserSession {
-  id          String   @id @default(cuid())
-  userId      String
-  sessionToken String  @unique
-  ipAddress   String
-  userAgent   String?
-  location    String?
-  expiresAt   DateTime
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String   @id @default(cuid())
+  userId         String
+  sessionToken   String   @unique
+  deviceHash     String?
+  ipAddress      String
+  userAgent      String?
+  location       String?
+  otpVerified    Boolean  @default(false)
+  otpVerifiedAt  DateTime?
+  stepUpLevel    Int      @default(0)
+  lastActivityAt DateTime @default(now())
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   @@index([userId])
   @@index([expiresAt])
+  @@index([lastActivityAt])
 }
 
 model RiskAssessment {
   id          String   @id @default(cuid())
   userId      String
+  action      String?
   riskScore   Int
   riskLevel   String
   factors     String
@@ -613,7 +623,7 @@ model RiskAssessment {
 
 model FraudRule {
   id          String   @id @default(cuid())
-  name        String
+  name        String   @unique
   description String?
   conditions  String
   action      String
@@ -624,11 +634,12 @@ model FraudRule {
   updatedAt   DateTime @updatedAt
 
   @@index([active])
+  @@index([name])
 }
 
 model SecurityEvent {
   id          String    @id @default(cuid())
-  userId      String
+  userId      String?
   eventType   String
   severity    String
   description String
@@ -648,6 +659,7 @@ model SecurityEvent {
 model ComplianceReport {
   id          String   @id @default(cuid())
   reportType  String
+  type        String?
   startDate   DateTime
   endDate     DateTime
   data        String
@@ -678,8 +690,11 @@ model SecurityAudit {
   userAgent   String?
   metadata    String?
   status      String
+  success     Boolean  @default(true)
+  errorMessage String?
   createdAt   DateTime @default(now())
 
   @@index([userId, createdAt])
   @@index([action, createdAt])
+  @@index([success])
 }
