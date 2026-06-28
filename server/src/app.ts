@@ -40,6 +40,7 @@ import auditRoutes from './routes/audit.js'
 import nftRoutes from './routes/nft.js'
 import adminHierarchyRoutes from './routes/admin-hierarchy.js'
 import otpRoutes from './routes/otp.js'
+// TEMPORARILY DISABLED - Security routes need schema alignment
 // import securityRoutes from './routes/security.js'
 // import userSecurityRoutes from './routes/userSecurity.js'
 import { isDbUnavailableError } from './dbError.js'
