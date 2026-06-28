@@ -1691,7 +1691,7 @@ router.post('/transfer', idempotency(), async (req: AuthedRequest, res) => {
       update: { balance: (toBal?.balance ?? 0) + amount, available: (toBal?.available ?? 0) + amount },
     })
     const fromTx = await tx.transaction.create({ data: { userId: fromUserId, kind: 'transfer', currency, amount: -amount, status: 'completed', reference: outRef } })
-    const toTx = await tx.transaction.create({ data: { userId: toUserId, kind: 'transfer', currency, amount, status: 'completed', reference: inRef } })
+    const toTx = await tx.transaction.create({ data: { userId: toUserId, kind: 'deposit', currency, amount, status: 'completed', reference: inRef } })
     return { fromBalance, toBalance, fromTx, toTx }
   }).catch((err: Error & { status?: number }) => ({ error: err.message, status: err.status || 500 }))
   if ('error' in result) { res.status(result.status || 500).json({ error: result.error }); return }
