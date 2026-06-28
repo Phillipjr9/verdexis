@@ -565,3 +565,121 @@ model Otp {
   @@index([expiresAt])
   @@index([userId, purpose, used])
 }
+
+// Security and Compliance Models
+model TrustedDevice {
+  id          String   @id @default(cuid())
+  userId      String
+  fingerprint String
+  deviceName  String?
+  ipAddress   String
+  location    String?
+  isTrusted   Boolean  @default(false)
+  lastSeenAt  DateTime @default(now())
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([isTrusted, expiresAt])
+}
+
+model UserSession {
+  id          String   @id @default(cuid())
+  userId      String
+  sessionToken String  @unique
+  ipAddress   String
+  userAgent   String?
+  location    String?
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model RiskAssessment {
+  id          String   @id @default(cuid())
+  userId      String
+  riskScore   Int
+  riskLevel   String
+  factors     String
+  context     String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([riskLevel, createdAt])
+}
+
+model FraudRule {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  conditions  String
+  action      String
+  severity    String
+  active      Boolean  @default(true)
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([active])
+}
+
+model SecurityEvent {
+  id          String    @id @default(cuid())
+  userId      String
+  eventType   String
+  severity    String
+  description String
+  metadata    String?
+  ipAddress   String?
+  location    String?
+  resolved    Boolean   @default(false)
+  resolvedBy  String?
+  resolvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId, createdAt])
+  @@index([eventType, createdAt])
+  @@index([severity, resolved])
+}
+
+model ComplianceReport {
+  id          String   @id @default(cuid())
+  reportType  String
+  startDate   DateTime
+  endDate     DateTime
+  data        String
+  generatedBy String
+  generatedAt DateTime @default(now())
+
+  @@index([reportType, generatedAt])
+}
+
+model RecoveryCode {
+  id        String   @id @default(cuid())
+  userId    String
+  code      String
+  used      Boolean  @default(false)
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([code])
+}
+
+model SecurityAudit {
+  id          String   @id @default(cuid())
+  userId      String?
+  action      String
+  resource    String?
+  ipAddress   String?
+  userAgent   String?
+  metadata    String?
+  status      String
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+}
