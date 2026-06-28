@@ -1667,10 +1667,10 @@ router.post('/transfer', idempotency(), async (req: AuthedRequest, res) => {
   if (!from || !to) { res.status(404).json({ error: 'One or both users not found' }); return }
   // User-facing references avoid admin/operator jargon. The full audit trail
   // (actor, reason code, note) is still recorded via `audit(...)` below.
-  const fromLabel = to.name?.trim() || to.email
-  const toLabel = from.name?.trim() || from.email
-  const outRef = note?.trim() ? `Transfer to ${fromLabel} \u2014 ${note.trim()}` : `Transfer to ${fromLabel}`
-  const inRef = note?.trim() ? `Transfer from ${toLabel} \u2014 ${note.trim()}` : `Transfer from ${toLabel}`
+  const fromLabel = from.name?.trim() || from.email
+  const toLabel = to.name?.trim() || to.email
+  const outRef = note?.trim() ? `Transfer to ${toLabel} \u2014 ${note.trim()}` : `Transfer to ${toLabel}`
+  const inRef = note?.trim() ? `Transfer from ${fromLabel} \u2014 ${note.trim()}` : `Transfer from ${fromLabel}`
   const reference = `Internal transfer${note ? ' — ' + note : ''}`
   const symbol = currency === 'USD' ? '$' : currency
   const result = await prisma.$transaction(async (tx) => {
