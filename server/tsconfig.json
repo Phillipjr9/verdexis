@@ -32,6 +32,7 @@
     "src/services/fraudDetection.ts",
     "src/services/riskAssessment.ts",
     "src/services/sessionManagement.ts",
-    "src/services/trustedDevice.ts"
+    "src/services/trustedDevice.ts",
+    "src/middleware/progressiveAuth.ts"
   ]
 }
