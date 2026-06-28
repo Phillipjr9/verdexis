@@ -5,7 +5,6 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { companyInfo } from '../config/company.js'
-import { companyInfo } from '../config/company.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
