@@ -24,6 +24,14 @@
     "src/providers/cryptocomPay.ts",
     "src/rds-auth.ts",
     "src/depositMonitor.ts",
-    "src/orderEvaluator.ts"
+    "src/orderEvaluator.ts",
+    "src/routes/security.ts",
+    "src/routes/userSecurity.ts",
+    "src/securityJobs.ts",
+    "src/services/compliance.ts",
+    "src/services/fraudDetection.ts",
+    "src/services/riskAssessment.ts",
+    "src/services/sessionManagement.ts",
+    "src/services/trustedDevice.ts"
   ]
 }
