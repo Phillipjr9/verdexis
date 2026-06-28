@@ -40,57 +40,45 @@ async def run_test():
         except Exception:
             pass
         
-        # -> Dismiss the cookie banner by clicking the 'Accept' button so header auth controls become available.
-        # button "Accept"
-        elem = page.locator("xpath=/html/body/div/div[2]/div/div[2]/button[2]").nth(0)
+        # -> Click the 'Accept' button on the cookie consent banner to dismiss it so the page is fully interactable.
+        # Accept button
+        elem = page.get_by_role('button', name='Accept', exact=True)
+        await elem.click(timeout=10000)
+        
+        # -> Click the 'Accept' button on the cookie consent banner to dismiss it so the page is fully interactable.
+        # Log In button
+        elem = page.get_by_role('button', name='Log In', exact=True)
+        await elem.click(timeout=10000)
+        
+        # -> input
+        # you@example.com or janedoe text field
+        elem = page.get_by_placeholder('you@example.com or janedoe', exact=True)
         await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
+        await elem.fill("example@gmail.com")
         
-        # -> Click the 'Try again' button to retry loading missing data so header auth controls become available and proceed to login.
-        # button "Try again"
-        elem = page.locator("xpath=/html/body/div/div/div/div/div[2]/button").nth(0)
+        # -> input
+        # Min 8 characters password field
+        elem = page.get_by_placeholder('Min 8 characters', exact=True)
         await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
+        await elem.fill("password123")
         
-        # -> Click the 'Reload and clear cache' button to reload the app and clear cached data so header auth controls become available (element index 2318).
-        # button "Reload and clear cache"
-        elem = page.locator("xpath=/html/body/div/div/div/div/div[2]/button[2]").nth(0)
-        await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
+        # -> click
+        # Sign In button
+        elem = page.get_by_role('button', name='Sign In', exact=True)
+        await elem.click(timeout=10000)
         
-        # -> Navigate to /login so the Auth modal or login page can be opened and proceed with authentication.
-        await page.goto("http://localhost:5173/login")
-        try:
-            await page.wait_for_load_state("domcontentloaded", timeout=5000)
-        except Exception:
-            pass
-        
-        # -> Navigate to /login so the Auth modal or login page can be opened and proceed with authentication.
-        await page.goto("http://localhost:5173/login")
-        try:
-            await page.wait_for_load_state("domcontentloaded", timeout=5000)
-        except Exception:
-            pass
-        
-        # -> Dismiss the cookie banner by clicking 'Accept', then navigate to /login to open the login modal/page.
-        # button "Accept"
-        elem = page.locator("xpath=/html/body/div/div[2]/div/div[2]/button[2]").nth(0)
-        await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
-        
-        # -> Dismiss the cookie banner by clicking 'Accept', then navigate to /login to open the login modal/page.
-        await page.goto("http://localhost:5173/login")
-        try:
-            await page.wait_for_load_state("domcontentloaded", timeout=5000)
-        except Exception:
-            pass
+        # -> Close the 'Welcome Back' sign-in modal by clicking its 'Close' button so the page is fully visible and then report the test as blocked because sign-in failed with a server error.
+        # Close button
+        elem = page.get_by_role('button', name='Close', exact=True)
+        await elem.click(timeout=10000)
         
         # --> Assertions to verify final state
-        assert await page.locator("xpath=//*[contains(., 'Your password has been updated')]").nth(0).is_visible(), "The password change confirmation should be visible after submitting the updated password."
+        # Assert: Verify a password change confirmation is visible
+        assert False, "Expected: Verify a password change confirmation is visible (could not be verified on the page)"
         
         # --> Test blocked by environment/access constraints during agent run
-        # Reason: TEST BLOCKED The test could not be run — the UI required to perform authentication and change the password was not reachable due to a site error. Observations: - The page shows a global error overlay: "Cannot read properties of undefined (reading 'length')". - Header auth controls and the login page/modal were not accessible, preventing authentication. - Recovery buttons ('Try again' and 'Reloa...
-        raise AssertionError("Test blocked during agent run: " + "TEST BLOCKED The test could not be run \u2014 the UI required to perform authentication and change the password was not reachable due to a site error. Observations: - The page shows a global error overlay: \"Cannot read properties of undefined (reading 'length')\". - Header auth controls and the login page/modal were not accessible, preventing authentication. - Recovery buttons ('Try again' and 'Reloa..." + " — the exported script cannot reproduce a PASS in this environment.")
+        # Reason: TEST BLOCKED The password-change flow could not be executed because sign-in failed with a server error, preventing access to the Settings page required to change the password. Observations: - The sign-in attempt returned 'Request failed with 500' and authentication did not complete. - The homepage is visible with non-authenticated controls (Sign Up / Log In), indicating no user session was esta...
+        raise AssertionError("Test blocked during agent run: " + "TEST BLOCKED The password-change flow could not be executed because sign-in failed with a server error, preventing access to the Settings page required to change the password. Observations: - The sign-in attempt returned 'Request failed with 500' and authentication did not complete. - The homepage is visible with non-authenticated controls (Sign Up / Log In), indicating no user session was esta..." + " — the exported script cannot reproduce a PASS in this environment.")
         await asyncio.sleep(5)
 
     finally:

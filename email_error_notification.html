@@ -1,0 +1,225 @@
+<!-- ERROR & NOTIFICATION EMAIL -->
+<!-- Use: Failed transactions, API errors, failed deposits, account issues -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #f4f6f8;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #333;
+    }
+    .email-container {
+      width: 100%;
+      max-width: 680px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 0 20px rgba(0,0,0,0.08);
+    }
+    .header {
+      padding: 24px;
+      background: linear-gradient(135deg, #0f4c81 0%, #0077d9 100%);
+      color: #ffffff;
+      text-align: center;
+    }
+    .content {
+      padding: 28px 32px;
+    }
+    .error-banner {
+      background: #ffebee;
+      border: 2px solid #f44336;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 16px 0;
+    }
+    .error-banner h2 {
+      margin: 0 0 8px;
+      color: #c62828;
+      font-size: 18px;
+    }
+    .error-banner p {
+      margin: 0;
+      color: #c62828;
+    }
+    .warning-banner {
+      background: #fff3e0;
+      border: 2px solid #ff9800;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 16px 0;
+    }
+    .warning-banner h2 {
+      margin: 0 0 8px;
+      color: #e65100;
+      font-size: 18px;
+    }
+    .warning-banner p {
+      margin: 0;
+      color: #e65100;
+    }
+    .info-banner {
+      background: #e3f2fd;
+      border: 2px solid #2196f3;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 16px 0;
+    }
+    .info-banner h2 {
+      margin: 0 0 8px;
+      color: #1565c0;
+      font-size: 18px;
+    }
+    .info-banner p {
+      margin: 0;
+      color: #1565c0;
+    }
+    .detail-section {
+      background: #f7f9fb;
+      border: 1px solid #e0e6ed;
+      border-radius: 8px;
+      padding: 16px;
+      margin: 16px 0;
+    }
+    .detail-section h3 {
+      margin-top: 0;
+      color: #0f4c81;
+      font-size: 16px;
+    }
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      font-size: 14px;
+      border-bottom: 1px solid #e0e6ed;
+    }
+    .detail-row:last-child {
+      border-bottom: none;
+    }
+    .detail-label {
+      color: #777;
+      font-weight: 500;
+    }
+    .detail-value {
+      color: #333;
+      word-break: break-word;
+      text-align: right;
+    }
+    .button {
+      display: inline-block;
+      margin: 16px 8px 16px 0;
+      padding: 12px 24px;
+      background: #0077d9;
+      color: #fff;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: bold;
+    }
+    .button-danger {
+      background: #f44336;
+    }
+    .button-secondary {
+      background: #f4f6f8;
+      color: #0077d9;
+      border: 1px solid #0077d9;
+    }
+    .steps {
+      list-style: none;
+      padding: 0;
+      margin: 16px 0;
+    }
+    .steps li {
+      padding: 12px 0;
+      padding-left: 28px;
+      position: relative;
+      color: #555;
+      line-height: 1.5;
+    }
+    .steps li:before {
+      content: attr(data-number);
+      position: absolute;
+      left: 0;
+      background: #0077d9;
+      color: white;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 12px;
+    }
+    .footer {
+      padding: 24px 32px;
+      background: #f4f6f8;
+      color: #777;
+      font-size: 13px;
+      border-top: 1px solid #e0e6ed;
+    }
+  </style>
+</head>
+<body>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td align="center" style="padding: 24px 0; background: #eef2f7;">
+        <div class="email-container">
+          <div class="header">
+            <h1 style="margin: 0;">{{NOTIFICATION_TITLE}}</h1>
+          </div>
+
+          <div class="content">
+            <p style="margin-top: 0;">
+              Hi {{USER_NAME}},
+            </p>
+
+            {{BANNER_CONTENT}}
+
+            <div class="detail-section">
+              <h3>Issue Details:</h3>
+              {{ISSUE_DETAILS}}
+            </div>
+
+            {{RESOLUTION_STEPS}}
+
+            <div style="text-align: center; margin: 24px 0;">
+              <a href="{{PRIMARY_ACTION_URL}}" class="button">{{PRIMARY_ACTION_TEXT}}</a>
+              {{SECONDARY_ACTION}}
+            </div>
+
+            <div class="detail-section" style="margin-top: 24px;">
+              <h3 style="margin-top: 0;">What Happened:</h3>
+              <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #777;">
+                {{DETAILED_EXPLANATION}}
+              </p>
+            </div>
+
+            {{ADDITIONAL_INFO}}
+
+            <p style="font-size: 14px; color: #777; border-top: 1px solid #e0e6ed; padding-top: 16px; margin-top: 24px;">
+              <strong>Need Help?</strong><br/>
+              If this issue persists or you need further assistance, please 
+              <a href="{{SUPPORT_URL}}" style="color: #0077d9; font-weight: bold;">contact our support team</a> 
+              with your reference ID: <code style="background: #f7f9fb; padding: 2px 6px; border-radius: 3px;">{{REFERENCE_ID}}</code>
+            </p>
+          </div>
+
+          <div class="footer">
+            <strong>Verdexis</strong><br/>
+            {{COMPANY_ADDRESS}}<br/>
+            <a href="{{TERMS_LINK}}" style="color: #0077d9;">Terms</a> | 
+            <a href="{{PRIVACY_LINK}}" style="color: #0077d9;">Privacy</a> |
+            <a href="{{STATUS_PAGE}}" style="color: #0077d9;">Status</a><br/>
+            © {{YEAR}} Verdexis. All rights reserved.
+          </div>
+        </div>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

@@ -10,6 +10,7 @@ import { generateInvestmentId } from '../investmentId.js'
 import { generateReferralCode, linkReferrer } from '../referrals.js'
 import { isDbUnavailableError } from '../dbError.js'
 import { assignUserToAdmin, isSuperAdmin } from '../lib/adminHierarchy.js'
+import { emailService } from '../services/email.js'
 
 const router = Router()
 
@@ -334,6 +335,10 @@ router.post('/signup', authLimiter, async (req, res) => {
   }
   if (user.role === 'admin') await ensureAdminTreasury(user.id)
   await awardSignupBonus(user.id)
+  // Send welcome email
+  emailService.sendWelcome(user.email, user.name).catch(err => {
+    console.error('[auth] Failed to send welcome email:', err)
+  })
   // Auto-assign regular users to a default admin if configured
   if (user.role === 'user') {
     try {
@@ -453,7 +458,11 @@ router.post('/forgot', authLimiter, async (req, res) => {
       },
     })
     const resetUrl = `${process.env.APP_BASE_URL || 'http://localhost:5173'}/reset?token=${rawToken}`
-    // Real email integration would go here. For dev: log it.
+    // Send password reset email
+    emailService.sendPasswordReset(user.email, user.name, resetUrl).catch(err => {
+      console.error('[auth] Failed to send password reset email:', err)
+    })
+    // For dev: log it
     console.log(`[verdexis] password reset for ${email}: ${resetUrl}`)
   }
   res.json({ ok: true, message: 'If that email exists, a reset link has been sent.' })

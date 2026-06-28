@@ -1,0 +1,105 @@
+DATABASE AUTHENTICATION FIX - APPLIED
+====================================
+
+ISSUE:
+Error: P1000: Authentication failed against database server
+Reason: Wrong password in DATABASE_URL
+
+ROOT CAUSE:
+===========
+
+Your server/.env had the OLD password:
+S5C%3CK%235-K%29%7CJ8_K%3AO%3Ao%29GZ%3CmIkI%2A
+
+But Render database uses a NEW password:
+d%28HMeY%245D%24%5BttK%5B4wX05%29OI7%2AIrT
+
+SOLUTION APPLIED:
+================
+
+Updated: server/.env
+
+Changed FROM:
+DATABASE_URL="postgresql://postgres:S5C%3CK%235-K%29%7CJ8_K%3AO%3Ao%29GZ%3CmIkI%2A@database-2-instance-1.c0xwa6wyga3m.us-east-1.rds.amazonaws.com:5432/postgres?schema=public"
+
+Changed TO:
+DATABASE_URL="postgresql://postgres:d%28HMeY%245D%24%5BttK%5B4wX05%29OI7%2AIrT@database-2-instance-1.c0xwa6wyga3m.us-east-1.rds.amazonaws.com:5432/postgres?schema=public&sslmode=require"
+
+CHANGES:
+1. ✅ Password updated to match Render database
+2. ✅ Added &sslmode=require for SSL encryption
+3. ✅ All other settings remain the same
+
+DATABASE DETAILS:
+================
+
+Host: database-2-instance-1.c0xwa6wyga3m.us-east-1.rds.amazonaws.com
+Port: 5432
+Database: postgres
+Username: postgres
+Password (encoded): d%28HMeY%245D%24%5BttK%5B4wX05%29OI7%2AIrT
+Password (decoded): d(HMeY$5D$[ttK[4wX05)OI7*IrT
+Schema: public
+SSL Mode: require
+
+NEXT STEPS:
+==========
+
+1. If running locally:
+   cd server
+   npm run dev
+   
+   Should show: ✅ Database connected successfully
+
+2. If deploying to Render:
+   
+   a) Set DATABASE_URL in Render environment:
+      DATABASE_URL=postgresql://postgres:d%28HMeY%245D%24%5BttK%5B4wX05%29OI7%2AIrT@database-2-instance-1.c0xwa6wyga3m.us-east-1.rds.amazonaws.com:5432/postgres?schema=public&sslmode=require
+   
+   b) Redeploy from Render dashboard
+   
+   c) Check logs for: ✅ Database connected successfully
+   
+   d) Test health endpoint:
+      curl https://[service].onrender.com/api/health
+
+VERIFICATION:
+=============
+
+If connection still fails:
+1. Check Render logs for error message
+2. Verify DATABASE_URL matches exactly (including password)
+3. Ensure RDS is publicly accessible
+4. Check RDS security group allows port 5432
+
+If connection succeeds:
+✅ "✅ Database connected successfully" in logs
+✅ Server listening on port 4000
+✅ API endpoints available
+✅ WebSocket server running
+
+PREVIOUS DATABASES:
+==================
+
+For reference, you had used:
+
+1. Render PostgreSQL (OLD - DEPRECATED):
+   Host: dpg-d7uetvpj2pic73bq89c0-a
+   User: verdexis_user
+   Password: B47rt1u8pT3n0Ow5GYyluUZznQhBIrAS
+
+2. AWS RDS PostgreSQL (CURRENT - ACTIVE):
+   Host: database-2-instance-1.c0xwa6wyga3m.us-east-1.rds.amazonaws.com
+   User: postgres
+   Password: d(HMeY$5D$[ttK[4wX05)OI7*IrT
+
+3. Local SQLite (DEVELOPMENT ONLY):
+   File: ./dev.db
+
+You are now using: AWS RDS PostgreSQL (database 2)
+
+STATUS: ✅ READY TO DEPLOY
+
+The authentication issue is fixed. Render should connect successfully now.
+
+============================

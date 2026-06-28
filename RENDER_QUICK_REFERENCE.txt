@@ -1,0 +1,268 @@
+RENDER DEPLOYMENT - QUICK REFERENCE
+===================================
+
+ENVIRONMENT VARIABLES TO SET IN RENDER:
+======================================
+
+DATABASE_URL
+postgresql://postgres:d%28HMeY%245D%24%5BttK%5B4wX05%29OI7%2AIrT@database-2-instance-1.c0xwa6wyga3m.us-east-1.rds.amazonaws.com:5432/postgres?schema=public&sslmode=require
+
+JWT_SECRET
+7f3a9b2c8e4d1f6a5b9c3e7d2f8a4b6c1e9d3f7a2b8c4e6d1f9a3b7c2e8d4f6a
+
+JWT_EXPIRES_IN
+7d
+
+NODE_ENV
+production
+
+PORT
+4000
+
+CORS_ORIGIN
+https://main.d28t5x0lqjdtjj.amplifyapp.com,https://6ourstyon7pic.kimi.page,http://localhost:5173
+
+APP_BASE_URL
+https://main.d28t5x0lqjdtjj.amplifyapp.com
+
+ALERT_POLL_ENABLED
+true
+
+ALERT_POLL_INTERVAL_MS
+60000
+
+===================================
+
+BUILD & START COMMANDS:
+======================
+
+Build Command:
+cd server && npm install && npm run build
+
+Start Command:
+cd server && npm run start:migrate
+
+===================================
+
+QUICK TEST COMMANDS (Local):
+============================
+
+1. Test database connection (PowerShell):
+   .\test-rds-connection.ps1
+
+2. Test database connection (Bash):
+   bash test-rds-connection.sh
+
+3. Build project locally:
+   cd server && npm run build
+
+4. Test migrations locally:
+   cd server && npm run prisma:deploy
+
+5. Start server locally:
+   cd server && npm run start:migrate
+
+===================================
+
+DEPLOYMENT STEPS:
+================
+
+1. Push code to GitHub main branch
+
+2. Go to https://render.com
+
+3. Click "New" → "Web Service"
+
+4. Connect GitHub repository
+
+5. Configure:
+   Name: verdexis-backend
+   Branch: main
+   Build Command: cd server && npm install && npm run build
+   Start Command: cd server && npm run start:migrate
+   Environment: Node
+   Plan: Free/Paid
+
+6. Add all environment variables from above
+
+7. Click "Create Web Service"
+
+8. Monitor logs at Render dashboard
+
+===================================
+
+HEALTH CHECK AFTER DEPLOY:
+==========================
+
+curl https://[your-render-service].onrender.com/api/health
+
+Expected response:
+{
+  "ok": true,
+  "service": "verdexis-api",
+  "database": "Connected",
+  "databaseReady": true
+}
+
+===================================
+
+COMMON ISSUES & FIXES:
+====================
+
+Issue: Database connection failed
+
+Solution 1: Check RDS security group
+  - AWS Console → RDS → Databases
+  - Select database → Security group
+  - Inbound rule: Port 5432, Source 0.0.0.0/0
+
+Solution 2: Verify DATABASE_URL in Render
+  - Render Dashboard → Environment
+  - Check DATABASE_URL exact value
+  - Ensure ?sslmode=require is present
+
+Solution 3: Test connection locally first
+  - Run: .\test-rds-connection.ps1 (Windows)
+  - Run: bash test-rds-connection.sh (Mac/Linux)
+
+---
+
+Issue: Build fails with TypeScript errors
+
+Solution: Clear build cache in Render
+  - Render Dashboard → Settings
+  - Click "Clear Build Cache"
+  - Redeploy
+
+---
+
+Issue: Service keeps restarting
+
+Solution: Check npm start:migrate output
+  - Click "Logs" in Render
+  - Look for Prisma errors
+  - Check migrations exist in server/prisma/migrations/
+
+---
+
+Issue: API responds with 503 Service Unavailable
+
+Solution: Database not ready
+  - Check Render logs for "Database connected"
+  - May take 30-60 seconds on first deploy
+  - Reload page after 1 minute
+
+===================================
+
+PRISMA SCHEMA SYNC:
+==================
+
+If database schema is missing:
+
+1. Locally, run:
+   cd server
+   npx prisma migrate deploy
+
+2. Or manually in psql:
+   psql "postgresql://postgres:password@host:5432/postgres"
+   
+   Then run Prisma schema creation:
+   npx prisma db push --skip-generate
+
+===================================
+
+ADMIN USER SETUP:
+================
+
+Default admin credentials:
+Email: admin@verdexis.com
+Password: Admin@Verdexis2024
+
+To create in production:
+1. SSH to Render instance (if available)
+2. cd server
+3. npm run init-super-admin
+
+Or via API:
+POST /api/auth/register
+{
+  "email": "admin@verdexis.com",
+  "password": "Admin@Verdexis2024",
+  "name": "Admin"
+}
+
+===================================
+
+LOGS & MONITORING:
+=================
+
+View logs:
+Render Dashboard → Logs
+
+Real-time logs:
+render logs --tail 100
+
+Restart service:
+render restart
+
+View environment variables:
+render env list
+
+===================================
+
+GIT PUSH TO DEPLOY:
+==================
+
+1. Make code changes
+2. Commit: git commit -m "message"
+3. Push: git push origin main
+4. Render auto-deploys
+5. Check Render logs
+
+===================================
+
+FILES TO CHECK:
+==============
+
+./render.yaml              - Render config
+./server/.env              - Local env (don't commit)
+./server/src/db.ts         - Database connection
+./server/src/index.ts      - Express app setup
+./server/package.json      - NPM scripts & dependencies
+./server/prisma/schema.prisma - Database schema
+
+===================================
+
+IMPORTANT NOTES:
+===============
+
+- Free tier may restart after 15 minutes inactivity
+- Database persists across deploys
+- Environment variables are encrypted
+- Logs retained for 7 days
+- Build time: typically 3-10 minutes
+- First deploy may take longer
+
+===================================
+
+USEFUL LINKS:
+============
+
+Render Dashboard: https://dashboard.render.com
+Render Docs: https://render.com/docs
+PostgreSQL on Render: https://render.com/docs/databases
+Prisma Docs: https://www.prisma.io/docs
+
+===================================
+
+NEXT STEPS:
+==========
+
+1. Test database locally with test-rds-connection.ps1
+2. Deploy to Render following deployment steps
+3. Verify health endpoint returns ok: true
+4. Connect frontend to Render backend
+5. Test API endpoints work
+6. Monitor logs for errors
+
+===================================

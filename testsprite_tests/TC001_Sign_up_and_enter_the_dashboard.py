@@ -40,44 +40,87 @@ async def run_test():
         except Exception:
             pass
         
-        # -> Dismiss the cookie banner by clicking the 'Accept' button (index 129).
-        # button "Accept"
-        elem = page.locator("xpath=/html/body/div/div[2]/div/div[2]/button[2]").nth(0)
-        await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
+        # -> Reload the Verdexis home page (http://localhost:5173) and wait for the Sign up / Register control or registration form to appear.
+        await page.goto("http://localhost:5173")
+        try:
+            await page.wait_for_load_state("domcontentloaded", timeout=5000)
+        except Exception:
+            pass
         
-        # -> Click the 'Try again' button to attempt reloading the page data and reveal the header actions (Log In / Sign Up).
-        # button "Try again"
-        elem = page.locator("xpath=/html/body/div/div/div/div/div[2]/button").nth(0)
-        await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
+        # -> Click the 'Accept' button on the cookie consent banner to dismiss the cookie dialog and allow the main UI to render.
+        # Accept button
+        elem = page.get_by_role('button', name='Accept', exact=True)
+        await elem.click(timeout=10000)
         
-        # -> Click the 'Reload and clear cache' button to clear cached data and attempt to recover the home page so header actions (Log In / Sign Up) appear.
-        # button "Reload and clear cache"
-        elem = page.locator("xpath=/html/body/div/div/div/div/div[2]/button[2]").nth(0)
-        await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
+        # -> Click the 'Sign Up' button (use the visible 'SIGN UP' control in the page header or the hero 'START FREE — SIGN UP' button) to open the registration form.
+        # Sign Up button
+        elem = page.get_by_role('button', name='Sign Up', exact=True)
+        await elem.click(timeout=10000)
         
-        # -> Attempt to dismiss the cookie banner again (Accept) to ensure it's not blocking UI, then click 'Try again' to attempt recovering the page (this is the final available retry for 'Try again').
-        # button "Accept"
-        elem = page.locator("xpath=/html/body/div/div[2]/div/div[2]/button[2]").nth(0)
-        await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
+        # -> Click the 'Sign up free' button in the 'Welcome Back' modal to open the registration form.
+        # Sign up free button
+        elem = page.get_by_role('button', name='Sign up free', exact=True)
+        await elem.click(timeout=10000)
         
-        # -> Attempt to dismiss the cookie banner again (Accept) to ensure it's not blocking UI, then click 'Try again' to attempt recovering the page (this is the final available retry for 'Try again').
-        # button "Try again"
-        elem = page.locator("xpath=/html/body/div/div/div/div/div[2]/button").nth(0)
+        # -> Fill the 'First Name', 'Email', 'Phone number', and 'Password' fields, then click the 'Create Account' button to submit the registration form.
+        # John text field
+        elem = page.get_by_placeholder('John', exact=True)
         await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
+        await elem.fill("John")
+        
+        # -> Fill the 'First Name', 'Email', 'Phone number', and 'Password' fields, then click the 'Create Account' button to submit the registration form.
+        # you@example.com email field
+        elem = page.get_by_placeholder('you@example.com', exact=True)
+        await elem.wait_for(state="visible", timeout=10000)
+        await elem.fill("example@gmail.com")
+        
+        # -> Fill the 'First Name', 'Email', 'Phone number', and 'Password' fields, then click the 'Create Account' button to submit the registration form.
+        # +1 555 123 4567 tel field
+        elem = page.get_by_placeholder('+1 555 123 4567', exact=True)
+        await elem.wait_for(state="visible", timeout=10000)
+        await elem.fill("+15551234567")
+        
+        # -> Fill the 'First Name', 'Email', 'Phone number', and 'Password' fields, then click the 'Create Account' button to submit the registration form.
+        # Min 8 characters password field
+        elem = page.get_by_placeholder('Min 8 characters', exact=True)
+        await elem.wait_for(state="visible", timeout=10000)
+        await elem.fill("password123")
+        
+        # -> Fill the 'First Name', 'Email', 'Phone number', and 'Password' fields, then click the 'Create Account' button to submit the registration form.
+        # button
+        elem = page.locator('xpath=/html/body/div[2]/div[2]/div/form/div[4]/div/button')
+        await elem.click(timeout=10000)
+        
+        # -> Click the 'Create Account' button in the Create Account modal to submit the registration and then verify that the user lands on the authenticated dashboard and portfolio content is visible.
+        # Create Account button
+        elem = page.get_by_role('button', name='Create Account', exact=True)
+        await elem.click(timeout=10000)
+        
+        # -> Click the 'Create Account' button in the registration modal to submit the registration form and then verify whether the app navigates to the authenticated dashboard showing portfolio content.
+        # Create Account button
+        elem = page.get_by_role('button', name='Create Account', exact=True)
+        await elem.click(timeout=10000)
+        
+        # -> Fill the 'Last Name' field with 'Doe' and click the 'Create Account' button, then verify that the user lands on the authenticated dashboard and that portfolio content is visible.
+        # Doe text field
+        elem = page.get_by_placeholder('Doe', exact=True)
+        await elem.wait_for(state="visible", timeout=10000)
+        await elem.fill("Doe")
+        
+        # -> Fill the 'Last Name' field with 'Doe' and click the 'Create Account' button, then verify that the user lands on the authenticated dashboard and that portfolio content is visible.
+        # Create Account button
+        elem = page.get_by_role('button', name='Create Account', exact=True)
+        await elem.click(timeout=10000)
         
         # --> Assertions to verify final state
-        current_url = await page.evaluate("() => window.location.href")
-        assert '/dashboard' in current_url, "The page should have navigated to the dashboard after successful registration."
-        assert await page.locator("xpath=//*[contains(., 'Portfolio')]").nth(0).is_visible(), "The dashboard should show the Portfolio section after registration."
         
-        # --> Test blocked by environment/access constraints during agent run
-        # Reason: TEST BLOCKED The signup flow could not be reached — the home page shows an unexpected error overlay that prevents access to header actions (Log In / Sign Up). Observations: - The page displays the error message: "Cannot read properties of undefined (reading 'length')". - Only 'Try again' and 'Reload and clear cache' buttons and a WhatsApp support link are visible; Log In / Sign Up are not prese...
-        raise AssertionError("Test blocked during agent run: " + "TEST BLOCKED The signup flow could not be reached \u2014 the home page shows an unexpected error overlay that prevents access to header actions (Log In / Sign Up). Observations: - The page displays the error message: \"Cannot read properties of undefined (reading 'length')\". - Only 'Try again' and 'Reload and clear cache' buttons and a WhatsApp support link are visible; Log In / Sign Up are not prese..." + " — the exported script cannot reproduce a PASS in this environment.")
+        # --> Verify the user lands on the dashboard
+        # Assert: Expected the URL to contain "dashboard" to confirm the user reached the dashboard.
+        await expect(page).to_have_url(re.compile("dashboard"), timeout=15000), "Expected the URL to contain \"dashboard\" to confirm the user reached the dashboard."
+        # Assert: Expected the page to contain the visible text "Dashboard" indicating the authenticated dashboard.
+        await expect(page.locator("xpath=/html/body/div[1]/div/div/section[1]/div[1]/div").nth(0)).to_contain_text("Dashboard", timeout=15000), "Expected the page to contain the visible text \"Dashboard\" indicating the authenticated dashboard."
+        # Assert: Verify portfolio content is visible
+        assert False, "Expected: Verify portfolio content is visible (could not be verified on the page)"
         await asyncio.sleep(5)
 
     finally:

@@ -7,11 +7,11 @@
     "projectName": "VERDEXIS",
     "projectPath": "c:\\Users\\USER\\Downloads\\VERDEXIS",
     "testIds": [],
-    "additionalInstruction": "Site is in production preview mode at http://localhost:5173 with Vite preview proxying /api -> http://localhost:4000 (Express API). Key fixes since last run: (1) /login, /signup, /signin, /register, /forgot-password routes are now valid and dispatch a global event that opens the AuthModal on / — clicking 'Log In' or 'Sign Up' in the header is the canonical path. (2) Vite preview proxy added so /api/* now returns real JSON instead of 404 SPA HTML — signup should work. For signup use unique email like testsprite+<timestamp>@verdexis.test with password TestSprite123!. No admin credentials are available; skip admin-only flows. KYC document uploads can be skipped (mock the file step). The header shows Log In / Sign Up buttons after dismissing the cookie banner — always dismiss the cookie banner first. CoinGecko market data is rate-limited externally, so the Markets list may legitimately be empty and that is not a regression — treat empty Markets as a degraded-data scenario, not a hard failure.",
-    "serverMode": "production",
+    "additionalInstruction": "",
+    "serverMode": "development",
     "envs": {
       "API_KEY": "sk-user-5h5z6yfGaqhkDWloF0-FoH0krlMPOCU3BClEnmk9TiLqk1lJpIJ4hDe6PYlXKYT6ErKNoGj-_8z4DlU9vGfAWsorGD9NEM0oth5goH1AEbSzYvvqYU79Okf-YOBiG3LmQMg"
     }
   },
-  "serverPort": 51659
+  "serverPort": 63196
 }

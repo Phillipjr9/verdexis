@@ -2051,6 +2051,22 @@ type SignupBonusSettings = {
   note?: string
 }
 
+const OTP_SETTINGS_KEY = 'otp_authentication'
+
+type OTPSettings = {
+  userId: string
+  enabled: boolean
+  method: 'email' | 'both' | 'disabled'
+  requireForLogin: boolean
+  requireForTransactions: boolean
+  requireForWithdrawals: boolean
+  requireFor2FA: boolean
+  enabledAt: string
+  disabledAt?: string | null
+  disabledBy?: string | null
+  disabledReason?: string | null
+}
+
 async function readSignupBonusSettings(): Promise<SignupBonusSettings> {
   const row = await prisma.appSetting.findUnique({ where: { key: SIGNUP_BONUS_KEY } })
   if (!row?.value) return { enabled: false, amountUsd: 0, note: '' }
@@ -2174,6 +2190,349 @@ router.post('/referrals/:referralId/cancel', async (req: AuthedRequest, res) => 
   } catch {
     res.status(400).json({ error: 'Failed to cancel referral' })
   }
+})
+
+// --- OTP AUTHENTICATION MANAGEMENT -----------------------------------
+
+// Get user's OTP settings
+router.get('/users/:id/otp-settings', async (req: AuthedRequest, res) => {
+  const userId = req.params.id
+  
+  const superAdmin = await isSuperAdmin(req.userId!)
+  const assigned = await isUserAssignedToAdmin(userId, req.userId!)
+  
+  if (!superAdmin && !assigned) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+  
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, name: true, prefs: true, twoFactor: true }
+  })
+  
+  if (!user) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+  
+  let prefs: Record<string, unknown> = {}
+  try {
+    if (user.prefs) prefs = JSON.parse(user.prefs)
+  } catch {
+    prefs = {}
+  }
+  
+  const otpSettings = (prefs.otpSettings as OTPSettings) || {
+    userId,
+    enabled: false,
+    method: 'disabled' as const,
+    requireForLogin: false,
+    requireForTransactions: false,
+    requireForWithdrawals: false,
+    requireFor2FA: false,
+    enabledAt: new Date().toISOString(),
+  }
+  
+  res.json({
+    user: { id: user.id, email: user.email, name: user.name },
+    otpSettings,
+    twoFactor: user.twoFactor
+  })
+})
+
+// Update user's OTP settings
+const updateOTPSettingsSchema = z.object({
+  enabled: z.boolean(),
+  method: z.enum(['email', 'both', 'disabled']),
+  requireForLogin: z.boolean().default(false),
+  requireForTransactions: z.boolean().default(false),
+  requireForWithdrawals: z.boolean().default(false),
+  requireFor2FA: z.boolean().default(false),
+  disabledReason: z.string().max(200).optional(),
+  notify: z.boolean().default(true),
+})
+
+router.put('/users/:id/otp-settings', async (req: AuthedRequest, res) => {
+  const userId = req.params.id
+  const parsed = updateOTPSettingsSchema.safeParse(req.body)
+  
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() })
+    return
+  }
+  
+  const superAdmin = await isSuperAdmin(req.userId!)
+  const assigned = await isUserAssignedToAdmin(userId, req.userId!)
+  
+  if (!superAdmin && !assigned) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+  
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, name: true, prefs: true }
+  })
+  
+  if (!user) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+  
+  let prefs: Record<string, unknown> = {}
+  try {
+    if (user.prefs) prefs = JSON.parse(user.prefs)
+  } catch {
+    prefs = {}
+  }
+  
+  const currentSettings = (prefs.otpSettings as OTPSettings) || null
+  const wasEnabled = currentSettings?.enabled || false
+  
+  const newSettings: OTPSettings = {
+    userId,
+    enabled: parsed.data.enabled,
+    method: parsed.data.enabled ? parsed.data.method : 'disabled',
+    requireForLogin: parsed.data.requireForLogin,
+    requireForTransactions: parsed.data.requireForTransactions,
+    requireForWithdrawals: parsed.data.requireForWithdrawals,
+    requireFor2FA: parsed.data.requireFor2FA,
+    enabledAt: currentSettings?.enabledAt || new Date().toISOString(),
+    ...(parsed.data.enabled ? {} : {
+      disabledAt: new Date().toISOString(),
+      disabledBy: req.userId!,
+      disabledReason: parsed.data.disabledReason || 'Admin disabled'
+    })
+  }
+  
+  prefs.otpSettings = newSettings
+  
+  const updatedUser = await prisma.user.update({
+    where: { id: userId },
+    data: {
+      prefs: JSON.stringify(prefs),
+      twoFactor: parsed.data.enabled && parsed.data.requireFor2FA
+    }
+  })
+  
+  // Send notification to user if OTP was enabled/disabled
+  if (parsed.data.notify) {
+    const statusChange = !wasEnabled && parsed.data.enabled ? 'enabled' : 
+                        wasEnabled && !parsed.data.enabled ? 'disabled' : 'updated'
+    
+    if (statusChange !== 'updated') {
+      await prisma.notification.create({
+        data: {
+          userId,
+          kind: 'security',
+          title: `OTP Authentication ${statusChange}`,
+          body: statusChange === 'enabled' 
+            ? `OTP authentication has been enabled for your account. You will need to verify codes for: ${[
+                parsed.data.requireForLogin && 'login',
+                parsed.data.requireForTransactions && 'transactions', 
+                parsed.data.requireForWithdrawals && 'withdrawals',
+                parsed.data.requireFor2FA && '2FA'
+              ].filter(Boolean).join(', ')}.`
+            : `OTP authentication has been disabled for your account. ${parsed.data.disabledReason ? 'Reason: ' + parsed.data.disabledReason : ''}`
+        }
+      }).catch(() => {})
+    }
+  }
+  
+  await audit(req.userId!, 'user.otp.settings.update', userId, {
+    enabled: parsed.data.enabled,
+    method: parsed.data.method,
+    requirements: {
+      login: parsed.data.requireForLogin,
+      transactions: parsed.data.requireForTransactions,
+      withdrawals: parsed.data.requireForWithdrawals,
+      twoFactor: parsed.data.requireFor2FA
+    },
+    wasEnabled,
+    disabledReason: parsed.data.disabledReason
+  })
+  
+  res.json({
+    user: { id: user.id, email: user.email, name: user.name },
+    otpSettings: newSettings,
+    twoFactor: updatedUser.twoFactor
+  })
+})
+
+// Bulk update OTP settings for multiple users
+const bulkOTPSchema = z.object({
+  userIds: z.array(z.string()).min(1).max(100),
+  enabled: z.boolean(),
+  method: z.enum(['email', 'both', 'disabled']),
+  requireForLogin: z.boolean().default(false),
+  requireForTransactions: z.boolean().default(false),
+  requireForWithdrawals: z.boolean().default(false),
+  requireFor2FA: z.boolean().default(false),
+  reason: z.string().max(200).optional(),
+  notify: z.boolean().default(true),
+})
+
+router.post('/users/bulk-otp-settings', async (req: AuthedRequest, res) => {
+  const superAdmin = await isSuperAdmin(req.userId!)
+  if (!superAdmin) {
+    res.status(404).json({ error: 'Endpoint not found' })
+    return
+  }
+  
+  const parsed = bulkOTPSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() })
+    return
+  }
+  
+  const { userIds, enabled, method, requireForLogin, requireForTransactions, requireForWithdrawals, requireFor2FA, reason, notify } = parsed.data
+  
+  let updated = 0
+  const results = []
+  
+  for (const userId of userIds) {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, email: true, name: true, prefs: true }
+      })
+      
+      if (!user) continue
+      
+      let prefs: Record<string, unknown> = {}
+      try {
+        if (user.prefs) prefs = JSON.parse(user.prefs)
+      } catch {
+        prefs = {}
+      }
+      
+      const currentSettings = (prefs.otpSettings as OTPSettings) || null
+      
+      const newSettings: OTPSettings = {
+        userId,
+        enabled,
+        method: enabled ? method : 'disabled',
+        requireForLogin,
+        requireForTransactions,
+        requireForWithdrawals,
+        requireFor2FA,
+        enabledAt: currentSettings?.enabledAt || new Date().toISOString(),
+        ...(enabled ? {} : {
+          disabledAt: new Date().toISOString(),
+          disabledBy: req.userId!,
+          disabledReason: reason || 'Bulk admin update'
+        })
+      }
+      
+      prefs.otpSettings = newSettings
+      
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          prefs: JSON.stringify(prefs),
+          twoFactor: enabled && requireFor2FA
+        }
+      })
+      
+      if (notify) {
+        await prisma.notification.create({
+          data: {
+            userId,
+            kind: 'security',
+            title: `OTP Authentication ${enabled ? 'enabled' : 'disabled'}`,
+            body: enabled 
+              ? `OTP authentication has been enabled. Required for: ${[
+                  requireForLogin && 'login',
+                  requireForTransactions && 'transactions',
+                  requireForWithdrawals && 'withdrawals', 
+                  requireFor2FA && '2FA'
+                ].filter(Boolean).join(', ')}.`
+              : `OTP authentication has been disabled. ${reason ? 'Reason: ' + reason : ''}`
+          }
+        }).catch(() => {})
+      }
+      
+      results.push({ userId, email: user.email, success: true })
+      updated++
+    } catch (error) {
+      results.push({ userId, success: false, error: error instanceof Error ? error.message : 'Unknown error' })
+    }
+  }
+  
+  await audit(req.userId!, 'user.otp.settings.bulk.update', null, {
+    userIds,
+    updated,
+    enabled,
+    method,
+    requirements: { requireForLogin, requireForTransactions, requireForWithdrawals, requireFor2FA },
+    reason
+  })
+  
+  res.json({
+    success: true,
+    updated,
+    total: userIds.length,
+    results
+  })
+})
+
+// Get OTP analytics
+router.get('/otp/analytics', async (req: AuthedRequest, res) => {
+  const superAdmin = await isSuperAdmin(req.userId!)
+  if (!superAdmin) {
+    res.status(404).json({ error: 'Endpoint not found' })
+    return
+  }
+  
+  const [totalUsers, usersWithOTP, recentOTPs, failedOTPs] = await Promise.all([
+    prisma.user.count(),
+    prisma.user.count({ where: { twoFactor: true } }),
+    prisma.otp.count({ where: { createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } } }),
+    prisma.otp.count({ where: { attempts: { gte: 3 }, createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } } })
+  ])
+  
+  // Get users with OTP enabled in prefs
+  const usersWithPrefs = await prisma.user.findMany({
+    select: { prefs: true },
+    where: { prefs: { not: null } }
+  })
+  
+  let otpEnabledCount = 0
+  const otpMethods: Record<string, number> = { email: 0, both: 0, disabled: 0 }
+  const otpRequirements = { login: 0, transactions: 0, withdrawals: 0, twoFactor: 0 }
+  
+  usersWithPrefs.forEach(user => {
+    try {
+      if (!user.prefs) return
+      const prefs = JSON.parse(user.prefs)
+      const otpSettings = prefs.otpSettings as OTPSettings
+      if (otpSettings?.enabled) {
+        otpEnabledCount++
+        otpMethods[otpSettings.method] = (otpMethods[otpSettings.method] || 0) + 1
+        if (otpSettings.requireForLogin) otpRequirements.login++
+        if (otpSettings.requireForTransactions) otpRequirements.transactions++
+        if (otpSettings.requireForWithdrawals) otpRequirements.withdrawals++
+        if (otpSettings.requireFor2FA) otpRequirements.twoFactor++
+      }
+    } catch {
+      // Skip invalid prefs
+    }
+  })
+  
+  res.json({
+    totalUsers,
+    otpEnabledCount,
+    usersWithOTP, // Legacy twoFactor field
+    adoptionRate: totalUsers > 0 ? ((otpEnabledCount / totalUsers) * 100).toFixed(1) + '%' : '0%',
+    methods: otpMethods,
+    requirements: otpRequirements,
+    activity24h: {
+      totalOTPs: recentOTPs,
+      failedOTPs,
+      successRate: recentOTPs > 0 ? (((recentOTPs - failedOTPs) / recentOTPs) * 100).toFixed(1) + '%' : '100%'
+    }
+  })
 })
 
 export default router

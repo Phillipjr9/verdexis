@@ -1,0 +1,376 @@
+<!-- OTP AUTHENTICATION EMAIL -->
+<!-- Use: Email-based OTP verification, 2FA, login verification, transaction authorization -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #f4f6f8;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #333;
+    }
+    .email-container {
+      width: 100%;
+      max-width: 680px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 0 20px rgba(0,0,0,0.08);
+    }
+    .header {
+      padding: 24px;
+      background: linear-gradient(135deg, #0f4c81 0%, #0077d9 100%);
+      color: #ffffff;
+      text-align: center;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 24px;
+    }
+    .content {
+      padding: 28px 32px;
+    }
+    .content p {
+      line-height: 1.65;
+      margin: 16px 0;
+      color: #555;
+      font-size: 16px;
+    }
+    .security-banner {
+      background: #e3f2fd;
+      border: 2px solid #2196f3;
+      border-radius: 8px;
+      padding: 16px;
+      margin: 16px 0;
+      color: #1565c0;
+      display: flex;
+      align-items: center;
+    }
+    .security-banner-icon {
+      font-size: 24px;
+      margin-right: 12px;
+      flex-shrink: 0;
+    }
+    .otp-container {
+      background: #f7f9fb;
+      border: 2px solid #e0e6ed;
+      border-radius: 12px;
+      padding: 32px 24px;
+      margin: 24px 0;
+      text-align: center;
+    }
+    .otp-label {
+      font-size: 14px;
+      color: #777;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+      display: block;
+    }
+    .otp-code {
+      font-family: 'Courier New', 'Courier', monospace;
+      font-size: 48px;
+      font-weight: bold;
+      color: #0077d9;
+      letter-spacing: 8px;
+      margin: 12px 0;
+      word-break: break-all;
+    }
+    .otp-code-formatted {
+      font-size: 32px;
+      letter-spacing: 6px;
+    }
+    .expiration-timer {
+      background: #fff3e0;
+      border-left: 4px solid #ff9800;
+      padding: 12px 16px;
+      border-radius: 4px;
+      margin: 16px 0;
+      color: #e65100;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+    }
+    .timer-icon {
+      font-size: 20px;
+      margin-right: 12px;
+      flex-shrink: 0;
+    }
+    .detail-grid {
+      background: #f7f9fb;
+      border-radius: 8px;
+      padding: 16px;
+      margin: 16px 0;
+    }
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid #e0e6ed;
+      font-size: 14px;
+    }
+    .detail-row:last-child {
+      border-bottom: none;
+    }
+    .detail-label {
+      color: #777;
+      font-weight: 500;
+    }
+    .detail-value {
+      color: #0f4c81;
+      font-weight: 600;
+    }
+    .action-buttons {
+      text-align: center;
+      margin: 24px 0;
+    }
+    .button {
+      display: inline-block;
+      margin: 8px 4px;
+      padding: 12px 24px;
+      background: #0077d9;
+      color: #fff;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: bold;
+      font-size: 16px;
+    }
+    .button-secondary {
+      background: #f4f6f8;
+      color: #0077d9;
+      border: 1px solid #0077d9;
+    }
+    .button-danger {
+      background: #f44336;
+    }
+    .security-notice {
+      background: #e8f5e9;
+      border-left: 4px solid #4caf50;
+      padding: 16px;
+      border-radius: 8px;
+      margin: 16px 0;
+      color: #2e7d32;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .security-notice strong {
+      display: block;
+      margin-bottom: 8px;
+    }
+    .warning-box {
+      background: #ffebee;
+      border: 1px solid #f44336;
+      border-radius: 8px;
+      padding: 16px;
+      margin: 16px 0;
+      color: #c62828;
+      font-size: 14px;
+    }
+    .warning-box strong {
+      display: block;
+      margin-bottom: 8px;
+    }
+    .context-info {
+      background: #f0f4f8;
+      border-radius: 8px;
+      padding: 14px;
+      margin: 16px 0;
+      font-size: 13px;
+      color: #666;
+    }
+    .context-info-row {
+      padding: 6px 0;
+      display: flex;
+      justify-content: space-between;
+    }
+    .context-label {
+      color: #777;
+    }
+    .context-value {
+      color: #0f4c81;
+      font-weight: 600;
+    }
+    .qr-code-section {
+      text-align: center;
+      margin: 24px 0;
+      padding: 16px;
+      background: #f7f9fb;
+      border-radius: 8px;
+    }
+    .qr-code-section p {
+      font-size: 14px;
+      color: #777;
+      margin: 0 0 12px 0;
+    }
+    .qr-code-section img {
+      max-width: 200px;
+      height: auto;
+    }
+    .backup-codes {
+      background: #f7f9fb;
+      border: 1px solid #e0e6ed;
+      border-radius: 8px;
+      padding: 16px;
+      margin: 16px 0;
+    }
+    .backup-codes-title {
+      color: #0f4c81;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .backup-codes-list {
+      font-family: 'Courier New', monospace;
+      background: #ffffff;
+      padding: 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      line-height: 1.8;
+      color: #333;
+      word-break: break-all;
+    }
+    .footer {
+      padding: 24px 32px;
+      background: #f4f6f8;
+      color: #777;
+      font-size: 13px;
+      border-top: 1px solid #e0e6ed;
+    }
+    .footer a {
+      color: #0077d9;
+      text-decoration: none;
+    }
+    .footer-links {
+      margin-top: 12px;
+    }
+    .footer-links a {
+      margin-right: 12px;
+    }
+    @media (max-width: 600px) {
+      .content,
+      .footer,
+      .header {
+        padding-left: 20px;
+        padding-right: 20px;
+      }
+      .otp-code {
+        font-size: 36px;
+        letter-spacing: 6px;
+      }
+      .otp-container {
+        padding: 24px 16px;
+      }
+      .detail-row {
+        flex-direction: column;
+        padding: 8px 0;
+      }
+      .detail-value {
+        margin-top: 4px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td align="center" style="padding: 24px 0; background: #eef2f7;">
+        <div class="email-container">
+          <!-- HEADER -->
+          <div class="header">
+            <h1>🔐 Verification Code</h1>
+          </div>
+
+          <!-- CONTENT -->
+          <div class="content">
+            <p>Hi {{USER_NAME}},</p>
+
+            <div class="security-banner">
+              <div class="security-banner-icon">🛡️</div>
+              <div>
+                <strong>Security Verification Required</strong><br/>
+                We need to verify your identity to proceed with this action.
+              </div>
+            </div>
+
+            <!-- OTP CODE SECTION -->
+            <div class="otp-container">
+              <span class="otp-label">Your Verification Code</span>
+              <div class="otp-code">{{OTP_CODE}}</div>
+              <p style="margin: 12px 0 0; font-size: 14px; color: #777;">
+                <strong>Code expires in:</strong> {{EXPIRATION_MINUTES}} minutes
+              </p>
+            </div>
+
+            <!-- EXPIRATION TIMER -->
+            <div class="expiration-timer">
+              <div class="timer-icon">⏱️</div>
+              <div>
+                <strong>Expires at:</strong> {{EXPIRATION_TIME}} ({{TIMEZONE}})<br/>
+                <small>This code is valid for one-time use only</small>
+              </div>
+            </div>
+
+            <!-- VERIFICATION CONTEXT -->
+            {{CONTEXT_SECTION}}
+
+            <!-- QUICK ACTION BUTTONS -->
+            {{ACTION_BUTTONS}}
+
+            <!-- SECURITY TIPS -->
+            <div class="security-notice">
+              <strong>🔒 Security Tips:</strong>
+              <ul style="margin: 8px 0; padding-left: 20px;">
+                <li>Never share this code with anyone, including Verdexis staff</li>
+                <li>Copy and paste the code - do NOT type it</li>
+                <li>This code is for single use only</li>
+                <li>Requests for this code are never sent by phone or chat</li>
+              </ul>
+            </div>
+
+            <!-- DIDN'T REQUEST THIS? -->
+            <div class="warning-box">
+              <strong>⚠️ Didn't request this code?</strong>
+              <p style="margin: 8px 0 0;">
+                If you didn't try to sign in or authorize this action, 
+                <a href="{{SECURITY_ALERT_URL}}" style="color: #f44336; font-weight: bold;">report suspicious activity now</a>. 
+                Your account will remain secure as long as you don't share your code.
+              </p>
+            </div>
+
+            <!-- BACKUP CODES (Optional) -->
+            {{BACKUP_CODES_SECTION}}
+
+            <!-- 2FA APP (Optional) -->
+            {{TWO_FA_APP_SECTION}}
+
+            <p style="font-size: 14px; color: #777; border-top: 1px solid #e0e6ed; padding-top: 16px; margin-top: 24px;">
+              <strong>Having trouble?</strong> 
+              <a href="{{HELP_VERIFICATION_URL}}" style="color: #0077d9;">View verification help</a> or 
+              <a href="{{CONTACT_SUPPORT_URL}}" style="color: #0077d9;">contact support</a>
+            </p>
+          </div>
+
+          <!-- FOOTER -->
+          <div class="footer">
+            <strong>Verdexis</strong><br/>
+            {{COMPANY_ADDRESS}}<br/>
+            <div class="footer-links">
+              <a href="{{SECURITY_LINK}}">Security</a> |
+              <a href="{{PRIVACY_LINK}}">Privacy</a> |
+              <a href="{{TERMS_LINK}}">Terms</a> |
+              <a href="{{CONTACT_LINK}}">Contact</a>
+            </div>
+            <p style="margin: 12px 0 0; font-size: 12px; color: #999;">
+              © {{YEAR}} Verdexis. All rights reserved.
+            </p>
+          </div>
+        </div>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

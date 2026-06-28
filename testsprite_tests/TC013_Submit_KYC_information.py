@@ -40,52 +40,8 @@ async def run_test():
         except Exception:
             pass
         
-        # -> Dismiss the cookie banner by clicking 'Accept' so header controls (Log In / Sign Up) become accessible.
-        # button "Accept"
-        elem = page.locator("xpath=/html/body/div/div[2]/div/div[2]/button[2]").nth(0)
-        await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
-        
-        # -> Retry loading the page by clicking the 'Try again' button to recover from the error. If that doesn't restore the app, use 'Reload and clear cache'. Then locate and open the Log In control to authenticate.
-        # button "Try again"
-        elem = page.locator("xpath=/html/body/div/div/div/div/div[2]/button").nth(0)
-        await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
-        
-        # -> Click the 'Reload and clear cache' button to attempt to recover the app and clear cached state. After reload, locate the Log In control and open the Auth modal.
-        # button "Reload and clear cache"
-        elem = page.locator("xpath=/html/body/div/div/div/div/div[2]/button[2]").nth(0)
-        await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
-        
-        # -> Navigate directly to /login (http://localhost:5173/login) to reach the login page and attempt authentication.
-        await page.goto("http://localhost:5173/login")
-        try:
-            await page.wait_for_load_state("domcontentloaded", timeout=5000)
-        except Exception:
-            pass
-        
-        # -> Navigate to http://localhost:5173/login to load the login page (explicit navigate step).
-        await page.goto("http://localhost:5173/login")
-        try:
-            await page.wait_for_load_state("domcontentloaded", timeout=5000)
-        except Exception:
-            pass
-        
-        # -> Dismiss the cookie consent banner by clicking 'Accept', wait for the UI to settle, then open the Log In control (Auth modal).
-        # button "Accept"
-        elem = page.locator("xpath=/html/body/div/div[2]/div/div[2]/button[2]").nth(0)
-        await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
-        
-        # -> Navigate directly to http://localhost:5173/login to reach the login page and attempt authentication.
-        await page.goto("http://localhost:5173/login")
-        try:
-            await page.wait_for_load_state("domcontentloaded", timeout=5000)
-        except Exception:
-            pass
-        
-        # -> Navigate to http://localhost:5173/login to try to reach the authentication page or trigger the Auth modal.
+        # -> Final action — this is where the agent failed
+        # Error observed by agent: Navigation failed - site unavailable: http://localhost:5173/login
         await page.goto("http://localhost:5173/login")
         try:
             await page.wait_for_load_state("domcontentloaded", timeout=5000)
@@ -93,11 +49,12 @@ async def run_test():
             pass
         
         # --> Assertions to verify final state
-        assert await page.locator("xpath=//*[contains(., 'Submitted')]").nth(0).is_visible(), "The submission status should be visible after submitting the KYC form."
+        # Assert: Verify the submission status is visible
+        assert False, "Expected: Verify the submission status is visible (could not be verified on the page)"
         
         # --> Test blocked by environment/access constraints during agent run
-        # Reason: TEST BLOCKED The test could not be run — the application shows a global error overlay that prevents reaching the authentication or KYC pages. Observations: - The page displays an error overlay: "A piece of data was missing from the server response. Cannot read properties of undefined (reading 'length')". - Only interactive controls available are 'Try again' and 'Reload and clear cache'; both we...
-        raise AssertionError("Test blocked during agent run: " + "TEST BLOCKED The test could not be run \u2014 the application shows a global error overlay that prevents reaching the authentication or KYC pages. Observations: - The page displays an error overlay: \"A piece of data was missing from the server response. Cannot read properties of undefined (reading 'length')\". - Only interactive controls available are 'Try again' and 'Reload and clear cache'; both we..." + " — the exported script cannot reproduce a PASS in this environment.")
+        # Reason: TEST BLOCKED The test could not be run — the application's login route is not reachable, preventing access to the KYC flow. Observations: - The /login page displays a prominent "404 — Not Found" message and the text "Off the chart.", indicating the route or page is missing. - The visible actions are navigation links/buttons such as "Back to Home" and "Open Dashboard"; no login form (email/passw...
+        raise AssertionError("Test blocked during agent run: " + "TEST BLOCKED The test could not be run \u2014 the application's login route is not reachable, preventing access to the KYC flow. Observations: - The /login page displays a prominent \"404 \u2014 Not Found\" message and the text \"Off the chart.\", indicating the route or page is missing. - The visible actions are navigation links/buttons such as \"Back to Home\" and \"Open Dashboard\"; no login form (email/passw..." + " — the exported script cannot reproduce a PASS in this environment.")
         await asyncio.sleep(5)
 
     finally:

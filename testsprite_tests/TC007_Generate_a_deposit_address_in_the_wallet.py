@@ -9,7 +9,10 @@ async def run_test():
     context = None
 
     try:
+        # Start a Playwright session in asynchronous mode
         pw = await async_api.async_playwright().start()
+
+        # Launch a Chromium browser in headless mode with custom arguments
         browser = await pw.chromium.launch(
             headless=True,
             args=[
@@ -19,9 +22,17 @@ async def run_test():
                 "--single-process"
             ],
         )
+
+        # Create a new browser context (like an incognito window)
         context = await browser.new_context()
+        # Wider default timeout to match the agent's DOM-stability budget;
+        # auto-waiting Playwright APIs (expect, locator.wait_for) inherit this.
         context.set_default_timeout(15000)
+
+        # Open a new page in the browser context
         page = await context.new_page()
+
+        # Interact with the page elements to simulate user flow
         # -> navigate
         await page.goto("http://localhost:5173")
         try:
@@ -29,41 +40,54 @@ async def run_test():
         except Exception:
             pass
         
-        # -> Dismiss the cookie banner by clicking 'Accept', then navigate to /login to open the login form.
-        # button "Accept"
-        elem = page.locator("xpath=/html/body/div/div[2]/div/div[2]/button[2]").nth(0)
+        # -> Click the 'Accept' button on the cookie consent dialog, then click the 'Back to Home' button to return to the main page and reveal the login or dashboard UI.
+        # Accept button
+        elem = page.get_by_role('button', name='Accept', exact=True)
+        await elem.click(timeout=10000)
+        
+        # -> Click the 'Accept' button on the cookie consent dialog, then click the 'Back to Home' button to return to the main page and reveal the login or dashboard UI.
+        # Back to Home link
+        elem = page.get_by_role('link', name='Back to Home', exact=True)
+        await elem.click(timeout=10000)
+        
+        # -> Click the 'Log In' button in the top navigation to open the login form or modal and wait for the email/password fields and submit button to appear.
+        # Log In button
+        elem = page.get_by_role('button', name='Log In', exact=True)
+        await elem.click(timeout=10000)
+        
+        # -> Fill the email field with 'example@gmail.com', fill the password field with 'password123', then click the 'Sign In' button to submit the login form.
+        # you@example.com or janedoe text field
+        elem = page.get_by_placeholder('you@example.com or janedoe', exact=True)
         await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
+        await elem.fill("example@gmail.com")
         
-        # -> Dismiss the cookie banner by clicking 'Accept', then navigate to /login to open the login form.
-        await page.goto("http://localhost:5173/login")
-        try:
-            await page.wait_for_load_state("domcontentloaded", timeout=5000)
-        except Exception:
-            pass
-        
-        # -> Click the 'Try again' button to attempt to recover the page and load the login/auth UI.
-        # button "Try again"
-        elem = page.locator("xpath=/html/body/div/div/div/div/div[2]/button").nth(0)
+        # -> Fill the email field with 'example@gmail.com', fill the password field with 'password123', then click the 'Sign In' button to submit the login form.
+        # Min 8 characters password field
+        elem = page.get_by_placeholder('Min 8 characters', exact=True)
         await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
+        await elem.fill("password123")
         
-        # -> Click the 'Reload and clear cache' button to attempt to recover the application UI so the login and wallet pages become available.
-        # button "Reload and clear cache"
-        elem = page.locator("xpath=/html/body/div/div/div/div/div[2]/button[2]").nth(0)
-        await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
+        # -> Fill the email field with 'example@gmail.com', fill the password field with 'password123', then click the 'Sign In' button to submit the login form.
+        # Sign In button
+        elem = page.get_by_role('button', name='Sign In', exact=True)
+        await elem.click(timeout=10000)
         
-        # -> Try letting the SPA finish loading, then navigate to /login to open the login/auth UI.
-        await page.goto("http://localhost:5173/login")
-        try:
-            await page.wait_for_load_state("domcontentloaded", timeout=5000)
-        except Exception:
-            pass
+        # -> Click the 'Sign In' button in the login modal to retry authentication and observe whether the server error persists or the dashboard appears.
+        # Sign In button
+        elem = page.get_by_role('button', name='Sign In', exact=True)
+        await elem.click(timeout=10000)
         
-        # --> Test blocked (AST guard fallback)
-        raise AssertionError("Test blocked during agent run: " + "TEST BLOCKED The test could not be run \u2014 the application shows a runtime error page that prevents reaching the login or wallet UI. Observations: - The page displays \u201cSomething went wrong on this page\u201d with an error about missing server data. - Clicking 'Try again' and 'Reload and clear cache' did not recover the application UI. - The login/auth UI is not accessible from the current page, so the...")
+        # --> Assertions to verify final state
+        # Assert: Verify a deposit address is displayed
+        assert False, "Expected: Verify a deposit address is displayed (could not be verified on the page)"
+        # Assert: Verify the wallet balance view remains available
+        assert False, "Expected: Verify the wallet balance view remains available (could not be verified on the page)"
+        
+        # --> Test blocked by environment/access constraints during agent run
+        # Reason: TEST BLOCKED The test could not be run — the UI returns server errors preventing login, so the wallet page and deposit address flow cannot be reached. Observations: - The login modal shows the error message 'Request failed with 500' after submitting valid credentials. - Authentication did not succeed and the dashboard/wallet page was not reached, blocking the deposit address flow.
+        raise AssertionError("Test blocked during agent run: " + "TEST BLOCKED The test could not be run \u2014 the UI returns server errors preventing login, so the wallet page and deposit address flow cannot be reached. Observations: - The login modal shows the error message 'Request failed with 500' after submitting valid credentials. - Authentication did not succeed and the dashboard/wallet page was not reached, blocking the deposit address flow." + " — the exported script cannot reproduce a PASS in this environment.")
         await asyncio.sleep(5)
+
     finally:
         if context:
             await context.close()

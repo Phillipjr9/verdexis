@@ -9,7 +9,10 @@ async def run_test():
     context = None
 
     try:
+        # Start a Playwright session in asynchronous mode
         pw = await async_api.async_playwright().start()
+
+        # Launch a Chromium browser in headless mode with custom arguments
         browser = await pw.chromium.launch(
             headless=True,
             args=[
@@ -19,9 +22,17 @@ async def run_test():
                 "--single-process"
             ],
         )
+
+        # Create a new browser context (like an incognito window)
         context = await browser.new_context()
+        # Wider default timeout to match the agent's DOM-stability budget;
+        # auto-waiting Playwright APIs (expect, locator.wait_for) inherit this.
         context.set_default_timeout(15000)
+
+        # Open a new page in the browser context
         page = await context.new_page()
+
+        # Interact with the page elements to simulate user flow
         # -> navigate
         await page.goto("http://localhost:5173")
         try:
@@ -29,70 +40,68 @@ async def run_test():
         except Exception:
             pass
         
-        # -> Dismiss the cookie banner by clicking 'Accept', then navigate to /trading
-        # button "Accept"
-        elem = page.locator("xpath=/html/body/div/div[2]/div/div[2]/button[2]").nth(0)
-        await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
-        
-        # -> Dismiss the cookie banner by clicking 'Accept', then navigate to /trading
+        # -> Navigate to the Trading page (open the application URL path '/trading') after a short wait so the SPA can finish loading.
         await page.goto("http://localhost:5173/trading")
         try:
             await page.wait_for_load_state("domcontentloaded", timeout=5000)
         except Exception:
             pass
         
-        # -> Open the Auth modal by clicking the 'Log In' button in the header so the session can sign in and proceed with trading.
-        # button "Log In"
-        elem = page.locator("xpath=/html/body/div/div/div/nav/div/div[2]/button[2]").nth(0)
-        await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
+        # -> Reload the Trading page and wait for the SPA to render so the asset list and buy controls become visible.
+        await page.goto("http://localhost:5173/trading")
+        try:
+            await page.wait_for_load_state("domcontentloaded", timeout=5000)
+        except Exception:
+            pass
         
-        # -> Open the signup form by clicking the 'Sign up free' button in the Auth modal.
-        # button "Sign up free"
-        elem = page.locator("xpath=/html/body/div[2]/div[2]/div/p/button").nth(0)
-        await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
+        # -> Click the 'Accept' button on the cookie consent popup to dismiss the cookie banner so the trading UI can finish loading.
+        # Accept button
+        elem = page.get_by_role('button', name='Accept', exact=True)
+        await elem.click(timeout=10000)
         
-        # -> Fill the signup form (first name, last name, email, phone, password) and submit the Create Account button.
-        # text input placeholder="John"
-        elem = page.locator("xpath=/html/body/div[2]/div[2]/div/form/div/div/div/input").nth(0)
-        await elem.wait_for(state="visible", timeout=10000)
-        await elem.fill("John")
+        # -> Open the login dialog by clicking the 'Log In to Trade' button so credentials can be entered and the trade flow can proceed.
+        # Log In to Trade button
+        elem = page.get_by_role('button', name='Log In to Trade', exact=True)
+        await elem.click(timeout=10000)
         
-        # -> Fill the signup form (first name, last name, email, phone, password) and submit the Create Account button.
-        # text input placeholder="Doe"
-        elem = page.locator("xpath=/html/body/div[2]/div[2]/div/form/div/div[2]/div/input").nth(0)
-        await elem.wait_for(state="visible", timeout=10000)
-        await elem.fill("Doe")
+        # -> Open the login dialog by clicking the 'Log In to Trade' button so credentials can be entered.
+        # Log In to Trade button
+        elem = page.get_by_role('button', name='Log In to Trade', exact=True)
+        await elem.click(timeout=10000)
         
-        # -> Fill the signup form (first name, last name, email, phone, password) and submit the Create Account button.
-        # email input placeholder="you@example.com"
-        elem = page.locator("xpath=/html/body/div[2]/div[2]/div/form/div[2]/div/input").nth(0)
-        await elem.wait_for(state="visible", timeout=10000)
-        await elem.fill("testsprite+20260513@verdexis.test")
+        # -> Open the login dialog by clicking the 'Log In' button in the top navigation so credentials can be entered.
+        # Log In button
+        elem = page.get_by_role('button', name='Log In', exact=True)
+        await elem.click(timeout=10000)
         
-        # -> Fill the signup form (first name, last name, email, phone, password) and submit the Create Account button.
-        # tel input placeholder="+1 555 123 4567"
-        elem = page.locator("xpath=/html/body/div[2]/div[2]/div/form/div[3]/div/input").nth(0)
+        # -> Enter credentials into the login modal: fill the email field with 'example@gmail.com', the password field with 'password123', and click the 'Sign In' button to authenticate.
+        # you@example.com or janedoe text field
+        elem = page.get_by_placeholder('you@example.com or janedoe', exact=True)
         await elem.wait_for(state="visible", timeout=10000)
-        await elem.fill("+15551234567")
+        await elem.fill("example@gmail.com")
         
-        # -> Fill the signup form (first name, last name, email, phone, password) and submit the Create Account button.
-        # password input placeholder="Min 8 characters"
-        elem = page.locator("xpath=/html/body/div[2]/div[2]/div/form/div[4]/div/input").nth(0)
+        # -> Enter credentials into the login modal: fill the email field with 'example@gmail.com', the password field with 'password123', and click the 'Sign In' button to authenticate.
+        # Min 8 characters password field
+        elem = page.get_by_placeholder('Min 8 characters', exact=True)
         await elem.wait_for(state="visible", timeout=10000)
-        await elem.fill("TestSprite123!")
+        await elem.fill("password123")
         
-        # -> Click the 'Create Account' submit button to submit the signup form.
-        # button "Create Account"
-        elem = page.locator("xpath=/html/body/div[2]/div[2]/div/form/button").nth(0)
-        await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
+        # -> Enter credentials into the login modal: fill the email field with 'example@gmail.com', the password field with 'password123', and click the 'Sign In' button to authenticate.
+        # Sign In button
+        elem = page.get_by_role('button', name='Sign In', exact=True)
+        await elem.click(timeout=10000)
         
-        # --> Test blocked (AST guard fallback)
-        raise AssertionError("Test blocked during agent run: " + "TEST BLOCKED User registration cannot be completed \u2014 the registration API returned a 404 error and the UI shows a failure message, preventing sign-in and any trading actions. Observations: - The Create Account form displayed a red error: 'Request failed with 404'. - No account confirmation or automatic sign-in occurred and the trading page still requires the user to 'Log In to Trade'.")
+        # --> Assertions to verify final state
+        # Assert: Verify a trade confirmation is visible
+        assert False, "Expected: Verify a trade confirmation is visible (could not be verified on the page)"
+        # Assert: Verify portfolio activity is updated
+        assert False, "Expected: Verify portfolio activity is updated (could not be verified on the page)"
+        
+        # --> Test blocked by environment/access constraints during agent run
+        # Reason: TEST BLOCKED The test could not be run because sign-in failed due to a server error, preventing access to trading functionality. Observations: - The login modal shows the error message 'Request failed with 500'. - The user remains on the sign-in modal and is not authenticated, and trading controls are gated behind sign-in.
+        raise AssertionError("Test blocked during agent run: " + "TEST BLOCKED The test could not be run because sign-in failed due to a server error, preventing access to trading functionality. Observations: - The login modal shows the error message 'Request failed with 500'. - The user remains on the sign-in modal and is not authenticated, and trading controls are gated behind sign-in." + " — the exported script cannot reproduce a PASS in this environment.")
         await asyncio.sleep(5)
+
     finally:
         if context:
             await context.close()

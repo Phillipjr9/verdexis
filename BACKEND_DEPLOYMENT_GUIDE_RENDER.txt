@@ -1,0 +1,475 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    BACKEND DEPLOYMENT GUIDE - RENDER
+║          Complete Setup for Verdexis Backend with Security Features         ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+CURRENT STATUS: Frontend ✅ Live on Amplify | Backend ⚠️ Needs Setup on Render
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 1: RENDER SETUP & DATABASE
+═══════════════════════════════════════════════════════════════════════════════
+
+STEP 1: Create Render Account (If needed)
+  [ ] Go to https://dashboard.render.com
+  [ ] Sign up / Log in
+  [ ] Create new project
+
+STEP 2: Create PostgreSQL Database
+  [ ] On Render dashboard, click "New +"
+  [ ] Select "PostgreSQL"
+  [ ] Database name: verdexis_db
+  [ ] Region: Select closest region
+  [ ] PostgreSQL version: Latest (14+)
+  [ ] Click "Create Database"
+  [ ] Wait for database to be ready (2-3 minutes)
+  [ ] Copy the connection string (External Database URL)
+
+STEP 3: Copy Database URL
+  [ ] The URL will look like:
+      postgresql://user:password@dpg-xxx.render.com:5432/verdexis_db
+  [ ] SAVE THIS - You'll need it soon
+
+STEP 4: Create Web Service
+  [ ] On Render dashboard, click "New +"
+  [ ] Select "Web Service"
+  [ ] Connect to GitHub repository
+  [ ] Select: your-verdexis-repo
+  [ ] Service name: verdexis-backend
+  [ ] Environment: Node
+  [ ] Build command: cd server && npm install && npx prisma generate && npx tsc -p tsconfig.json --skipLibCheck
+  [ ] Start command: cd server && npm run start
+  [ ] Region: Select same as database
+  [ ] Plan: Free (or upgrade if needed)
+  [ ] Create Web Service
+
+STEP 5: Set Environment Variables (Render Dashboard)
+  [ ] Go to Web Service settings > Environment
+  [ ] Add variables:
+
+      NODE_ENV = production
+      PORT = 4000
+      DATABASE_URL = [PASTE THE URL FROM STEP 3]
+      JWT_SECRET = [GENERATE: openssl rand -hex 32]
+      JWT_EXPIRES_IN = 7d
+      CORS_ORIGIN = https://main.d28t5x0lqjdtjj.amplifyapp.com
+      APP_BASE_URL = https://main.d28t5x0lqjdtjj.amplifyapp.com
+      
+      OPTIONAL (if using AWS SES for email):
+      AWS_REGION = us-east-1
+      SES_FROM_EMAIL = noreply@verdexis.com
+      AWS_ACCESS_KEY_ID = [your key]
+      AWS_SECRET_ACCESS_KEY = [your secret]
+
+  [ ] Click "Save Environment Variables"
+  [ ] Render will auto-redeploy
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 2: ADD SECURITY FEATURES TO BACKEND
+═══════════════════════════════════════════════════════════════════════════════
+
+STEP 6: Copy Security Files to Backend
+  [ ] Copy these 6 files to server/src/services/:
+      1. password-reset-complete.js
+      2. email-notifications-complete.js
+      3. rate-limiting-complete.js
+      4. security-service-complete.js
+      5. api-routes-complete.js → copy to server/src/routes/
+      6. Update: admin-panel.js
+
+  Command:
+  cp password-reset-complete.js server/src/services/
+  cp email-notifications-complete.js server/src/services/
+  cp rate-limiting-complete.js server/src/services/
+  cp security-service-complete.js server/src/services/
+  cp api-routes-complete.js server/src/routes/
+  # Update admin-panel.js manually
+
+STEP 7: Update package.json
+  [ ] Add new dependencies to server/package.json:
+      
+      In "dependencies":
+      "express-rate-limit": "^7.1.5",
+      "speakeasy": "^2.0.0",
+      "qrcode": "^1.5.3",
+      "uuid": "^9.0.1"
+
+  [ ] Install locally:
+      cd server
+      npm install
+
+STEP 8: Update Server app.ts/app.js
+  [ ] Add imports at top:
+      import apiRoutesComplete from './routes/api-routes-complete.js';
+      import securityMiddleware from './middleware/security-middleware.js';
+
+  [ ] Add middleware after express setup:
+      app.use(securityMiddleware);
+
+  [ ] Add routes:
+      app.use('/api', apiRoutesComplete);
+
+  [ ] Verify your existing routes are still there
+
+STEP 9: Create Security Middleware
+  [ ] Create file: server/src/middleware/security-middleware.ts
+  
+      Contents:
+      import { BruteForceProtection } from '../services/rate-limiting-complete.js';
+      
+      const bruteForce = new BruteForceProtection();
+      
+      const securityMiddleware = (req, res, next) => {
+        req.startTime = Date.now();
+        req.ip = req.headers['x-forwarded-for']?.split(',')[0].trim() ||
+                 req.socket.remoteAddress;
+        
+        console.log({
+          timestamp: new Date().toISOString(),
+          method: req.method,
+          path: req.path,
+          ip: req.ip
+        });
+        
+        next();
+      };
+      
+      export default securityMiddleware;
+
+STEP 10: Update Prisma Schema (if needed)
+  [ ] Add custom attributes to User model in schema.prisma:
+      
+      model User {
+        // ... existing fields
+        
+        // 2FA attributes
+        twoFactorEnabled    Boolean @default(false)
+        twoFactorSecret     String?
+        
+        // KYC attributes
+        kycStatus          String? @default("pending")
+        kycVerifiedDate    DateTime?
+        kycLevel           String?
+        
+        // Account status
+        accountLocked      Boolean @default(false)
+        lockedReason       String?
+        lockedUntil        DateTime?
+        
+        suspensionReason   String?
+        suspendedAt        DateTime?
+        
+        userTier           String? @default("basic")
+        tradingEnabled     Boolean @default(true)
+      }
+  
+  [ ] Run migration:
+      npx prisma migrate dev --name add_security_fields
+  
+  [ ] Push to database:
+      npx prisma db push
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 3: TESTING LOCALLY
+═══════════════════════════════════════════════════════════════════════════════
+
+STEP 11: Test Backend Locally
+  [ ] Start dev server:
+      cd server
+      npm run dev
+  
+  [ ] Server should start on http://localhost:4000
+
+STEP 12: Test Endpoints
+  [ ] Test auth endpoint:
+      curl -X POST http://localhost:4000/api/auth/login \
+      -H "Content-Type: application/json" \
+      -d '{"email":"test@test.com","password":"test123"}'
+  
+  [ ] Test password reset:
+      curl -X POST http://localhost:4000/api/password/forgot \
+      -H "Content-Type: application/json" \
+      -d '{"email":"user@example.com"}'
+  
+  [ ] Test admin dashboard:
+      curl http://localhost:4000/api/admin/dashboard
+  
+  [ ] Expected responses:
+      ✓ 401 for invalid login
+      ✓ 200 for valid endpoints
+      ✓ 429 for rate limited
+      ✓ No 500 errors
+
+STEP 13: Test Rate Limiting
+  [ ] Make rapid requests to test rate limiting:
+      for i in {1..10}; do
+        curl -X POST http://localhost:4000/api/password/forgot \
+        -H "Content-Type: application/json" \
+        -d '{"email":"test@test.com'}'
+      done
+  
+  [ ] After 3 requests, should get 429 (Too Many Requests)
+
+STEP 14: Test Database Connection
+  [ ] Verify Prisma can connect:
+      npx prisma studio
+  
+  [ ] Should open UI at http://localhost:5555
+  [ ] Verify tables are created
+  [ ] Check connection status
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 4: DEPLOYMENT
+═══════════════════════════════════════════════════════════════════════════════
+
+STEP 15: Commit Changes
+  [ ] Stage all changes:
+      git add .
+  
+  [ ] Commit with message:
+      git commit -m "Add security features: password reset, 2FA, email notifications, rate limiting, audit logging, admin panel"
+  
+  [ ] Push to main:
+      git push origin main
+
+STEP 16: Monitor Render Deployment
+  [ ] Go to Render dashboard
+  [ ] Select: verdexis-backend service
+  [ ] Click: "Logs" tab
+  [ ] Watch build progress:
+      ✓ Dependencies installing
+      ✓ Prisma generating
+      ✓ TypeScript compiling
+      ✓ Build completing
+      ✓ Service starting
+  
+  [ ] Wait for status to be "Live" (green)
+
+STEP 17: Get Backend URL
+  [ ] On Render dashboard, find your service
+  [ ] Copy the URL (usually looks like):
+      https://verdexis-backend-xxxx.onrender.com
+  
+  [ ] Test it:
+      curl https://verdexis-backend-xxxx.onrender.com/api/health
+
+STEP 18: Update Frontend Environment
+  [ ] Create .env.production in app folder:
+      VITE_API_BASE=https://verdexis-backend-xxxx.onrender.com
+      VITE_APP_URL=https://main.d28t5x0lqjdtjj.amplifyapp.com
+      VITE_JWT_EXPIRY=7d
+  
+  [ ] Update API calls in frontend code to use VITE_API_BASE
+  
+  [ ] Commit and push:
+      git add app/.env.production
+      git commit -m "Update backend API endpoint for production"
+      git push origin main
+  
+  [ ] Amplify will auto-deploy
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 5: PRODUCTION VERIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+STEP 19: Verify Backend is Running
+  [ ] Check endpoint from Render URL:
+      curl https://[backend-url]/api/health
+      
+      Expected: 200 OK response
+
+STEP 20: Verify Database Connection
+  [ ] Backend should connect on startup
+  [ ] Check Render logs for database connection message
+  [ ] Look for: "Database connected" or similar
+
+STEP 21: Test Full Auth Flow
+  [ ] From frontend (https://main.d28t5x0lqjdtjj.amplifyapp.com):
+      [ ] Try to register
+      [ ] Check email for welcome
+      [ ] Try to login
+      [ ] Check user is authenticated
+
+STEP 22: Test Password Reset
+  [ ] From frontend:
+      [ ] Click "Forgot Password"
+      [ ] Enter email
+      [ ] Check email for reset link
+      [ ] Click link
+      [ ] Reset password
+      [ ] Try logging in with new password
+
+STEP 23: Test Rate Limiting
+  [ ] Make rapid requests:
+      [ ] Try logging in 6 times quickly
+      [ ] 6th attempt should fail with rate limit error
+      [ ] Wait 15 minutes
+      [ ] Should be able to login again
+
+STEP 24: Test 2FA
+  [ ] From user settings:
+      [ ] Enable 2FA
+      [ ] Scan QR code with authenticator app
+      [ ] Enter code to confirm
+      [ ] Logout
+      [ ] Login again
+      [ ] Should require 2FA code
+
+STEP 25: Test Admin Features
+  [ ] Login with admin account
+  [ ] Access admin dashboard
+  [ ] Verify all features working:
+      [ ] View users
+      [ ] Suspend user
+      [ ] View statistics
+      [ ] Export data
+
+═══════════════════════════════════════════════════════════════════════════════
+PHASE 6: MONITORING & SCALING
+═══════════════════════════════════════════════════════════════════════════════
+
+STEP 26: Setup Monitoring
+  [ ] In Render dashboard:
+      [ ] Check Service Health
+      [ ] Monitor CPU usage
+      [ ] Monitor Memory usage
+      [ ] Check Response times
+
+STEP 27: Check Logs
+  [ ] Monitor logs daily:
+      [ ] Look for errors
+      [ ] Check request patterns
+      [ ] Monitor rate limiting
+      [ ] Check database performance
+
+STEP 28: Setup Alerts (Optional)
+  [ ] Configure Render alerts for:
+      [ ] Service crashes
+      [ ] Memory usage > 80%
+      [ ] High response times
+      [ ] Failed deployments
+
+STEP 29: Plan Scaling (If Needed)
+  [ ] If using free tier and hitting limits:
+      [ ] Upgrade to Pro plan
+      [ ] Add more resources
+      [ ] Consider database upgrade
+      [ ] Add caching layer
+
+═══════════════════════════════════════════════════════════════════════════════
+🔧 TROUBLESHOOTING
+═══════════════════════════════════════════════════════════════════════════════
+
+ISSUE: Build Fails
+  [ ] Check logs for error message
+  [ ] Verify all dependencies in package.json
+  [ ] Check TypeScript compilation
+  [ ] Verify npm scripts are correct
+
+ISSUE: Service Won't Start
+  [ ] Check logs for startup errors
+  [ ] Verify DATABASE_URL is correct
+  [ ] Verify port 4000 is not in use
+  [ ] Check Node.js version (needs >= 20)
+
+ISSUE: Cannot Connect to Database
+  [ ] Verify DATABASE_URL is set in environment
+  [ ] Check Postgres is running
+  [ ] Verify connection string format
+  [ ] Check credentials are correct
+
+ISSUE: Rate Limiting Not Working
+  [ ] Verify rate-limiting-complete.js is in services
+  [ ] Check middleware is applied
+  [ ] Verify environment variables are set
+  [ ] Check logs for rate limit events
+
+ISSUE: Emails Not Sending
+  [ ] Verify SES credentials are set
+  [ ] Check SES is out of sandbox mode
+  [ ] Verify sender email is verified
+  [ ] Check CloudWatch logs for errors
+
+ISSUE: CORS Errors
+  [ ] Verify CORS_ORIGIN matches frontend URL
+  [ ] Check CORS headers in app.ts
+  [ ] Verify frontend is making correct requests
+  [ ] Check browser console for details
+
+═══════════════════════════════════════════════════════════════════════════════
+✅ FINAL CHECKLIST
+═══════════════════════════════════════════════════════════════════════════════
+
+DATABASE & ENVIRONMENT:
+  [ ] PostgreSQL database created on Render
+  [ ] DATABASE_URL configured
+  [ ] JWT_SECRET configured
+  [ ] All environment variables set
+  [ ] CORS_ORIGIN correct
+  [ ] API_BASE_URL correct
+
+CODE & DEPENDENCIES:
+  [ ] 6 security files copied
+  [ ] New dependencies installed
+  [ ] app.ts updated with routes
+  [ ] Security middleware created
+  [ ] Prisma schema updated
+  [ ] TypeScript compiles without errors
+
+TESTING:
+  [ ] Backend runs locally
+  [ ] All endpoints respond
+  [ ] Rate limiting works
+  [ ] Database connects
+  [ ] 2FA generates QR code
+  [ ] Email sends (if configured)
+  [ ] Admin features work
+
+DEPLOYMENT:
+  [ ] Code pushed to main
+  [ ] Render build completes
+  [ ] Service shows "Live"
+  [ ] Frontend and backend can communicate
+  [ ] Frontend URL configured
+  [ ] All features tested on production
+
+MONITORING:
+  [ ] Error logs checked
+  [ ] Database logs checked
+  [ ] Rate limits monitoring
+  [ ] Performance metrics visible
+  [ ] Alerts configured (optional)
+
+═══════════════════════════════════════════════════════════════════════════════
+📊 RENDER SERVICE DETAILS
+═══════════════════════════════════════════════════════════════════════════════
+
+Service Name:          verdexis-backend
+Type:                  Web Service
+Runtime:               Node.js
+Plan:                  Free (or Pro)
+Build Command:         cd server && npm install && npx prisma generate && npx tsc
+Start Command:         cd server && npm run start
+Port:                  4000
+Environment:           Production
+
+Expected URL Format:   https://verdexis-backend-xxxx.onrender.com
+Actual URL:            [WILL BE PROVIDED BY RENDER]
+
+═══════════════════════════════════════════════════════════════════════════════
+
+READY TO DEPLOY? 🚀
+
+Follow these steps in order:
+1. Create database on Render (5 min)
+2. Create web service on Render (5 min)
+3. Copy security files locally (5 min)
+4. Install dependencies (3 min)
+5. Update code (10 min)
+6. Test locally (10 min)
+7. Commit and push (2 min)
+8. Monitor deployment (10 min)
+9. Verify production (10 min)
+
+TOTAL TIME: ~60 minutes
+
+═══════════════════════════════════════════════════════════════════════════════

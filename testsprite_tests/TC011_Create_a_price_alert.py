@@ -40,37 +40,47 @@ async def run_test():
         except Exception:
             pass
         
-        # -> Dismiss the cookie banner by clicking 'Accept' so the header and auth controls become accessible.
-        # button "Accept"
-        elem = page.locator("xpath=/html/body/div/div[2]/div/div[2]/button[2]").nth(0)
-        await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
-        
-        # -> Navigate to /login (explicit path provided in test steps).
+        # -> Open the Login page by navigating to /login (visit http://localhost:5173/login) and wait for the login form or interactive elements to appear.
         await page.goto("http://localhost:5173/login")
         try:
             await page.wait_for_load_state("domcontentloaded", timeout=5000)
         except Exception:
             pass
         
-        # -> Attempt to recover from the error by clicking the 'Try again' button to let the app re-request data and reveal the login UI.
-        # button "Try again"
-        elem = page.locator("xpath=/html/body/div/div/div/div/div[2]/button").nth(0)
-        await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
+        # -> Click the 'Accept' button on the cookie banner to dismiss it, then click the 'Log In' button in the header to open the login form.
+        # Accept button
+        elem = page.get_by_role('button', name='Accept', exact=True)
+        await elem.click(timeout=10000)
         
-        # -> Click the 'Reload and clear cache' button to reload the app and clear cached data, then observe whether the login UI (or auth modal) becomes available.
-        # button "Reload and clear cache"
-        elem = page.locator("xpath=/html/body/div/div/div/div/div[2]/button[2]").nth(0)
+        # -> Click the 'Accept' button on the cookie banner to dismiss it, then click the 'Log In' button in the header to open the login form.
+        # Log In button
+        elem = page.get_by_role('button', name='Log In', exact=True)
+        await elem.click(timeout=10000)
+        
+        # -> Fill 'example@gmail.com' into the Email or username field, fill 'password123' into the Password field, then click the 'Sign In' button to submit the login form.
+        # you@example.com or janedoe text field
+        elem = page.get_by_placeholder('you@example.com or janedoe', exact=True)
         await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
+        await elem.fill("example@gmail.com")
+        
+        # -> Fill 'example@gmail.com' into the Email or username field, fill 'password123' into the Password field, then click the 'Sign In' button to submit the login form.
+        # Min 8 characters password field
+        elem = page.get_by_placeholder('Min 8 characters', exact=True)
+        await elem.wait_for(state="visible", timeout=10000)
+        await elem.fill("password123")
+        
+        # -> Fill 'example@gmail.com' into the Email or username field, fill 'password123' into the Password field, then click the 'Sign In' button to submit the login form.
+        # Sign In button
+        elem = page.get_by_role('button', name='Sign In', exact=True)
+        await elem.click(timeout=10000)
         
         # --> Assertions to verify final state
-        assert await page.locator("xpath=//*[contains(., 'BTC')] ").nth(0).is_visible(), "The alerts list should show the newly created BTC alert after saving."
+        # Assert: Verify the new alert appears in the alerts list
+        assert False, "Expected: Verify the new alert appears in the alerts list (could not be verified on the page)"
         
         # --> Test blocked by environment/access constraints during agent run
-        # Reason: TEST BLOCKED The test could not be run — the application shows a runtime error page that prevents accessing the login/auth UI and subsequent flows needed to create an alert. Observations: - The page displays "Something went wrong on this page" and an error detail about missing data. - The error details show: "Cannot read properties of undefined (reading 'length')". - Header/auth controls and th...
-        raise AssertionError("Test blocked during agent run: " + "TEST BLOCKED The test could not be run \u2014 the application shows a runtime error page that prevents accessing the login/auth UI and subsequent flows needed to create an alert. Observations: - The page displays \"Something went wrong on this page\" and an error detail about missing data. - The error details show: \"Cannot read properties of undefined (reading 'length')\". - Header/auth controls and th..." + " — the exported script cannot reproduce a PASS in this environment.")
+        # Reason: TEST BLOCKED The test could not be run — login is failing with a server error, preventing access to the alerts feature. Observations: - After submitting credentials the login form displayed the error message 'Request failed with 500'. - The user remains unauthenticated and the alerts page cannot be reached.
+        raise AssertionError("Test blocked during agent run: " + "TEST BLOCKED The test could not be run \u2014 login is failing with a server error, preventing access to the alerts feature. Observations: - After submitting credentials the login form displayed the error message 'Request failed with 500'. - The user remains unauthenticated and the alerts page cannot be reached." + " — the exported script cannot reproduce a PASS in this environment.")
         await asyncio.sleep(5)
 
     finally:

@@ -60,6 +60,7 @@ model User {
   updatedAt    DateTime @updatedAt
 
   emailVerifications EmailVerification[]
+  otps          Otp[]
   holdings      Holding[]
   walletBalances WalletBalance[]
   transactions  Transaction[]
@@ -543,4 +544,24 @@ model AdminWalletDetail {
 
   @@index([userId])
   @@index([adminId])
+}
+
+model Otp {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hashedOtp   String
+  purpose     String
+  expiresAt   DateTime
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  used        Boolean   @default(false)
+  verifiedAt  DateTime?
+  metadata    String?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+  @@index([purpose])
+  @@index([expiresAt])
+  @@index([userId, purpose, used])
 }

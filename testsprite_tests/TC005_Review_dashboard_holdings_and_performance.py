@@ -40,64 +40,37 @@ async def run_test():
         except Exception:
             pass
         
-        # -> Dismiss the cookie banner by clicking 'Accept' so the auth flows and header controls become usable.
-        # button "Accept"
-        elem = page.locator("xpath=/html/body/div/div[2]/div/div[2]/button[2]").nth(0)
+        # -> Click the page header's 'Log In' button to open the login form or navigate to the login page.
+        # Log In button
+        elem = page.get_by_role('button', name='Log In', exact=True)
+        await elem.click(timeout=10000)
+        
+        # -> Fill the email field with 'example@gmail.com', fill the password field with 'password123', then click the 'Sign In' button to submit the login form.
+        # you@example.com or janedoe text field
+        elem = page.get_by_placeholder('you@example.com or janedoe', exact=True)
         await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
+        await elem.fill("example@gmail.com")
         
-        # -> Navigate directly to /login (use explicit navigation to http://localhost:5173/login as the step instructs).
-        await page.goto("http://localhost:5173/login")
-        try:
-            await page.wait_for_load_state("domcontentloaded", timeout=5000)
-        except Exception:
-            pass
-        
-        # -> Click the 'Try again' button on the error page to attempt to recover the application state so header and auth flows become usable.
-        # button "Try again"
-        elem = page.locator("xpath=/html/body/div/div/div/div/div[2]/button").nth(0)
+        # -> Fill the email field with 'example@gmail.com', fill the password field with 'password123', then click the 'Sign In' button to submit the login form.
+        # Min 8 characters password field
+        elem = page.get_by_placeholder('Min 8 characters', exact=True)
         await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
+        await elem.fill("password123")
         
-        # -> Click the 'Reload and clear cache' button to attempt to reload the app and clear cached data so the header and auth flows become usable.
-        # button "Reload and clear cache"
-        elem = page.locator("xpath=/html/body/div/div/div/div/div[2]/button[2]").nth(0)
-        await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
-        
-        # -> Wait briefly for the SPA to finish loading. If the page does not recover, navigate to /login to open the auth flow.
-        await page.goto("http://localhost:5173/login")
-        try:
-            await page.wait_for_load_state("domcontentloaded", timeout=5000)
-        except Exception:
-            pass
-        
-        # -> Dismiss the cookie banner so header auth buttons become usable (click the Accept button).
-        # button "Accept"
-        elem = page.locator("xpath=/html/body/div/div[2]/div/div[2]/button[2]").nth(0)
-        await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
-        
-        # -> Navigate to /login to attempt to open the authentication flow (Auth modal or login page).
-        await page.goto("http://localhost:5173/login")
-        try:
-            await page.wait_for_load_state("domcontentloaded", timeout=5000)
-        except Exception:
-            pass
-        
-        # -> Click the 'Try again' button on the error page to attempt to recover the app state so the header and auth flows become usable.
-        # button "Try again"
-        elem = page.locator("xpath=/html/body/div/div/div/div/div[2]/button").nth(0)
-        await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
+        # -> Fill the email field with 'example@gmail.com', fill the password field with 'password123', then click the 'Sign In' button to submit the login form.
+        # Sign In button
+        elem = page.get_by_role('button', name='Sign In', exact=True)
+        await elem.click(timeout=10000)
         
         # --> Assertions to verify final state
-        assert await page.locator("xpath=//*[contains(., 'Portfolio performance')]").nth(0).is_visible(), "The portfolio performance section should be visible on the dashboard after login."
-        assert await page.locator("xpath=//*[contains(., 'Holdings')]").nth(0).is_visible(), "The holdings and wallet balances should be visible on the dashboard after login."
+        # Assert: Verify portfolio performance data is displayed
+        assert False, "Expected: Verify portfolio performance data is displayed (could not be verified on the page)"
+        # Assert: Verify holdings and wallet balances are visible
+        assert False, "Expected: Verify holdings and wallet balances are visible (could not be verified on the page)"
         
         # --> Test blocked by environment/access constraints during agent run
-        # Reason: TEST BLOCKED The test could not be run — the UI shows an application error page that prevents accessing the login flow and dashboard. Observations: - The page displays 'Something went wrong on this page' with an inline error: "Cannot read properties of undefined (reading 'length')". - The visible recovery buttons ('Try again' and 'Reload and clear cache') are present but do not restore the head...
-        raise AssertionError("Test blocked during agent run: " + "TEST BLOCKED The test could not be run \u2014 the UI shows an application error page that prevents accessing the login flow and dashboard. Observations: - The page displays 'Something went wrong on this page' with an inline error: \"Cannot read properties of undefined (reading 'length')\". - The visible recovery buttons ('Try again' and 'Reload and clear cache') are present but do not restore the head..." + " — the exported script cannot reproduce a PASS in this environment.")
+        # Reason: TEST BLOCKED The test could not be run — the UI returned a server error preventing authentication. Observations: - The login modal displayed the error message 'Request failed with 500'. - Authentication could not be completed and the dashboard could not be reached.
+        raise AssertionError("Test blocked during agent run: " + "TEST BLOCKED The test could not be run \u2014 the UI returned a server error preventing authentication. Observations: - The login modal displayed the error message 'Request failed with 500'. - Authentication could not be completed and the dashboard could not be reached." + " — the exported script cannot reproduce a PASS in this environment.")
         await asyncio.sleep(5)
 
     finally:

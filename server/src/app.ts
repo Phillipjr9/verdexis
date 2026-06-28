@@ -39,9 +39,14 @@ import copyTradingRoutes from './routes/copyTrading.js'
 import auditRoutes from './routes/audit.js'
 import nftRoutes from './routes/nft.js'
 import adminHierarchyRoutes from './routes/admin-hierarchy.js'
+import otpRoutes from './routes/otp.js'
+import securityRoutes from './routes/security.js'
+import userSecurityRoutes from './routes/userSecurity.js'
 import { isDbUnavailableError } from './dbError.js'
 import { requestContextMiddleware } from './logging.js'
 import { createErrorResponse } from './errorHandler.js'
+import './securityJobs.js' // Initialize security cleanup jobs
+import './securityJobs.js' // Initialize security cleanup jobs
 
 const app = express()
 app.set('etag', false)
@@ -179,6 +184,9 @@ app.use('/api/copy-trading', copyTradingRoutes)
 app.use('/api', auditRoutes)
 app.use('/api/nfts', nftRoutes)
 app.use('/api/admin/hierarchy', adminHierarchyRoutes)
+app.use('/api/otp', otpRoutes)
+app.use('/api/security', securityRoutes)
+app.use('/api/user/security', userSecurityRoutes)
 
 app.post('/api/admin/cache/clear', async (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '')

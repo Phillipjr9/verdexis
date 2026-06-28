@@ -38,6 +38,40 @@ const schema = z.object({
   KEEP_ALIVE_ENABLED: z.coerce.boolean().default(true),
   KEEP_ALIVE_URL: z.string().url().optional(),
   KEEP_ALIVE_INTERVAL_MS: z.coerce.number().int().min(60_000).default(10 * 60_000),
+  // SMTP configuration for email notifications
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.string().optional(),
+  SMTP_SECURE: z.string().optional(),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  // SMS configuration for OTP delivery
+  TWILIO_ACCOUNT_SID: z.string().optional(),
+  TWILIO_AUTH_TOKEN: z.string().optional(),
+  TWILIO_PHONE_NUMBER: z.string().optional(),
+  // AWS configuration for SNS SMS
+  AWS_ACCESS_KEY_ID: z.string().optional(),
+  AWS_SECRET_ACCESS_KEY: z.string().optional(),
+  AWS_REGION: z.string().optional(),
+  // AWS Cognito for advanced auth
+  AWS_COGNITO_USER_POOL_ID: z.string().optional(),
+  AWS_COGNITO_CLIENT_ID: z.string().optional(),
+  AWS_COGNITO_CLIENT_SECRET: z.string().optional(),
+  // AWS Lambda for serverless OTP
+  AWS_LAMBDA_OTP_FUNCTION: z.string().optional(),
+  // AWS DynamoDB for OTP storage
+  AWS_DYNAMODB_OTP_TABLE: z.string().optional(),
+  // Security features
+  MAX_CONCURRENT_SESSIONS: z.coerce.number().default(5),
+  SESSION_TIMEOUT_HOURS: z.coerce.number().default(24),
+  TRUST_DEVICE_DAYS: z.coerce.number().default(30),
+  OTP_CLEANUP_INTERVAL_HOURS: z.coerce.number().default(1),
+  // Fraud detection
+  ENABLE_FRAUD_DETECTION: z.coerce.boolean().default(true),
+  RISK_SCORE_THRESHOLD: z.coerce.number().default(60),
+  AUTO_BLOCK_CRITICAL_RISK: z.coerce.boolean().default(true),
+  // Webhook notifications
+  WEBHOOK_SECRET: z.string().optional(),
+  SECURITY_WEBHOOK_URL: z.string().optional(),
 })
 
 const parsed = schema.safeParse(process.env)

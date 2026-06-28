@@ -1,0 +1,293 @@
+DATABASE_URL CONFIGURATION GUIDE
+================================
+
+YOUR RDS CONNECTION DETAILS:
+===========================
+
+Database Type: PostgreSQL
+Host: database-2-instance-1.c0xwa6wyga3m.us-east-1.rds.amazonaws.com
+Port: 5432
+Database: postgres
+Username: postgres
+Password (original): S5C<K#5-K)|J8_K:O:o)GZ<mIkI*
+Password (URL-encoded): S5C%3CK%235-K%29%7CJ8_K%3AO%3Ao%29GZ%3CmIkI%2A
+
+===========================
+
+COMPLETE DATABASE_URL FOR RENDER:
+=================================
+
+postgresql://postgres:S5C%3CK%235-K%29%7CJ8_K%3AO%3Ao%29GZ%3CmIkI%2A@database-2-instance-1.c0xwa6wyga3m.us-east-1.rds.amazonaws.com:5432/postgres?schema=public&sslmode=require
+
+===========================
+
+BREAKDOWN OF URL COMPONENTS:
+===========================
+
+Protocol:
+  postgresql://
+  (Always use this for PostgreSQL)
+
+Username:
+  postgres
+  (RDS default admin user)
+
+Password (URL-encoded):
+  S5C%3CK%235-K%29%7CJ8_K%3AO%3Ao%29GZ%3CmIkI%2A
+  (Original: S5C<K#5-K)|J8_K:O:o)GZ<mIkI*)
+  
+  Why URL-encoded?
+  Special characters need encoding for connection strings:
+  < = %3C
+  # = %23
+  - = %2D (if it appears)
+  ) = %29
+  | = %7C
+  : = %3A (in password only)
+  > = %3E
+
+Host:
+  database-2-instance-1.c0xwa6wyga3m.us-east-1.rds.amazonaws.com
+  (AWS RDS endpoint)
+
+Port:
+  5432
+  (PostgreSQL default)
+
+Database:
+  postgres
+  (Default database on RDS)
+
+Query Parameters:
+  schema=public
+  (Prisma schema location)
+  
+  sslmode=require
+  (Required for RDS - enforces SSL/TLS encryption)
+
+===========================
+
+PASSWORD URL ENCODING REFERENCE:
+===============================
+
+Original password: S5C<K#5-K)|J8_K:O:o)GZ<mIkI*
+
+Character breakdown:
+S = S (no encoding)
+5 = 5 (no encoding)
+C = C (no encoding)
+< = %3C (encoding required)
+K = K (no encoding)
+# = %23 (encoding required)
+5 = 5 (no encoding)
+- = - (no encoding)
+K = K (no encoding)
+) = %29 (encoding required)
+| = %7C (encoding required)
+J = J (no encoding)
+8 = 8 (no encoding)
+_ = _ (no encoding)
+K = K (no encoding)
+: = %3A (encoding required)
+O = O (no encoding)
+: = %3A (encoding required)
+o = o (no encoding)
+) = %29 (encoding required)
+G = G (no encoding)
+Z = Z (no encoding)
+< = %3C (encoding required)
+m = m (no encoding)
+I = I (no encoding)
+k = k (no encoding)
+I = I (no encoding)
+* = %2A (encoding required)
+
+Complete encoded: S5C%3CK%235-K%29%7CJ8_K%3AO%3Ao%29GZ%3CmIkI%2A
+
+===========================
+
+HOW TO ENCODE A PASSWORD:
+========================
+
+If you need to encode a different password:
+
+Method 1: Online URL Encoder
+  1. Visit https://www.urlencoder.org/
+  2. Paste your password
+  3. Click "Encode"
+  4. Copy result
+
+Method 2: JavaScript
+  const password = "S5C<K#5-K)|J8_K:O:o)GZ<mIkI*"
+  const encoded = encodeURIComponent(password)
+  console.log(encoded)
+
+Method 3: PowerShell
+  [System.Net.WebUtility]::UrlEncode("S5C<K#5-K)|J8_K:O:o)GZ<mIkI*")
+
+Method 4: Node.js
+  const querystring = require('querystring')
+  querystring.escape("S5C<K#5-K)|J8_K:O:o)GZ<mIkI*")
+
+===========================
+
+SETTING IN RENDER:
+=================
+
+1. Go to Render Dashboard
+2. Select your web service
+3. Click "Environment"
+4. Click "Add Environment Variable"
+5. Key: DATABASE_URL
+6. Value: postgresql://postgres:S5C%3CK%235-K%29%7CJ8_K%3AO%3Ao%29GZ%3CmIkI%2A@database-2-instance-1.c0xwa6wyga3m.us-east-1.rds.amazonaws.com:5432/postgres?schema=public&sslmode=require
+7. Click "Save"
+
+===========================
+
+VERIFICATION:
+=============
+
+After setting DATABASE_URL in Render:
+
+1. Check Render logs for:
+   ✅ "Database connected successfully"
+   ✅ "listening on http://0.0.0.0:4000"
+
+2. Test health endpoint:
+   curl https://[your-service].onrender.com/api/health
+
+3. Expected response:
+   {
+     "ok": true,
+     "database": "Connected",
+     "databaseReady": true
+   }
+
+===========================
+
+COMMON MISTAKES TO AVOID:
+=======================
+
+1. ❌ Using original password instead of URL-encoded
+   Wrong: S5C<K#5-K)|J8_K:O:o)GZ<mIkI*
+   Right: S5C%3CK%235-K%29%7CJ8_K%3AO%3Ao%29GZ%3CmIkI%2A
+
+2. ❌ Missing ?sslmode=require
+   Wrong: postgresql://user:pass@host:5432/postgres
+   Right: postgresql://user:pass@host:5432/postgres?sslmode=require
+
+3. ❌ Missing ?schema=public
+   Wrong: postgresql://user:pass@host:5432/postgres?sslmode=require
+   Right: postgresql://user:pass@host:5432/postgres?schema=public&sslmode=require
+
+4. ❌ Wrong host
+   Wrong: localhost or 127.0.0.1
+   Right: database-2-instance-1.c0xwa6wyga3m.us-east-1.rds.amazonaws.com
+
+5. ❌ Missing @
+   Wrong: postgresqlusernamepassword@host
+   Right: postgresql://username:password@host
+
+6. ❌ Wrong separator
+   Wrong: postgresql://username password@host
+   Right: postgresql://username:password@host
+
+===========================
+
+IF CONNECTION STILL FAILS:
+=========================
+
+1. Verify RDS is publicly accessible
+   AWS Console → RDS → Databases
+   → Connectivity & security
+   → Publicly accessible: YES
+
+2. Verify security group inbound rule
+   Source: 0.0.0.0/0
+   Port: 5432
+   Protocol: TCP
+
+3. Test locally first
+   PowerShell: .\test-rds-connection.ps1
+   Bash: bash test-rds-connection.sh
+
+4. Check database is running
+   AWS Console → RDS → Databases
+   → Status: available
+
+5. Verify credentials
+   Username: postgres
+   Password: S5C<K#5-K)|J8_K:O:o)GZ<mIkI*
+
+6. Check Render logs
+   Render Dashboard → Logs
+   Look for connection errors
+
+===========================
+
+ALTERNATIVE URL FORMATS:
+=======================
+
+If ?schema=public causes issues, try without it:
+postgresql://postgres:S5C%3CK%235-K%29%7CJ8_K%3AO%3Ao%29GZ%3CmIkI%2A@database-2-instance-1.c0xwa6wyga3m.us-east-1.rds.amazonaws.com:5432/postgres?sslmode=require
+
+If sslmode=require causes SSL errors, try:
+postgresql://postgres:S5C%3CK%235-K%29%7CJ8_K%3AO%3Ao%29GZ%3CmIkI%2A@database-2-instance-1.c0xwa6wyga3m.us-east-1.rds.amazonaws.com:5432/postgres?sslmode=prefer
+
+===========================
+
+ENVIRONMENT VARIABLE FORMAT:
+===========================
+
+Render accepts:
+DATABASE_URL=postgresql://...
+
+Do NOT use:
+export DATABASE_URL=postgresql://...
+set DATABASE_URL=postgresql://...
+"DATABASE_URL" = postgresql://...
+
+Just enter the value exactly as shown above.
+
+===========================
+
+WHAT db.ts DOES WITH THE URL:
+============================
+
+1. Reads DATABASE_URL from environment
+2. Checks for special characters (%XX encoding)
+3. Detects if it's an RDS connection (contains rds.amazonaws.com)
+4. Automatically adds ?sslmode=require if using RDS
+5. Passes to Prisma for connection pooling
+6. Attempts connection with retries (5 attempts, exponential backoff)
+
+===========================
+
+PRISMA MIGRATION:
+================
+
+When Render deploys:
+
+1. npm run build
+   → Generates Prisma client
+   → Compiles TypeScript
+
+2. npm run start:migrate
+   → Runs: npx prisma migrate deploy
+   → Applies pending migrations to database
+   → Then starts: node dist/index.js
+
+This ensures database schema is always in sync with code.
+
+===========================
+
+SUMMARY:
+=======
+
+Copy this exact value to Render environment variable DATABASE_URL:
+
+postgresql://postgres:S5C%3CK%235-K%29%7CJ8_K%3AO%3Ao%29GZ%3CmIkI%2A@database-2-instance-1.c0xwa6wyga3m.us-east-1.rds.amazonaws.com:5432/postgres?schema=public&sslmode=require
+
+Then deploy. Should work immediately.
+
+===========================

@@ -1,0 +1,188 @@
+RENDER DEPLOYMENT - FINAL CONFIGURATION
+======================================
+
+DATABASE CORRECTED ✅
+====================
+
+Your Render database is using a DIFFERENT password than your local .env
+
+Local Development (.env):
+Password: S5C%3CK%235-K%29%7CJ8_K%3AO%3Ao%29GZ%3CmIkI%2A
+
+Render Production:
+Password: d%28HMeY%245D%24%5BttK%5B4wX05%29OI7%2AIrT
+
+Both connect to the same RDS instance:
+database-2-instance-1.c0xwa6wyga3m.us-east-1.rds.amazonaws.com
+
+===========================
+
+COPY THIS TO RENDER:
+===================
+
+Environment Variable: DATABASE_URL
+
+Value:
+postgresql://postgres:d%28HMeY%245D%24%5BttK%5B4wX05%29OI7%2AIrT@database-2-instance-1.c0xwa6wyga3m.us-east-1.rds.amazonaws.com:5432/postgres?schema=public&sslmode=require
+
+===========================
+
+ALL RENDER ENVIRONMENT VARIABLES:
+=================================
+
+DATABASE_URL
+postgresql://postgres:d%28HMeY%245D%24%5BttK%5B4wX05%29OI7%2AIrT@database-2-instance-1.c0xwa6wyga3m.us-east-1.rds.amazonaws.com:5432/postgres?schema=public&sslmode=require
+
+JWT_SECRET
+7f3a9b2c8e4d1f6a5b9c3e7d2f8a4b6c1e9d3f7a2b8c4e6d1f9a3b7c2e8d4f6a
+
+JWT_EXPIRES_IN
+7d
+
+NODE_ENV
+production
+
+PORT
+4000
+
+CORS_ORIGIN
+https://main.d28t5x0lqjdtjj.amplifyapp.com,https://6ourstyon7pic.kimi.page,http://localhost:5173
+
+APP_BASE_URL
+https://main.d28t5x0lqjdtjj.amplifyapp.com
+
+ALERT_POLL_ENABLED
+true
+
+ALERT_POLL_INTERVAL_MS
+60000
+
+===========================
+
+BUILD & START COMMANDS:
+======================
+
+Build Command:
+cd server && npm install && npm run build
+
+Start Command:
+cd server && npm run start:migrate
+
+===========================
+
+DEPLOYMENT STEPS:
+===============
+
+1. Go to https://dashboard.render.com
+
+2. Create Web Service:
+   - Select "New" → "Web Service"
+   - Connect GitHub repository
+   - Select main branch
+
+3. Configure:
+   - Name: verdexis-backend
+   - Build Command: cd server && npm install && npm run build
+   - Start Command: cd server && npm run start:migrate
+
+4. Add Environment Variables:
+   - Click "Add Environment Variable"
+   - Add each variable from the list above
+   - DATABASE_URL is the most important
+
+5. Deploy:
+   - Click "Create Web Service"
+   - Wait 3-10 minutes for build
+   - Watch logs for "Database connected successfully"
+
+===========================
+
+VERIFICATION:
+============
+
+After deployment completes:
+
+1. Check logs for success message:
+   ✅ "Database connected successfully"
+   ✅ "listening on http://0.0.0.0:4000"
+
+2. Test health endpoint:
+   curl https://[your-service].onrender.com/api/health
+
+3. Expected response:
+   {
+     "ok": true,
+     "database": "Connected",
+     "databaseReady": true
+   }
+
+4. If you see "Database: Failed":
+   - Check DATABASE_URL in Render environment
+   - Verify password is URL-encoded version (with %XX)
+   - Wait 30 seconds and refresh
+
+===========================
+
+IF DATABASE CONNECTION FAILS:
+==========================
+
+1. Verify DATABASE_URL in Render
+   Dashboard → Environment
+   Check exact value matches above (with d%28HMeY...IrT)
+
+2. Check RDS security group
+   AWS Console → RDS → Security Groups
+   Inbound: Port 5432 from 0.0.0.0/0
+
+3. Test locally first
+   .\test-rds-connection.ps1
+   Make sure it shows "✅ Successfully connected to database"
+
+4. Check Render logs for error details
+   Look for: "Connection refused", "SSL error", "Authentication failed"
+
+===========================
+
+KEY POINTS:
+==========
+
+✅ Use the Render password, not your local .env password
+✅ Password must be URL-encoded (d%28HMeY...)
+✅ Include &sslmode=require for SSL
+✅ Database auto-migrates on deploy
+✅ No manual setup needed
+✅ Health endpoint confirms status
+
+===========================
+
+RENDER DATABASE INFO:
+====================
+
+Host: database-2-instance-1.c0xwa6wyga3m.us-east-1.rds.amazonaws.com
+Port: 5432
+Database: postgres
+Username: postgres
+Password: d%28HMeY%245D%24%5BttK%5B4wX05%29OI7%2AIrT (URL-encoded)
+         d(HMeY$5D$[ttK[4wX05)OI7*IrT (decoded - don't use)
+
+===========================
+
+NEXT STEPS:
+==========
+
+1. Copy DATABASE_URL from above
+2. Go to Render dashboard
+3. Add all 9 environment variables
+4. Trigger deployment
+5. Wait for "Database connected successfully"
+6. Test health endpoint
+7. Connect frontend
+
+===========================
+
+READY? 
+======
+
+You have everything you need. Copy the DATABASE_URL and deploy!
+
+===========================

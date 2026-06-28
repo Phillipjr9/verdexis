@@ -40,32 +40,56 @@ async def run_test():
         except Exception:
             pass
         
-        # -> Dismiss the cookie banner by clicking 'Accept', then navigate to /markets.
-        # button "Accept"
-        elem = page.locator("xpath=/html/body/div/div[2]/div/div[2]/button[2]").nth(0)
-        await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
-        
-        # -> Dismiss the cookie banner by clicking 'Accept', then navigate to /markets.
+        # -> Navigate to the Markets page (the 'Markets' listing) by visiting the /markets path and then look for a search box or market list.
         await page.goto("http://localhost:5173/markets")
         try:
             await page.wait_for_load_state("domcontentloaded", timeout=5000)
         except Exception:
             pass
         
-        # -> Type 'bitcoin' into the search input to try to locate an asset, then wait for the UI to update and check the page for any results or the 'No assets match your filters.' message.
-        # text input placeholder="Search markets by name, symbol"
-        elem = page.locator("xpath=/html/body/div/div/div/main/div/div[2]/div/input").nth(0)
+        # -> Dismiss the cookie banner by clicking the 'Accept' button on the 'We use cookies' cookie consent banner so the markets content can render.
+        # Accept button
+        elem = page.get_by_role('button', name='Accept', exact=True)
+        await elem.click(timeout=10000)
+        
+        # -> Reload the app by navigating to the site root (the Verdexis homepage) to check whether the SPA mounts correctly and the markets listing becomes accessible.
+        await page.goto("http://localhost:5173")
+        try:
+            await page.wait_for_load_state("domcontentloaded", timeout=5000)
+        except Exception:
+            pass
+        
+        # -> Navigate to the 'Markets' listing page (visit the site at /markets) and wait for the page to finish rendering so the search box or market list becomes visible.
+        await page.goto("http://localhost:5173/markets")
+        try:
+            await page.wait_for_load_state("domcontentloaded", timeout=5000)
+        except Exception:
+            pass
+        
+        # -> Type 'Ethereum' into the search box labeled 'Search markets by name, symbol, or id...' and then click the 'Ethereum' asset row to open its detail view.
+        # Search markets by name, symbol, or id... text field
+        elem = page.get_by_placeholder('Search markets by name, symbol, or id...', exact=True)
         await elem.wait_for(state="visible", timeout=10000)
-        await elem.fill("bitcoin")
+        await elem.fill("Ethereum")
+        
+        # -> Type 'Ethereum' into the search box labeled 'Search markets by name, symbol, or id...' and then click the 'Ethereum' asset row to open its detail view.
+        # Ethereum ETH link
+        elem = page.get_by_role('link', name='Ethereum ETH', exact=True)
+        await elem.click(timeout=10000)
         
         # --> Assertions to verify final state
-        assert await page.locator("xpath=//*[contains(., 'Bitcoin')]").nth(0).is_visible(), "The asset detail view should be visible after opening the asset from the market list"
-        assert await page.locator("xpath=//*[contains(., 'Market Cap')]").nth(0).is_visible(), "The market information for the selected asset should be displayed on the asset detail view"
         
-        # --> Test blocked by environment/access constraints during agent run
-        # Reason: TEST BLOCKED The Markets page could not be exercised fully because live market data is not available. Observations: - The Markets page displayed the message 'No assets match your filters.' - Searching for 'bitcoin' returned no results (the search input contains 'bitcoin' but the list remained empty). - Market data appears unavailable or rate-limited (external CoinGecko data) preventing opening ...
-        raise AssertionError("Test blocked during agent run: " + "TEST BLOCKED The Markets page could not be exercised fully because live market data is not available. Observations: - The Markets page displayed the message 'No assets match your filters.' - Searching for 'bitcoin' returned no results (the search input contains 'bitcoin' but the list remained empty). - Market data appears unavailable or rate-limited (external CoinGecko data) preventing opening ..." + " — the exported script cannot reproduce a PASS in this environment.")
+        # --> Verify the asset detail view is displayed
+        # Assert: The URL contains 'asset/ethereum', confirming the Ethereum asset page is open.
+        await expect(page).to_have_url(re.compile("asset/ethereum"), timeout=15000), "The URL contains 'asset/ethereum', confirming the Ethereum asset page is open."
+        # Assert: The Market Statistics section is visible on the asset detail view.
+        await expect(page.locator("xpath=/html/body/div/div/div/div/div/div[3]/div[1]/div[2]").nth(0)).to_contain_text("Market Statistics", timeout=15000), "The Market Statistics section is visible on the asset detail view."
+        # Assert: The asset price '$ 2,250' is displayed on the page.
+        await expect(page.locator("xpath=/html/body/div/div/div/div/div/div[3]/div[2]/div/div[4]/div[1]/span[2]").nth(0)).to_contain_text("$ 2,250", timeout=15000), "The asset price '$ 2,250' is displayed on the page."
+        
+        # --> Verify market information for the selected asset is displayed
+        # Assert: The asset price is displayed as $ 2,250.
+        await expect(page.locator("xpath=/html/body/div/div/div/div/div/div[3]/div[2]/div/div[4]/div[1]/span[2]").nth(0)).to_have_text("$ 2,250", timeout=15000), "The asset price is displayed as $ 2,250."
         await asyncio.sleep(5)
 
     finally:

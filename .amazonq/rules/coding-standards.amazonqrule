@@ -1,0 +1,33 @@
+---
+description: Project coding standards and best practices for VERDEXIS
+---
+
+# VERDEXIS Coding Standards
+
+## Code Style
+- Write minimal, focused code - only what's needed to solve the requirement
+- Use TypeScript for type safety across the stack
+- Follow existing project patterns and architecture
+- Prioritize readability and maintainability
+
+## Project Structure
+- Frontend: React + Vite in /app directory
+- Backend: Express + Prisma in /server directory
+- Use environment variables for configuration
+
+## Security
+- Never expose credentials or sensitive data
+- Validate all user inputs
+- Follow authentication best practices
+
+## Testing
+- Only add tests when explicitly requested
+- Use existing test patterns in testsprite_tests/
+
+## Documentation
+- Do not create .md files unless explicitly requested
+
+## Deployment
+- Always verify code won't break deployment before pushing to git
+- Ensure all environment variables are properly configured
+- Test build processes before committing

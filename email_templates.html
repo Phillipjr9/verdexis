@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #f4f6f8;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #333;
+    }
+    .email-container {
+      width: 100%;
+      max-width: 680px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 0 20px rgba(0,0,0,0.08);
+    }
+    .header {
+      padding: 24px;
+      background: linear-gradient(135deg, #0f4c81 0%, #0077d9 100%);
+      color: #ffffff;
+      text-align: center;
+    }
+    .header img {
+      max-height: 50px;
+      margin-bottom: 12px;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 24px;
+      letter-spacing: 0.3px;
+    }
+    .header .subtitle {
+      margin: 8px 0 0;
+      font-size: 14px;
+      opacity: 0.9;
+    }
+    .content {
+      padding: 28px 32px;
+    }
+    .content h2 {
+      margin-top: 0;
+      color: #0f4c81;
+      font-size: 22px;
+    }
+    .content p {
+      line-height: 1.65;
+      margin: 16px 0;
+      color: #555;
+      font-size: 16px;
+    }
+    .alert {
+      padding: 16px;
+      border-radius: 8px;
+      margin: 16px 0;
+      border-left: 4px solid;
+    }
+    .alert-success {
+      background: #e8f5e9;
+      border-left-color: #4caf50;
+      color: #2e7d32;
+    }
+    .alert-warning {
+      background: #fff3e0;
+      border-left-color: #ff9800;
+      color: #e65100;
+    }
+    .alert-error {
+      background: #ffebee;
+      border-left-color: #f44336;
+      color: #c62828;
+    }
+    .alert-info {
+      background: #e3f2fd;
+      border-left-color: #2196f3;
+      color: #1565c0;
+    }
+    .button {
+      display: inline-block;
+      margin: 16px 0;
+      padding: 14px 28px;
+      background: #0077d9;
+      color: #fff;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: bold;
+      transition: background 0.3s;
+    }
+    .button:hover {
+      background: #0056a8;
+    }
+    .button-secondary {
+      background: #f4f6f8;
+      color: #0077d9;
+      border: 1px solid #0077d9;
+    }
+    .button-secondary:hover {
+      background: #e8ecf1;
+    }
+    .button-danger {
+      background: #f44336;
+    }
+    .button-danger:hover {
+      background: #d32f2f;
+    }
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      margin: 24px 0;
+    }
+    .info-card {
+      background: #f7f9fb;
+      border-radius: 10px;
+      padding: 18px;
+      border: 1px solid #e0e6ed;
+    }
+    .info-card strong {
+      display: block;
+      margin-bottom: 8px;
+      color: #0f4c81;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .info-card p {
+      margin: 6px 0;
+      font-size: 15px;
+    }
+    .divider {
+      border-top: 1px solid #e0e6ed;
+      margin: 24px 0;
+    }
+    .footer {
+      padding: 24px 32px;
+      background: #f4f6f8;
+      color: #777;
+      font-size: 13px;
+      border-top: 1px solid #e0e6ed;
+    }
+    .footer a {
+      color: #0077d9;
+      text-decoration: none;
+    }
+    .footer-links {
+      margin-top: 16px;
+    }
+    .footer-links a {
+      margin-right: 16px;
+    }
+    .social-links a {
+      margin-right: 12px;
+      color: #0077d9;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .transaction-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+    }
+    .transaction-table th {
+      background: #f0f4f8;
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      color: #0f4c81;
+      border-bottom: 2px solid #e0e6ed;
+    }
+    .transaction-table td {
+      padding: 12px;
+      border-bottom: 1px solid #e0e6ed;
+    }
+    .transaction-table tr:hover {
+      background: #f7f9fb;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .badge-success {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+    .badge-pending {
+      background: #fff3e0;
+      color: #e65100;
+    }
+    .badge-failed {
+      background: #ffebee;
+      color: #c62828;
+    }
+    .highlight {
+      background: #fff9c4;
+      padding: 2px 4px;
+      border-radius: 3px;
+    }
+    @media (max-width: 600px) {
+      .content,
+      .footer,
+      .header {
+        padding-left: 20px;
+        padding-right: 20px;
+      }
+      .button {
+        display: block;
+        text-align: center;
+      }
+      .transaction-table {
+        font-size: 14px;
+      }
+      .transaction-table th,
+      .transaction-table td {
+        padding: 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td align="center" style="padding: 24px 0; background: #eef2f7;">
+        <div class="email-container">
+          <!-- HEADER -->
+          <div class="header">
+            <img src="https://via.placeholder.com/160x50?text=Logo" alt="Verdexis Logo" />
+            <h1>Verdexis</h1>
+            <p class="subtitle">{{EMAIL_SUBTITLE}}</p>
+          </div>
+
+          <!-- CONTENT -->
+          <div class="content">
+            {{EMAIL_CONTENT}}
+          </div>
+
+          <!-- FOOTER -->
+          <div class="footer">
+            <strong>{{COMPANY_NAME}}</strong><br/>
+            {{COMPANY_ADDRESS}}<br/>
+            {{COMPANY_PHONE}}
+            
+            <div class="footer-links" style="margin-top: 16px;">
+              <a href="{{PRIVACY_LINK}}">Privacy Policy</a> |
+              <a href="{{TERMS_LINK}}">Terms of Service</a> |
+              <a href="{{CONTACT_LINK}}">Contact Support</a>
+            </div>
+
+            <div style="margin-top: 16px; font-size: 12px;">
+              <strong>Follow us</strong><br/>
+              <span class="social-links">
+                <a href="{{LINKEDIN}}">LinkedIn</a>
+                <a href="{{TWITTER}}">Twitter</a>
+                <a href="{{FACEBOOK}}">Facebook</a>
+              </span>
+            </div>
+
+            <p style="margin: 18px 0 0; font-size: 12px; color: #999;">
+              © {{YEAR}} {{COMPANY_NAME}}. All rights reserved.
+            </p>
+          </div>
+        </div>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

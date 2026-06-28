@@ -1,0 +1,109 @@
+RENDER DEPLOYMENT - SETUP GUIDE
+================================
+
+Step 1: Connect Your Repository
+  1. Go to https://render.com
+  2. Click "New" → "Web Service"
+  3. Connect your GitHub repository
+  4. Select the branch to deploy
+
+Step 2: Configure Environment Variables
+  In Render dashboard, add these environment variables:
+  
+  DATABASE_URL: postgresql://postgres:S5C%3CK%235-K%29%7CJ8_K%3AO%3Ao%29GZ%3CmIkI%2A@database-2-instance-1.c0xwa6wyga3m.us-east-1.rds.amazonaws.com:5432/postgres?schema=public&sslmode=require
+  
+  JWT_SECRET: 7f3a9b2c8e4d1f6a5b9c3e7d2f8a4b6c1e9d3f7a2b8c4e6d1f9a3b7c2e8d4f6a
+  
+  CORS_ORIGIN: https://main.d28t5x0lqjdtjj.amplifyapp.com,https://6ourstyon7pic.kimi.page
+  
+  APP_BASE_URL: https://main.d28t5x0lqjdtjj.amplifyapp.com
+  
+  ALERT_POLL_ENABLED: true
+  
+  ALERT_POLL_INTERVAL_MS: 60000
+
+Step 3: Configure Build Settings
+  Build Command: cd server && npm install && npm run build
+  Start Command: cd server && npm run start:migrate
+  Runtime: Node
+  Plan: Free/Paid
+
+Step 4: Important RDS Configuration
+  
+  A. Ensure RDS Security Group allows inbound on port 5432
+     Source: 0.0.0.0/0 (or Render's IP range)
+  
+  B. Verify RDS is publicly accessible
+     In AWS RDS Dashboard → Connectivity & security
+     → Publicly accessible: Yes
+  
+  C. SSL Mode
+     The database URL includes ?sslmode=require
+     This is required for RDS connections
+
+Step 5: Deploy
+  1. Click "Create Web Service"
+  2. Render will automatically deploy on git push
+  3. Check deployment logs at: https://dashboard.render.com/logs
+
+Step 6: Verify Deployment
+  Check the logs for:
+  ✅ Database connected successfully
+  ✅ Server listening on port 4000
+  
+  If database connection fails:
+  - Verify DATABASE_URL in Render env vars
+  - Check RDS security groups
+  - Test connection locally with psql first
+
+Database Connection Troubleshooting
+===================================
+
+If you see "Database connection failed":
+
+1. Verify DATABASE_URL format:
+   postgresql://user:password@host:5432/dbname?sslmode=require
+
+2. Check RDS Details:
+   - Host: database-2-instance-1.c0xwa6wyga3m.us-east-1.rds.amazonaws.com
+   - Port: 5432
+   - User: postgres
+   - Database: postgres
+   - Password: URL-encoded version
+
+3. Test Connection Locally:
+   psql "postgresql://postgres:password@database-2-instance-1.c0xwa6wyga3m.us-east-1.rds.amazonaws.com:5432/postgres?sslmode=require"
+
+4. Check Render Logs:
+   - New connections
+   - SSL errors
+   - Authentication errors
+
+Deployment Status Commands
+===========================
+
+Check deployment status:
+  render logs --tail 100
+
+Restart service:
+  render restart
+
+View environment:
+  render env list
+
+Update environment variable:
+  render env set KEY=value
+
+Deploy from specific commit:
+  1. In Render dashboard
+  2. Click "Manual Deploy"
+  3. Select commit
+
+Notes
+=====
+
+- Free tier may have limitations
+- Database migrations run automatically on deploy
+- First deploy may take 5-10 minutes
+- SSL is required for RDS connections
+- Check Render logs if deployment fails

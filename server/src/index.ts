@@ -46,6 +46,7 @@ import { requestContextMiddleware } from './logging.js'
 import { createErrorResponse } from './errorHandler.js'
 import { priceStreamManager } from './websocket.js'
 import { depositMonitor } from './depositMonitor.js'
+import { startOTPCleanup } from './otpCleanup.js'
 
 const app = express()
 app.set('etag', false)
@@ -275,5 +276,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       }, 500)
     }
     promoteAllAdminEmails().catch((e) => console.error('[verdexis-api] admin bootstrap failed:', e))
+    startOTPCleanup()
   })
 }

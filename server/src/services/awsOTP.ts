@@ -1,0 +1,350 @@
+import { awsSNSService } from './awsSNS.js'
+import { awsCognitoService } from './awsCognito.js'
+import { env } from '../env.js'
+import AWS from 'aws-sdk'
+
+interface AWSOTPConfig {
+  provider: 'sns' | 'cognito' | 'lambda'
+  region: string
+  fallbackToEmail: boolean
+}
+
+interface AWSOTPResult {
+  success: boolean
+  messageId?: string
+  session?: string
+  error?: string
+  provider: string
+  cost?: string
+}
+
+export class AWSOTPService {
+  private config: AWSOTPConfig
+  private lambda: AWS.Lambda
+
+  constructor() {
+    this.config = {
+      provider: this.detectBestProvider(),
+      region: env.AWS_REGION || 'us-east-1',
+      fallbackToEmail: true
+    }
+
+    // Initialize Lambda client
+    AWS.config.update({
+      accessKeyId: env.AWS_ACCESS_KEY_ID,
+      secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
+      region: this.config.region
+    })
+
+    this.lambda = new AWS.Lambda({ region: this.config.region })
+  }
+
+  /**
+   * Send OTP via best available AWS service
+   */
+  async sendOTP(
+    phoneNumber: string, 
+    code: string, 
+    purpose: string = 'verification',
+    userId?: string
+  ): Promise<AWSOTPResult> {
+    
+    console.log(`[AWS OTP] Sending via ${this.config.provider}: ${phoneNumber}`)
+
+    try {
+      switch (this.config.provider) {
+        case 'lambda':
+          return await this.sendViaLambda(phoneNumber, code, purpose, userId)
+        
+        case 'cognito':
+          return await this.sendViaCognito(phoneNumber, code, purpose)
+        
+        case 'sns':
+        default:
+          return await this.sendViaSNS(phoneNumber, code, purpose)
+      }
+    } catch (error) {
+      console.error(`[AWS OTP] ${this.config.provider} failed:`, error)
+      
+      // Try fallback methods
+      if (this.config.provider !== 'sns') {
+        console.log('[AWS OTP] Falling back to SNS...')
+        return await this.sendViaSNS(phoneNumber, code, purpose)
+      }
+      
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'OTP send failed',
+        provider: this.config.provider
+      }
+    }
+  }
+
+  /**
+   * Send via AWS Lambda (serverless)
+   */
+  private async sendViaLambda(
+    phoneNumber: string, 
+    code: string, 
+    purpose: string,
+    userId?: string
+  ): Promise<AWSOTPResult> {
+    
+    const payload = {
+      httpMethod: 'POST',
+      path: '/send-otp',
+      body: JSON.stringify({
+        phoneNumber,
+        code,
+        purpose,
+        userId,
+        expirationMinutes: 10
+      })
+    }
+
+    const result = await this.lambda.invoke({
+      FunctionName: env.AWS_LAMBDA_OTP_FUNCTION || 'verdexis-otp-handler',
+      Payload: JSON.stringify(payload)
+    }).promise()
+
+    if (result.StatusCode === 200 && result.Payload) {
+      const response = JSON.parse(result.Payload as string)
+      const body = JSON.parse(response.body)
+      
+      return {
+        success: body.success || false,
+        messageId: body.messageId,
+        error: body.error,
+        provider: 'lambda'
+      }
+    }
+
+    throw new Error(`Lambda invocation failed: ${result.StatusCode}`)
+  }
+
+  /**
+   * Send via AWS Cognito (managed auth)
+   */
+  private async sendViaCognito(
+    phoneNumber: string, 
+    code: string, 
+    purpose: string
+  ): Promise<AWSOTPResult> {
+    
+    // For Cognito, we use their built-in OTP system
+    const result = await awsCognitoService.sendSMSOTP(phoneNumber)
+    
+    return {
+      success: result.success,
+      session: result.session,
+      error: result.error,
+      provider: 'cognito'
+    }
+  }
+
+  /**
+   * Send via AWS SNS (direct SMS)
+   */
+  private async sendViaSNS(
+    phoneNumber: string, 
+    code: string, 
+    purpose: string
+  ): Promise<AWSOTPResult> {
+    
+    const result = await awsSNSService.sendOTP(phoneNumber, code, 10)
+    
+    return {
+      success: result.success,
+      messageId: result.messageId,
+      error: result.error,
+      provider: 'sns',
+      cost: await this.getSMSCost(phoneNumber)
+    }
+  }
+
+  /**
+   * Verify OTP code
+   */
+  async verifyOTP(
+    phoneNumber: string, 
+    code: string, 
+    session?: string
+  ): Promise<{ success: boolean; error?: string }> {
+    
+    switch (this.config.provider) {
+      case 'lambda':
+        return await this.verifyViaLambda(phoneNumber, code)
+      
+      case 'cognito':
+        if (!session) {
+          return { success: false, error: 'Session required for Cognito verification' }
+        }
+        return await this.verifyViaCognito(phoneNumber, code, session)
+      
+      default:
+        // For SNS, verification is handled by your main OTP service
+        return { success: true }
+    }
+  }
+
+  /**
+   * Verify via Lambda
+   */
+  private async verifyViaLambda(
+    phoneNumber: string, 
+    code: string
+  ): Promise<{ success: boolean; error?: string }> {
+    
+    const payload = {
+      httpMethod: 'POST',
+      path: '/verify-otp',
+      body: JSON.stringify({ phoneNumber, code })
+    }
+
+    try {
+      const result = await this.lambda.invoke({
+        FunctionName: env.AWS_LAMBDA_OTP_FUNCTION || 'verdexis-otp-handler',
+        Payload: JSON.stringify(payload)
+      }).promise()
+
+      if (result.StatusCode === 200 && result.Payload) {
+        const response = JSON.parse(result.Payload as string)
+        const body = JSON.parse(response.body)
+        
+        return {
+          success: body.success || false,
+          error: body.error
+        }
+      }
+
+      return { success: false, error: 'Lambda verification failed' }
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Verification failed' 
+      }
+    }
+  }
+
+  /**
+   * Verify via Cognito
+   */
+  private async verifyViaCognito(
+    phoneNumber: string, 
+    code: string, 
+    session: string
+  ): Promise<{ success: boolean; error?: string }> {
+    
+    const result = await awsCognitoService.verifySMSOTP(phoneNumber, code, session)
+    
+    return {
+      success: result.success,
+      error: result.error
+    }
+  }
+
+  /**
+   * Get SMS cost estimation
+   */
+  private async getSMSCost(phoneNumber: string): Promise<string> {
+    try {
+      const pricing = await awsSNSService.getSMSPricing(phoneNumber)
+      return `$${pricing.price} ${pricing.currency}`
+    } catch {
+      return 'Unknown'
+    }
+  }
+
+  /**
+   * Detect best AWS provider based on configuration
+   */
+  private detectBestProvider(): 'sns' | 'cognito' | 'lambda' {
+    // Check Lambda first (most flexible)
+    if (env.AWS_LAMBDA_OTP_FUNCTION && env.AWS_ACCESS_KEY_ID) {
+      return 'lambda'
+    }
+    
+    // Check Cognito (managed service)
+    if (env.AWS_COGNITO_USER_POOL_ID && env.AWS_COGNITO_CLIENT_ID) {
+      return 'cognito'
+    }
+    
+    // Fallback to SNS (simple SMS)
+    return 'sns'
+  }
+
+  /**
+   * Get service status and capabilities
+   */
+  getStatus(): {
+    provider: string
+    configured: boolean
+    capabilities: string[]
+    region: string
+  } {
+    const capabilities: string[] = []
+    
+    if (this.config.provider === 'lambda') {
+      capabilities.push('Serverless OTP', 'Custom Logic', 'DynamoDB Storage')
+    } else if (this.config.provider === 'cognito') {
+      capabilities.push('Managed Auth', 'Built-in MFA', 'User Pools')
+    } else {
+      capabilities.push('Direct SMS', 'Global Delivery', 'Cost Optimization')
+    }
+
+    return {
+      provider: this.config.provider,
+      configured: !!(env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY),
+      capabilities,
+      region: this.config.region
+    }
+  }
+
+  /**
+   * Test AWS connectivity
+   */
+  async testConnection(): Promise<{ 
+    success: boolean
+    provider: string
+    latency: number
+    error?: string 
+  }> {
+    const startTime = Date.now()
+    
+    try {
+      switch (this.config.provider) {
+        case 'lambda':
+          await this.lambda.listFunctions({ MaxItems: 1 }).promise()
+          break
+        
+        case 'cognito':
+          const cognito = new AWS.CognitoIdentityServiceProvider({ 
+            region: this.config.region 
+          })
+          await cognito.listUserPools({ MaxResults: 1 }).promise()
+          break
+        
+        case 'sns':
+        default:
+          const sns = new AWS.SNS({ region: this.config.region })
+          await sns.getSMSAttributes().promise()
+          break
+      }
+
+      return {
+        success: true,
+        provider: this.config.provider,
+        latency: Date.now() - startTime
+      }
+    } catch (error) {
+      return {
+        success: false,
+        provider: this.config.provider,
+        latency: Date.now() - startTime,
+        error: error instanceof Error ? error.message : 'Connection test failed'
+      }
+    }
+  }
+}
+
+export const awsOTPService = new AWSOTPService()

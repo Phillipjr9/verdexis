@@ -9,7 +9,10 @@ async def run_test():
     context = None
 
     try:
+        # Start a Playwright session in asynchronous mode
         pw = await async_api.async_playwright().start()
+
+        # Launch a Chromium browser in headless mode with custom arguments
         browser = await pw.chromium.launch(
             headless=True,
             args=[
@@ -19,9 +22,17 @@ async def run_test():
                 "--single-process"
             ],
         )
+
+        # Create a new browser context (like an incognito window)
         context = await browser.new_context()
+        # Wider default timeout to match the agent's DOM-stability budget;
+        # auto-waiting Playwright APIs (expect, locator.wait_for) inherit this.
         context.set_default_timeout(15000)
+
+        # Open a new page in the browser context
         page = await context.new_page()
+
+        # Interact with the page elements to simulate user flow
         # -> navigate
         await page.goto("http://localhost:5173")
         try:
@@ -29,33 +40,51 @@ async def run_test():
         except Exception:
             pass
         
-        # -> Dismiss the cookie banner by clicking 'Accept', then retry loading the page by clicking 'Try again'.
-        # button "Accept"
-        elem = page.locator("xpath=/html/body/div/div[2]/div/div[2]/button[2]").nth(0)
-        await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
+        # -> Open the application's Login page by navigating to the '/login' URL (the Login page) so the login form can be located and filled.
+        await page.goto("http://localhost:5173/login")
+        try:
+            await page.wait_for_load_state("domcontentloaded", timeout=5000)
+        except Exception:
+            pass
         
-        # -> Dismiss the cookie banner by clicking 'Accept', then retry loading the page by clicking 'Try again'.
-        # button "Try again"
-        elem = page.locator("xpath=/html/body/div/div/div/div/div[2]/button").nth(0)
-        await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
+        # -> Click the cookie banner 'Accept' button to dismiss the consent prompt, then click the header 'Log In' button to open the login form or navigate to the login page.
+        # Accept button
+        elem = page.get_by_role('button', name='Accept', exact=True)
+        await elem.click(timeout=10000)
         
-        # -> Click the 'Try again' button to attempt to recover the application so the login flow can proceed. After the page settles, continue to the login route and perform authentication steps.
-        # button "Try again"
-        elem = page.locator("xpath=/html/body/div/div/div/div/div[2]/button").nth(0)
-        await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
+        # -> Click the cookie banner 'Accept' button to dismiss the consent prompt, then click the header 'Log In' button to open the login form or navigate to the login page.
+        # Log In button
+        elem = page.get_by_role('button', name='Log In', exact=True)
+        await elem.click(timeout=10000)
         
-        # -> Click the 'Reload and clear cache' button (index 2191) to attempt to recover the application, then wait for the page to settle.
-        # button "Reload and clear cache"
-        elem = page.locator("xpath=/html/body/div/div/div/div/div[2]/button[2]").nth(0)
+        # -> Fill the 'Email or username' field with example@gmail.com, fill the 'Password' field with password123, then click the 'Sign In' button to submit the login form.
+        # you@example.com or janedoe text field
+        elem = page.get_by_placeholder('you@example.com or janedoe', exact=True)
         await elem.wait_for(state="visible", timeout=10000)
-        await elem.click()
+        await elem.fill("example@gmail.com")
         
-        # --> Test blocked (AST guard fallback)
-        raise AssertionError("Test blocked during agent run: " + "TEST BLOCKED The test could not be run \u2014 the application shows an unexpected runtime error that prevents reaching the login or wallet pages. Observations: - The page displays an error: \"Cannot read properties of undefined (reading 'length')\". - Clicking \"Try again\" and \"Reload and clear cache\" did not recover the application. - The cookie consent banner is visible and the app remains on the err...")
+        # -> Fill the 'Email or username' field with example@gmail.com, fill the 'Password' field with password123, then click the 'Sign In' button to submit the login form.
+        # Min 8 characters password field
+        elem = page.get_by_placeholder('Min 8 characters', exact=True)
+        await elem.wait_for(state="visible", timeout=10000)
+        await elem.fill("password123")
+        
+        # -> Fill the 'Email or username' field with example@gmail.com, fill the 'Password' field with password123, then click the 'Sign In' button to submit the login form.
+        # Sign In button
+        elem = page.get_by_role('button', name='Sign In', exact=True)
+        await elem.click(timeout=10000)
+        
+        # --> Assertions to verify final state
+        # Assert: Verify the withdrawal appears in wallet activity
+        assert False, "Expected: Verify the withdrawal appears in wallet activity (could not be verified on the page)"
+        # Assert: Verify the withdrawal request is reflected in the wallet history
+        assert False, "Expected: Verify the withdrawal request is reflected in the wallet history (could not be verified on the page)"
+        
+        # --> Test blocked by environment/access constraints during agent run
+        # Reason: TEST BLOCKED The test could not be run to completion because the application returns a server error during login, preventing access to authenticated wallet functionality. Observations: - The login modal shows the error message "Request failed with 500" after submitting credentials. - The user remains unauthenticated, so wallet and withdrawal flows cannot be reached or exercised.
+        raise AssertionError("Test blocked during agent run: " + "TEST BLOCKED The test could not be run to completion because the application returns a server error during login, preventing access to authenticated wallet functionality. Observations: - The login modal shows the error message \"Request failed with 500\" after submitting credentials. - The user remains unauthenticated, so wallet and withdrawal flows cannot be reached or exercised." + " — the exported script cannot reproduce a PASS in this environment.")
         await asyncio.sleep(5)
+
     finally:
         if context:
             await context.close()

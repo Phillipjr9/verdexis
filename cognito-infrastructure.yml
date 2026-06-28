@@ -1,0 +1,122 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Verdexis Cognito OTP Authentication'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: production
+    AllowedValues: [development, staging, production]
+
+Resources:
+  # IAM role for Cognito SNS
+  CognitoSNSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'VerdexisCognitoSNSRole-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cognito-idp.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CognitoSNSPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: '*'
+
+  # Cognito User Pool
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub 'verdexis-users-${Environment}'
+      UsernameConfiguration:
+        CaseSensitive: false
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+      MfaConfiguration: 'ON'
+      EnabledMfas:
+        - SMS_MFA
+      SmsConfiguration:
+        SnsCallerArn: !GetAtt CognitoSNSRole.Arn
+        ExternalId: !Sub 'verdexis-cognito-${Environment}'
+      SmsAuthenticationMessage: 'Your Verdexis verification code is {####}'
+      SmsVerificationMessage: 'Your Verdexis verification code is {####}'
+      AutoVerifiedAttributes:
+        - phone_number
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+        - Name: phone_number
+          AttributeDataType: String
+          Required: true
+          Mutable: true
+
+  # Cognito User Pool Client
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientName: !Sub 'verdexis-web-${Environment}'
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_CUSTOM_AUTH
+        - ALLOW_SMS_MFA
+      SupportedIdentityProviders:
+        - COGNITO
+      CallbackURLs:
+        - http://localhost:3000/auth/callback
+        - https://verdexis.com/auth/callback
+      LogoutURLs:
+        - http://localhost:3000
+        - https://verdexis.com
+
+  # Cognito Identity Pool
+  IdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName: !Sub 'verdexis_identity_${Environment}'
+      AllowUnauthenticatedIdentities: false
+      CognitoIdentityProviders:
+        - ClientId: !Ref UserPoolClient
+          ProviderName: !GetAtt UserPool.ProviderName
+
+Outputs:
+  UserPoolId:
+    Description: 'Cognito User Pool ID'
+    Value: !Ref UserPool
+    Export:
+      Name: !Sub '${AWS::StackName}-UserPoolId'
+
+  UserPoolClientId:
+    Description: 'Cognito User Pool Client ID'
+    Value: !Ref UserPoolClient
+    Export:
+      Name: !Sub '${AWS::StackName}-UserPoolClientId'
+
+  IdentityPoolId:
+    Description: 'Cognito Identity Pool ID'
+    Value: !Ref IdentityPool
+    Export:
+      Name: !Sub '${AWS::StackName}-IdentityPoolId'
+
+  UserPoolProviderURL:
+    Description: 'Cognito User Pool Provider URL'
+    Value: !GetAtt UserPool.ProviderURL
+    Export:
+      Name: !Sub '${AWS::StackName}-UserPoolProviderURL'

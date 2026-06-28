@@ -3,8 +3,8 @@ services:
     name: verdexis-backend
     runtime: node
     plan: free
-    buildCommand: cd server && npm install && npx prisma generate && npx tsc -p tsconfig.json --skipLibCheck
-    startCommand: cd server && npm run start
+    buildCommand: cd server && npm install && npm run build
+    startCommand: cd server && npm run start:migrate
     envVars:
       - key: NODE_ENV
         value: production
@@ -17,6 +17,10 @@ services:
       - key: JWT_EXPIRES_IN
         value: 7d
       - key: CORS_ORIGIN
-        value: https://main.d28t5x0lqjdtjj.amplifyapp.com
+        value: https://main.d28t5x0lqjdtjj.amplifyapp.com,https://6ourstyon7pic.kimi.page,http://localhost:5173,http://localhost:3000
       - key: APP_BASE_URL
         value: https://main.d28t5x0lqjdtjj.amplifyapp.com
+      - key: ALERT_POLL_ENABLED
+        value: "true"
+      - key: ALERT_POLL_INTERVAL_MS
+        value: "60000"

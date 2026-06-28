@@ -1,0 +1,171 @@
+<!-- PORTFOLIO ALERT EMAIL -->
+<!-- Use: Price alerts, portfolio changes, market opportunities -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #f4f6f8;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #333;
+    }
+    .email-container {
+      width: 100%;
+      max-width: 680px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 0 20px rgba(0,0,0,0.08);
+    }
+    .header {
+      padding: 24px;
+      background: linear-gradient(135deg, #0f4c81 0%, #0077d9 100%);
+      color: #ffffff;
+      text-align: center;
+    }
+    .content {
+      padding: 28px 32px;
+    }
+    .alert-banner {
+      padding: 16px;
+      border-radius: 8px;
+      margin: 16px 0;
+      border-left: 4px solid;
+      display: flex;
+      align-items: center;
+    }
+    .alert-warning {
+      background: #fff3e0;
+      border-left-color: #ff9800;
+      color: #e65100;
+    }
+    .alert-success {
+      background: #e8f5e9;
+      border-left-color: #4caf50;
+      color: #2e7d32;
+    }
+    .alert-icon {
+      font-size: 24px;
+      margin-right: 12px;
+    }
+    .asset-card {
+      background: #f7f9fb;
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      border: 1px solid #e0e6ed;
+    }
+    .asset-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .asset-name {
+      font-weight: 600;
+      color: #0f4c81;
+      font-size: 16px;
+    }
+    .price-change {
+      font-weight: bold;
+      font-size: 14px;
+    }
+    .price-up {
+      color: #4caf50;
+    }
+    .price-down {
+      color: #f44336;
+    }
+    .asset-detail {
+      display: flex;
+      justify-content: space-between;
+      font-size: 14px;
+      color: #777;
+      padding: 6px 0;
+    }
+    .button {
+      display: inline-block;
+      margin: 16px 8px 16px 0;
+      padding: 12px 24px;
+      background: #0077d9;
+      color: #fff;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: bold;
+    }
+    .recommendation {
+      background: #e3f2fd;
+      border: 1px solid #90caf9;
+      border-radius: 8px;
+      padding: 16px;
+      margin: 16px 0;
+      color: #1565c0;
+    }
+    .recommendation strong {
+      display: block;
+      margin-bottom: 8px;
+    }
+    .footer {
+      padding: 24px 32px;
+      background: #f4f6f8;
+      color: #777;
+      font-size: 13px;
+      border-top: 1px solid #e0e6ed;
+    }
+  </style>
+</head>
+<body>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+      <td align="center" style="padding: 24px 0; background: #eef2f7;">
+        <div class="email-container">
+          <div class="header">
+            <h1 style="margin: 0;">{{ALERT_TYPE}}</h1>
+          </div>
+
+          <div class="content">
+            <p style="margin-top: 0;">
+              Hi {{USER_NAME}},
+            </p>
+
+            <div class="alert-banner alert-{{ALERT_SEVERITY}}">
+              <span class="alert-icon">{{ALERT_ICON}}</span>
+              <div>{{ALERT_MESSAGE}}</div>
+            </div>
+
+            <h3 style="color: #0f4c81; margin-top: 24px;">Affected Assets:</h3>
+
+            {{ASSET_CARDS}}
+
+            {{RECOMMENDATION}}
+
+            <div style="margin: 24px 0;">
+              <a href="{{PORTFOLIO_URL}}" class="button">View Portfolio</a>
+              <a href="{{ANALYSIS_URL}}" class="button" style="background: #f4f6f8; color: #0077d9; border: 1px solid #0077d9;">View Analysis</a>
+            </div>
+
+            <p style="font-size: 14px; color: #777; border-top: 1px solid #e0e6ed; padding-top: 16px; margin-top: 24px;">
+              <strong>Manage alerts:</strong> You can adjust your alert preferences in 
+              <a href="{{SETTINGS_URL}}" style="color: #0077d9;">Account Settings</a>
+            </p>
+          </div>
+
+          <div class="footer">
+            <strong>Verdexis</strong><br/>
+            {{COMPANY_ADDRESS}}<br/>
+            <a href="{{TERMS_LINK}}" style="color: #0077d9;">Terms</a> | 
+            <a href="{{PRIVACY_LINK}}" style="color: #0077d9;">Privacy</a> |
+            <a href="{{CONTACT_LINK}}" style="color: #0077d9;">Support</a><br/>
+            © {{YEAR}} Verdexis. All rights reserved.
+          </div>
+        </div>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
