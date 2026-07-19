@@ -11,7 +11,7 @@ interface AuthModalProps {
   defaultMode?: 'login' | 'signup'
 }
 
-type Mode = 'login' | 'signup' | 'forgot'
+type Mode = 'login' | 'signup' | 'forgot' | 'otp'
 
 export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: AuthModalProps) {
   const navigate = useNavigate()
@@ -21,15 +21,25 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [resetSent, setResetSent] = useState(false)
+  const [pendingToken, setPendingToken] = useState('')
+  const [otpCode, setOtpCode] = useState('')
 
   // Lock body scroll while the modal is open so the fixed overlay always
   // sits centered in the current viewport (prevents the user from having
   // to scroll the page down to find the modal on long pages).
   useEffect(() => {
     if (!isOpen) return
-    const prev = document.body.style.overflow
+    const prevOverflow = document.body.style.overflow
+    const prevPaddingRight = document.body.style.paddingRight
+    const scrollbarGap = window.innerWidth - document.documentElement.clientWidth
+    if (scrollbarGap > 0) {
+      document.body.style.paddingRight = `${scrollbarGap}px`
+    }
     document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = prev }
+    return () => {
+      document.body.style.overflow = prevOverflow
+      document.body.style.paddingRight = prevPaddingRight
+    }
   }, [isOpen])
 
   if (!isOpen) return null
@@ -66,6 +76,24 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
     setLoading(true)
 
     try {
+      if (mode === 'otp') {
+        if (otpCode.length !== 6) {
+          setError('Enter the 6-digit code')
+          setLoading(false)
+          return
+        }
+        const res = await api.loginVerifyOtp(pendingToken, otpCode)
+        setToken(res.token)
+        setStoredUser(res.user)
+        toast.success('Welcome back')
+        setLoading(false)
+        onClose()
+        window.dispatchEvent(new Event('storage'))
+        window.dispatchEvent(new Event('verdexis:profile'))
+        navigate('/dashboard', { replace: true })
+        return
+      }
+
       if (mode === 'signup') {
         const trimmedPhone = form.phone.trim()
         // Require a phone with at least 7 digits; same rule as the server.
@@ -79,6 +107,14 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
       const res = mode === 'signup'
         ? await api.signup(form.email, form.password, `${form.firstName} ${form.lastName}`.trim() || 'User', form.phone.trim())
         : await api.login(form.email, form.password)
+      if ('otpRequired' in res && res.otpRequired) {
+        setPendingToken(res.pendingToken)
+        setOtpCode('')
+        setError('')
+        setMode('otp')
+        setLoading(false)
+        return
+      }
       setToken(res.token)
       setStoredUser(res.user)
       toast.success(mode === 'signup' ? 'Account created' : 'Welcome back')
@@ -181,7 +217,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
             <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-[#0C8B44] to-[#00E676] flex items-center justify-center mx-auto mb-3 sm:mb-4 overflow-hidden">
               {mode === 'login' ? (
                 <Fingerprint className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
-              ) : mode === 'forgot' ? (
+              ) : mode === 'forgot' || mode === 'otp' ? (
                 <KeyRound className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
               ) : (
                 <img
@@ -199,19 +235,63 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
               )}
             </div>
             <h2 className="text-xl sm:text-2xl font-light tracking-[-0.02em] text-[#E5E5E5]">
-              {mode === 'login' ? 'Welcome Back' : mode === 'forgot' ? 'Reset Password' : 'Create Account'}
+              {mode === 'login' ? 'Welcome Back' : mode === 'forgot' ? 'Reset Password' : mode === 'otp' ? 'Verify Identity' : 'Create Account'}
             </h2>
             <p className="text-xs sm:text-sm text-[#737373] mt-1 sm:mt-2">
               {mode === 'login'
                 ? 'Sign in to access your dashboard'
                 : mode === 'forgot'
                 ? "We'll email you a secure reset link"
+                : mode === 'otp'
+                ? 'Check your email for a verification code'
                 : 'Get started with Verdexis'}
             </p>
           </div>
 
           {/* Form (placed above OAuth so email/password are visible without scrolling on mobile) */}
           <form onSubmit={handleSubmit} className="space-y-4">
+            {mode === 'otp' && (
+              <div>
+                <p className="text-sm text-[#A3A3A3] mb-4 text-center">
+                  A 6-digit code was sent to your email. Enter it below to complete sign in.
+                </p>
+                <div>
+                  <label className="text-xs text-[#737373] mb-1.5 block">Verification code</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    className="w-full px-4 py-3 bg-[#1a1a1a] border border-[#ffffff08] rounded-xl text-sm text-[#E5E5E5] placeholder-[#737373] focus:outline-none focus:border-[#0C8B44] transition-colors text-center tracking-[0.4em] text-lg"
+                    placeholder="000000"
+                    autoFocus
+                  />
+                </div>
+                {error && (
+                  <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-400 mt-3">
+                    {error}
+                  </div>
+                )}
+                <button
+                  type="submit"
+                  disabled={loading || otpCode.length !== 6}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#0C8B44] text-white text-sm font-medium rounded-xl hover:bg-[#0a7539] transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-4"
+                >
+                  {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><Shield className="w-4 h-4" /> Verify & Sign In</>}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setMode('login'); setError(''); setOtpCode(''); setPendingToken('') }}
+                  className="w-full mt-2 text-xs text-[#737373] hover:text-[#E5E5E5] transition-colors"
+                >
+                  ← Back to sign in
+                </button>
+              </div>
+            )}
+
+            {mode !== 'otp' && (
+            <>
             {mode === 'signup' && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -371,10 +451,12 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
                 </button>
               </>
             )}
+            </>
+            )}
           </form>
 
           {/* Switch mode */}
-          <p className="text-center text-sm text-[#737373] mt-6">
+          {mode !== 'otp' && <p className="text-center text-sm text-[#737373] mt-6">
             {mode === 'forgot' ? (
               <button
                 onClick={goBackToLogin}
@@ -397,7 +479,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
                 </button>
               </>
             )}
-          </p>
+          </p>}
 
           {/* Trust indicators */}
           <div className="flex items-center justify-center gap-4 mt-6 pt-6 border-t border-[#ffffff08]">

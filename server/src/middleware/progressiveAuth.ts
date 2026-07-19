@@ -32,7 +32,7 @@ export class ProgressiveAuthMiddleware {
   /**
    * Create middleware for progressive authentication
    */
-  static create(config: ProgressiveAuthConfig) {
+  static create(config: ProgressiveAuthConfig): (req: AuthedRequest, res: Response, next: NextFunction) => Promise<void | Response> {
     return async (req: AuthedRequest, res: Response, next: NextFunction) => {
       if (!req.userId) {
         return res.status(401).json({ error: 'Authentication required' })
@@ -124,7 +124,7 @@ export class ProgressiveAuthMiddleware {
     userId: string,
     config: ProgressiveAuthConfig,
     context: any,
-    requestData: any
+    _requestData: any
   ): Promise<AuthResult> {
     
     // Get risk assessment

@@ -72,7 +72,7 @@ export default function CandleChart({ coinId, symbol, livePrice, range }: Props)
     [candles],
   )
   const volumeData = useMemo(
-    () => candles.map((c) => [c.time, c.volume]),
+    () => candles.map((c) => [c.time, (c as Candle & { volume?: number }).volume ?? 0]),
     [candles],
   )
 

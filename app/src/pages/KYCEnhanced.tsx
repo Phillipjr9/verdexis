@@ -8,7 +8,7 @@ import { api } from '../lib/api'
 
 type KycStep = 'identity' | 'address' | 'selfie' | 'review' | 'done'
 
-export default function KYC() { return <RequireAuth><KYCInner /></RequireAuth> }
+export default function KYCEnhanced() { return <RequireAuth><KYCEnhancedInner /></RequireAuth> }
 
 interface TierInfo {
   tier: string
@@ -29,7 +29,7 @@ const TIER_COLORS: Record<string, string> = {
   TIER_3: '#3B82F6',
 }
 
-function KYCInner() {
+function KYCEnhancedInner() {
   const [step, setStep] = useState<KycStep>('identity')
   const [idType, setIdType] = useState('passport')
   const [idFile, setIdFile] = useState<string | null>(null)

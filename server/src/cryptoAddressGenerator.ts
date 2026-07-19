@@ -1,14 +1,6 @@
 import crypto from 'node:crypto'
 import https from 'node:https'
 
-interface DepositAddress {
-  address: string
-  currency: string
-  chainId?: string
-  network?: string
-  qrCode?: string
-}
-
 interface AddressResponse {
   address: string
   currency: string

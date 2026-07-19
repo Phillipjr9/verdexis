@@ -1,215 +1,188 @@
 import crypto from 'node:crypto'
 import { prisma } from '../db.js'
-import { env } from '../env.js'
 
-interface WebhookPayload {
-  event: string
+export type WebhookEvent =
+  | 'user.created'
+  | 'user.updated'
+  | 'user.deleted'
+  | 'user.verified'
+  | 'transaction.created'
+  | 'transaction.completed'
+  | 'transaction.failed'
+  | 'deposit.received'
+  | 'withdrawal.initiated'
+  | 'withdrawal.completed'
+  | 'trade.created'
+  | 'trade.completed'
+  | 'alert.triggered'
+  | 'kyc.approved'
+  | 'kyc.rejected'
+  | 'account.suspended'
+  | 'account.unsuspended'
+
+export interface WebhookPayload {
+  event: WebhookEvent
   timestamp: string
+  data: Record<string, unknown>
   userId?: string
-  data: any
-}
-
-interface SecurityWebhookData {
-  eventType: string
-  severity: string
-  userId: string
-  description: string
-  riskScore?: number
-  ipAddress?: string
-  location?: string
 }
 
 export class WebhookService {
-
   /**
-   * Send security event webhook
+   * Create webhook endpoint for user
    */
-  async sendSecurityWebhook(data: SecurityWebhookData): Promise<boolean> {
-    const payload: WebhookPayload = {
-      event: 'security_event',
-      timestamp: new Date().toISOString(),
-      userId: data.userId,
-      data
-    }
-
-    return this.sendWebhook(payload, env.SECURITY_WEBHOOK_URL)
-  }
-
-  /**
-   * Send fraud detection webhook
-   */
-  async sendFraudWebhook(
-    userId: string, 
-    transaction: any, 
-    fraudResult: any
-  ): Promise<boolean> {
-    const payload: WebhookPayload = {
-      event: 'fraud_detection',
-      timestamp: new Date().toISOString(),
-      userId,
-      data: {
-        transaction,
-        fraudResult,
-        severity: fraudResult.riskScore >= 80 ? 'critical' : 
-                 fraudResult.riskScore >= 60 ? 'high' : 'medium'
-      }
-    }
-
-    return this.sendWebhook(payload, env.SECURITY_WEBHOOK_URL)
-  }
-
-  /**
-   * Send OTP failure webhook
-   */
-  async sendOTPFailureWebhook(
+  static async createWebhook(
     userId: string,
-    attempts: number,
-    purpose: string
-  ): Promise<boolean> {
-    const payload: WebhookPayload = {
-      event: 'otp_failure',
-      timestamp: new Date().toISOString(),
-      userId,
-      data: {
-        attempts,
-        purpose,
-        severity: attempts >= 5 ? 'high' : 'medium'
-      }
-    }
+    url: string,
+    events: WebhookEvent[],
+    active: boolean = true,
+  ): Promise<{ id: string; secret: string }> {
+    const secret = crypto.randomBytes(32).toString('hex')
+    const secretHash = crypto.createHash('sha256').update(secret).digest('hex')
 
-    return this.sendWebhook(payload, env.SECURITY_WEBHOOK_URL)
+    const webhook = await prisma.webhook.create({
+      data: {
+        userId,
+        url,
+        events,
+        secretHash,
+        active,
+      },
+    })
+
+    return { id: webhook.id, secret }
   }
 
   /**
-   * Send login anomaly webhook
+   * Get user's webhooks
    */
-  async sendLoginAnomalyWebhook(
+  static async getWebhooks(userId: string) {
+    return prisma.webhook.findMany({
+      where: { userId },
+      select: {
+        id: true,
+        url: true,
+        events: true,
+        active: true,
+        createdAt: true,
+        lastTriggeredAt: true,
+        failureCount: true,
+      },
+    })
+  }
+
+  /**
+   * Update webhook
+   */
+  static async updateWebhook(
     userId: string,
-    anomalies: string[],
-    context: any
-  ): Promise<boolean> {
-    const payload: WebhookPayload = {
-      event: 'login_anomaly',
-      timestamp: new Date().toISOString(),
-      userId,
-      data: {
-        anomalies,
-        context,
-        severity: anomalies.includes('new_country') ? 'high' : 'medium'
-      }
-    }
-
-    return this.sendWebhook(payload, env.SECURITY_WEBHOOK_URL)
+    webhookId: string,
+    data: { url?: string; events?: WebhookEvent[]; active?: boolean },
+  ) {
+    return prisma.webhook.updateMany({
+      where: { id: webhookId, userId },
+      data,
+    })
   }
 
   /**
-   * Send generic webhook
+   * Delete webhook
    */
-  private async sendWebhook(payload: WebhookPayload, webhookUrl?: string): Promise<boolean> {
-    if (!webhookUrl) {
-      console.log('[webhook] No URL configured, payload:', JSON.stringify(payload, null, 2))
-      return true // Success in dev mode
+  static async deleteWebhook(userId: string, webhookId: string): Promise<boolean> {
+    const result = await prisma.webhook.deleteMany({
+      where: { id: webhookId, userId },
+    })
+
+    return result.count > 0
+  }
+
+  /**
+   * Trigger webhook event
+   */
+  static async triggerEvent(event: WebhookEvent, data: Record<string, unknown>, userId?: string): Promise<void> {
+    const webhooks = await prisma.webhook.findMany({
+      where: {
+        active: true,
+        events: { has: event },
+        ...(userId ? { userId } : {}),
+      },
+    })
+
+    const payload: WebhookPayload = {
+      event,
+      timestamp: new Date().toISOString(),
+      data,
+      userId,
     }
+
+    for (const webhook of webhooks) {
+      this.sendWebhook(webhook, payload).catch(err => {
+        console.error(`[webhook] Failed to send ${event} to ${webhook.url}:`, err)
+      })
+    }
+  }
+
+  /**
+   * Send webhook with signature
+   */
+  private static async sendWebhook(webhook: { id: string; url: string; secretHash: string }, payload: WebhookPayload): Promise<void> {
+    const body = JSON.stringify(payload)
+    const timestamp = Date.now().toString()
+    const signature = crypto
+      .createHmac('sha256', webhook.secretHash)
+      .update(`${timestamp}.${body}`)
+      .digest('hex')
 
     try {
-      const signature = this.generateSignature(JSON.stringify(payload))
-      
-      const response = await fetch(webhookUrl, {
+      const response = await fetch(webhook.url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Webhook-Signature': signature,
-          'User-Agent': 'Verdexis-Webhook/1.0'
+          'X-Webhook-Timestamp': timestamp,
+          'X-Webhook-ID': webhook.id,
         },
-        body: JSON.stringify(payload)
+        body,
       })
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        throw new Error(`HTTP ${response.status}`)
       }
 
-      // Log successful webhook
-      await this.logWebhookDelivery(webhookUrl, payload.event, true)
-      
-      return true
+      // Update last triggered time
+      await prisma.webhook.update({
+        where: { id: webhook.id },
+        data: {
+          lastTriggeredAt: new Date(),
+          failureCount: 0,
+        },
+      })
     } catch (error) {
-      console.error('[webhook] Delivery failed:', error)
-      
-      // Log failed webhook
-      await this.logWebhookDelivery(
-        webhookUrl, 
-        payload.event, 
-        false, 
-        error instanceof Error ? error.message : String(error)
-      )
-      
-      return false
-    }
-  }
+      // Increment failure count
+      await prisma.webhook.update({
+        where: { id: webhook.id },
+        data: {
+          failureCount: { increment: 1 },
+          // Disable after 10 failures
+          active: (await prisma.webhook.findUnique({ where: { id: webhook.id } }))?.failureCount ?? 0 < 10,
+        },
+      })
 
-  /**
-   * Generate webhook signature
-   */
-  private generateSignature(payload: string): string {
-    if (!env.WEBHOOK_SECRET) {
-      return 'no-secret'
+      throw error
     }
-
-    const hmac = crypto.createHmac('sha256', env.WEBHOOK_SECRET)
-    hmac.update(payload)
-    return `sha256=${hmac.digest('hex')}`
   }
 
   /**
    * Verify webhook signature
    */
-  verifySignature(payload: string, signature: string): boolean {
-    if (!env.WEBHOOK_SECRET) {
-      return true // Allow in dev mode
-    }
+  static verifySignature(body: string, signature: string, timestamp: string, secret: string): boolean {
+    const secretHash = crypto.createHash('sha256').update(secret).digest('hex')
+    const expectedSignature = crypto
+      .createHmac('sha256', secretHash)
+      .update(`${timestamp}.${body}`)
+      .digest('hex')
 
-    const expectedSignature = this.generateSignature(payload)
-    return crypto.timingSafeEqual(
-      Buffer.from(signature),
-      Buffer.from(expectedSignature)
-    )
-  }
-
-  /**
-   * Log webhook delivery
-   */
-  private async logWebhookDelivery(
-    url: string,
-    event: string,
-    success: boolean,
-    error?: string
-  ): Promise<void> {
-    try {
-      // In a full implementation, you'd store this in a webhooks table
-      console.log(`[webhook] ${success ? 'SUCCESS' : 'FAILED'}: ${event} to ${url}${error ? ` - ${error}` : ''}`)
-    } catch (logError) {
-      console.error('[webhook] Failed to log delivery:', logError)
-    }
-  }
-
-  /**
-   * Get webhook delivery stats
-   */
-  async getWebhookStats(days = 7): Promise<{
-    totalDeliveries: number
-    successfulDeliveries: number
-    failedDeliveries: number
-    successRate: string
-    eventBreakdown: Record<string, number>
-  }> {
-    // In a full implementation, query from webhooks table
-    return {
-      totalDeliveries: 0,
-      successfulDeliveries: 0,
-      failedDeliveries: 0,
-      successRate: '0%',
-      eventBreakdown: {}
-    }
+    return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))
   }
 }
 

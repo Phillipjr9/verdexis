@@ -6,7 +6,7 @@ const router = Router()
 // Get user's NFT holdings
 // TODO: Integrate with Simplehash, Reservoir, or OpenSea API
 router.get('/:walletAddress', requireAuth, async (req: AuthedRequest, res) => {
-  const { walletAddress } = req.params
+  const { walletAddress: _walletAddress } = req.params
   const userId = req.userId
 
   if (!userId) {

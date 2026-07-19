@@ -22,6 +22,43 @@ import { toCsv, downloadFile } from '../lib/csvExport'
 import { userWallets, type UserWalletOverride, hydrateUserWalletsFromServer, pushUserWalletsToServer } from '../lib/userWallets'
 import { feeProofs, FEE_PROOFS_EVENT, type FeeProof } from '../lib/feeProofs'
 
+function AdminActionProgress({ active, title, detail }: { active: boolean; title: string; detail: string }) {
+  const [progress, setProgress] = useState(0)
+
+  useEffect(() => {
+    if (!active) {
+      setProgress(0)
+      return
+    }
+
+    setProgress(12)
+    const timer = window.setInterval(() => {
+      setProgress((value) => {
+        if (value >= 92) return value
+        const step = value < 36 ? 14 : value < 72 ? 8 : 6
+        return Math.min(92, value + step)
+      })
+    }, 700)
+
+    return () => window.clearInterval(timer)
+  }, [active])
+
+  if (!active) return null
+
+  return (
+    <div className="mt-3 rounded-xl border border-[#F59E0B]/20 bg-[#F59E0B]/10 p-3">
+      <div className="flex items-center justify-between text-[11px] text-[#FDE68A]">
+        <span>{title}</span>
+        <span>{Math.round(progress)}%</span>
+      </div>
+      <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+        <div className="h-2 rounded-full bg-[#FBBF24] transition-all duration-500" style={{ width: `${progress}%` }} />
+      </div>
+      <p className="mt-2 text-[10px] text-[#FDE68A]/80">{detail}</p>
+    </div>
+  )
+}
+
 type Tab = 'profile' | 'wallet' | 'holdings' | 'transactions' | 'trades' | 'watchlist' | 'alerts' | 'notifications' | 'audit' | 'danger'
 
 // Curated description presets shown in the "Inject transaction" form on the
@@ -1009,17 +1046,20 @@ function FeeProofsPanel({ userId, userEmail, onChange }: { userId: string; userE
                   {p.reviewerNote && <p className="text-[10px] text-[#737373] mt-1 italic">Admin note: {p.reviewerNote}</p>}
                 </div>
                 {p.status === 'pending' && (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => reject(p)}
-                      disabled={busyId === p.id}
-                      className="px-3 py-1.5 text-[11px] rounded-lg bg-[#1a1a1a] border border-[#f44336]/40 text-[#f44336] hover:bg-[#f44336]/10 disabled:opacity-50"
-                    >Reject</button>
-                    <button
-                      onClick={() => approve(p)}
-                      disabled={busyId === p.id}
-                      className="px-3 py-1.5 text-[11px] rounded-lg bg-[#0C8B44] text-white hover:bg-[#0a7539] disabled:opacity-50"
-                    >{busyId === p.id ? 'Crediting…' : 'Mark fee paid'}</button>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => reject(p)}
+                        disabled={busyId === p.id}
+                        className="px-3 py-1.5 text-[11px] rounded-lg bg-[#1a1a1a] border border-[#f44336]/40 text-[#f44336] hover:bg-[#f44336]/10 disabled:opacity-50"
+                      >Reject</button>
+                      <button
+                        onClick={() => approve(p)}
+                        disabled={busyId === p.id}
+                        className="px-3 py-1.5 text-[11px] rounded-lg bg-[#0C8B44] text-white hover:bg-[#0a7539] disabled:opacity-50"
+                      >{busyId === p.id ? 'Crediting…' : 'Mark fee paid'}</button>
+                    </div>
+                    <AdminActionProgress active={busyId === p.id} title="Refund is being applied" detail="The fee credit is syncing to the user's wallet balance and audit trail." />
                   </div>
                 )}
               </div>
@@ -1635,6 +1675,7 @@ function ContactBonusPanel({ user, onChange }: { user: AdminUserDetailResponse['
           <p className="text-[11px] text-[#A0A0A0] mt-3">
             Until unlocked, this user cannot withdraw funds. They've been told to message support on WhatsApp or Telegram first. Once you've confirmed the conversation, clear the lock below.
           </p>
+          <AdminActionProgress active={busy} title="Unlocking withdrawal access" detail="Updating the bonus lock state and syncing the change for the user." />
           <button
             type="button"
             onClick={unlockBonus}
@@ -1815,7 +1856,7 @@ function EmailUserPanel({ userId, onSent }: { userId: string; onSent: () => void
     setBusy(true)
     try {
       await adminApi.emailUser(userId, { subject, body, template })
-      toast.success('Email queued (delivered as in-app notification)')
+      toast.success('Email and web notification queued')
       setSubject(''); setBody(''); setTemplate('none'); onSent()
     } catch (err) { toast.error((err as { error?: string }).error || 'Failed') }
     finally { setBusy(false) }

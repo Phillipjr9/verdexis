@@ -1,6 +1,5 @@
 import https from 'node:https'
 import { prisma } from './db.js'
-import { env } from './env.js'
 
 interface BlockchainNode {
   network: string
@@ -54,7 +53,7 @@ class DepositMonitor {
         const cryptos = prefs.depositAddresses?.cryptos
         if (!cryptos) continue
 
-        for (const [symbol, addr] of Object.entries(cryptos)) {
+        for (const addr of Object.values(cryptos)) {
           if (addr.address && addr.currency) {
             this.monitoredAddresses.set(addr.address, {
               userId: user.id,
@@ -130,7 +129,7 @@ class DepositMonitor {
 
     if (!response || !response.chain_stats) return
 
-    const { received_value, confirmed_balance } = response.chain_stats
+    const { confirmed_balance } = response.chain_stats
 
     if (confirmed_balance > 0) {
       const btcAmount = confirmed_balance / Math.pow(10, node.decimals)
@@ -245,6 +244,19 @@ class DepositMonitor {
           reference: `Crypto deposit - ${amount} ${currency} (auto-credited)`,
         },
       })
+
+      if (depositId) {
+        await tx.pendingDeposit.updateMany({
+          where: {
+            id: depositId,
+            status: 'pending',
+          },
+          data: {
+            status: 'completed',
+            creditedTxId: `auto-${Date.now()}`,
+          },
+        })
+      }
 
       // Create notification
       await tx.notification.create({

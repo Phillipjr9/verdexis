@@ -265,10 +265,14 @@ export async function checkTierLimit(
  * Validate file for upload
  */
 export function validateDocumentFile(
-  buffer: Buffer,
+  buffer: Buffer | undefined,
   mimetype: string,
   filename: string,
 ): { valid: boolean; error?: string } {
+  if (!buffer) {
+    return { valid: false, error: 'Missing file buffer' }
+  }
+
   // Check mime type
   const allowedMimes = ['image/jpeg', 'image/png', 'application/pdf']
   if (!allowedMimes.includes(mimetype)) {

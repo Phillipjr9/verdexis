@@ -542,8 +542,8 @@ if (typeof window !== 'undefined') {
   window.addEventListener('verdexis:portfolio-refresh', () => {
     if (getToken()) void portfolioStore.hydrate(true)
   })
-  // Belt-and-braces: poll the server every 5s while a token is present
-  // so admin-side mutations (deposits, transfers, balance edits) reflect
-  // even if the notification path failed or the user has disabled toasts.
-  setInterval(() => { if (getToken()) void portfolioStore.hydrate(true) }, 5000)
+  // Poll the server every 30s while a token is present so admin-side
+  // mutations (deposits, transfers, balance edits) reflect without a
+  // manual reload. 5s was too aggressive for a shared backend.
+  setInterval(() => { if (getToken()) void portfolioStore.hydrate(true) }, 30_000)
 }

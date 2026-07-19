@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, Navigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import Navigation from '../components/Navigation'
 import Footer from '../components/Footer'
 import AuthModal from '../components/AuthModal'
@@ -73,14 +73,30 @@ export default function Home() {
   const [livePrices, setLivePrices] = useState<Record<string, number>>({})
   const [authOpen, setAuthOpen] = useState(false)
   const [authMode, setAuthMode] = useState<'signup' | 'login'>('signup')
+  const navigate = useNavigate()
+
   useEffect(() => {
-    marketData.getCryptoList().then(setCryptoData)
-    aiService.getPortfolioInsights().then(setInsights)
+    marketData.getCryptoList()
+      .then(setCryptoData)
+      .catch((error) => {
+        console.warn('[Home] crypto list fetch failed', error)
+      })
+
+    aiService.getPortfolioInsights()
+      .then(setInsights)
+      .catch((error) => {
+        console.warn('[Home] AI insights fetch failed', error)
+      })
+
     // Refresh the snapshot list (sparklines, market caps, 24h %) every 30s
     // so even sections that key off CryptoQuote (not just liveTicker) stay
     // fresh while the visitor is on the landing page.
     const refresh = setInterval(() => {
-      marketData.getCryptoList().then(setCryptoData)
+      marketData.getCryptoList()
+        .then(setCryptoData)
+        .catch((error) => {
+          console.warn('[Home] crypto list refresh failed', error)
+        })
     }, 30_000)
     return () => clearInterval(refresh)
   }, [])
@@ -100,11 +116,11 @@ export default function Home() {
   }, [topIds])
 
   const openSignup = () => { setAuthMode('signup'); setAuthOpen(true) }
-  // Gated nav: if the visitor is signed in, follow the link; otherwise prompt
-  // them to sign up. Stops the silent redirect-to-/ that <RequireAuth> does.
+  // Gated nav: if the visitor is signed in, navigate inside the SPA;
+  // otherwise prompt them to sign up.
   const goAuthed = (path: string) => {
     if (isAuthed) {
-      window.location.href = path
+      navigate(path)
     } else {
       openSignup()
     }

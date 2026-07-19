@@ -1,0 +1,181 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Verdexis API",
+    "version": "0.1.0",
+    "description": "OpenAPI specification for the Verdexis web platform API. This baseline covers core health, authentication, wallet, trading, watchlist, and admin endpoints.",
+    "contact": {
+      "name": "Verdexis Engineering"
+    }
+  },
+  "servers": [
+    {
+      "url": "/api",
+      "description": "Relative API base URL"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Service health check",
+        "responses": {
+          "200": {
+            "description": "Service health information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "summary": "Authenticate a user",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": { "type": "string" },
+                  "password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Authentication successful" }
+        }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "summary": "Register a new user",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": { "type": "string" },
+                  "password": { "type": "string" },
+                  "name": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "User created" } }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "summary": "Refresh JWT token",
+        "responses": { "200": { "description": "New token" } }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "summary": "Invalidate current session/token",
+        "responses": { "204": { "description": "Logged out" } }
+      }
+    },
+    "/wallet": {
+      "get": {
+        "summary": "Retrieve wallet balances and positions",
+        "responses": {
+          "200": {
+            "description": "Wallet response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "balances": {
+                      "type": "array",
+                      "items": { "type": "object", "properties": { "token": { "type": "string" }, "available": { "type": "number" }, "locked": { "type": "number" } } }
+                    },
+                    "addresses": { "type": "array", "items": { "type": "string" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wallet/address": {
+      "post": {
+        "summary": "Create or retrieve a deposit address for a token",
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "properties": { "token": { "type": "string" } } } } } },
+        "responses": { "200": { "description": "Deposit address" } }
+      }
+    },
+    "/trades": {
+      "get": {
+        "summary": "List recent trades",
+        "responses": { "200": { "description": "Trades response" } }
+      },
+      "post": {
+        "summary": "Create a new trade/order",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "side": { "type": "string", "enum": ["buy", "sell"] },
+                  "symbol": { "type": "string" },
+                  "quantity": { "type": "number" },
+                  "price": { "type": "number" },
+                  "type": { "type": "string", "enum": ["limit", "market"] }
+                },
+                "required": ["side", "symbol", "quantity"]
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Order created" } }
+      }
+    },
+    "/trades/{tradeId}": {
+      "get": {
+        "summary": "Retrieve a specific trade by id",
+        "parameters": [{ "name": "tradeId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Trade details" }, "404": { "description": "Not found" } }
+      }
+    },
+    "/watchlist": {
+      "get": {
+        "summary": "List the authenticated user's watchlist",
+        "responses": {
+          "200": { "description": "Watchlist response" }
+        }
+      }
+    },
+    "/admin": {
+      "get": {
+        "summary": "Administrative dashboard data",
+        "responses": {
+          "200": { "description": "Admin response" }
+        }
+      }
+    },
+    "/docs/openapi.json": {
+      "get": {
+        "summary": "Download the OpenAPI document",
+        "responses": {
+          "200": { "description": "OpenAPI JSON document" }
+        }
+      }
+    }
+  }
+}

@@ -15,7 +15,7 @@ import rateLimit from 'express-rate-limit'
 import path from 'node:path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import authRoutes, { promoteAllAdminEmails } from './routes/auth.js'
+import authRoutes from './routes/auth.js'
 import profileRoutes from './routes/profile.js'
 import holdingsRoutes from './routes/holdings.js'
 import walletRoutes from './routes/wallet.js'
@@ -40,13 +40,30 @@ import auditRoutes from './routes/audit.js'
 import nftRoutes from './routes/nft.js'
 import adminHierarchyRoutes from './routes/admin-hierarchy.js'
 import otpRoutes from './routes/otp.js'
-// TEMPORARILY DISABLED - Security routes need schema alignment
-// import securityRoutes from './routes/security.js'
-// import userSecurityRoutes from './routes/userSecurity.js'
-import { isDbUnavailableError } from './dbError.js'
+import withdrawalsRoutes from './routes/withdrawals.js'
+import portfolioRoutes from './routes/portfolio.js'
+import stakingRoutes from './routes/staking.js'
+import walletVerificationRoutes from './routes/wallet-verification.js'
+import transactionExportRoutes from './routes/transaction-export.js'
+import limitsRoutes from './routes/limits.js'
+import adminFeaturesRoutes from './routes/admin-features.js'
+import advancedTradingRoutes from './routes/advanced-trading.js'
+import riskManagementRoutes from './routes/risk-management.js'
+import notificationsManagementRoutes from './routes/notifications-management.js'
+import tokenRegistryRoutes from './routes/tokenRegistry.js'
+import kycEnhancedRoutes, { setPrisma as setKycEnhancedPrisma } from './routes/kyc-enhanced.js'
+import analyticsRoutes from './routes/analytics.js'
+import advancedAnalyticsRoutes from './routes/advanced-analytics.js'
+import advancedTaxRoutes from './routes/advanced-tax.js'
+import advancedComplianceRoutes from './routes/advanced-compliance.js'
+import advancedNotificationsRoutes from './routes/advanced-notifications.js'
+import securityRoutes from './routes/security.js'
+import adminWithdrawalConfigRoutes from './routes/admin-withdrawal-config.js'
 import { requestContextMiddleware } from './logging.js'
 import { createErrorResponse } from './errorHandler.js'
-// import './securityJobs.js' // Initialize security cleanup jobs
+import { isDbUnavailableError } from './dbError.js'
+import { registerOpenApiDocs } from './openapiDocs.js'
+import './securityJobs.js'
 
 const app = express()
 app.set('etag', false)
@@ -114,6 +131,8 @@ app.use(
   }),
 )
 
+registerOpenApiDocs(app)
+
 const SERVER_BOOT_TIME = Date.now()
 let DB_READY = false
 
@@ -128,35 +147,28 @@ async function initializeDatabase(): Promise<void> {
 }
 
 initializeDatabase()
+setKycEnhancedPrisma(prisma)
 
 app.get('/api/health', async (_req, res) => {
   const dbReady = DB_READY
   let dbStatus = dbReady ? 'Ready' : 'Unavailable'
-  let dbError = null
-  
-  // Try a quick DB check
+
   if (!dbReady) {
     try {
       await prisma.$queryRaw`SELECT 1`
       dbStatus = 'Connected'
-    } catch (err) {
+    } catch {
       dbStatus = 'Failed'
-      dbError = err instanceof Error ? err.message : String(err)
     }
   }
-  
+
+  // Never expose internal error details, env name, node version, or DB URL
+  // status in a public health endpoint — only return what a load-balancer needs.
   res.json({
     ok: true,
     service: 'verdexis-api',
-    version: '0.1.0',
-    env: env.NODE_ENV,
     uptimeSec: Math.round((Date.now() - SERVER_BOOT_TIME) / 1000),
-    nodeVersion: process.version,
-    bootedAt: new Date(SERVER_BOOT_TIME).toISOString(),
     database: dbStatus,
-    databaseReady: dbReady,
-    databaseUrl: process.env.DATABASE_URL ? 'Set (hidden)' : 'NOT SET',
-    ...(dbError ? { databaseError: dbError } : {}),
   })
 })
 
@@ -178,15 +190,33 @@ app.use('/api/deposit-addresses', depositAddressesRoutes)
 app.use('/api/deposits', depositsRoutes)
 app.use('/api/oauth', amazonOAuthRoutes)
 app.use('/api/trades/advanced', advancedOrdersRoutes)
+// advancedTradingRoutes registered below under its own path
 app.use('/api/passkeys', passkeysRoutes)
 app.use('/api/kyc', kycRoutes)
+app.use('/api/kyc/enhanced', kycEnhancedRoutes)
 app.use('/api/copy-trading', copyTradingRoutes)
 app.use('/api', auditRoutes)
 app.use('/api/nfts', nftRoutes)
 app.use('/api/admin/hierarchy', adminHierarchyRoutes)
 app.use('/api/otp', otpRoutes)
-// app.use('/api/security', securityRoutes)
-// app.use('/api/user/security', userSecurityRoutes)
+app.use('/api/withdrawals', withdrawalsRoutes)
+app.use('/api/portfolio', portfolioRoutes)
+app.use('/api/staking', stakingRoutes)
+app.use('/api/wallet/verification', walletVerificationRoutes)
+app.use('/api/transactions', transactionExportRoutes)
+app.use('/api/limits', limitsRoutes)
+app.use('/api/admin/features', adminFeaturesRoutes)
+app.use('/api/advanced-trading', advancedTradingRoutes)
+app.use('/api/risk', riskManagementRoutes)
+app.use('/api/notifications-management', notificationsManagementRoutes)
+app.use('/api/admin/token-registry', tokenRegistryRoutes)
+app.use('/api/analytics', analyticsRoutes)
+app.use('/api/analytics/advanced', advancedAnalyticsRoutes)
+app.use('/api/tax', advancedTaxRoutes)
+app.use('/api/compliance', advancedComplianceRoutes)
+app.use('/api/notifications/advanced', advancedNotificationsRoutes)
+app.use('/api/security', securityRoutes)
+app.use('/api/admin/withdrawal-config', adminWithdrawalConfigRoutes)
 
 app.post('/api/admin/cache/clear', async (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '')
@@ -246,10 +276,11 @@ app.use((req, res) => {
 app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(`[verdexis-api] unhandled error on ${req.method} ${req.path}:`, err)
   if (isDbUnavailableError(err)) {
-    res.status(503).json(createErrorResponse('Database unavailable', err.message || String(err), req.path))
+    res.status(503).json(createErrorResponse('Database unavailable', undefined, req.path))
     return
   }
-  res.status(500).json(createErrorResponse('Internal server error', err?.message || String(err), req.path))
+  const detail = IS_PROD ? undefined : (err?.message || String(err))
+  res.status(500).json(createErrorResponse('Internal server error', detail, req.path))
 })
 
 export default app

@@ -10,6 +10,7 @@ export interface AuthPayload {
   sub: string
   email: string
   v?: number // tokenVersion at issue time
+  otpPending?: boolean
 }
 
 export function signToken(payload: AuthPayload): string {
@@ -49,6 +50,11 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
     res.status(401).json({ error: 'Invalid or expired token' })
     return
   }
+  // Reject pending OTP tokens — they must not be used as real session tokens.
+  if (payload.otpPending) {
+    res.status(401).json({ error: 'OTP verification required to complete login' })
+    return
+  }
   // Cheap existence check; cache could be added later.
   const user = await prisma.user.findUnique({
     where: { id: payload.sub },
@@ -59,7 +65,7 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
     return
   }
   // tokenVersion lets admins force-revoke all sessions for a user.
-  if (typeof payload.v === 'number' && payload.v !== user.tokenVersion) {
+  if (typeof payload.v === 'number' && user.tokenVersion !== null && payload.v !== user.tokenVersion) {
     res.status(401).json({ error: 'Session revoked. Please log in again.' })
     return
   }

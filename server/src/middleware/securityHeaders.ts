@@ -35,9 +35,6 @@ export function setupSecurityHeaders(app: Express) {
   // Prevent MIME sniffing
   app.use(helmet.noSniff())
 
-  // Enable XSS filtering in older browsers
-  app.use(helmet.xssFilter())
-
   // Disable X-Frame-Options (clickjacking protection)
   app.use(helmet.frameguard({ action: 'deny' }))
 
@@ -56,75 +53,11 @@ export function setupSecurityHeaders(app: Express) {
   // Strict-Transport-Security (HSTS) - Force HTTPS
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (process.env.NODE_ENV === 'production') {
-      // HSTS preload includes your domain in browser's preload list
       res.setHeader(
         'Strict-Transport-Security',
         'max-age=63072000; includeSubDomains; preload'
       )
     }
-    next()
-  })
-
-  // X-Content-Type-Options - Prevent MIME-type sniffing
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    res.setHeader('X-Content-Type-Options', 'nosniff')
-    next()
-  })
-
-  // X-Frame-Options - Prevent clickjacking
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    res.setHeader('X-Frame-Options', 'DENY')
-    next()
-  })
-
-  // X-XSS-Protection - Legacy XSS protection (for older browsers)
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    res.setHeader('X-XSS-Protection', '1; mode=block')
-    next()
-  })
-
-  // Referrer-Policy - Control referrer information disclosure
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
-    next()
-  })
-
-  // Permissions-Policy - Control which browser features can be used
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    res.setHeader(
-      'Permissions-Policy',
-      'geolocation=(), microphone=(), camera=(), payment=()'
-    )
-    next()
-  })
-
-  // Remove X-Powered-By header (doesn't reveal tech stack)
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    res.removeHeader('X-Powered-By')
-    next()
-  })
-
-  // ============= SUBRESOURCE INTEGRITY (SRI) SETUP =============
-  /**
-   * For CDN resources in HTML:
-   * <script src="https://cdn.example.com/lib.js" 
-   *   integrity="sha384-BASE64HERE" 
-   *   crossorigin="anonymous">
-   * </script>
-   * 
-   * Generate SRI hash:
-   * cat lib.js | openssl dgst -sha384 -binary | openssl enc -base64 -A
-   */
-
-  // ============= REQUEST SIZE LIMITS =============
-  // Prevent DoS attacks via large payloads
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    const maxBodySize = process.env.MAX_BODY_SIZE || '10mb'
-    const maxJsonSize = process.env.MAX_JSON_SIZE || '5mb'
-    const maxUrlEncodedSize = process.env.MAX_URLENCODED_SIZE || '5mb'
-
-    // Handled by express.json/urlencoded in app.ts
-    // Just documenting here
     next()
   })
 
@@ -142,6 +75,15 @@ export function setupSecurityHeaders(app: Express) {
 
     // Prevent browsers from opening downloads
     res.setHeader('X-Download-Options', 'noopen')
+
+    // Permissions-Policy - Control which browser features can be used
+    res.setHeader(
+      'Permissions-Policy',
+      'geolocation=(), microphone=(), camera=(), payment=()'
+    )
+
+    // Remove X-Powered-By header
+    res.removeHeader('X-Powered-By')
 
     next()
   })

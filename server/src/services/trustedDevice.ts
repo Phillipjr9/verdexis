@@ -159,11 +159,21 @@ export class TrustedDeviceService {
   /**
    * Update device
    */
-  private async updateDevice(deviceId: string, data: any) {
-    return prisma.trustedDevice.update({
+  private async updateDevice(deviceId: string, data: Record<string, unknown>): Promise<TrustedDevice> {
+    const updated = await prisma.trustedDevice.update({
       where: { id: deviceId },
-      data
+      data: {
+        ...data,
+        ...(typeof data.fingerprint !== 'undefined' ? { fingerprint: JSON.stringify(data.fingerprint) } : {}),
+        ...(typeof data.location !== 'undefined' ? { location: typeof data.location === 'string' ? data.location : JSON.stringify(data.location) } : {}),
+      } as any,
     })
+
+    return {
+      ...updated,
+      fingerprint: typeof updated.fingerprint === 'string' ? JSON.parse(updated.fingerprint) : (updated.fingerprint as DeviceFingerprint),
+      location: updated.location ? (typeof updated.location === 'string' ? JSON.parse(updated.location) : (updated.location as TrustedDevice['location'])) : undefined,
+    }
   }
 
   /**

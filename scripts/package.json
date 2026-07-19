@@ -1,0 +1,25 @@
+{
+  "name": "verdexis-cognito-otp",
+  "version": "1.0.0",
+  "description": "Cognito OTP authentication for Verdexis",
+  "main": "cognito-api.js",
+  "scripts": {
+    "start": "node cognito-api.js",
+    "setup": "bash setup-cognito.sh",
+    "test": "node test-cognito.js"
+  },
+  "dependencies": {
+    "aws-sdk": "^2.1693.0",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.2",
+    "express-session": "^1.19.0"
+  },
+  "keywords": [
+    "cognito",
+    "otp",
+    "aws",
+    "authentication"
+  ],
+  "author": "Verdexis",
+  "license": "MIT"
+}

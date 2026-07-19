@@ -71,7 +71,8 @@ export async function initRedis(): Promise<void> {
     })
 
     redis.on('error', (error) => {
-      console.error('[redis] ❌ Redis error:', error.message)
+      // Suppress error logs for optional Redis - it's not critical
+      // console.error('[redis] ❌ Redis error:', error.message)
     })
 
     // Test connection
@@ -112,7 +113,8 @@ export async function setCache<T>(
   if (!redis) return
 
   try {
-    const strategy = CACHE_STRATEGIES[key.split(':')[0]]
+    const prefix = key.split(':')[0] ?? ''
+    const strategy = CACHE_STRATEGIES[prefix]
     const cacheTtl = ttl || strategy?.ttl || 300
 
     await redis.setex(key, cacheTtl, JSON.stringify(value))

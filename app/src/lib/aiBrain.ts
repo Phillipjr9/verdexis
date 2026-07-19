@@ -81,6 +81,27 @@ export interface TechSignals {
   vsLow: number                  // distance from 7d low (%)
 }
 
+export interface TechSignals {
+  trend: 'up' | 'down' | 'flat'
+  trendStrength: number
+  rsi: number
+  vol7d: number
+  drawdown7d: number
+  sma_short: number
+  sma_long: number
+  smaCross: 'bullish' | 'bearish' | 'none'
+  vsHigh: number
+  vsLow: number
+  macd: number
+  macdSignal: number
+  macdHistogram: number
+  bbUpper: number
+  bbMiddle: number
+  bbLower: number
+  bbWidth: number
+  bbPosition: number   // 0=at lower band, 1=at upper band
+}
+
 export function computeSignals(spark: number[] | undefined): TechSignals | null {
   if (!spark || spark.length < 12) return null
   const prices = spark.filter((x) => typeof x === 'number' && isFinite(x) && x > 0)
@@ -92,10 +113,9 @@ export function computeSignals(spark: number[] | undefined): TechSignals | null 
   const low = Math.min(...prices)
 
   const rets = dailyReturns(prices)
-  const vol = annualisedVolatility(rets, 24 * 7) * 100        // hourly-ish bars
+  const vol = annualisedVolatility(rets, 24 * 7) * 100
   const dd = maxDrawdown(prices) * 100
 
-  // SMAs over short (~last 1/4) vs long (~all)
   const shortLen = Math.max(4, Math.floor(prices.length / 4))
   const longLen  = prices.length
   const sma_short = mean(prices.slice(-shortLen))
@@ -106,25 +126,53 @@ export function computeSignals(spark: number[] | undefined): TechSignals | null 
   if (prevShort <= prevLong && sma_short > sma_long) smaCross = 'bullish'
   else if (prevShort >= prevLong && sma_short < sma_long) smaCross = 'bearish'
 
-  // RSI(14) — Wilder's smoothing; falls back to simple if not enough bars
   const rsi = computeRSI(prices, Math.min(14, Math.max(6, Math.floor(prices.length / 5))))
+
+  // MACD: EMA(12) - EMA(26), signal EMA(9) of MACD
+  const ema12 = computeEMA(prices, Math.min(12, Math.floor(prices.length / 3)))
+  const ema26 = computeEMA(prices, Math.min(26, Math.floor(prices.length * 2 / 3)))
+  const macdLine = ema12 - ema26
+  // Build a short MACD series for the signal line
+  const macdSeries: number[] = []
+  const step = Math.max(1, Math.floor(prices.length / 20))
+  for (let i = step; i <= prices.length; i += step) {
+    const slice = prices.slice(0, i)
+    macdSeries.push(computeEMA(slice, Math.min(12, Math.floor(slice.length / 3))) -
+                    computeEMA(slice, Math.min(26, Math.floor(slice.length * 2 / 3))))
+  }
+  const macdSignal = macdSeries.length >= 3 ? computeEMA(macdSeries, Math.min(9, macdSeries.length)) : macdLine
+  const macdHistogram = macdLine - macdSignal
+
+  // Bollinger Bands: 20-period SMA ± 2σ
+  const bbLen = Math.min(20, prices.length)
+  const bbSlice = prices.slice(-bbLen)
+  const bbMiddle = mean(bbSlice)
+  const bbStd = stdev(bbSlice)
+  const bbUpper = bbMiddle + 2 * bbStd
+  const bbLower = bbMiddle - 2 * bbStd
+  const bbWidth = bbStd > 0 ? ((bbUpper - bbLower) / bbMiddle) * 100 : 0
+  const bbPosition = bbUpper > bbLower ? (last - bbLower) / (bbUpper - bbLower) : 0.5
 
   const totalChange = (last - first) / first
   const trend: TechSignals['trend'] = totalChange > 0.01 ? 'up' : totalChange < -0.01 ? 'down' : 'flat'
   const trendStrength = Math.min(100, Math.round(Math.abs(totalChange) * 1000))
 
   return {
-    trend,
-    trendStrength,
-    rsi,
-    vol7d: vol,
-    drawdown7d: dd,
-    sma_short,
-    sma_long,
-    smaCross,
+    trend, trendStrength, rsi, vol7d: vol, drawdown7d: dd,
+    sma_short, sma_long, smaCross,
     vsHigh: ((last - high) / high) * 100,
     vsLow:  ((last - low)  / low)  * 100,
+    macd: macdLine, macdSignal, macdHistogram,
+    bbUpper, bbMiddle, bbLower, bbWidth, bbPosition,
   }
+}
+
+function computeEMA(prices: number[], period: number): number {
+  if (prices.length === 0 || period <= 0) return 0
+  const k = 2 / (period + 1)
+  let ema = prices[0]
+  for (let i = 1; i < prices.length; i++) ema = prices[i] * k + ema * (1 - k)
+  return ema
 }
 
 function computeRSI(prices: number[], period = 14): number {
@@ -416,6 +464,196 @@ function correlation(a: number[], b: number[]): number {
   return num / denom
 }
 
+// ---------- market opportunity scanner ----------
+
+export interface MarketOpportunity {
+  coin: CryptoQuote
+  action: 'BUY' | 'SELL' | 'WATCH'
+  score: number          // 0-100 (higher = stronger signal)
+  reasons: string[]      // human-readable signal explanations
+  riskLevel: 'Low' | 'Medium' | 'High'
+  signals: TechSignals
+}
+
+/**
+ * Scans the top N coins and scores each one for buy / sell / watch.
+ * Scoring weights:
+ *   RSI oversold/overbought  → ±30 pts
+ *   SMA cross                → ±20 pts
+ *   MACD histogram direction → ±15 pts
+ *   Bollinger band position  → ±15 pts
+ *   24h momentum             → ±10 pts
+ *   Volatility penalty       → up to -10 pts
+ */
+export function computeMarketOpportunities(
+  market: CryptoQuote[],
+  holdings: PortfolioHolding[],
+  topN = 30,
+): MarketOpportunity[] {
+  const results: MarketOpportunity[] = []
+  const heldSyms = new Set(holdings.map(h => h.symbol.toLowerCase()))
+
+  for (const coin of market.slice(0, topN)) {
+    const sig = computeSignals(coin.sparkline_in_7d?.price)
+    if (!sig) continue
+
+    let score = 50  // neutral baseline
+    const reasons: string[] = []
+
+    // RSI
+    if (sig.rsi <= 30) {
+      score += 30
+      reasons.push(`RSI ${sig.rsi.toFixed(0)} — oversold (potential bounce)`)
+    } else if (sig.rsi <= 40) {
+      score += 15
+      reasons.push(`RSI ${sig.rsi.toFixed(0)} — approaching oversold`)
+    } else if (sig.rsi >= 70) {
+      score -= 30
+      reasons.push(`RSI ${sig.rsi.toFixed(0)} — overbought (mean-reversion risk)`)
+    } else if (sig.rsi >= 60) {
+      score -= 15
+      reasons.push(`RSI ${sig.rsi.toFixed(0)} — elevated, watch for reversal`)
+    }
+
+    // SMA cross
+    if (sig.smaCross === 'bullish') {
+      score += 20
+      reasons.push('Bullish SMA cross — short MA crossed above long MA')
+    } else if (sig.smaCross === 'bearish') {
+      score -= 20
+      reasons.push('Bearish SMA cross — short MA crossed below long MA')
+    }
+
+    // MACD
+    if (sig.macdHistogram > 0) {
+      score += 15
+      reasons.push('MACD histogram positive — bullish momentum building')
+    } else {
+      score -= 15
+      reasons.push('MACD histogram negative — bearish momentum')
+    }
+
+    // Bollinger band position
+    if (sig.bbPosition < 0.2) {
+      score += 15
+      reasons.push('Price near lower Bollinger Band — potential mean-reversion entry')
+    } else if (sig.bbPosition > 0.8) {
+      score -= 15
+      reasons.push('Price near upper Bollinger Band — extended, risk of pullback')
+    }
+
+    // 24h momentum
+    const chg = coin.price_change_percentage_24h || 0
+    if (chg > 5) {
+      score += 10
+      reasons.push(`Strong 24h momentum +${chg.toFixed(1)}%`)
+    } else if (chg < -5) {
+      score -= 10
+      reasons.push(`Weak 24h momentum ${chg.toFixed(1)}%`)
+    }
+
+    // Volatility penalty (very high vol = higher risk, lower score)
+    const volPenalty = Math.min(10, Math.max(0, (sig.vol7d - 80) / 20))
+    score -= volPenalty
+
+    score = Math.round(Math.max(0, Math.min(100, score)))
+
+    const riskLevel: MarketOpportunity['riskLevel'] =
+      sig.vol7d > 150 ? 'High' : sig.vol7d > 80 ? 'Medium' : 'Low'
+
+    let action: MarketOpportunity['action'] = 'WATCH'
+    if (score >= 65) action = 'BUY'
+    else if (score <= 35) action = 'SELL'
+
+    // If user holds this coin and signal is SELL, prioritise it
+    const isHeld = heldSyms.has(coin.symbol.toLowerCase())
+    if (isHeld && action === 'SELL') score = Math.min(100, score + 10)
+
+    results.push({ coin, action, score, reasons, riskLevel, signals: sig })
+  }
+
+  return results.sort((a, b) => {
+    // Sort: BUY first (highest score), then WATCH, then SELL (lowest score)
+    if (a.action !== b.action) {
+      const order = { BUY: 0, WATCH: 1, SELL: 2 }
+      return order[a.action] - order[b.action]
+    }
+    return b.score - a.score
+  })
+}
+
+// ---------- portfolio-level risk advisory ----------
+
+export interface RiskAdvisory {
+  overallRisk: 'Low' | 'Medium' | 'High' | 'Critical'
+  sellAdvisories: { symbol: string; reason: string; urgency: 'low' | 'medium' | 'high' }[]
+  buyOpportunities: { symbol: string; reason: string; confidence: number }[]
+  regimeSummary: string
+}
+
+export function computeRiskAdvisory(
+  holdings: PortfolioHolding[],
+  market: CryptoQuote[],
+  netWorth: number,
+): RiskAdvisory {
+  const regime = computeMarketRegime(market)
+  const opportunities = computeMarketOpportunities(market, holdings)
+  const risk = computePortfolioRisk(holdings, market, netWorth)
+
+  const sellAdvisories: RiskAdvisory['sellAdvisories'] = []
+  const buyOpportunities: RiskAdvisory['buyOpportunities'] = []
+
+  // Check each held position for sell signals
+  for (const h of holdings) {
+    const m = market.find(x => x.id === h.id || x.symbol.toLowerCase() === h.symbol.toLowerCase())
+    if (!m) continue
+    const sig = computeSignals(m.sparkline_in_7d?.price)
+    if (!sig) continue
+
+    const reasons: string[] = []
+    let urgency: 'low' | 'medium' | 'high' = 'low'
+
+    if (sig.rsi >= 75) { reasons.push(`RSI ${sig.rsi.toFixed(0)} — severely overbought`); urgency = 'high' }
+    else if (sig.rsi >= 65) { reasons.push(`RSI ${sig.rsi.toFixed(0)} — overbought`); urgency = 'medium' }
+
+    if (sig.smaCross === 'bearish') { reasons.push('Bearish SMA cross confirmed'); urgency = urgency === 'low' ? 'medium' : 'high' }
+    if (sig.macdHistogram < 0 && sig.trend === 'down') { reasons.push('MACD bearish + downtrend'); urgency = urgency === 'low' ? 'medium' : urgency }
+    if (h.pnlPercent > 40) { reasons.push(`Up ${h.pnlPercent.toFixed(0)}% — consider locking in gains`); urgency = urgency === 'low' ? 'low' : urgency }
+    if (h.pnlPercent < -20) { reasons.push(`Down ${Math.abs(h.pnlPercent).toFixed(0)}% — stop-loss territory`); urgency = 'high' }
+
+    if (reasons.length > 0) {
+      sellAdvisories.push({ symbol: h.symbol, reason: reasons.join('; '), urgency })
+    }
+  }
+
+  // Top buy opportunities from unowned coins
+  const heldSyms = new Set(holdings.map(h => h.symbol.toLowerCase()))
+  const buys = opportunities
+    .filter(o => o.action === 'BUY' && !heldSyms.has(o.coin.symbol.toLowerCase()))
+    .slice(0, 5)
+  for (const b of buys) {
+    buyOpportunities.push({
+      symbol: b.coin.symbol.toUpperCase(),
+      reason: b.reasons.slice(0, 2).join('; '),
+      confidence: b.score,
+    })
+  }
+
+  // Overall risk
+  const fearGreed = regime?.fearGreed ?? 50
+  const volGrade = risk?.riskGrade ?? 'Low'
+  let overallRisk: RiskAdvisory['overallRisk'] = 'Low'
+  if (volGrade === 'Extreme' || fearGreed < 15 || fearGreed > 90) overallRisk = 'Critical'
+  else if (volGrade === 'High' || fearGreed < 25 || fearGreed > 80) overallRisk = 'High'
+  else if (volGrade === 'Elevated' || fearGreed < 40 || fearGreed > 70) overallRisk = 'Medium'
+
+  const regimeSummary = regime
+    ? `${regime.label} (Fear/Greed ${regime.fearGreed}/100, breadth ${regime.breadth.toFixed(0)}% advancing)`
+    : 'Market data unavailable'
+
+  return { overallRisk, sellAdvisories, buyOpportunities, regimeSummary }
+}
+
 // ---------- intent classifier ----------
 
 export type Intent =
@@ -425,27 +663,34 @@ export type Intent =
   | 'pnl' | 'best_worst' | 'win_rate'
   | 'asset_quote' | 'asset_signals' | 'compare_assets'
   | 'market_regime' | 'market_news' | 'top_movers'
-  | 'deposit_history' | 'withdraw_history' | 'transaction_history'
+  | 'deposit_history' | 'withdraw_history' | 'transaction_history' | 'fee_history'
   | 'cash_balance' | 'rebalance' | 'tax_estimate'
   | 'staking' | 'yield' | 'goals' | 'dca'
   | 'alerts' | 'watchlist'
   | 'whatif_sell' | 'whatif_buy'
   | 'recommendation' | 'strategy'
   | 'fundamentals' | 'persona_question'
+  | 'copy_trading' | 'paper_trading' | 'sentiment'
+  | 'execute_trade' | 'execute_sell' | 'execute_swap'
+  | 'market_opportunities' | 'risk_advisory'
   | 'unknown'
 
 export function classifyIntent(query: string): Intent {
   const q = query.toLowerCase().trim()
   if (!q) return 'unknown'
 
-  if (/^(hi|hello|hey|yo|sup|good (morning|afternoon|evening))/.test(q)) return 'greeting'
-  if (/(thank|thanks|appreciate|cheers)/.test(q)) return 'thanks'
-  if (/(help|what can you do|what.*do you do|capabilities|commands)/.test(q)) return 'help'
+  if (/^(hi|hello|hey|yo|sup|good (morning|afternoon|evening|night))/.test(q)) return 'greeting'
+  if (/(thank|thanks|appreciate|cheers|great|awesome|perfect|nice one)/.test(q)) return 'thanks'
+  if (/(help|what can you do|what.*do you do|capabilities|commands|features)/.test(q)) return 'help'
 
   if (/(rebalance|reallocate|reweight)/.test(q)) return 'rebalance'
   if (/(tax|capital gains|wash sale|cost basis)/.test(q)) return 'tax_estimate'
   if (/(what (if|happens) i (sell|dump|trim|reduce)|sell .* of my)/.test(q)) return 'whatif_sell'
   if (/(what (if|happens) i (buy|add|stack))/.test(q)) return 'whatif_buy'
+
+  if (/(copy.trad|mirror.trad|follow.*trader|copy.*trade)/.test(q)) return 'copy_trading'
+  if (/(paper.trad|simulated|virtual.*trad|practice.*trad|demo.*trad)/.test(q)) return 'paper_trading'
+  if (/(sentiment|mood|feeling|bullish|bearish|community|market.*vibe)/.test(q)) return 'sentiment'
 
   if (/(stake|staking|validator|delegation)/.test(q)) return 'staking'
   if (/(yield|apy|apr|earn|farming)/.test(q)) return 'yield'
@@ -454,10 +699,11 @@ export function classifyIntent(query: string): Intent {
   if (/(alert|notification|notify)/.test(q)) return 'alerts'
   if (/(watchlist|watching)/.test(q)) return 'watchlist'
 
-  if (/(deposit|funded|funding|topped? up|added money|put in)/.test(q)) return 'deposit_history'
-  if (/(withdraw|withdrew|cashed out|took out)/.test(q)) return 'withdraw_history'
-  if (/(transaction|history|activity|statement)/.test(q)) return 'transaction_history'
-  if (/(cash|usd balance|how much (cash|money)|dry powder)/.test(q)) return 'cash_balance'
+  if (/(fee|fees|charged|deducted|management fee|service fee|commission)/.test(q)) return 'fee_history'
+  if (/(deposit|funded|funding|topped? up|added money|put in|received|credited)/.test(q)) return 'deposit_history'
+  if (/(withdraw|withdrew|cashed out|took out|sent out|debited)/.test(q)) return 'withdraw_history'
+  if (/(transaction|history|activity|statement|ledger)/.test(q)) return 'transaction_history'
+  if (/(cash|usd balance|how much (cash|money)|dry powder|available balance)/.test(q)) return 'cash_balance'
 
   if (/(health score|portfolio health|how healthy)/.test(q)) return 'portfolio_health'
   if (/(risk|volatility|var|drawdown|sharpe)/.test(q)) return 'portfolio_risk'
@@ -465,23 +711,32 @@ export function classifyIntent(query: string): Intent {
   if (/(diversif|spread out)/.test(q)) return 'diversification'
   if (/(allocation|breakdown|weights?|split)/.test(q)) return 'allocation'
 
-  if (/(pnl|p&l|profit|loss|gain|return|made|lost|how (much|am i) (up|down))/.test(q)) return 'pnl'
-  if (/(best|worst|top|bottom) (performer|holding|trade|position)/.test(q)) return 'best_worst'
+  if (/(pnl|p&l|profit|loss|gain|return|made|lost|how (much|am i) (up|down)|performance|earnings)/.test(q)) return 'pnl'
+  if (/(best|worst|top|bottom) (performer|holding|trade|position|asset)/.test(q)) return 'best_worst'
   if (/(win rate|win\/loss|trade stats|trading stats|how (many|often) (did|do) i)/.test(q)) return 'win_rate'
 
-  if (/(top movers?|gainers?|losers?|biggest movers?)/.test(q)) return 'top_movers'
-  if (/(market sentiment|market regime|fear.*greed|how.*market.*feeling|breadth)/.test(q)) return 'market_regime'
-  if (/(news|headline|story)/.test(q)) return 'market_news'
+  if (/(top movers?|gainers?|losers?|biggest movers?|24h movers?)/.test(q)) return 'top_movers'
+  if (/(market sentiment|market regime|fear.*greed|how.*market.*feeling|breadth|market.*mood)/.test(q)) return 'market_regime'
+  if (/(news|headline|story|latest.*crypto|crypto.*news)/.test(q)) return 'market_news'
 
   if (/(compare|vs\.?|versus|which is better|which should i)/.test(q)) return 'compare_assets'
-  if (/(price|quote|how much is|what.*(trading|priced) at)/.test(q)) return 'asset_quote'
-  if (/(rsi|moving average|sma|ema|trend|signal|momentum|overbought|oversold|breakout)/.test(q)) return 'asset_signals'
+  if (/(price|quote|how much is|what.*(trading|priced) at|how is my|how.*doing)/.test(q)) return 'asset_quote'
+  if (/(rsi|moving average|sma|ema|macd|bollinger|trend|signal|momentum|overbought|oversold|breakout)/.test(q)) return 'asset_signals'
 
-  if (/(strategy|approach|plan|tactic|playbook)/.test(q)) return 'strategy'
-  if (/(should i|recommend|suggest|advice|what.*should|what.*do (you|i) think)/.test(q)) return 'recommendation'
-  if (/(fundamental|moat|business|earnings|revenue|cash flow|valuation|p\/?e)/.test(q)) return 'fundamentals'
+  if (/(strategy|approach|plan|tactic|playbook|how should i invest)/.test(q)) return 'strategy'
+  if (/(should i|recommend|suggest|advice|what.*should|what.*do (you|i) think|what.*buy|what.*sell)/.test(q)) return 'recommendation'
+  if (/(fundamental|moat|business|earnings|revenue|cash flow|valuation|p\/?e|tokenomics)/.test(q)) return 'fundamentals'
+  if (/(who are you|what.*persona|which.*persona|tell me about yourself|your philosophy|your style)/.test(q)) return 'persona_question'
 
   if (/(portfolio|net worth|holdings|positions)/.test(q)) return 'portfolio_overview'
+
+  // Action intents — must come after what-if checks
+  if (/(^buy |^i want to buy|^place.*buy|^execute.*buy|^purchase |^i.d like to buy|^can you buy)/.test(q)) return 'execute_trade'
+  if (/(^sell |^i want to sell|^place.*sell|^execute.*sell|^dump |^i.d like to sell|^can you sell)/.test(q)) return 'execute_sell'
+  if (/(^swap |^i want to swap|^exchange |^convert |^i.d like to swap|^can you swap)/.test(q)) return 'execute_swap'
+
+  if (/(best (market|coin|crypto|asset|buy|trade)|what (should|can) i buy|top (opportunity|opportunities)|where (should|to) invest|good (entry|buy)|market scan|scan market|opportunity|opportunities)/.test(q)) return 'market_opportunities'
+  if (/(risk advisory|advise|should i sell|when (to|should i) sell|market risk|portfolio danger|danger|protect|hedge|exit|cut loss|stop loss|at risk)/.test(q)) return 'risk_advisory'
 
   return 'unknown'
 }

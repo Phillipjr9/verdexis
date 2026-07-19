@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../db.js'
 import { requireAuth, type AuthedRequest } from '../auth.js'
+import { warnUnverified } from '../middleware/verificationCheck.js'
 
 const router = Router()
 
@@ -13,7 +14,7 @@ const profileSchema = z.object({
   twoFactor: z.boolean().optional(),
 })
 
-router.patch('/', requireAuth, async (req: AuthedRequest, res) => {
+router.patch('/', requireAuth, warnUnverified, async (req: AuthedRequest, res) => {
   const userId = req.userId
   if (!userId) {
     res.status(401).json({ error: 'Unauthorized' })

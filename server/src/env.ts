@@ -1,5 +1,11 @@
 import { z } from 'zod'
 
+// When running tests, provide minimal defaults so env validation doesn't abort the test runner
+if (process.env.NODE_ENV === 'test') {
+  process.env.DATABASE_URL = process.env.DATABASE_URL || 'file:memory?mode=memory&cache=shared'
+  process.env.JWT_SECRET = process.env.JWT_SECRET || 'testjwtsecret000000'
+}
+
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
@@ -13,6 +19,8 @@ const schema = z.object({
   ALERT_POLL_INTERVAL_MS: z.coerce.number().int().min(15_000).default(60_000),
   // Comma-separated list of emails that auto-promote to admin on next login.
   ADMIN_EMAILS: z.string().default(''),
+  // Optional admin API secret for machine-to-machine admin calls (set in prod)
+  ADMIN_API_SECRET: z.string().optional(),
   // Optional Alpha Vantage API key for historical stock prices used by the
   // admin "deposit + invest as <stock>" flow. Crypto prices come from the
   // free CoinGecko endpoints and don't need a key.
@@ -24,6 +32,8 @@ const schema = z.object({
   // aggressively rate-limits/blocks shared cloud egress IPs.
   COINGECKO_API_KEY: z.string().optional(),
   COINGECKO_API_TIER: z.enum(['demo', 'pro']).default('demo'),
+  // Optional Coinbase proxy for restricted networks (e.g., Render free tier)
+  COINBASE_PROXY_URL: z.string().optional(),
   // Optional Finnhub key (60 req/min free) for stock/forex/crypto news.
   FINNHUB_API_KEY: z.string().optional(),
   // Optional Twelve Data key (800 req/day free) — used as a higher-volume
@@ -44,6 +54,7 @@ const schema = z.object({
   SMTP_SECURE: z.string().optional(),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().optional(),
   // SMS configuration for OTP delivery
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),
@@ -69,6 +80,16 @@ const schema = z.object({
   ENABLE_FRAUD_DETECTION: z.coerce.boolean().default(true),
   RISK_SCORE_THRESHOLD: z.coerce.number().default(60),
   AUTO_BLOCK_CRITICAL_RISK: z.coerce.boolean().default(true),
+  // Provider integrations
+  BTCPAY_SERVER_URL: z.string().optional(),
+  BTCPAY_API_KEY: z.string().optional(),
+  BTCPAY_STORE_ID: z.string().optional(),
+  COINBASE_COMMERCE_KEY: z.string().optional(),
+  CRYPTOCOM_PAY_KEY: z.string().optional(),
+  CRYPTOCOM_PAY_SECRET: z.string().optional(),
+  FIREBASE_PROJECT_ID: z.string().optional(),
+  FIREBASE_PRIVATE_KEY: z.string().optional(),
+  FIREBASE_CLIENT_EMAIL: z.string().optional(),
   // Webhook notifications
   WEBHOOK_SECRET: z.string().optional(),
   SECURITY_WEBHOOK_URL: z.string().optional(),

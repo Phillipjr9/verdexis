@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import './lightmode.css';
 
 @tailwind base;
 @tailwind components;
@@ -464,3 +465,6 @@ button:disabled,
   cursor: not-allowed;
   opacity: 0.55;
 }
+
+
+/* Light mode overrides are in lightmode.css (imported above) */

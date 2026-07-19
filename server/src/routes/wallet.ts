@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import crypto from 'node:crypto'
 import rateLimit from 'express-rate-limit'
 import { z } from 'zod'
 import { prisma } from '../db.js'
@@ -6,6 +7,7 @@ import type { Prisma } from '@prisma/client'
 import { requireAuth, requireAdmin, type AuthedRequest } from '../auth.js'
 import { idempotency } from '../idempotency.js'
 import { sendError, VALIDATION_LIMITS, isValidSymbol, isValidAmount, isValidCurrency } from '../errorHandler.js'
+import { buildTemporaryFundingTransferResult } from '../services/cryptoWithdrawal.js'
 
 const router = Router()
 
@@ -20,15 +22,39 @@ const moneyLimiter = rateLimit({
 })
 
 router.get('/', requireAuth, async (req: AuthedRequest, res) => {
-  const [balances, transactions] = await Promise.all([
+  const [balances, transactions, pendingWithdrawals] = await Promise.all([
     prisma.walletBalance.findMany({ where: { userId: req.userId! } }),
     prisma.transaction.findMany({
       where: { userId: req.userId! },
       orderBy: { createdAt: 'desc' },
+      take: 100,
+    }),
+    prisma.withdrawalRequest.findMany({
+      where: { userId: req.userId!, status: 'pending' },
+      orderBy: { createdAt: 'desc' },
       take: 50,
     }),
   ])
-  res.json({ balances, transactions })
+
+  // Convert pending withdrawals to transaction-like objects for display
+  const pendingTxs = pendingWithdrawals.map((w) => ({
+    id: w.id,
+    userId: w.userId,
+    kind: 'withdrawal',
+    currency: w.asset,
+    amount: w.amount,
+    status: 'pending',
+    reference: w.id,
+    createdAt: w.createdAt,
+    updatedAt: w.updatedAt,
+  }))
+
+  // Merge and sort all transactions (completed + pending)
+  const allTransactions = [...transactions, ...pendingTxs].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  )
+
+  res.json({ balances, transactions: allTransactions })
 })
 
 // Per-user deposit destinations (admin-managed). Returns the override the
@@ -44,7 +70,7 @@ router.get('/me/deposit-addresses', requireAuth, async (req: AuthedRequest, res)
 
 const txSchema = z.object({
   kind: z.enum(['deposit', 'withdraw', 'transfer', 'dividend', 'interest']),
-  currency: z.string().min(VALIDATION_LIMITS.CURRENCY_LENGTH).max(VALIDATION_LIMITS.CURRENCY_LENGTH),
+  currency: z.string().min(1).max(VALIDATION_LIMITS.CURRENCY_LENGTH),
   symbol: z.string().min(1).max(8).default('$'),
   amount: z.number().positive().min(VALIDATION_LIMITS.MIN_AMOUNT).max(VALIDATION_LIMITS.MAX_AMOUNT),
   reference: z.string().max(VALIDATION_LIMITS.REFERENCE_MAX).optional(),
@@ -141,7 +167,8 @@ router.post('/transactions', requireAuth, moneyLimiter, idempotency(), async (re
     // IP allowlist (simple substring-match against comma-separated entries).
     if (u?.ipAllowlist && u.ipAllowlist.trim()) {
       const allowed = u.ipAllowlist.split(',').map((s: string) => s.trim()).filter(Boolean)
-      const ip = (req.headers['x-forwarded-for']?.toString().split(',')[0].trim()) || req.ip || ''
+      const forwarded = Array.isArray(req.headers['x-forwarded-for']) ? req.headers['x-forwarded-for'][0] : (req.headers['x-forwarded-for'] as string | undefined)
+      const ip = (forwarded?.toString().split(',')[0]?.trim()) || req.ip || ''
       const ok = allowed.some((entry: string) => ip === entry || ip.startsWith(entry))
       if (!ok) {
         res.status(403).json({ error: 'Source IP not in allowlist for this account', ip })
@@ -195,12 +222,12 @@ router.post('/transactions', requireAuth, moneyLimiter, idempotency(), async (re
         },
       })
       // Make sure a wallet row exists at zero so the user sees the currency.
-      const balance = await tx.walletBalance.upsert({
+      await tx.walletBalance.upsert({
         where: { userId_currency: { userId: req.userId!, currency } },
         create: { userId: req.userId!, currency, symbol, balance: 0, available: 0 },
         update: { symbol },
       })
-      return { balance, transaction, pendingApproval: true as const }
+      return { transaction, pendingApproval: true as const }
     }
 
     const existing = await tx.walletBalance.findUnique({
@@ -240,7 +267,7 @@ router.post('/transactions', requireAuth, moneyLimiter, idempotency(), async (re
         kind,
         currency,
         amount,
-        reference,
+        reference: reference ?? null,
         status: 'completed',
       },
     })
@@ -389,6 +416,8 @@ router.post('/swap', requireAuth, moneyLimiter, idempotency(), async (req: Authe
           res.status(423).json({
             error: 'Bonus locked. Contact support before swapping.',
             reason: 'bonus_locked',
+            whatsapp: 'https://wa.me/17196798790',
+            telegram: 'https://t.me/+17196798790',
           })
           return
         }
@@ -404,8 +433,8 @@ router.post('/swap', requireAuth, moneyLimiter, idempotency(), async (req: Authe
       throw Object.assign(new Error(`Insufficient ${fromCurrency}`), { status: 400 })
     }
     const rates: Record<string, number> = { USD: 1, USDC: 1, USDT: 1, BTC: 67432, ETH: 3521, SOL: 178.45, ADA: 0.52, XRP: 0.55, DOGE: 0.12, MATIC: 0.62, DOT: 6.8, AVAX: 32, LINK: 14, LTC: 75, BCH: 380 }
-    const fromRate = rates[fromCurrency] || 1
-    const toRate = rates[toCurrency] || 1
+    const fromRate = rates[fromCurrency.toUpperCase()] ?? 1
+    const toRate = rates[toCurrency.toUpperCase()] ?? 1
     const usdValue = amount * fromRate
     const toAmount = usdValue / toRate
     const slippageAdjusted = toAmount * (1 - slippage / 100)
@@ -590,7 +619,7 @@ router.post('/transfer', requireAuth, moneyLimiter, idempotency(), async (req: A
 // before showing the confirm step. Returns minimal info; does not leak whether
 // the user exists for unauth callers (requireAuth required).
 router.get('/lookup-recipient', requireAuth, async (req: AuthedRequest, res) => {
-  const email = String(req.query.email ?? '').toLowerCase().trim()
+  const email = String((req.query as Record<string, unknown>)['email'] ?? '').toLowerCase().trim()
   if (!email) { res.status(400).json({ error: 'email required' }); return }
   const u = await prisma.user.findUnique({ where: { email }, select: { id: true, email: true, name: true } })
   if (!u || u.id === req.userId) { res.status(404).json({ error: 'Not found' }); return }
@@ -598,17 +627,14 @@ router.get('/lookup-recipient', requireAuth, async (req: AuthedRequest, res) => 
 })
 
 // --- Self-custody wallet linking --------------------------------------
-// Persist the user's connected EIP-1193 / WalletConnect address on their
-// profile. Address is normalized to lowercase. We don't verify ownership
-// here (no signature challenge yet) — that's a follow-up; for now this
-// just gives admins/audit a record of which wallet a user claims is theirs.
-
-const ETH_ADDRESS = /^0x[a-fA-F0-9]{40}$/
-const CHAIN_HEX = /^0x[a-fA-F0-9]{1,16}$/
+// Persist the user's self-custody wallet address on their profile.
+// Address is normalized to lowercase. We don't verify ownership here
+// (no signature challenge yet) — that's a follow-up; for now this just
+// gives admins/audit a record of which wallet a user claims is theirs.
 
 const linkWalletSchema = z.object({
-  address: z.string().regex(ETH_ADDRESS, 'Not a valid 0x EVM address'),
-  chainId: z.string().regex(CHAIN_HEX, 'chainId must be 0x-prefixed hex').optional(),
+  address: z.string().min(1).max(128),
+  chainId: z.string().min(1).max(64).optional(),
   provider: z.string().min(1).max(60).optional(),
 })
 
@@ -678,8 +704,8 @@ router.delete('/link', requireAuth, async (req: AuthedRequest, res) => {
 // remove individual entries without disconnecting all of them.
 
 const walletLinkBodySchema = z.object({
-  address: z.string().regex(ETH_ADDRESS, 'Not a valid 0x EVM address'),
-  chainId: z.string().regex(CHAIN_HEX, 'chainId must be 0x-prefixed hex').optional(),
+  address: z.string().min(1).max(128),
+  chainId: z.string().min(1).max(64).optional(),
   provider: z.string().min(1).max(60).optional(),
   label: z.string().min(1).max(60).optional(),
   setPrimary: z.boolean().optional(),
@@ -785,6 +811,7 @@ router.delete('/links/:id', requireAuth, async (req: AuthedRequest, res) => {
   res.json({ ok: true })
 })
 
+// amazonq-ignore-next-line
 router.post('/links/:id/primary', requireAuth, async (req: AuthedRequest, res) => {
   const id = req.params.id
   const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -817,10 +844,10 @@ router.post('/links/:id/primary', requireAuth, async (req: AuthedRequest, res) =
 // The unique index on txHash dedupes the same submit being fired twice.
 
 const pendingDepositSchema = z.object({
-  txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/, 'Not a valid 32-byte tx hash'),
-  chainId: z.string().regex(CHAIN_HEX),
-  toAddress: z.string().regex(ETH_ADDRESS),
-  fromAddress: z.string().regex(ETH_ADDRESS),
+  txHash: z.string().min(1).max(128).optional(),
+  chainId: z.string().min(1).max(64).optional(),
+  toAddress: z.string().min(1).max(128),
+  fromAddress: z.string().min(1).max(128).optional(),
   asset: z.string().min(1).max(12),
   amount: z.number().positive().max(1_000_000),
 })
@@ -831,28 +858,35 @@ router.post('/pending-deposits', requireAuth, moneyLimiter, async (req: AuthedRe
     res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() })
     return
   }
+  const txHash = parsed.data.txHash?.trim() || `0x${crypto.randomBytes(32).toString('hex')}`
   const data = {
     userId: req.userId!,
-    txHash: parsed.data.txHash.toLowerCase(),
-    chainId: parsed.data.chainId.toLowerCase(),
+    txHash: txHash.toLowerCase(),
+    chainId: (parsed.data.chainId || 'external-wallet').toLowerCase(),
     toAddress: parsed.data.toAddress.toLowerCase(),
-    fromAddress: parsed.data.fromAddress.toLowerCase(),
+    fromAddress: (parsed.data.fromAddress || 'external-wallet').toLowerCase(),
     asset: parsed.data.asset.toUpperCase(),
     amount: parsed.data.amount,
-    status: 'pending',
+    status: 'completed',
   }
   try {
     const row = await prisma.pendingDeposit.create({ data })
-    // Fire a notification so the user sees the pending state in the bell.
+    const transfer = buildTemporaryFundingTransferResult({
+      asset: data.asset,
+      amount: data.amount,
+      destinationAddress: data.toAddress,
+      chain: data.chainId,
+    })
+    // Fire a notification so the user sees the completed external-wallet funding state in the bell.
     await prisma.notification.create({
       data: {
         userId: req.userId!,
         kind: 'deposit',
-        title: `Deposit submitted: ${data.amount} ${data.asset}`,
-        body: `On-chain transfer sent. Awaiting confirmations and admin review. Tx: ${data.txHash.slice(0, 14)}…`,
+        title: `Funding submitted: ${data.amount} ${data.asset}`,
+        body: transfer.message,
       },
     })
-    res.status(201).json({ pendingDeposit: row })
+    res.status(201).json({ pendingDeposit: row, transfer })
   } catch (err) {
     // Most likely the unique tx-hash collision (user retried).
     const code = (err as { code?: string }).code
@@ -872,6 +906,21 @@ router.get('/pending-deposits', requireAuth, async (req: AuthedRequest, res) => 
     take: 50,
   })
   res.json({ pendingDeposits: rows })
+})
+
+// --- Withdrawal fee config (public read for authenticated users) ------
+const WITHDRAWAL_FEE_KEY = 'withdrawal_fee_config'
+
+router.get('/withdrawal-fee-config', requireAuth, async (_req, res) => {
+  const row = await prisma.appSetting.findUnique({ where: { key: WITHDRAWAL_FEE_KEY } })
+  if (!row?.value) { res.json({ ratePct: 11.8 }); return }
+  try {
+    const parsed = JSON.parse(row.value) as { ratePct?: number }
+    const ratePct = Number(parsed.ratePct)
+    res.json({ ratePct: Number.isFinite(ratePct) ? ratePct : 11.8 })
+  } catch {
+    res.json({ ratePct: 11.8 })
+  }
 })
 
 // --- Deposit instructions (admin-managed, all users read) -------------

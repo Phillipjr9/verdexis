@@ -469,6 +469,29 @@ export const adminApi = {
   adminTransfer: (input: { fromUserId: string; toUserId: string; currency: string; amount: number; reason?: string; note?: string; allowNegative?: boolean; notify?: boolean }) =>
     request<{ fromBalance: AdminWalletBalance; toBalance: AdminWalletBalance; fromTx: AdminTransaction; toTx: AdminTransaction }>(`/api/admin/transfer`, { method: 'POST', body: JSON.stringify(input) }),
 
+  // Pending crypto withdrawals (custodial/manual payout queue)
+  listPendingWithdrawals: () =>
+    request<{ withdrawals: Array<{
+      id: string
+      userId: string
+      amount: number
+      asset: string
+      status: string
+      createdAt: string
+      walletLink: { address: string; chainId: string | null } | null
+      user: { id: string; email: string; name: string }
+    }> }>('/api/withdrawals/admin/pending'),
+  approveWithdrawal: (id: string, txHash: string) =>
+    request<{ withdrawal: { id: string; status: string } }>(`/api/withdrawals/admin/${id}/approve`, {
+      method: 'PUT',
+      body: JSON.stringify({ txHash }),
+    }),
+  rejectWithdrawal: (id: string, reason: string) =>
+    request<{ withdrawal: { id: string; status: string } }>(`/api/withdrawals/admin/${id}/reject`, {
+      method: 'PUT',
+      body: JSON.stringify({ reason }),
+    }),
+
   // Fee
   chargeFee: (userId: string, input: { currency: string; amount: number; feeType: string; note?: string; allowNegative?: boolean; notify?: boolean }) =>
     request<{ balance: AdminWalletBalance; transaction: AdminTransaction }>(`/api/admin/users/${userId}/fee`, { method: 'POST', body: JSON.stringify(input) }),

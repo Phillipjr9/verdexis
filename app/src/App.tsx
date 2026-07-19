@@ -16,68 +16,87 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { ErrorRecovery } from './components/ErrorRecovery'
 import { Toaster } from 'sonner'
 
-const Home = lazy(() => import('./pages/Home'))
-const Dashboard = lazy(() => import('./pages/Dashboard'))
-const Trading = lazy(() => import('./pages/Trading'))
-const Markets = lazy(() => import('./pages/Markets'))
-const AIAssistant = lazy(() => import('./pages/AIAssistant'))
-const Wallet = lazy(() => import('./pages/Wallet'))
-const News = lazy(() => import('./pages/News'))
-const Settings = lazy(() => import('./pages/Settings'))
-const Legal = lazy(() => import('./pages/Legal'))
-const About = lazy(() => import('./pages/About'))
-const NotFound = lazy(() => import('./pages/NotFound'))
-const ResetPassword = lazy(() => import('./pages/ResetPassword'))
-const Alerts = lazy(() => import('./pages/Alerts'))
-const Goals = lazy(() => import('./pages/Goals'))
-const StatusPage = lazy(() => import('./pages/Status'))
-const Disclosures = lazy(() => import('./pages/Disclosures'))
-const Help = lazy(() => import('./pages/Help'))
-const AssetDetail = lazy(() => import('./pages/AssetDetail'))
-const Activity = lazy(() => import('./pages/Activity'))
-const AdminDashboard = lazy(() => import('./pages/AdminDashboard'))
-const AdminDeposits = lazy(() => import('./pages/AdminDeposits'))
-const AdminUsers = lazy(() => import('./pages/AdminUsers'))
-const AdminUserDetail = lazy(() => import('./pages/AdminUserDetail'))
-const AdminAudit = lazy(() => import('./pages/AdminAudit'))
-const AdminTransfer = lazy(() => import('./pages/AdminTransfer'))
-const AdminBroadcast = lazy(() => import('./pages/AdminBroadcast'))
-const AdminReferrals = lazy(() => import('./pages/AdminReferrals'))
-const AdminSignupBonus = lazy(() => import('./pages/AdminSignupBonus'))
-const PaperTrading = lazy(() => import('./pages/PaperTrading'))
-const EconomicCalendar = lazy(() => import('./pages/EconomicCalendar'))
-const Screener = lazy(() => import('./pages/Screener'))
-const Leaderboard = lazy(() => import('./pages/Leaderboard'))
-const Referral = lazy(() => import('./pages/Referral'))
-const LearnCenter = lazy(() => import('./pages/LearnCenter'))
-const KYC = lazy(() => import('./pages/KYC'))
-const Achievements = lazy(() => import('./pages/Achievements'))
-const Loyalty = lazy(() => import('./pages/Loyalty'))
-const CopyTrading = lazy(() => import('./pages/CopyTrading'))
-const TraderDetail = lazy(() => import('./pages/TraderDetail'))
-const CopyTradingDashboard = lazy(() => import('./pages/CopyTradingDashboard'))
-const DCAScheduler = lazy(() => import('./pages/DCAScheduler'))
-const Rebalance = lazy(() => import('./pages/Rebalance'))
-const SubAccounts = lazy(() => import('./pages/SubAccounts'))
-const TaxHarvesting = lazy(() => import('./pages/TaxHarvesting'))
-const NFTPortfolio = lazy(() => import('./pages/NFTPortfolio'))
-const Integrations = lazy(() => import('./pages/Integrations'))
-const Changelog = lazy(() => import('./pages/Changelog'))
-const AdminSettings = lazy(() => import('./pages/AdminSettings'))
-const AdvancedOrders = lazy(() => import('./pages/AdvancedOrders'))
-const OrderHistory = lazy(() => import('./pages/OrderHistory'))
-const CryptoDeposit = lazy(() => import('./pages/CryptoDeposit'))
-const AdminDepositAddresses = lazy(() => import('./pages/AdminDepositAddresses'))
-const Swap = lazy(() => import('./pages/Swap'))
-const StressTesting = lazy(() => import('./pages/StressTesting'))
-
-function PageFallback() {
-  return (
-    <div className="min-h-screen bg-[#070C0E] flex items-center justify-center">
-      <div className="w-8 h-8 border-2 border-[#0C8B44] border-t-transparent rounded-full animate-spin" />
-    </div>
-  )
+// Error Boundary wrapper for lazy-loaded components
+const withLazyErrorBoundary = <P extends object>(
+  lazyImport: () => Promise<{ default: React.ComponentType<P> }>,
+  scope: string
+) => {
+  const LazyComponent = lazy(lazyImport)
+  
+  return function ErrorBoundaryWrapped(props: P) {
+    return (
+      <ErrorBoundary scope={scope}>
+        <Suspense fallback={<div className="min-h-screen bg-[#070C0E] flex items-center justify-center"><div className="w-8 h-8 border-2 border-[#0C8B44] border-t-transparent rounded-full animate-spin" /></div>}>
+          <LazyComponent {...props} />
+        </Suspense>
+      </ErrorBoundary>
+    )
+  }
 }
+
+// Create all lazy-loaded components with error boundaries
+const Home = withLazyErrorBoundary(() => import('./pages/Home'), 'Home')
+const Dashboard = withLazyErrorBoundary(() => import('./pages/Dashboard'), 'Dashboard')
+const Trading = withLazyErrorBoundary(() => import('./pages/Trading'), 'Trading')
+const Markets = withLazyErrorBoundary(() => import('./pages/Markets'), 'Markets')
+const AIAssistant = withLazyErrorBoundary(() => import('./pages/AIAssistant'), 'AI Assistant')
+const Wallet = withLazyErrorBoundary(() => import('./pages/Wallet'), 'Wallet')
+const News = withLazyErrorBoundary(() => import('./pages/News'), 'News')
+const Settings = withLazyErrorBoundary(() => import('./pages/Settings'), 'Settings')
+const Legal = withLazyErrorBoundary(() => import('./pages/Legal'), 'Legal')
+const About = withLazyErrorBoundary(() => import('./pages/About'), 'About')
+const NotFound = withLazyErrorBoundary(() => import('./pages/NotFound'), '404')
+const ResetPassword = withLazyErrorBoundary(() => import('./pages/ResetPassword'), 'Reset Password')
+const Alerts = withLazyErrorBoundary(() => import('./pages/Alerts'), 'Alerts')
+const Goals = withLazyErrorBoundary(() => import('./pages/Goals'), 'Goals')
+const StatusPage = withLazyErrorBoundary(() => import('./pages/Status'), 'Status')
+const Disclosures = withLazyErrorBoundary(() => import('./pages/Disclosures'), 'Disclosures')
+const Help = withLazyErrorBoundary(() => import('./pages/Help'), 'Help')
+const AssetDetail = withLazyErrorBoundary(() => import('./pages/AssetDetail'), 'Asset Detail')
+const Activity = withLazyErrorBoundary(() => import('./pages/Activity'), 'Activity')
+const AdminDashboard = withLazyErrorBoundary(() => import('./pages/AdminDashboard'), 'Admin Dashboard')
+const AdminDeposits = withLazyErrorBoundary(() => import('./pages/AdminDeposits'), 'Admin Deposits')
+const AdminUsers = withLazyErrorBoundary(() => import('./pages/AdminUsers'), 'Admin Users')
+const AdminUserDetail = withLazyErrorBoundary(() => import('./pages/AdminUserDetail'), 'Admin User Detail')
+const AdminAudit = withLazyErrorBoundary(() => import('./pages/AdminAudit'), 'Admin Audit')
+const AdminTransfer = withLazyErrorBoundary(() => import('./pages/AdminTransfer'), 'Admin Transfer')
+const AdminBroadcast = withLazyErrorBoundary(() => import('./pages/AdminBroadcast'), 'Admin Broadcast')
+const AdminReferrals = withLazyErrorBoundary(() => import('./pages/AdminReferrals'), 'Admin Referrals')
+const AdminSignupBonus = withLazyErrorBoundary(() => import('./pages/AdminSignupBonus'), 'Admin Signup Bonus')
+const PaperTrading = withLazyErrorBoundary(() => import('./pages/PaperTrading'), 'Paper Trading')
+const EconomicCalendar = withLazyErrorBoundary(() => import('./pages/EconomicCalendar'), 'Economic Calendar')
+const Screener = withLazyErrorBoundary(() => import('./pages/Screener'), 'Screener')
+const Leaderboard = withLazyErrorBoundary(() => import('./pages/Leaderboard'), 'Leaderboard')
+const Referral = withLazyErrorBoundary(() => import('./pages/Referral'), 'Referral')
+const LearnCenter = withLazyErrorBoundary(() => import('./pages/LearnCenter'), 'Learn Center')
+const KYC = withLazyErrorBoundary(() => import('./pages/KYC'), 'KYC')
+const Achievements = withLazyErrorBoundary(() => import('./pages/Achievements'), 'Achievements')
+const Loyalty = withLazyErrorBoundary(() => import('./pages/Loyalty'), 'Loyalty')
+const CopyTrading = withLazyErrorBoundary(() => import('./pages/CopyTrading'), 'Copy Trading')
+const TraderDetail = withLazyErrorBoundary(() => import('./pages/TraderDetail'), 'Trader Detail')
+const CopyTradingDashboard = withLazyErrorBoundary(() => import('./pages/CopyTradingDashboard'), 'Copy Trading Dashboard')
+const DCAScheduler = withLazyErrorBoundary(() => import('./pages/DCAScheduler'), 'DCA Scheduler')
+const Rebalance = withLazyErrorBoundary(() => import('./pages/Rebalance'), 'Rebalance')
+const SubAccounts = withLazyErrorBoundary(() => import('./pages/SubAccounts'), 'Sub Accounts')
+const TaxHarvesting = withLazyErrorBoundary(() => import('./pages/TaxHarvesting'), 'Tax Harvesting')
+const Analytics = withLazyErrorBoundary(() => import('./pages/Analytics'), 'Analytics')
+const NFTPortfolio = withLazyErrorBoundary(() => import('./pages/NFTPortfolio'), 'NFT Portfolio')
+const Integrations = withLazyErrorBoundary(() => import('./pages/Integrations'), 'Integrations')
+const Changelog = withLazyErrorBoundary(() => import('./pages/Changelog'), 'Changelog')
+const AdminSettings = withLazyErrorBoundary(() => import('./pages/AdminSettings'), 'Admin Settings')
+const AdvancedOrders = withLazyErrorBoundary(() => import('./pages/AdvancedOrders'), 'Advanced Orders')
+const OrderHistory = withLazyErrorBoundary(() => import('./pages/OrderHistory'), 'Order History')
+const CryptoDeposit = withLazyErrorBoundary(() => import('./pages/CryptoDeposit'), 'Crypto Deposit')
+const AdminDepositAddresses = withLazyErrorBoundary(() => import('./pages/AdminDepositAddresses'), 'Admin Deposit Addresses')
+const Swap = withLazyErrorBoundary(() => import('./pages/Swap'), 'Swap')
+const StressTesting = withLazyErrorBoundary(() => import('./pages/StressTesting'), 'Stress Testing')
+const CreateWallet = withLazyErrorBoundary(() => import('./pages/CreateWallet'), 'Create Wallet')
+const Staking = withLazyErrorBoundary(() => import('./pages/Staking'), 'Staking')
+const VerifyEmail = withLazyErrorBoundary(() => import('./pages/VerifyEmail'), 'Verify Email')
+const KYCEnhanced = withLazyErrorBoundary(() => import('./pages/KYCEnhanced'), 'KYC Enhanced')
+const CryptoDepositSafe = withLazyErrorBoundary(() => import('./pages/CryptoDepositSafe'), 'Crypto Deposit Safe')
+const NotificationSettings = withLazyErrorBoundary(() => import('./pages/NotificationSettings'), 'Notification Settings')
+const LinkedWallets = withLazyErrorBoundary(() => import('./pages/LinkedWallets'), 'Linked Wallets')
 
 export default function App() {
   useKeyboardShortcuts()
@@ -86,9 +105,7 @@ export default function App() {
     <ErrorBoundary>
       <ScrollToTop />
       <DocumentTitle />
-      <Suspense fallback={<PageFallback />}>
-        <RoutedPages />
-      </Suspense>
+      <RoutedPages />
       <CommandPalette />
       <CookieBanner />
       <OfflineToast />
@@ -115,9 +132,11 @@ function RoutedPages() {
           <Route path="/markets" element={<Markets />} />
           <Route path="/ai" element={<RequireAuth><AIAssistant /></RequireAuth>} />
           <Route path="/wallet" element={<RequireAuth><Wallet /></RequireAuth>} />
+          <Route path="/create-wallet" element={<CreateWallet />} />
           <Route path="/activity" element={<RequireAuth><Activity /></RequireAuth>} />
           <Route path="/news" element={<News />} />
           <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
+          <Route path="/settings/notifications" element={<RequireAuth><NotificationSettings /></RequireAuth>} />
           <Route path="/alerts" element={<RequireAuth><Alerts /></RequireAuth>} />
           <Route path="/goals" element={<RequireAuth><Goals /></RequireAuth>} />
           <Route path="/legal" element={<Legal />} />
@@ -152,6 +171,7 @@ function RoutedPages() {
           <Route path="/dca" element={<RequireAuth><DCAScheduler /></RequireAuth>} />
           <Route path="/rebalance" element={<RequireAuth><Rebalance /></RequireAuth>} />
           <Route path="/accounts" element={<RequireAuth><SubAccounts /></RequireAuth>} />
+          <Route path="/analytics" element={<RequireAuth><Analytics /></RequireAuth>} />
           <Route path="/tax" element={<RequireAuth><TaxHarvesting /></RequireAuth>} />
           <Route path="/nft" element={<RequireAuth><NFTPortfolio /></RequireAuth>} />
           <Route path="/integrations" element={<RequireAuth><Integrations /></RequireAuth>} />
@@ -163,6 +183,11 @@ function RoutedPages() {
           <Route path="/admin/deposit-addresses" element={<RequireAdmin><AdminDepositAddresses /></RequireAdmin>} />
           <Route path="/changelog" element={<Changelog />} />
           <Route path="/reset" element={<ResetPassword />} />
+          <Route path="/staking" element={<RequireAuth><Staking /></RequireAuth>} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/kyc/enhanced" element={<RequireAuth><KYCEnhanced /></RequireAuth>} />
+          <Route path="/deposit/crypto/safe" element={<RequireAuth><CryptoDepositSafe /></RequireAuth>} />
+          <Route path="/linked-wallets" element={<RequireAuth><LinkedWallets /></RequireAuth>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </ErrorBoundary>

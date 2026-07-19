@@ -126,6 +126,12 @@ async function request<T>(path: string, init: RequestOpts = {}): Promise<T> {
 }
 
 export const api = {
+  get: <T>(path: string, init: Omit<RequestOpts, 'method'> = {}) => request<T>(path, { ...init, method: 'GET' }),
+  post: <T>(path: string, body?: unknown, init: Omit<RequestOpts, 'method' | 'body'> = {}) => request<T>(path, { ...init, method: 'POST', body: body !== undefined ? JSON.stringify(body) : undefined }),
+  put: <T>(path: string, body?: unknown, init: Omit<RequestOpts, 'method' | 'body'> = {}) => request<T>(path, { ...init, method: 'PUT', body: body !== undefined ? JSON.stringify(body) : undefined }),
+  patch: <T>(path: string, body?: unknown, init: Omit<RequestOpts, 'method' | 'body'> = {}) => request<T>(path, { ...init, method: 'PATCH', body: body !== undefined ? JSON.stringify(body) : undefined }),
+  delete: <T>(path: string, init: Omit<RequestOpts, 'method'> = {}) => request<T>(path, { ...init, method: 'DELETE' }),
+
   health: () => request<{ ok: boolean }>('/api/health'),
 
   // Auth
@@ -135,9 +141,14 @@ export const api = {
       body: JSON.stringify({ email, password, name, phone }),
     }),
   login: (identifier: string, password: string) =>
-    request<{ token: string; user: ApiUser }>('/api/auth/login', {
+    request<{ token: string; user: ApiUser } | { otpRequired: true; pendingToken: string }>('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ identifier, password }),
+    }),
+  loginVerifyOtp: (pendingToken: string, code: string) =>
+    request<{ token: string; user: ApiUser }>('/api/auth/login/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ pendingToken, code }),
     }),
   forgot: (email: string) =>
     request<{ ok: boolean; message: string }>('/api/auth/forgot', {
@@ -165,9 +176,10 @@ export const api = {
       body: JSON.stringify({ token }),
     }),
   exportData: () => {
-    const headers: Record<string, string> = {}
     const t = getToken()
-    if (t) headers.Authorization = `Bearer ${t}`
+    if (!t) return Promise.reject({ error: 'Sign in to export your data', status: 401 })
+    const headers = new Headers()
+    headers.set('Authorization', `Bearer ${t}`)
     return fetch(`${BASE}/api/auth/export`, { headers }).then(async (r) => {
       if (!r.ok) throw await r.json().catch(() => ({ error: r.statusText }))
       return r.blob()
@@ -245,6 +257,13 @@ export const api = {
   setPrimaryWalletLink: (id: string) =>
     request<{ ok: boolean }>(`/api/wallet/links/${encodeURIComponent(id)}/primary`, { method: 'POST' }),
 
+  // Withdrawals
+  getWithdrawalConfig: () =>
+    request<{ enabled: boolean; networks: { chain: string; enabled: boolean }[]; message: string }>('/api/withdrawals/config'),
+
+  withdrawCrypto: (payload: { amount: number; asset: string; destinationAddress: string; chain?: string; tokenAddress?: string }, idempotencyKey?: string) =>
+    request<{ withdrawal: unknown; transfer: { status: string; message: string; txHash?: string | null } }>('/api/withdrawals', { method: 'POST', body: JSON.stringify(payload), idempotencyKey }),
+
   // Admin-managed deposit instructions (wire / crypto / web3 destinations)
   getDepositInstructions: () =>
     request<{ instructions: unknown; updatedAt: string | null }>('/api/wallet/deposit-instructions'),
@@ -271,9 +290,9 @@ export const api = {
 
   // On-chain pending deposits
   recordPendingDeposit: (
-    payload: { txHash: string; chainId: string; toAddress: string; fromAddress: string; asset: string; amount: number },
+    payload: { txHash?: string; chainId?: string; toAddress: string; fromAddress?: string; asset: string; amount: number },
   ) =>
-    request<{ pendingDeposit: { id: string; txHash: string; status: string; createdAt: string }; deduped?: boolean }>(
+    request<{ pendingDeposit: { id: string; txHash: string; status: string; createdAt: string }; transfer?: { status: string; message: string; txHash?: string | null }; deduped?: boolean }>(
       '/api/wallet/pending-deposits',
       { method: 'POST', body: JSON.stringify(payload) },
     ),

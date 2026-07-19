@@ -464,10 +464,10 @@ router.get('/status', requireAuth, async (req: AuthedRequest, res) => {
       selfie: uploadedDocuments.some(d => d.type === 'selfie' && d.uploaded),
     },
     limits: {
-      dailyWithdraw: user.dailyWithdrawLimit || KYC_TIERS.UNVERIFIED.dailyWithdrawLimit,
-      monthlyWithdraw: user.monthlyWithdrawLimit || KYC_TIERS.UNVERIFIED.monthlyWithdrawLimit,
-      dailyTransfer: user.dailyTransferLimit || KYC_TIERS.UNVERIFIED.dailyTransferLimit,
-      monthlyTransfer: user.monthlyTransferLimit || KYC_TIERS.UNVERIFIED.monthlyTransferLimit,
+      dailyWithdraw: user.dailyWithdrawLimit || KYC_TIERS['UNVERIFIED']?.dailyWithdrawLimit || 100,
+      monthlyWithdraw: user.monthlyWithdrawLimit || KYC_TIERS['UNVERIFIED']?.monthlyWithdrawLimit || 500,
+      dailyTransfer: user.dailyTransferLimit || KYC_TIERS['UNVERIFIED']?.dailyTransferLimit || 500,
+      monthlyTransfer: user.monthlyTransferLimit || KYC_TIERS['UNVERIFIED']?.monthlyTransferLimit || 2000,
     },
   })
 })
@@ -503,10 +503,10 @@ router.get('/tier', requireAuth, async (req: AuthedRequest, res) => {
     tier,
     tierInfo: KYC_TIERS[tier],
     currentLimits: {
-      dailyWithdraw: user.dailyWithdrawLimit || KYC_TIERS[tier].dailyWithdrawLimit,
-      monthlyWithdraw: user.monthlyWithdrawLimit || KYC_TIERS[tier].monthlyWithdrawLimit,
-      dailyTransfer: user.dailyTransferLimit || KYC_TIERS[tier].dailyTransferLimit,
-      monthlyTransfer: user.monthlyTransferLimit || KYC_TIERS[tier].monthlyTransferLimit,
+      dailyWithdraw: user.dailyWithdrawLimit || KYC_TIERS[tier]?.dailyWithdrawLimit || 100,
+      monthlyWithdraw: user.monthlyWithdrawLimit || KYC_TIERS[tier]?.monthlyWithdrawLimit || 500,
+      dailyTransfer: user.dailyTransferLimit || KYC_TIERS[tier]?.dailyTransferLimit || 500,
+      monthlyTransfer: user.monthlyTransferLimit || KYC_TIERS[tier]?.monthlyTransferLimit || 2000,
     },
   })
 })

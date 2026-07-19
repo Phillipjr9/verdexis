@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Wallet as WalletIcon, Star, Trash2, Copy, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { api } from '../lib/api'
+import { detectWalletAddressType, getWalletChainHint, type DetectedWalletType } from '../lib/walletUtils'
 
 interface WalletLink {
   id: string
@@ -32,6 +33,14 @@ export default function LinkedWalletsPanel({ activeAddress, refreshKey, onActive
   const [links, setLinks] = useState<WalletLink[]>([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [newAddress, setNewAddress] = useState('')
+  const [newChainId, setNewChainId] = useState('')
+  const [newProvider, setNewProvider] = useState('')
+  const [newLabel, setNewLabel] = useState('')
+  const [detectedAddressType, setDetectedAddressType] = useState<DetectedWalletType>('unknown')
+  const [chainHintTouched, setChainHintTouched] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -52,6 +61,23 @@ export default function LinkedWalletsPanel({ activeAddress, refreshKey, onActive
     void load()
   }, [refreshKey])
 
+  useEffect(() => {
+    const address = newAddress.trim()
+    const detected = address ? detectWalletAddressType(address) : 'unknown'
+    setDetectedAddressType(detected)
+
+    if (!address) {
+      setNewChainId('')
+      setChainHintTouched(false)
+      return
+    }
+
+    const hint = getWalletChainHint(detected)
+    if (!chainHintTouched && hint) {
+      setNewChainId(hint)
+    }
+  }, [newAddress, chainHintTouched])
+
   async function setPrimary(id: string) {
     setBusyId(id)
     try {
@@ -62,6 +88,36 @@ export default function LinkedWalletsPanel({ activeAddress, refreshKey, onActive
       toast.error(err instanceof Error ? err.message : 'Failed to set primary')
     } finally {
       setBusyId(null)
+    }
+  }
+
+  async function addWalletLink() {
+    const address = newAddress.trim()
+    if (!address) {
+      setFormError('Enter a wallet address to link.')
+      return
+    }
+    setFormError(null)
+    setSubmitting(true)
+    try {
+      await api.addWalletLink({
+        address,
+        chainId: newChainId.trim() || undefined,
+        provider: newProvider.trim() || undefined,
+        label: newLabel.trim() || undefined,
+      })
+      setNewAddress('')
+      setNewChainId('')
+      setNewProvider('')
+      setNewLabel('')
+      setDetectedAddressType('unknown')
+      setChainHintTouched(false)
+      toast.success('Wallet linked successfully')
+      await load()
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Failed to link wallet')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -89,10 +145,8 @@ export default function LinkedWalletsPanel({ activeAddress, refreshKey, onActive
     )
   }
 
-  if (links.length === 0) {
-    // Don't render an empty card \u2014 the main Connect button is right above.
-    return null
-  }
+  const canSubmit = !submitting && newAddress.trim().length > 0
+  const detectedChainHint = getWalletChainHint(detectedAddressType)
 
   return (
     <div className="glass-card p-6 mb-8">
@@ -111,9 +165,77 @@ export default function LinkedWalletsPanel({ activeAddress, refreshKey, onActive
         </button>
       </div>
       <p className="text-[11px] text-[#737373] mb-4">
-        Add up to several self-custody addresses. The <span className="text-[#0C8B44]">primary</span> wallet
-        is the one used for deposit attribution and shown on the admin user page.
+        Add any self-custody wallet address to keep it linked. The <span className="text-[#0C8B44]">primary</span> wallet
+        is used for deposit attribution and shown on the admin page.
       </p>
+
+      <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-3 mb-6">
+        <div className="space-y-3">
+          <div>
+            <label className="text-[11px] text-[#A0A0A0] mb-1 block">Address</label>
+            <input
+              type="text"
+              value={newAddress}
+              onChange={(e) => setNewAddress(e.target.value)}
+              placeholder="0x..., solana address, bitcoin address, etc."
+              className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#ffffff10] rounded-lg text-sm text-[#E5E5E5] placeholder-[#737373] focus:outline-none focus:border-[#0C8B44]"
+            />
+            <p className="mt-1 text-[10px] text-[#737373]">
+              {detectedAddressType === 'unknown'
+                ? 'Auto-detects Ethereum, Solana, and Bitcoin addresses as you type.'
+                : `Detected ${detectedAddressType} address${detectedChainHint ? ` • chain hint: ${detectedChainHint}` : ''}.`}
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] text-[#A0A0A0] mb-1 block">Network / chain</label>
+              <input
+                type="text"
+                value={newChainId}
+                onChange={(e) => {
+                  setNewChainId(e.target.value)
+                  setChainHintTouched(true)
+                }}
+                placeholder="ethereum, solana, bitcoin, 0x1, ..."
+                className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#ffffff10] rounded-lg text-sm text-[#E5E5E5] placeholder-[#737373] focus:outline-none focus:border-[#0C8B44]"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-[#A0A0A0] mb-1 block">Label (optional)</label>
+              <input
+                type="text"
+                value={newLabel}
+                onChange={(e) => setNewLabel(e.target.value)}
+                placeholder="MetaMask, Phantom, Trust Wallet"
+                className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#ffffff10] rounded-lg text-sm text-[#E5E5E5] placeholder-[#737373] focus:outline-none focus:border-[#0C8B44]"
+              />
+            </div>
+          </div>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <label className="text-[11px] text-[#A0A0A0] mb-1 block">Provider (optional)</label>
+            <input
+              type="text"
+              value={newProvider}
+              onChange={(e) => setNewProvider(e.target.value)}
+              placeholder="Wallet provider name"
+              className="w-full px-3 py-2 bg-[#0d0d0d] border border-[#ffffff10] rounded-lg text-sm text-[#E5E5E5] placeholder-[#737373] focus:outline-none focus:border-[#0C8B44]"
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            {formError && <p className="text-[11px] text-[#EF4444]">{formError}</p>}
+            <button
+              onClick={addWalletLink}
+              disabled={!canSubmit}
+              className="w-full py-2.5 text-sm text-white bg-[#0C8B44] rounded-lg hover:bg-[#0a7539] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {submitting ? 'Linking…' : 'Add linked wallet'}
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div className="space-y-2">
         {links.map((link) => {
           const isActive = activeAddress && link.address.toLowerCase() === activeAddress.toLowerCase()
@@ -139,6 +261,7 @@ export default function LinkedWalletsPanel({ activeAddress, refreshKey, onActive
                   )}
                 </div>
                 <div className="flex items-center gap-2 mt-1 text-[11px] text-[#737373] flex-wrap">
+                  {link.label && <span>{link.label}</span>}
                   {link.provider && <span>{link.provider}</span>}
                   {link.chainId && <span className="font-mono">{link.chainId}</span>}
                   <span>linked {new Date(link.linkedAt).toLocaleDateString()}</span>

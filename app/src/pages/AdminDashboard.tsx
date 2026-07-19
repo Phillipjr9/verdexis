@@ -6,7 +6,7 @@ import { adminApi, type AdminStats } from '../lib/adminApi'
 import {
   Users, ShieldCheck, Ban, Briefcase, ArrowLeftRight, Bell,
   Banknote, UserPlus, MegaphoneIcon, Settings as Cog, Activity, FileCheck2, Lock, ArrowDownToLine, Clock,
-  Link2 as LinkIcon, ExternalLink, Gift,
+  Link2 as LinkIcon, ExternalLink, Gift, ArrowUpRight,
 } from 'lucide-react'
 
 export default function AdminDashboard() {
@@ -30,6 +30,9 @@ export function AdminConsoleContent({ onPendingDepositsLoaded }: { onPendingDepo
   const [onchain, setOnchain] = useState<Awaited<ReturnType<typeof adminApi.listOnchainDeposits>>['pendingDeposits']>([])
   const [onchainLoading, setOnchainLoading] = useState(true)
   const [busyOnchain, setBusyOnchain] = useState<string | null>(null)
+  const [pendingWithdrawals, setPendingWithdrawals] = useState<Awaited<ReturnType<typeof adminApi.listPendingWithdrawals>>['withdrawals']>([])
+  const [withdrawalsLoading, setWithdrawalsLoading] = useState(true)
+  const [busyWithdrawal, setBusyWithdrawal] = useState<string | null>(null)
   const [seedingTreasury, setSeedingTreasury] = useState(false)
 
   useEffect(() => {
@@ -58,12 +61,22 @@ export function AdminConsoleContent({ onPendingDepositsLoaded }: { onPendingDepo
       .finally(() => setOnchainLoading(false))
   }
 
+  const refreshWithdrawals = () => {
+    setWithdrawalsLoading(true)
+    adminApi.listPendingWithdrawals()
+      .then((r) => setPendingWithdrawals(r.withdrawals))
+      .catch(() => {})
+      .finally(() => setWithdrawalsLoading(false))
+  }
+
   useEffect(() => {
     refreshPending()
     refreshOnchain()
+    refreshWithdrawals()
     const t = setInterval(() => {
       refreshPending()
       refreshOnchain()
+      refreshWithdrawals()
     }, 30_000)
     return () => clearInterval(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -139,6 +152,35 @@ export function AdminConsoleContent({ onPendingDepositsLoaded }: { onPendingDepo
     }
   }
 
+  async function handleApproveWithdrawal(id: string) {
+    const txHash = window.prompt('Enter the on-chain transaction hash for this payout:')
+    if (!txHash) return
+    setBusyWithdrawal(id)
+    try {
+      await adminApi.approveWithdrawal(id, txHash)
+      toast.success('Withdrawal approved — user notified')
+      refreshWithdrawals()
+    } catch (e) {
+      toast.error((e as { error?: string }).error || 'Approval failed')
+    } finally {
+      setBusyWithdrawal(null)
+    }
+  }
+
+  async function handleRejectWithdrawal(id: string) {
+    const reason = window.prompt('Reason for rejection (shown to user)?', '') || ''
+    setBusyWithdrawal(id)
+    try {
+      await adminApi.rejectWithdrawal(id, reason)
+      toast.success('Withdrawal rejected — balance refunded to user')
+      refreshWithdrawals()
+    } catch (e) {
+      toast.error((e as { error?: string }).error || 'Rejection failed')
+    } finally {
+      setBusyWithdrawal(null)
+    }
+  }
+
   async function handleSeedTreasury() {
     if (!confirm('This will set your admin USD balance to $1,000,000,000,000 (1 trillion). Continue?')) return
     setSeedingTreasury(true)
@@ -191,6 +233,7 @@ export function AdminConsoleContent({ onPendingDepositsLoaded }: { onPendingDepo
         <QuickLink to="/admin/signup-bonus" icon={<Gift className="w-5 h-5" />} label="Signup bonus" />
         <QuickLink to="/admin/audit" icon={<Activity className="w-5 h-5" />} label="Audit log" />
         <QuickLink to="/admin/status" icon={<Activity className="w-5 h-5" />} label="System status" />
+        <QuickLink to="/admin/settings" icon={<Cog className="w-5 h-5" />} label="Fee settings" />
       </div>
 
       {loading ? (
@@ -347,6 +390,52 @@ export function AdminConsoleContent({ onPendingDepositsLoaded }: { onPendingDepo
                 <div className="flex items-center gap-2">
                   <button type="button" disabled={busyOnchain === d.id} onClick={() => handleApproveOnchain(d)} className="px-3 py-1.5 text-xs rounded-lg bg-[#0C8B44] text-white hover:bg-[#0a7539] disabled:opacity-50">Approve & credit</button>
                   <button type="button" disabled={busyOnchain === d.id} onClick={() => handleRejectOnchain(d)} className="px-3 py-1.5 text-xs rounded-lg bg-[#1a1a1a] border border-[#f44336]/40 text-[#f44336] hover:bg-[#f44336]/10 disabled:opacity-50">Reject</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="mt-6 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-medium text-[#E5E5E5] flex items-center gap-2">
+            <ArrowUpRight className="w-4 h-4 text-[#f44336]" /> Pending withdrawal payouts
+            {pendingWithdrawals.length > 0 && (
+              <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#f44336]/15 text-[#f44336]">{pendingWithdrawals.length}</span>
+            )}
+          </h2>
+          <button type="button" onClick={refreshWithdrawals} className="text-[11px] text-[#A0A0A0] hover:text-[#0C8B44]">Refresh</button>
+        </div>
+        <p className="text-[11px] text-[#737373] mb-3">
+          Crypto withdrawal requests queued for manual payout. Send the funds to the user&rsquo;s wallet address, then click Approve and paste the tx hash.
+        </p>
+        {withdrawalsLoading ? (
+          <p className="text-xs text-[#737373]">Loading…</p>
+        ) : pendingWithdrawals.length === 0 ? (
+          <p className="text-xs text-[#737373]">No pending withdrawal requests.</p>
+        ) : (
+          <div className="space-y-2">
+            {pendingWithdrawals.map((w) => (
+              <div key={w.id} className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-[#1a1a1a]/50 border border-[#ffffff05]">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Link to={`/admin/users/${w.user.id}`} className="text-sm text-[#E5E5E5] hover:text-[#0C8B44]">{w.user.name}</Link>
+                    <span className="text-[#737373]">·</span>
+                    <span className="text-[11px] text-[#737373]">{w.user.email}</span>
+                  </div>
+                  <p className="text-[11px] text-[#737373] font-mono mt-1 truncate">
+                    Send to: {w.walletLink?.address ?? 'unknown'}
+                    {w.walletLink?.chainId ? <span className="ml-1 text-[#A0A0A0]">({w.walletLink.chainId})</span> : null}
+                  </p>
+                  <p className="text-[10px] text-[#737373] mt-0.5">{relTime(w.createdAt)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-base font-medium text-[#E5E5E5]">{w.amount} {w.asset}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button type="button" disabled={busyWithdrawal === w.id} onClick={() => handleApproveWithdrawal(w.id)} className="px-3 py-1.5 text-xs rounded-lg bg-[#0C8B44] text-white hover:bg-[#0a7539] disabled:opacity-50">Approve &amp; mark sent</button>
+                  <button type="button" disabled={busyWithdrawal === w.id} onClick={() => handleRejectWithdrawal(w.id)} className="px-3 py-1.5 text-xs rounded-lg bg-[#1a1a1a] border border-[#f44336]/40 text-[#f44336] hover:bg-[#f44336]/10 disabled:opacity-50">Reject</button>
                 </div>
               </div>
             ))}

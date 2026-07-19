@@ -242,10 +242,14 @@ export function useWeb3() {
           localStorage.setItem(STORAGE_KEY, addr)
           localStorage.setItem(WALLET_RDNS_STORAGE, target.info.rdns)
         } catch { /* ignore */ }
-        // Fire-and-forget: persist to backend so the link survives across
-        // devices and shows up in admin views.
-        void persistLinkToBackend(addr, chainId, target.info.name)
+        // Close the picker immediately — don't wait for the backend link to complete.
         setPickerOpen(false)
+        // Fire-and-forget with a timeout to prevent hanging indefinitely
+        const linkTimeout = setTimeout(() => {
+          // eslint-disable-next-line no-console
+          console.warn('[persistLink] request exceeded 10s, abandoning')
+        }, 10000)
+        persistLinkToBackend(addr, chainId, target.info.name).finally(() => clearTimeout(linkTimeout))
       } else {
         setState((s) => ({ ...s, isConnecting: false, error: 'No account selected' }))
       }
@@ -306,8 +310,15 @@ export function useWeb3() {
           localStorage.setItem(STORAGE_KEY, addr)
           localStorage.setItem(WALLET_RDNS_STORAGE, WALLETCONNECT_INFO.rdns)
         } catch { /* ignore */ }
-        void persistLinkToBackend(addr, chainId, 'WalletConnect')
+        // Close the picker immediately — don't wait for the backend link to complete.
+        // The link persistence is best-effort and shouldn't block the UX.
         setPickerOpen(false)
+        // Fire-and-forget with a timeout to prevent hanging indefinitely
+        const linkTimeout = setTimeout(() => {
+          // eslint-disable-next-line no-console
+          console.warn('[persistLink] request exceeded 10s, abandoning')
+        }, 10000)
+        persistLinkToBackend(addr, chainId, 'WalletConnect').finally(() => clearTimeout(linkTimeout))
       } else {
         setState((s) => ({ ...s, isConnecting: false, error: 'No account approved' }))
       }

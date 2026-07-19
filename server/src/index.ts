@@ -13,7 +13,7 @@ import jwt from 'jsonwebtoken'
 import rateLimit from 'express-rate-limit'
 import path from 'node:path'
 import fs from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { WebSocketServer } from 'ws'
 import http from 'node:http'
 import authRoutes, { promoteAllAdminEmails } from './routes/auth.js'
@@ -38,6 +38,8 @@ import amazonOAuthRoutes from './routes/amazon-oauth.js'
 import advancedOrdersRoutes from './routes/advancedOrders.js'
 import passkeysRoutes from './routes/passkeys.js'
 import kycRoutes from './routes/kyc.js'
+import withdrawalsRoutes from './routes/withdrawals.js'
+import otpRoutes from './routes/otp.js'
 import { startAlertPoller } from './alertPoller.js'
 import { startDcaPoller } from './dcaPoller.js'
 import { startKeepAlive } from './keepAlive.js'
@@ -47,6 +49,15 @@ import { createErrorResponse } from './errorHandler.js'
 import { priceStreamManager } from './websocket.js'
 import { depositMonitor } from './depositMonitor.js'
 import { startOTPCleanup } from './otpCleanup.js'
+import redisService from './lib/redis.js'
+import tokenRegistryRoutes from './routes/tokenRegistry.js'
+import { registerComplianceRoutes } from './compliance/routes.js'
+import { registerComplianceAdminRoutes } from './compliance/adminRoutes.js'
+import { registerOpenApiDocs } from './openapiDocs.js'
+import advancedAnalyticsRoutes from './routes/advanced-analytics.js'
+import advancedTaxRoutes from './routes/advanced-tax.js'
+import advancedComplianceRoutes from './routes/advanced-compliance.js'
+import advancedNotificationsRoutes from './routes/advanced-notifications.js'
 
 const app = express()
 app.set('etag', false)
@@ -71,25 +82,85 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
 }))
 app.use(compression())
-app.use(
-  cors({
-    origin: (origin, cb) => {
-      if (!origin) return cb(null, true)
-      if (ALLOWED_ORIGINS.has(origin)) return cb(null, true)
-      if (/^https:\/\/[a-z0-9-]+\.onrender\.com$/i.test(origin)) return cb(null, true)
-      if (!IS_PROD && LAN_ORIGIN_RE.test(origin)) return cb(null, true)
-      cb(new Error(`CORS blocked: ${origin}`))
-    },
-    credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
-    exposedHeaders: ['Idempotent-Replay'],
-  }),
-)
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) {
+      return callback(null, true)
+    }
+
+    // Check against allowed origins
+    if (ALLOWED_ORIGINS.has(origin)) {
+      return callback(null, true)
+    }
+
+    // In production, only allow specific domains
+    if (IS_PROD) {
+      // Allow Render deployments
+      if (/^https:\/\/[a-z0-9-]+\.onrender\.com$/i.test(origin)) {
+        return callback(null, true)
+      }
+      
+      // Allow Vercel deployments
+      if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin)) {
+        return callback(null, true)
+      }
+
+      // Allow Railway deployments
+      if (/^https:\/\/[a-z0-9-]+\.railway\.app$/i.test(origin)) {
+        return callback(null, true)
+      }
+
+      // Allow Firebase Hosting deployments
+      if (/^https:\/\/[a-z0-9-]+\.web\.app$/i.test(origin) || /^https:\/\/[a-z0-9-]+\.firebaseapp\.com$/i.test(origin)) {
+        return callback(null, true)
+      }
+      
+      // Log blocked origins in production for monitoring
+      console.warn(`[CORS] Blocked origin in production: ${origin}`)
+      return callback(new Error('Not allowed by CORS'), false)
+    }
+
+    // In development, allow localhost and LAN addresses
+    if (!IS_PROD) {
+      if (LAN_ORIGIN_RE.test(origin)) {
+        return callback(null, true)
+      }
+      
+      // Allow common development ports
+      if (/^http:\/\/localhost:\d+$/.test(origin)) {
+        return callback(null, true)
+      }
+    }
+
+    // Block all other origins
+    console.warn(`[CORS] Blocked origin: ${origin}`)
+    return callback(new Error('Not allowed by CORS'), false)
+  },
+  credentials: true,
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'Idempotency-Key',
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'Cache-Control'
+  ],
+  exposedHeaders: ['Idempotent-Replay', 'X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  maxAge: 86400, // 24 hours
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+}
+
+app.use(cors(corsOptions))
 app.use(express.json({ limit: '512kb' }))
 app.use(cookieParser())
 app.use(morgan(IS_PROD ? 'combined' : 'dev'))
 app.use(requestContextMiddleware)
 
+// Rate limiting configuration
 function rateLimitKey(req: express.Request): string {
   const header = req.headers.authorization
   if (header?.startsWith('Bearer ')) {
@@ -102,16 +173,44 @@ function rateLimitKey(req: express.Request): string {
   }
   return `ip:${req.ip || 'anon'}`
 }
-app.use(
-  '/api/',
-  rateLimit({
-    windowMs: 60 * 1000,
-    limit: 600,
-    standardHeaders: 'draft-7',
-    legacyHeaders: false,
-    keyGenerator: rateLimitKey,
-  }),
-)
+
+// Global API rate limiting (per IP/user)
+const globalRateLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  limit: 600, // 600 requests per minute per IP/user
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: rateLimitKey,
+  message: { error: 'Too many requests, please try again later.' },
+  skip: (req) => {
+    // Skip rate limiting for health checks
+    return req.path === '/api/health'
+  }
+})
+
+// Stricter rate limiting for authentication endpoints
+const authRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 30, // 30 attempts per 15 minutes
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    const body = (req.body ?? {}) as { email?: string; identifier?: string }
+    const identifier = body.email || body.identifier || ''
+    return `auth:${req.ip || 'anon'}:${identifier.toLowerCase().trim()}`
+  },
+  skipSuccessfulRequests: true, // Don't count successful logins
+  message: { error: 'Too many authentication attempts, please try again later.' }
+})
+
+// Apply rate limiters
+app.use('/api/', globalRateLimiter)
+app.use('/api/auth/login', authRateLimiter)
+app.use('/api/auth/signup', authRateLimiter)
+app.use('/api/auth/forgot', authRateLimiter)
+app.use('/api/auth/reset', authRateLimiter)
+
+registerOpenApiDocs(app)
 
 const SERVER_BOOT_TIME = Date.now()
 let DB_READY = false
@@ -129,33 +228,20 @@ async function initializeDatabase(): Promise<void> {
 initializeDatabase()
 
 app.get('/api/health', async (_req, res) => {
-  const dbReady = DB_READY
-  let dbStatus = dbReady ? 'Ready' : 'Unavailable'
-  let dbError = null
-  
-  // Try a quick DB check
-  if (!dbReady) {
+  let dbStatus = DB_READY ? 'Ready' : 'Unavailable'
+  if (!DB_READY) {
     try {
       await prisma.$queryRaw`SELECT 1`
       dbStatus = 'Connected'
-    } catch (err) {
+    } catch {
       dbStatus = 'Failed'
-      dbError = err instanceof Error ? err.message : String(err)
     }
   }
-  
   res.json({
     ok: true,
     service: 'verdexis-api',
-    version: '0.1.0',
-    env: env.NODE_ENV,
     uptimeSec: Math.round((Date.now() - SERVER_BOOT_TIME) / 1000),
-    nodeVersion: process.version,
-    bootedAt: new Date(SERVER_BOOT_TIME).toISOString(),
     database: dbStatus,
-    databaseReady: dbReady,
-    databaseUrl: process.env.DATABASE_URL ? 'Set (hidden)' : 'NOT SET',
-    ...(dbError ? { databaseError: dbError } : {}),
   })
 })
 
@@ -173,6 +259,7 @@ app.use('/api/reviews', reviewsRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/admin', adminBonusRoutes)
 app.use('/api/swap', swapRoutes)
+app.use('/api/admin/token-registry', tokenRegistryRoutes)
 app.use('/api/referrals', referralRoutes)
 app.use('/api/dca', dcaRoutes)
 app.use('/api/deposit-addresses', depositAddressesRoutes)
@@ -181,6 +268,12 @@ app.use('/api/oauth', amazonOAuthRoutes)
 app.use('/api/trades/advanced', advancedOrdersRoutes)
 app.use('/api/passkeys', passkeysRoutes)
 app.use('/api/kyc', kycRoutes)
+app.use('/api/withdrawals', withdrawalsRoutes)
+app.use('/api/otp', otpRoutes)
+app.use('/api/analytics', advancedAnalyticsRoutes)
+app.use('/api/tax', advancedTaxRoutes)
+app.use('/api/compliance', advancedComplianceRoutes)
+app.use('/api/notifications', advancedNotificationsRoutes)
 
 app.post('/api/admin/cache/clear', async (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '')
@@ -240,22 +333,31 @@ app.use((req, res) => {
 app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(`[verdexis-api] unhandled error on ${req.method} ${req.path}:`, err)
   if (isDbUnavailableError(err)) {
-    res.status(503).json(createErrorResponse('Database unavailable', err.message || String(err), req.path))
+    res.status(503).json(createErrorResponse('Database unavailable', undefined, req.path))
     return
   }
-  res.status(500).json(createErrorResponse('Internal server error', err?.message || String(err), req.path))
+  const detail = IS_PROD ? undefined : (err?.message || String(err))
+  res.status(500).json(createErrorResponse('Internal server error', detail, req.path))
 })
 
 export default app
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const server = http.createServer(app)
   const wss = new WebSocketServer({ server })
   priceStreamManager.connectClients(wss)
 
-  server.listen(PORT, '0.0.0.0', () => {
+  server.listen(PORT, '0.0.0.0', async () => {
     console.log(`[verdexis-api] listening on http://0.0.0.0:${PORT} (LAN reachable)`)
     console.log(`[verdexis-api] WebSocket server running on ws://0.0.0.0:${PORT}`)
+    
+    // Initialize Redis cache
+    try {
+      await redisService.initRedis()
+    } catch (error) {
+      console.warn('[verdexis-api] Redis initialization failed, continuing without cache:', error)
+    }
+    
     if (env.ALERT_POLL_ENABLED) {
       startAlertPoller({ intervalMs: env.ALERT_POLL_INTERVAL_MS })
     }
@@ -263,6 +365,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       startDcaPoller({ intervalMs: 60_000 })
     }
     startKeepAlive()
+      // Register compliance webhook routes
+      registerComplianceRoutes(app)
+      // Register compliance admin routes
+      registerComplianceAdminRoutes(app)
     // Initialize deposit monitor after DB is ready
     if (DB_READY) {
       depositMonitor.initialize().then(() => depositMonitor.start()).catch(e => console.error('[deposit-monitor] init failed:', e))

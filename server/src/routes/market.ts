@@ -99,8 +99,12 @@ async function fetchOne(product: string): Promise<number | null> {
   if (existing) return existing
   const promise = (async () => {
     try {
+      const baseUrl = env.COINBASE_PROXY_URL || 'https://api.exchange.coinbase.com'
+      const url = baseUrl.includes('allorigins')
+        ? `${baseUrl}/products/${product}/ticker`
+        : `${baseUrl}/products/${product}/ticker`
       const data = (await httpsGetJson(
-        `https://api.exchange.coinbase.com/products/${product}/ticker`,
+        url,
         4000,
       )) as { price?: string }
       const price = data.price ? parseFloat(data.price) : NaN
@@ -184,8 +188,9 @@ router.get('/orderbook', async (req, res) => {
     return
   }
   try {
+    const baseUrl = env.COINBASE_PROXY_URL || 'https://api.exchange.coinbase.com'
     const raw = await httpsGetJson(
-      `https://api.exchange.coinbase.com/products/${product}/book?level=2`,
+      `${baseUrl}/products/${product}/book?level=2`,
       4000,
     ) as { bids?: [string, string, number][]; asks?: [string, string, number][] }
     const bids = (raw.bids || []).slice(0, 25).map(([p, s]) => ({ price: parseFloat(p), size: parseFloat(s) }))
@@ -213,8 +218,9 @@ router.get('/recent-trades', async (req, res) => {
     return
   }
   try {
+    const baseUrl = env.COINBASE_PROXY_URL || 'https://api.exchange.coinbase.com'
     const raw = await httpsGetJson(
-      `https://api.exchange.coinbase.com/products/${product}/trades?limit=50`,
+      `${baseUrl}/products/${product}/trades?limit=50`,
       4000,
     ) as { time: string; trade_id: number; price: string; size: string; side: 'buy' | 'sell' }[]
     const trades = raw.map((t) => ({
@@ -285,12 +291,7 @@ async function cgFetch(pathAndQuery: string, ttlMs: number, timeoutMs = 6000): P
     throw lastError || new Error('CoinGecko API failed')
   })()
   cgInflight.set(pathAndQuery, promise)
-  // Clean up inflight cache when promise settles (success or error)
-  promise.finally(() => {
-    cgInflight.delete(pathAndQuery)
-  }).catch(() => {
-    // Suppress unhandled rejection
-  })
+  promise.finally(() => cgInflight.delete(pathAndQuery)).catch(() => { /* suppress */ })
   return promise
 }
 
@@ -379,7 +380,8 @@ async function fetchCoinbaseCandles(product: string, days: number): Promise<numb
   if (cached && Date.now() - cached.ts < 60_000) return cached.data
   const end = Math.floor(Date.now() / 1000)
   const start = end - days * 24 * 60 * 60
-  const url = `https://api.exchange.coinbase.com/products/${product}/candles?granularity=${granularity}&start=${new Date(start * 1000).toISOString()}&end=${new Date(end * 1000).toISOString()}`
+  const baseUrl = env.COINBASE_PROXY_URL || 'https://api.exchange.coinbase.com'
+  const url = `${baseUrl}/products/${product}/candles?granularity=${granularity}&start=${new Date(start * 1000).toISOString()}&end=${new Date(end * 1000).toISOString()}`
   const raw = (await httpsGetJson(url, 6000)) as Array<[number, number, number, number, number, number]>
   if (!Array.isArray(raw)) return []
   // Coinbase returns newest-first; reverse so the chart plots left→right.

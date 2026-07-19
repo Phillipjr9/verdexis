@@ -1,8 +1,54 @@
 import { Router } from 'express'
 import { requireAuth, type AuthedRequest } from '../auth.js'
 import { prisma } from '../db.js'
+import {
+  generateRegistrationOptions,
+  verifyRegistrationResponse,
+  generateAuthenticationOptions,
+  verifyAuthenticationResponse,
+} from '@simplewebauthn/server'
+import type {
+  RegistrationResponseJSON,
+  AuthenticationResponseJSON,
+} from '@simplewebauthn/types'
 
 const router = Router()
+
+// In-memory challenge storage (use Redis in production)
+const challenges = new Map<string, { challenge: string; timestamp: number }>()
+const CHALLENGE_TIMEOUT = 10 * 60 * 1000 // 10 minutes
+
+// Clean up expired challenges
+setInterval(() => {
+  const now = Date.now()
+  for (const [key, value] of challenges.entries()) {
+    if (now - value.timestamp > CHALLENGE_TIMEOUT) {
+      challenges.delete(key)
+    }
+  }
+}, 60000)
+
+// Extract domain from APP_BASE_URL
+function getRpId(): string {
+  if (process.env.RP_ID) return process.env.RP_ID
+  const baseUrl = process.env.APP_BASE_URL || 'http://localhost:5173'
+  try {
+    const url = new URL(baseUrl)
+    return url.hostname
+  } catch {
+    return 'localhost'
+  }
+}
+
+function getOrigin(): string {
+  return process.env.APP_BASE_URL || 'http://localhost:5173'
+}
+
+const RP_ID = getRpId()
+const RP_NAME = 'Verdexis'
+const ORIGIN = getOrigin()
+
+console.log('[passkeys] Configured with RP_ID:', RP_ID, 'ORIGIN:', ORIGIN)
 
 // List user's passkeys
 router.get('/', requireAuth, async (req: AuthedRequest, res) => {
@@ -21,6 +67,7 @@ router.get('/', requireAuth, async (req: AuthedRequest, res) => {
 
     const formatted = passkeys.map((pk) => ({
       id: pk.id,
+      credentialId: pk.credentialId,
       deviceName: pk.deviceName || 'Unnamed device',
       lastUsed: pk.lastUsedAt ? new Date(pk.lastUsedAt).toLocaleDateString() : 'Never',
       createdAt: new Date(pk.createdAt).toLocaleDateString(),
@@ -36,54 +83,235 @@ router.get('/', requireAuth, async (req: AuthedRequest, res) => {
 // Start passkey registration (generate challenge)
 router.post('/register/options', requireAuth, async (req: AuthedRequest, res) => {
   try {
-    // WebAuthn registration would generate a challenge here
-    // For now, return a placeholder response
-    res.json({
-      success: false,
-      error: 'Passkey registration will be available in the next update',
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId! },
+      select: { id: true, email: true, name: true },
     })
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    // Get existing passkeys for this user
+    const existingPasskeys = await prisma.passkey.findMany({
+      where: { userId: req.userId! },
+      select: { credentialId: true },
+    })
+
+    const options = await generateRegistrationOptions({
+      rpID: RP_ID,
+      rpName: RP_NAME,
+      userID: user.id,
+      userName: user.email,
+      userDisplayName: user.name || user.email,
+      attestationType: 'none',
+      excludeCredentials: existingPasskeys.map((pk) => ({
+        id: Buffer.from(pk.credentialId, 'base64'),
+        type: 'public-key' as const,
+        transports: ['usb', 'ble', 'nfc', 'internal'] as const,
+      })),
+    })
+
+    // Store challenge for verification
+    const challengeKey = `reg_${req.userId}_${Date.now()}`
+    challenges.set(challengeKey, {
+      challenge: options.challenge,
+      timestamp: Date.now(),
+    })
+
+    // Return challenge key so client can send it back
+    res.json({ options, challengeKey })
   } catch (err) {
     console.error('[passkeys] register options error:', err)
-    res.status(500).json({ error: 'Failed to start registration' })
+    return res.status(500).json({ error: 'Failed to start registration', details: String(err) })
   }
 })
 
 // Complete passkey registration (verify credential)
 router.post('/register/verify', requireAuth, async (req: AuthedRequest, res) => {
   try {
-    res.json({
-      success: false,
-      error: 'Passkey registration will be available in the next update',
+    const { response, deviceName, challengeKey } = req.body as {
+      response: RegistrationResponseJSON
+      deviceName: string
+      challengeKey: string
+    }
+
+    if (!response || !deviceName || !challengeKey) {
+      return res.status(400).json({ error: 'Missing response, deviceName, or challengeKey' })
+    }
+
+    // Retrieve stored challenge
+    const storedChallenge = challenges.get(challengeKey)
+    if (!storedChallenge) {
+      return res.status(400).json({ error: 'Challenge expired or not found' })
+    }
+
+    challenges.delete(challengeKey)
+
+    const verification = await verifyRegistrationResponse({
+      response,
+      expectedChallenge: storedChallenge.challenge,
+      expectedOrigin: ORIGIN,
+      expectedRPID: RP_ID,
+    })
+
+    if (!verification.verified || !verification.registrationInfo) {
+      return res.status(400).json({ error: 'Registration verification failed' })
+    }
+
+    const { credentialID, credentialPublicKey, counter } = verification.registrationInfo
+
+    // Store the passkey
+    const passkey = await prisma.passkey.create({
+      data: {
+        userId: req.userId!,
+        credentialId: Buffer.from(credentialID).toString('base64'),
+        publicKey: Buffer.from(credentialPublicKey).toString('base64'),
+        counter,
+        deviceName,
+      },
+    })
+
+    return res.json({
+      verified: true,
+      passkey: {
+        id: passkey.id,
+        deviceName: passkey.deviceName,
+      },
     })
   } catch (err) {
     console.error('[passkeys] register verify error:', err)
-    res.status(500).json({ error: 'Failed to complete registration' })
+    return res.status(500).json({ error: 'Failed to complete registration', details: String(err) })
   }
 })
 
 // Start passkey authentication (generate challenge)
 router.post('/auth/options', async (req, res) => {
   try {
-    res.json({
-      success: false,
-      error: 'Passkey authentication will be available in the next update',
+    const { email } = req.body as { email?: string }
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' })
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
     })
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' })
+    }
+
+    const passkeys = await prisma.passkey.findMany({
+      where: { userId: user.id },
+      select: { credentialId: true },
+    })
+
+    if (passkeys.length === 0) {
+      return res.status(404).json({ error: 'No passkeys registered' })
+    }
+
+    const options = await generateAuthenticationOptions({
+      rpID: RP_ID,
+      allowCredentials: passkeys.map((pk) => ({
+        id: Buffer.from(pk.credentialId, 'base64'),
+        type: 'public-key' as const,
+        transports: ['usb', 'ble', 'nfc', 'internal'] as const,
+      })),
+    })
+
+    // Store challenge for verification
+    const challengeKey = `auth_${email}_${Date.now()}`
+    challenges.set(challengeKey, {
+      challenge: options.challenge,
+      timestamp: Date.now(),
+    })
+
+    res.json({ options, challengeKey })
   } catch (err) {
     console.error('[passkeys] auth options error:', err)
-    res.status(500).json({ error: 'Failed to start authentication' })
+    return res.status(500).json({ error: 'Failed to start authentication', details: String(err) })
   }
 })
 
 // Complete passkey authentication (verify assertion)
 router.post('/auth/verify', async (req, res) => {
   try {
-    res.json({
-      success: false,
-      error: 'Passkey authentication will be available in the next update',
+    const { response, challengeKey } = req.body as {
+      response: AuthenticationResponseJSON
+      challengeKey: string
+    }
+
+    if (!response || !challengeKey) {
+      return res.status(400).json({ error: 'Missing response or challengeKey' })
+    }
+
+    // Retrieve stored challenge
+    const storedChallenge = challenges.get(challengeKey)
+    if (!storedChallenge) {
+      return res.status(400).json({ error: 'Challenge expired or not found' })
+    }
+
+    challenges.delete(challengeKey)
+
+    // Find the passkey by credential ID
+    const credentialId = Buffer.from(
+      typeof response.id === 'string' ? response.id : new Uint8Array(response.id as any)
+    ).toString('base64')
+
+    const passkey = await prisma.passkey.findFirst({
+      where: { credentialId },
+      include: { user: true },
+    })
+
+    if (!passkey) {
+      return res.status(404).json({ error: 'Passkey not found' })
+    }
+
+    const verification = await verifyAuthenticationResponse({
+      response,
+      expectedChallenge: storedChallenge.challenge,
+      expectedOrigin: ORIGIN,
+      expectedRPID: RP_ID,
+      credential: {
+        id: Buffer.from(passkey.credentialId, 'base64'),
+        publicKey: Buffer.from(passkey.publicKey, 'base64'),
+        counter: passkey.counter,
+        transports: ['usb', 'ble', 'nfc', 'internal'] as const,
+      },
+    })
+
+    if (!verification.verified) {
+      return res.status(401).json({ error: 'Authentication verification failed' })
+    }
+
+    // Update counter and last used
+    await prisma.passkey.update({
+      where: { id: passkey.id },
+      data: {
+        counter: verification.authenticationInfo?.newCounter || passkey.counter,
+        lastUsedAt: new Date(),
+      },
+    })
+
+    // Generate JWT token
+    const { generateToken } = await import('../auth.js')
+    const token = generateToken(passkey.user.id)
+
+    return res.json({
+      verified: true,
+      token,
+      user: {
+        id: passkey.user.id,
+        email: passkey.user.email,
+        name: passkey.user.name,
+        role: passkey.user.role,
+      },
     })
   } catch (err) {
     console.error('[passkeys] auth verify error:', err)
-    res.status(500).json({ error: 'Failed to complete authentication' })
+    return res.status(500).json({ error: 'Failed to complete authentication', details: String(err) })
   }
 })
 
@@ -107,10 +335,10 @@ router.delete('/:id', requireAuth, async (req: AuthedRequest, res) => {
 
     await prisma.passkey.delete({ where: { id } })
 
-    res.json({ success: true })
+    return res.json({ success: true })
   } catch (err) {
     console.error('[passkeys] delete error:', err)
-    res.status(500).json({ error: 'Failed to remove passkey' })
+    return res.status(500).json({ error: 'Failed to remove passkey' })
   }
 })
 

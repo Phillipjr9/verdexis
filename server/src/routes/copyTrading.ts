@@ -350,10 +350,10 @@ router.post('/follow', auth, async (req: any, res) => {
       data: { activeCopiers: { increment: 1 } },
     })
 
-    res.json({ relationship })
+    return res.json({ relationship })
   } catch (err) {
     console.error('[copy-trading] follow error:', err)
-    res.status(500).json({ error: 'Failed to start copying' })
+    return res.status(500).json({ error: 'Failed to start copying' })
   }
 })
 

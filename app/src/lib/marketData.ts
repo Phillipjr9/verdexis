@@ -184,12 +184,11 @@ class MarketDataService {
 
     // Try to fetch real data first
     try {
-      console.log('[marketData] fetching fresh crypto list...')
       const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 3000)
+      const timeout = setTimeout(() => controller.abort(), 12000)
 
       const response = await fetch(
-        `${CG_PROXY}/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1&sparkline=true`,
+        `${CG_PROXY}/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=true`,
         { signal: controller.signal }
       )
       clearTimeout(timeout)
@@ -205,7 +204,6 @@ class MarketDataService {
       }
 
       const sanitized = sanitizeCryptoList(data)
-      console.log('[marketData] fetched', sanitized.length, 'coins, caching...')
       this.setCache(cacheKey, sanitized)
       return sanitized
     } catch (error) {
@@ -214,14 +212,8 @@ class MarketDataService {
       // Try stale cache
       const stale = this.cache.get(cacheKey)?.data as CryptoQuote[] | undefined
       if (stale && stale.length > 0) {
-        console.log('[marketData] returning stale cache:', stale.length, 'coins')
         return stale
       }
-      // No mock data - fall back to bundled mock data so the UI can
-      // still render during local development / when the backend or
-      // CoinGecko proxy is unavailable. This prevents an uncaught
-      // exception from taking down the whole SPA (which blocks tests).
-      console.warn('[marketData] returning builtin mock crypto data as fallback')
       return MOCK_CRYPTO_DATA
     }
   }
@@ -232,36 +224,34 @@ class MarketDataService {
       if (this.isApiCoolingDown()) return
       try {
         const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 3000)
-
+        const timeout = setTimeout(() => controller.abort(), 12000)
         const response = await fetch(
-          `${CG_PROXY}/markets?vs_currency=usd&order=market_cap_desc&per_page=250&page=1&sparkline=true`,
+          `${CG_PROXY}/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=true`,
           { signal: controller.signal }
         )
         clearTimeout(timeout)
-
         if (!response.ok) throw new Error(`Error: ${response.status}`)
         const data = await response.json()
         if (Array.isArray(data) && data.length > 0) {
           const sanitized = sanitizeCryptoList(data)
           this.setCache('crypto_list', sanitized)
-          console.log('[marketData] background refresh complete')
         }
-      } catch (error) {
-        console.warn('[marketData] background refresh failed:', error)
+      } catch {
+        this.markApiFailed()
       }
     })
   }
 
   async getCryptoPrice(ids: string[]): Promise<CryptoQuote[]> {
-    const cacheKey = `crypto_${ids.join('_')}`
+    if (!ids.length) return []
+    const cacheKey = `crypto_${ids.slice().sort().join('_')}`
     const cached = this.getCached<CryptoQuote[]>(cacheKey)
     if (cached) return cached
 
     try {
       const response = await fetch(
         `${CG_PROXY}/markets?vs_currency=usd&ids=${ids.join(',')}&sparkline=true`,
-        { signal: AbortSignal.timeout(5000) }
+        { signal: AbortSignal.timeout(10000) }
       )
       if (!response.ok) throw new Error(`CoinGecko API error: ${response.status}`)
       const data = await response.json()

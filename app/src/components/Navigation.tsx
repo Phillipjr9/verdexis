@@ -18,13 +18,20 @@ const userPrivateLinks = [
   { label: 'Dashboard', path: '/dashboard' },
   { label: 'Markets', path: '/markets' },
   { label: 'Trade', path: '/trading' },
-  { label: 'News', path: '/news' },
-  { label: 'AI Analyst', path: '/ai' },
   { label: 'Wallet', path: '/wallet' },
+  { label: 'AI Analyst', path: '/ai' },
+  { label: 'Analytics', path: '/analytics' },
+]
+
+const userMoreLinks = [
+  { label: 'Tax', path: '/tax' },
+  { label: 'Staking', path: '/staking' },
   { label: 'Goals', path: '/goals' },
+  { label: 'News', path: '/news' },
   { label: 'Screener', path: '/screener' },
   { label: 'Calendar', path: '/calendar' },
   { label: 'Learn', path: '/learn' },
+  { label: 'Linked Wallets', path: '/linked-wallets' },
 ]
 
 const adminPrivateLinks = [
@@ -68,6 +75,7 @@ export default function Navigation() {
   const [avatar, setAvatar] = useState<string | null>(initial.avatar)
   const { isConnected: web3Connected, isConnecting: web3Connecting, shortAddress, connect: connectWeb3, error: web3Error } = useWeb3()
   const location = useLocation()
+  const [moreOpen, setMoreOpen] = useState(false)
 
   // Check auth state from localStorage
   const checkAuth = () => {
@@ -107,10 +115,11 @@ export default function Navigation() {
 
   const isPrivatePage = location.pathname.startsWith('/dashboard')
     || location.pathname.startsWith('/admin')
-    || ['/ai', '/wallet'].includes(location.pathname)
+    || ['/ai', '/wallet', '/analytics', '/tax', '/staking', '/settings', '/kyc'].includes(location.pathname)
   const showPrivateNav = isAuthenticated || isPrivatePage
   const baseLinks = showPrivateNav ? (isAdmin ? adminPrivateLinks : userPrivateLinks) : publicLinks
   const navLinks = baseLinks
+  const moreLinks = showPrivateNav && !isAdmin ? userMoreLinks : []
   const roleLabel = isAuthenticated && isAdmin ? 'Admin' : ''
   const roleBadgeClass = isAdmin
     ? 'text-[#0C8B44] bg-[#0C8B44]/10 border border-[#0C8B44]/30'
@@ -154,13 +163,35 @@ export default function Navigation() {
           </Link>
 
           {/* Desktop Nav */}
-          <div className="hidden lg:flex items-center gap-6 xl:gap-8">
+          <div className="hidden lg:flex items-center gap-3 xl:gap-5 flex-1 justify-end overflow-x-auto">
             {navLinks.map((link) => (
               <Link key={link.path} to={link.path}
                 className={`text-sm font-light tracking-[0.08em] uppercase whitespace-nowrap transition-colors hover:text-[#0C8B44] ${location.pathname === link.path ? 'text-[#0C8B44]' : 'text-[#A0A0A0]'}`}>
                 {link.label}
               </Link>
             ))}
+            {moreLinks.length > 0 && (
+              <div className="relative">
+                <button
+                  onClick={() => setMoreOpen(v => !v)}
+                  onBlur={() => setTimeout(() => setMoreOpen(false), 150)}
+                  className={`text-sm font-light tracking-[0.08em] uppercase whitespace-nowrap transition-colors hover:text-[#0C8B44] flex items-center gap-1 ${moreLinks.some(l => location.pathname === l.path) ? 'text-[#0C8B44]' : 'text-[#A0A0A0]'}`}
+                >
+                  More <span className="text-[10px]">▾</span>
+                </button>
+                {moreOpen && (
+                  <div className="absolute top-8 left-0 z-50 min-w-[140px] rounded-xl bg-[#0f1619] border border-[#ffffff10] py-2 shadow-xl">
+                    {moreLinks.map((link) => (
+                      <Link key={link.path} to={link.path}
+                        onClick={() => setMoreOpen(false)}
+                        className={`block px-4 py-2 text-sm font-light tracking-[0.06em] uppercase whitespace-nowrap transition-colors hover:text-[#0C8B44] hover:bg-[#ffffff05] ${location.pathname === link.path ? 'text-[#0C8B44]' : 'text-[#A0A0A0]'}`}>
+                        {link.label}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Desktop Auth Buttons */}
@@ -238,6 +269,13 @@ export default function Navigation() {
                 </div>
               )}
               {navLinks.map((link) => (
+                <Link key={link.path} to={link.path}
+                  className="text-sm font-light tracking-[0.08em] uppercase text-[#A0A0A0] hover:text-[#0C8B44] transition-colors"
+                  onClick={() => setMobileOpen(false)}>
+                  {link.label}
+                </Link>
+              ))}
+              {moreLinks.map((link) => (
                 <Link key={link.path} to={link.path}
                   className="text-sm font-light tracking-[0.08em] uppercase text-[#A0A0A0] hover:text-[#0C8B44] transition-colors"
                   onClick={() => setMobileOpen(false)}>

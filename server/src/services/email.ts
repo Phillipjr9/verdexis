@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer'
 import type { Transporter } from 'nodemailer'
 import { env } from '../env.js'
+import { sendEmailNotification } from '../notificationService.js'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -12,6 +13,11 @@ interface EmailOptions {
   to: string
   subject: string
   html: string
+  text?: string
+  userId?: string
+  kind?: string
+  title?: string
+  createWebNotification?: boolean
 }
 
 class EmailService {
@@ -50,6 +56,7 @@ class EmailService {
       'email_transaction_confirmation.html',
       'email_security.html',
       'email_error_notification.html',
+      'email_password_reset.html',
     ]
 
     for (const file of templateFiles) {
@@ -87,53 +94,58 @@ class EmailService {
 
   async send(options: EmailOptions): Promise<boolean> {
     try {
-      if (!this.transporter) {
-        console.log('[email] Would send to:', options.to)
-        console.log('[email] Subject:', options.subject)
-        return true
-      }
-
-      await this.transporter.sendMail({
-        from: `Verdexis <${env.SMTP_USER}>`,
-        ...options,
+      const plainText = options.text ?? options.subject
+      const success = await sendEmailNotification(options.to, options.subject, plainText, options.html, {
+        userId: options.userId,
+        kind: options.kind,
+        title: options.title ?? options.subject,
+        body: plainText,
+        createWebNotification: options.createWebNotification,
       })
 
       console.log('[email] Sent to:', options.to)
-      return true
+      return success
     } catch (error) {
       console.error('[email] Failed:', error)
       return false
     }
   }
 
-  async sendOTP(to: string, userName: string, otp: string, expirationMinutes: number): Promise<boolean> {
+  async sendOTP(to: string, userName: string, otp: string, expirationMinutes: number, userId?: string): Promise<boolean> {
     const template = this.templates.get('otp_verification')
-    if (!template) return false
 
     const expiresAt = new Date(Date.now() + expirationMinutes * 60000)
-    const html = this.replaceVariables(template, {
-      USER_NAME: userName,
-      OTP_CODE: otp,
-      EXPIRATION_MINUTES: expirationMinutes.toString(),
-      EXPIRATION_TIME: expiresAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-      TIMEZONE: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      CONTEXT_SECTION: '',
-      ACTION_BUTTONS: '',
-      BACKUP_CODES_SECTION: '',
-      TWO_FA_APP_SECTION: '',
-      SECURITY_ALERT_URL: `${env.APP_BASE_URL}/security/alert`,
-      HELP_VERIFICATION_URL: `${env.APP_BASE_URL}/help/verification`,
-      CONTACT_SUPPORT_URL: `${env.APP_BASE_URL}/contact`,
-    })
+
+    const html = template
+      ? this.replaceVariables(template, {
+          USER_NAME: userName,
+          OTP_CODE: otp,
+          EXPIRATION_MINUTES: expirationMinutes.toString(),
+          EXPIRATION_TIME: expiresAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+          TIMEZONE: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          CONTEXT_SECTION: '',
+          ACTION_BUTTONS: '',
+          BACKUP_CODES_SECTION: '',
+          TWO_FA_APP_SECTION: '',
+          SECURITY_ALERT_URL: `${env.APP_BASE_URL}/security/alert`,
+          HELP_VERIFICATION_URL: `${env.APP_BASE_URL}/help/verification`,
+          CONTACT_SUPPORT_URL: `${env.APP_BASE_URL}/contact`,
+        })
+      : `<div style="font-family:sans-serif;padding:24px"><h2>Your verification code</h2><p>Hi ${userName},</p><p style="font-size:32px;font-weight:bold;letter-spacing:8px">${otp}</p><p>Expires in ${expirationMinutes} minutes. Do not share this code.</p></div>`
 
     return this.send({
       to,
       subject: `Your Verdexis verification code: ${otp}`,
       html,
+      text: `Your OTP is ${otp}. It expires in ${expirationMinutes} minutes.`,
+      userId,
+      kind: 'otp',
+      title: 'Verification Code',
+      createWebNotification: true,
     })
   }
 
-  async sendWelcome(to: string, userName: string): Promise<boolean> {
+  async sendWelcome(to: string, userName: string, userId?: string): Promise<boolean> {
     const template = this.templates.get('welcome')
     if (!template) return false
 
@@ -148,27 +160,73 @@ class EmailService {
       to,
       subject: 'Welcome to Verdexis!',
       html,
+      text: 'Welcome to Verdexis! Complete your onboarding to get started.',
+      userId,
+      kind: 'welcome',
+      title: 'Welcome to Verdexis!',
+      createWebNotification: true,
     })
   }
 
-  async sendPasswordReset(to: string, userName: string, resetUrl: string): Promise<boolean> {
-    const template = this.templates.get('security')
-    if (!template) return false
+  async sendPasswordReset(to: string, userName: string, resetUrl: string, userId?: string): Promise<boolean> {
+    const template = this.templates.get('password_reset')
+    if (!template) {
+      // Fallback to simple text email
+      const html = `
+        <h2>Password Reset Request</h2>
+        <p>Hello ${userName},</p>
+        <p>Click the link below to reset your password:</p>
+        <p><a href="${resetUrl}">${resetUrl}</a></p>
+        <p>This link expires in 1 hour.</p>
+        <p>If you didn't request this, please ignore this email.</p>
+      `
+      return this.send({
+        to,
+        subject: 'Reset your Verdexis password',
+        html,
+        text: `Use this link to reset your password: ${resetUrl}`,
+        userId,
+        kind: 'password_reset',
+        title: 'Reset your Verdexis password',
+        createWebNotification: true,
+      })
+    }
 
     const html = this.replaceVariables(template, {
       USER_NAME: userName,
-      SECURITY_TITLE: 'Password Reset Request',
-      SECURITY_CONTENT: '<p>We received a request to reset your password. Click the button below to choose a new password.</p>',
-      EXPIRATION_TIME: '1',
-      ACTION_URL: resetUrl,
-      BUTTON_TEXT: 'Reset Password',
-      SECURITY_HELP_URL: `${env.APP_BASE_URL}/security/help`,
+      RESET_URL: resetUrl,
+      REQUEST_TIME: new Date().toLocaleString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        timeZoneName: 'short' 
+      }),
+      EXPIRY_TIME: new Date(Date.now() + 60 * 60 * 1000).toLocaleString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        timeZoneName: 'short' 
+      }),
+      USER_EMAIL: to,
+      USER_AGENT: 'Unknown', // Would come from request headers in real implementation
+      LOCATION: 'Unknown', // Would come from IP geolocation
     })
 
     return this.send({
       to,
       subject: 'Reset your Verdexis password',
       html,
+      text: `Use this link to reset your password: ${resetUrl}`,
+      userId,
+      kind: 'password_reset',
+      title: 'Reset your Verdexis password',
+      createWebNotification: true,
     })
   }
 

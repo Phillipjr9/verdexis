@@ -4,7 +4,6 @@ import { Link, useSearchParams } from 'react-router-dom'
 import Navigation from '../components/Navigation'
 import Footer from '../components/Footer'
 import LinkBankModal from '../components/LinkBankModal'
-import LinkedWalletsPanel from '../components/LinkedWalletsPanel'
 import WalletPickerModal from '../components/WalletPickerModal'
 import QrCode from '../components/QrCode'
 import { portfolioStore, type WalletTransaction } from '../lib/portfolioStore'
@@ -19,6 +18,7 @@ import { useWeb3 } from '../hooks/use-web3'
 import { cryptoIconFor, assetIconFor, cryptoIconErrorFallback } from '../lib/cryptoIcon'
 import { api, getToken, newIdempotencyKey } from '../lib/api'
 import { headlineAmountClass } from '../lib/utils'
+import { detectWalletAddressType, type DetectedWalletType } from '../lib/walletUtils'
 import { Toaster, toast } from 'sonner'
 import {
   ArrowDownRight, ArrowUpRight, ArrowLeftRight,
@@ -56,6 +56,192 @@ interface CheckDeliveryInfo {
   memo: string
 }
 
+function TransferStatusPhoneCard({
+  kind,
+  title,
+  message,
+  onDismiss,
+  progress,
+}: {
+  kind: 'processing' | 'success' | 'error'
+  title: string
+  message: string
+  onDismiss: () => void
+  progress?: number
+}) {
+  const isSuccess = kind === 'success'
+  const isProcessing = kind === 'processing'
+  const chipClass = isSuccess
+    ? 'border-[#0C8B44]/20 bg-[#0C8B44]/10 text-[#4CAF50]'
+    : isProcessing
+      ? 'border-[#F59E0B]/20 bg-[#F59E0B]/10 text-[#FBBF24]'
+      : 'border-[#f44336]/20 bg-[#f44336]/10 text-[#EF4444]'
+  const progressPercent = isProcessing ? Math.min(100, Math.max(10, progress ?? 12)) : isSuccess ? 100 : 70
+  const progressToneClass = isSuccess ? 'bg-[#0C8B44]' : isProcessing ? 'bg-[#FBBF24]' : 'bg-[#EF4444]'
+
+  return (
+    <div className="w-full max-w-[22rem] rounded-[2rem] border border-white/10 bg-[#090C0F] p-2 shadow-[0_30px_90px_rgba(0,0,0,0.65)]">
+      <div className="relative overflow-hidden rounded-[1.6rem] border border-white/10 bg-[#0F1317] p-4">
+        <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white/5 to-transparent" />
+        <div className="relative">
+          <div className="mb-4 flex items-center justify-between gap-2">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.28em] text-[#737373]">Mobile receipt</p>
+              <p className="text-sm font-medium text-[#E5E5E5]">{isProcessing ? 'Transfer moving' : isSuccess ? 'Transfer complete' : 'Needs attention'}</p>
+            </div>
+            <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${chipClass}`}>
+              {isProcessing ? 'In motion' : isSuccess ? 'Success' : 'Error'}
+            </span>
+          </div>
+
+          <div className="rounded-[1rem] border border-white/10 bg-[#12161A] p-4">
+            <div className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border ${isSuccess ? 'border-[#0C8B44]/20 bg-[#0C8B44]/10' : 'border-[#f44336]/20 bg-[#f44336]/10'}`}>
+              <svg className="h-8 w-8" viewBox="0 0 52 52" fill="none" stroke={isSuccess ? '#0C8B44' : '#ef4444'} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                {isSuccess ? (
+                  <path d="M14 27 L23 36 L40 18" />
+                ) : (
+                  <path d="M18 18 L34 34 M34 18 L18 34" />
+                )}
+              </svg>
+            </div>
+            <div className="mb-3 flex items-center gap-2">
+              <div className="h-2 flex-1 rounded-full bg-white/10">
+                <div className={`h-2 rounded-full transition-all duration-500 ${progressToneClass}`} style={{ width: `${progressPercent}%` }} />
+              </div>
+              <span className="text-[11px] text-[#737373]">{isProcessing ? `${Math.round(progressPercent)}%` : isSuccess ? 'Live update' : 'Action needed'}</span>
+            </div>
+            <div className="space-y-2 text-center">
+              <h2 className={`text-lg font-semibold ${isSuccess ? 'text-white' : 'text-red-400'}`}>{title}</h2>
+              <p className="text-sm leading-relaxed text-[#A0A0A0]">{message}</p>
+            </div>
+          </div>
+
+          {kind === 'error' && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onDismiss() }}
+              className="mt-4 w-full rounded-xl bg-white/10 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/20"
+            >
+              Dismiss
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CryptoTransferPhoneCard({
+  status,
+  asset,
+  amount,
+  address,
+  chain,
+  progress,
+}: {
+  status: {
+    status: 'processing' | 'completed' | 'failed'
+    steps: Array<{ label: string; detail: string; done: boolean; active: boolean }>
+  }
+  asset: string
+  amount: string
+  address: string
+  chain?: string
+  progress?: number
+}) {
+  const completedCount = status.steps.filter((step) => step.done).length
+  const parsedAmount = Number.parseFloat(amount)
+  const amountLabel = Number.isFinite(parsedAmount)
+    ? parsedAmount.toLocaleString(undefined, { maximumFractionDigits: 8 })
+    : '0'
+  const chainLabel = chain ? chain.charAt(0).toUpperCase() + chain.slice(1) : 'External wallet'
+  const toneClass = status.status === 'completed'
+    ? 'border-[#0C8B44]/20 bg-[#0C8B44]/10 text-[#4CAF50]'
+    : status.status === 'failed'
+      ? 'border-[#f44336]/20 bg-[#f44336]/10 text-[#EF4444]'
+      : 'border-[#F59E0B]/20 bg-[#F59E0B]/10 text-[#FBBF24]'
+  const progressPercent = status.status === 'completed' ? 100 : status.status === 'failed' ? 35 : Math.min(96, Math.max(12, progress ?? 36))
+  const progressToneClass = status.status === 'completed' ? 'bg-[#0C8B44]' : status.status === 'failed' ? 'bg-[#EF4444]' : 'bg-[#FBBF24]'
+
+  return (
+    <div className="mt-4 overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#0F1317] p-2 shadow-[0_16px_50px_rgba(0,0,0,0.38)]">
+      <div className="rounded-[1.15rem] border border-white/10 bg-[#090C0F] p-3">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full border border-[#0C8B44]/20 bg-[#0C8B44]/10 text-[#4CAF50]">
+              <ArrowUpRight className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.28em] text-[#737373]">Mobile transfer view</p>
+              <p className="text-sm font-medium text-[#E5E5E5]">
+                {status.status === 'completed' ? 'Transfer delivered' : status.status === 'failed' ? 'Transfer interrupted' : 'Sending to your external wallet'}
+              </p>
+            </div>
+          </div>
+          <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${toneClass}`}>
+            {status.status === 'completed' ? 'Completed' : status.status === 'failed' ? 'Failed' : 'In progress'}
+          </span>
+        </div>
+
+        <div className="rounded-[1rem] border border-white/10 bg-[#12161A] p-3">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.24em] text-[#737373]">Live path</p>
+              <p className="text-sm text-[#E5E5E5]">{amountLabel} {asset}</p>
+            </div>
+            <div className="rounded-full border border-[#0C8B44]/20 bg-[#0C8B44]/10 px-2.5 py-1 text-[11px] font-medium text-[#4CAF50]">
+              {chainLabel}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-[#0F1317] text-[#E5E5E5]">
+              <WalletIcon className="h-4 w-4" />
+            </div>
+            <div className="flex-1">
+              <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                <div className={`h-2 rounded-full transition-all duration-500 ${progressToneClass} ${status.status === 'processing' ? 'animate-pulse' : ''}`} style={{ width: `${progressPercent}%` }} />
+              </div>
+            </div>
+            <div className="flex h-9 w-9 items-center justify-center rounded-full border border-[#0C8B44]/20 bg-[#0C8B44]/10 text-[#4CAF50]">
+              <Shield className="h-4 w-4" />
+            </div>
+          </div>
+
+          <div className="mt-2 flex items-center justify-between text-[11px] text-[#737373]">
+            <span>Account balance</span>
+            <span>{completedCount}/{status.steps.length} steps</span>
+          </div>
+          <p className="mt-2 text-[11px] leading-relaxed text-[#737373]">
+            {address
+              ? `Sending to ${address.slice(0, 10)}${address.length > 10 ? '…' : ''} and reflecting the movement in the external wallet in real time.`
+              : 'The transfer will appear in the destination wallet in real time.'}
+          </p>
+        </div>
+
+        <div className="mt-3 space-y-3">
+          {status.steps.map((step, index) => (
+            <div key={`${step.label}-${index}`} className="flex gap-3">
+              <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border ${step.done ? 'border-[#0C8B44]/30 bg-[#0C8B44]/10' : step.active ? 'border-[#FBBF24]/30 bg-[#FBBF24]/10 animate-pulse' : 'border-[#ffffff10] bg-[#1a1a1a]'}`}>
+                {step.done ? (
+                  <CheckCircle className="h-4 w-4 text-[#4CAF50]" />
+                ) : step.active ? (
+                  <Clock className="h-4 w-4 text-[#FBBF24]" />
+                ) : (
+                  <div className="h-2 w-2 rounded-full bg-[#737373]" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-[#E5E5E5]">{step.label}</p>
+                <p className="text-[11px] leading-relaxed text-[#737373]">{step.detail}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function WalletPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const initialTab = (searchParams.get('action') as TabType | null) ?? 'overview'
@@ -81,6 +267,7 @@ export default function WalletPage() {
   }, [activeTab])
 
   const [selectedCurrency, setSelectedCurrency] = useState('USD')
+  const [selectedWithdrawAsset, setSelectedWithdrawAsset] = useState('USD')
   const [amount, setAmount] = useState('')
   // Optional on-chain transaction hash the user can paste after sending
   // a crypto deposit — lets the operations team match the credit faster.
@@ -104,16 +291,41 @@ export default function WalletPage() {
   const [transferSending, setTransferSending] = useState(false)
   // Full-page success / error overlay shown after a transfer attempt.
   const [transferStatus, setTransferStatus] = useState<
+    | { kind: 'processing'; title: string; message: string }
     | { kind: 'success'; title: string; message: string }
     | { kind: 'error'; title: string; message: string }
     | null
   >(null)
+  const [liveFlowProgress, setLiveFlowProgress] = useState(0)
+  const [cryptoWithdrawalStatus, setCryptoWithdrawalStatus] = useState<{
+    status: 'processing' | 'completed' | 'failed'
+    steps: Array<{ label: string; detail: string; done: boolean; active: boolean }>
+  } | null>(null)
   // Auto-dismiss the success overlay; errors stay until the user clicks.
   useEffect(() => {
     if (transferStatus?.kind !== 'success') return
     const t = setTimeout(() => setTransferStatus(null), 4500)
     return () => clearTimeout(t)
   }, [transferStatus])
+
+  useEffect(() => {
+    const shouldAnimate = transferStatus?.kind === 'processing' || cryptoWithdrawalStatus?.status === 'processing'
+    if (!shouldAnimate) {
+      setLiveFlowProgress(0)
+      return
+    }
+
+    setLiveFlowProgress(12)
+    const timer = window.setInterval(() => {
+      setLiveFlowProgress((value) => {
+        if (value >= 92) return value
+        const step = value < 36 ? 12 : value < 72 ? 8 : 6
+        return Math.min(92, value + step)
+      })
+    }, 700)
+
+    return () => window.clearInterval(timer)
+  }, [transferStatus?.kind, cryptoWithdrawalStatus?.status])
   const [incomeKind, setIncomeKind] = useState<IncomeKind>('dividend')
   const [incomeSource, setIncomeSource] = useState('')
   const [wallet, setWallet] = useState(() => portfolioStore.getWallet())
@@ -209,6 +421,100 @@ export default function WalletPage() {
   // Bumped after every successful wallet connect / disconnect so the
   // LinkedWalletsPanel re-fetches and shows the new entry.
   const [walletLinksTick, setWalletLinksTick] = useState(0)
+  const [withdrawalConfig, setWithdrawalConfig] = useState<{ enabled: boolean; networks: { chain: string; enabled: boolean }[] } | null>(null)
+  const [selectedWithdrawChain, setSelectedWithdrawChain] = useState<string | undefined>(undefined)
+  const [hasExplicitChainSelection, setHasExplicitChainSelection] = useState(false)
+  const [detectedWalletType, setDetectedWalletType] = useState<DetectedWalletType>('unknown')
+
+  const getSupportedWithdrawChains = (currency: string) => {
+    const cur = currency.toUpperCase()
+    if (cur === 'BTC') return ['bitcoin'] as const
+    if (cur === 'ETH') return ['ethereum'] as const
+    if (cur === 'BNB') return ['bsc'] as const
+    if (cur === 'SOL') return ['solana'] as const
+    if (cur === 'USDC' || cur === 'USDT') return ['ethereum', 'solana', 'bsc'] as const
+    return [] as const
+  }
+
+  const getChainForCurrency = (currency: string) => {
+    return getSupportedWithdrawChains(currency)[0]
+  }
+
+  const getWithdrawChainOptions = () => {
+    if (selectedWithdrawAsset === 'USD') return []
+    const supportedChains = getSupportedWithdrawChains(selectedWithdrawAsset)
+    const enabledNetworks = withdrawalConfig?.networks.filter((n) => n.enabled).map((n) => n.chain) ?? []
+    const availableChains = supportedChains.length > 0 ? supportedChains : ['ethereum', 'solana', 'bitcoin']
+    const allowedChains = enabledNetworks.length > 0 ? availableChains.filter((chain) => enabledNetworks.includes(chain)) : availableChains
+
+    return allowedChains.map((chainName) => ({
+      chain: chainName,
+      label: chainName === 'bsc' ? 'BSC' : chainName.charAt(0).toUpperCase() + chainName.slice(1),
+    }))
+  }
+
+  const withdrawChainOptions = useMemo(() => getWithdrawChainOptions(), [selectedWithdrawAsset, withdrawalConfig])
+
+  const isCurrencyWithdrawalSupported = (currency: string) => {
+    if (currency === 'USD') return true
+    const supportedChains = getSupportedWithdrawChains(currency)
+    const enabledNetworks = withdrawalConfig?.networks.filter((n) => n.enabled).map((n) => n.chain) ?? []
+    if (supportedChains.length > 0) {
+      return enabledNetworks.length > 0
+        ? supportedChains.some((chain) => enabledNetworks.includes(chain))
+        : true
+    }
+    if (!withdrawalConfig) return true
+    return withdrawalConfig.networks.some((n) => n.enabled)
+  }
+
+  useEffect(() => {
+    if (activeTab !== 'withdraw') return
+    api.getWithdrawalConfig()
+      .then(setWithdrawalConfig)
+      .catch(() => setWithdrawalConfig(null))
+  }, [activeTab])
+
+  useEffect(() => {
+    setHasExplicitChainSelection(false)
+    const defaultChain = getChainForCurrency(selectedWithdrawAsset) ?? withdrawChainOptions[0]?.chain
+    setSelectedWithdrawChain(defaultChain)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedWithdrawAsset, JSON.stringify(withdrawChainOptions)])
+
+  useEffect(() => {
+    if (selectedWithdrawAsset === 'USD') {
+      setDetectedWalletType('unknown')
+      return
+    }
+
+    setDetectedWalletType(recipient.trim() ? detectWalletAddressType(recipient) : 'unknown')
+  }, [recipient, selectedWithdrawAsset])
+
+  useEffect(() => {
+    if (selectedWithdrawAsset === 'USD' || hasExplicitChainSelection) return
+
+    const walletChain = detectedWalletType === 'ethereum'
+      ? 'ethereum'
+      : detectedWalletType === 'solana'
+        ? 'solana'
+        : detectedWalletType === 'bitcoin'
+          ? 'bitcoin'
+          : undefined
+
+    if (!walletChain) return
+
+    const supportedChains = getSupportedWithdrawChains(selectedWithdrawAsset)
+    if (supportedChains.length > 0 && !supportedChains.includes(walletChain)) return
+
+    const allowed = withdrawChainOptions.some((option) => option.chain === walletChain)
+    if (allowed) {
+      setSelectedWithdrawChain(walletChain)
+    }
+  }, [detectedWalletType, hasExplicitChainSelection, selectedWithdrawAsset, withdrawChainOptions])
+
+  const withdrawalAvailable = wallet.find((w) => w.currency === selectedWithdrawAsset)?.available ?? 0
+
   const wireInstructions = useMemo(
     () => depositInstructions.getWire(selectedCurrency),
     // re-read whenever admin saves new instructions OR currency changes
@@ -525,22 +831,19 @@ export default function WalletPage() {
     return baseline[currency.toUpperCase()] || 1
   }
 
-  // Company-rule sliding processing-fee schedule. Designed so that even a
-  // $1M withdrawal stays in the low single-digit-thousands range (target:
-  // $2k–$4k @ $1M). Rate decreases as gross size increases.
-  //   <  $10k          → 0.40%
-  //   $10k  –  $50k    → 0.35%
-  //   $50k  – $250k    → 0.30%
-  //   ≥ $250k           → 0.25%
+  const [withdrawalFeeConfig, setWithdrawalFeeConfig] = useState<{ ratePct: number } | null>(null)
+
+  useEffect(() => {
+    api.get<{ ratePct: number }>('/api/wallet/withdrawal-fee-config')
+      .then(setWithdrawalFeeConfig)
+      .catch(() => { /* use default */ })
+  }, [])
+
+  // Processing fee: flat rate configurable by admin, defaulting to 11.8%.
   function calcProcessingFee(grossUsd: number): { feeUsd: number; ratePct: number; tierLabel: string } {
-    if (grossUsd <= 0) return { feeUsd: 0, ratePct: 0.4, tierLabel: 'Tier 1 (< $10k)' }
-    let ratePct: number
-    let tierLabel: string
-    if (grossUsd < 10_000)        { ratePct = 0.40; tierLabel = 'Tier 1 (< $10k)' }
-    else if (grossUsd < 50_000)   { ratePct = 0.35; tierLabel = 'Tier 2 ($10k–$50k)' }
-    else if (grossUsd < 250_000)  { ratePct = 0.30; tierLabel = 'Tier 3 ($50k–$250k)' }
-    else                          { ratePct = 0.25; tierLabel = 'Tier 4 (≥ $250k)' }
-    return { feeUsd: grossUsd * (ratePct / 100), ratePct, tierLabel }
+    const ratePct = withdrawalFeeConfig?.ratePct ?? 11.8
+    if (grossUsd <= 0) return { feeUsd: 0, ratePct, tierLabel: `${ratePct}% processing fee` }
+    return { feeUsd: grossUsd * (ratePct / 100), ratePct, tierLabel: `${ratePct}% processing fee` }
   }
 
   // Per-user admin-set wallet override (crypto address / wire) for fee
@@ -663,6 +966,11 @@ export default function WalletPage() {
     const txHash = cryptoTxHash.trim()
     let verified: VerifyStatus | null = null
     if (txHash && isVerifiableCurrency(selectedCurrency)) {
+      setTransferStatus({
+        kind: 'processing',
+        title: 'Checking deposit status',
+        message: 'We are verifying the transaction hash and confirming the deposit on-chain.',
+      })
       setVerifying(true)
       setVerifyResult(null)
       try {
@@ -711,30 +1019,48 @@ export default function WalletPage() {
       newIdempotencyKey(),
     )
 
+    let fundingTransferMessage: string | null = null
+
+    try {
+      const pendingResponse = await api.recordPendingDeposit({
+        txHash: txHash || undefined,
+        chainId: cryptoInstructions.network || 'external-wallet',
+        toAddress: cryptoInstructions.address,
+        fromAddress: txHash || undefined,
+        asset: selectedCurrency,
+        amount: creditedAmount,
+      })
+
+      fundingTransferMessage = pendingResponse.transfer?.message ?? null
+    } catch {
+      // Keep the local wallet update intact even if the server-side funding
+      // transfer record cannot be saved right away.
+    }
+
     if (verified && verified.kind === 'confirmed') {
       portfolioStore.confirmDeposit(tx.id)
       setTransferStatus({
         kind: 'success',
         title: 'Deposit confirmed on-chain',
-        message: `Verified ${verified.confirmations}+ confirmations on the ${cryptoInstructions.network} network. Your wallet has been credited with ${creditedAmount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 8 })} ${selectedCurrency}.`,
+        message: fundingTransferMessage || `Verified ${verified.confirmations}+ confirmations on the ${cryptoInstructions.network} network. Your wallet has been credited with ${creditedAmount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 8 })} ${selectedCurrency}.`,
       })
     } else if (verified && verified.kind === 'pending') {
       setTransferStatus({
         kind: 'success',
         title: 'Transaction found — awaiting confirmations',
-        message: `${verified.confirmations}/${verified.required} confirmations on ${cryptoInstructions.network}. Your wallet will be credited automatically once the network confirms the transaction.`,
+        message: fundingTransferMessage || `${verified.confirmations}/${verified.required} confirmations on ${cryptoInstructions.network}. Your wallet will be credited automatically once the network confirms the transaction.`,
       })
     } else if (verified && verified.kind === 'error') {
       setTransferStatus({
         kind: 'success',
         title: 'Deposit submitted (manual review)',
-        message: `On-chain verifier was unreachable (${verified.message}). Your deposit has been queued for admin review and will be credited shortly.`,
+        message: fundingTransferMessage || `On-chain verifier was unreachable (${verified.message}). Your deposit has been queued for admin review and will be credited shortly.`,
       })
     } else {
       setTransferStatus({
         kind: 'success',
         title: 'Deposit submitted',
-        message: `Submitted ${creditedAmount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 8 })} ${selectedCurrency}. We'll credit your wallet once the network confirms the transaction.`,
+        message: fundingTransferMessage || `Submitted ${creditedAmount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 8 })} ${selectedCurrency}. We'll credit your wallet once the network confirms the transaction.`,
       })
     }
 
@@ -743,33 +1069,37 @@ export default function WalletPage() {
     setTransactions(portfolioStore.getTransactions())
   }
 
-  const handleWithdraw = () => {
+  const handleWithdraw = async () => {
     if (!amount || parseFloat(amount) <= 0) {
       setTransferStatus({ kind: 'error', title: 'Withdrawal declined', message: 'Enter a valid amount.' })
       return
     }
     const gross = parseFloat(amount)
+    if (selectedWithdrawAsset !== 'USD' && gross > withdrawalAvailable) {
+      setTransferStatus({ kind: 'error', title: 'Withdrawal declined', message: `Insufficient ${selectedWithdrawAsset} balance. Available: ${withdrawalAvailable.toLocaleString(undefined, { maximumFractionDigits: 8 })} ${selectedWithdrawAsset}.` })
+      return
+    }
     // Fee is always quoted in USD. For crypto withdrawals we mark the
     // withdrawn amount to USD using the live quote so the same
     // `max($500, 0.8%)` floor applies uniformly.
-    const grossUsd = selectedCurrency === 'USD' ? gross : gross * getUsdRate(selectedCurrency)
+    const grossUsd = selectedWithdrawAsset === 'USD' ? gross : gross * getUsdRate(selectedWithdrawAsset)
     // Fee is calculated against MAX(this withdrawal, total wallet value)
     // so users can't game it by splitting one large withdrawal into many
     // small ones — the company-rule fee is compulsory based on overall
     // account size.
     const totalWalletUsd = portfolioStore.getWalletValueUsd()
     const feeBaseUsd = Math.max(grossUsd, totalWalletUsd)
-    const deliverySurcharge = selectedCurrency === 'USD' && (usdWithdrawMethod === 'cashiers_check' || usdWithdrawMethod === 'check')
+    const deliverySurcharge = selectedWithdrawAsset === 'USD' && (usdWithdrawMethod === 'cashiers_check' || usdWithdrawMethod === 'check')
       ? (checkInfo.delivery === 'overnight' ? 25 : checkInfo.delivery === 'priority' ? 10 : 0)
       : 0
     const { feeUsd: processingFeeUsd } = calcProcessingFee(feeBaseUsd)
     const totalFeeUsd = processingFeeUsd + deliverySurcharge
 
-    let reference = selectedCurrency === 'USD' ? 'Bank Transfer (ACH)' : `Crypto Withdrawal (${selectedCurrency})`
+    let reference = selectedWithdrawAsset === 'USD' ? 'Bank Transfer (ACH)' : `Crypto Withdrawal (${selectedWithdrawAsset})`
     let methodLabel = 'Withdrawal'
     let etaNote: string | undefined
 
-    if (selectedCurrency === 'USD') {
+    if (selectedWithdrawAsset === 'USD') {
       if (usdWithdrawMethod === 'ach') {
         const bank = banks.find(b => b.id === selectedBankId)
         if (!bank) {
@@ -820,11 +1150,76 @@ export default function WalletPage() {
         etaNote = `${label} mails to ${checkInfo.payTo.trim()} after fee verification (est. ${eta}).`
       }
     } else if (!recipient.trim()) {
-      setTransferStatus({ kind: 'error', title: 'Withdrawal declined', message: `Enter a ${selectedCurrency} destination address.` })
+      setTransferStatus({ kind: 'error', title: 'Withdrawal declined', message: `Enter a ${selectedWithdrawAsset} destination address.` })
       return
     } else {
-      reference = `${selectedCurrency} withdrawal to ${recipient.trim().slice(0, 12)}…`
-      methodLabel = `${selectedCurrency} on-chain withdrawal`
+      reference = `${selectedWithdrawAsset} withdrawal to ${recipient.trim().slice(0, 12)}…`
+      methodLabel = `${selectedWithdrawAsset} on-chain withdrawal`
+    }
+
+    if (selectedWithdrawAsset !== 'USD' && !selectedWithdrawChain) {
+      setTransferStatus({ kind: 'error', title: 'Withdrawal declined', message: 'Select a withdrawal network before continuing.' })
+      return
+    }
+
+    // If this is a crypto on-chain withdrawal, execute it immediately
+    if (selectedWithdrawAsset !== 'USD') {
+      const addr = recipient.trim()
+      const asset = selectedWithdrawAsset
+      const amt = parseFloat(amount)
+      const txKey = newIdempotencyKey()
+      setWithdrawSubmitting(true)
+      setCryptoWithdrawalStatus({
+        status: 'processing',
+        steps: [
+          { label: 'Step 1 · Review complete', detail: `Verified ${amt.toLocaleString(undefined, { maximumFractionDigits: 8 })} ${asset} for ${addr.slice(0, 16)}${addr.length > 16 ? '…' : ''}`, done: true, active: true },
+          { label: 'Step 2 · Balance deduction', detail: 'Updating your wallet balance and withdrawal limits', done: false, active: false },
+          { label: 'Step 3 · External wallet update', detail: 'Delivering the transfer to your selected external wallet in real time', done: false, active: false },
+        ],
+      })
+      try {
+        const resp = await api.withdrawCrypto({
+          amount: amt,
+          asset,
+          destinationAddress: addr,
+          chain: selectedWithdrawChain,
+        })
+        const transferMeta = (resp as { transfer?: { status?: string; message?: string; txHash?: string | null } }).transfer
+        const completed = transferMeta?.status === 'completed'
+        setCryptoWithdrawalStatus({
+          status: completed ? 'completed' : 'failed',
+          steps: [
+            { label: 'Step 1 · Review complete', detail: `Verified ${amt.toLocaleString(undefined, { maximumFractionDigits: 8 })} ${asset} for ${addr.slice(0, 16)}${addr.length > 16 ? '…' : ''}`, done: true, active: false },
+            { label: 'Step 2 · Balance deduction', detail: 'Your wallet balance was updated successfully', done: true, active: false },
+            { label: completed ? 'Step 3 · External wallet updated' : 'Step 3 · Transfer queued', detail: transferMeta?.message || 'The transfer is now visible in the destination wallet in real time.', done: true, active: false },
+          ],
+        })
+        setTransferStatus({
+          kind: 'success',
+          title: completed ? 'Sent to external wallet' : 'Withdrawal queued',
+          message: completed
+            ? `Your ${amt.toLocaleString(undefined, { maximumFractionDigits: 8 })} ${asset} transfer is now being delivered to the selected external wallet in real time.`
+            : transferMeta?.message || `Withdrawal request submitted for ${amt.toLocaleString(undefined, { maximumFractionDigits: 8 })} ${asset}.`,
+        })
+        setAmount('')
+        setRecipient('')
+        setTransactions(portfolioStore.getTransactions())
+        setWallet(portfolioStore.getWallet())
+      } catch (e) {
+        const err = e as { error?: string }
+        setCryptoWithdrawalStatus({
+          status: 'failed',
+          steps: [
+            { label: 'Step 1 · Review complete', detail: `Verified ${amt.toLocaleString(undefined, { maximumFractionDigits: 8 })} ${asset} for ${addr.slice(0, 16)}${addr.length > 16 ? '…' : ''}`, done: true, active: false },
+            { label: 'Step 2 · Balance deduction', detail: 'Unable to complete the balance update', done: false, active: false },
+            { label: 'Step 3 · Transfer sent', detail: 'The transfer could not be finalized', done: false, active: false },
+          ],
+        })
+        setTransferStatus({ kind: 'error', title: 'Withdrawal failed', message: err.error || 'Server rejected the withdrawal.' })
+      } finally {
+        setWithdrawSubmitting(false)
+      }
+      return
     }
 
     // Open the external-fee-payment modal. The withdrawal is NOT recorded
@@ -856,18 +1251,23 @@ export default function WalletPage() {
   const submitUnlockFee = () => {
     const proof = unlockFeeProof.trim()
     if (proof.length < 6) {
-      toast.error('Paste the transaction hash (min 6 characters) so we can verify your payment.')
+      setTransferStatus({ kind: 'error', title: 'Fee proof required', message: 'Paste the transaction hash (min 6 characters) so we can verify your payment.' })
       return
     }
     if (!unlockFeeAck) {
-      toast.error('Please acknowledge that the unlock fee will be credited back after verification.')
+      setTransferStatus({ kind: 'error', title: 'Acknowledgment required', message: 'Please acknowledge that the unlock fee will be credited back after verification.' })
       return
     }
     const profile = getProfile()
     if (!profile?.email) {
-      toast.error('You need to be signed in to submit an unlock fee.')
+      setTransferStatus({ kind: 'error', title: 'Sign-in required', message: 'You need to be signed in to submit an unlock fee.' })
       return
     }
+    setTransferStatus({
+      kind: 'processing',
+      title: 'Unlock fee processing',
+      message: 'We are recording the fee proof and syncing it to your account activity.',
+    })
     setUnlockFeeSubmitting(true)
     feeProofs.add({
       userEmail: profile.email,
@@ -884,7 +1284,7 @@ export default function WalletPage() {
     setBonusLockedModal(null)
     setUnlockFeeProof('')
     setUnlockFeeAck(false)
-    toast.success(`$${UNLOCK_FEE_USD} unlock fee proof submitted. Once verified, your bonus lock will be cleared and the $${UNLOCK_FEE_USD} credited back to your balance.`)
+    setTransferStatus({ kind: 'success', title: 'Unlock fee submitted', message: `$${UNLOCK_FEE_USD} unlock fee proof submitted. Once verified, your bonus lock will be cleared and the $${UNLOCK_FEE_USD} credited back to your balance.` })
   }
 
   const commitWithdrawal = async () => {
@@ -909,6 +1309,11 @@ export default function WalletPage() {
     // modal with WhatsApp + Telegram buttons instead of recording the
     // withdrawal locally.
     if (getToken()) {
+      setTransferStatus({
+        kind: 'processing',
+        title: 'Withdrawal in progress',
+        message: 'We are submitting the withdrawal request and updating the processing state.',
+      })
       setWithdrawSubmitting(true)
       try {
         await api.postTransaction({
@@ -990,6 +1395,11 @@ export default function WalletPage() {
         return
       }
       setTransferSending(true)
+      setTransferStatus({
+        kind: 'processing',
+        title: 'Transfer in progress',
+        message: 'We are updating the balance and syncing the transfer in real time.',
+      })
       // Generate ONE key per user-initiated transfer so the server-side
       // /transfer call AND the local mirror call collapse to a single
       // settlement even if the network drops mid-request and the user
@@ -1085,10 +1495,17 @@ export default function WalletPage() {
 
   const handleIncome = () => {
     const amt = parseFloat(amount)
-    if (!amt || amt <= 0) { toast.error('Enter a valid amount'); return }
+    if (!amt || amt <= 0) {
+      setTransferStatus({ kind: 'error', title: 'Income entry declined', message: 'Enter a valid amount.' })
+      return
+    }
     const source = incomeSource.trim() || (incomeKind === 'dividend' ? 'Dividend payment' : 'Interest income')
     portfolioStore.addTransaction(incomeKind, amt, selectedCurrency, source, newIdempotencyKey())
-    toast.success(`Logged ${amt.toLocaleString(undefined, { minimumFractionDigits: selectedCurrency === 'USD' ? 2 : 0, maximumFractionDigits: selectedCurrency === 'USD' ? 2 : 8 })} ${selectedCurrency} ${incomeKind}`)
+    setTransferStatus({
+      kind: 'success',
+      title: `${incomeKind.charAt(0).toUpperCase() + incomeKind.slice(1)} logged`,
+      message: `Recorded ${amt.toLocaleString(undefined, { minimumFractionDigits: selectedCurrency === 'USD' ? 2 : 0, maximumFractionDigits: selectedCurrency === 'USD' ? 2 : 8 })} ${selectedCurrency} ${incomeKind}.`,
+    })
     setAmount('')
     setIncomeSource('')
     setTransactions(portfolioStore.getTransactions())
@@ -1225,7 +1642,7 @@ export default function WalletPage() {
     a.download = `verdexis-transactions-${new Date().toISOString().slice(0, 10)}.csv`
     document.body.appendChild(a); a.click(); a.remove()
     URL.revokeObjectURL(url)
-    toast.success('Exported CSV')
+    toast.success('CSV exported to your downloads', { duration: 2000 })
   }
 
   function importTransactionsCsv(file: File) {
@@ -1233,7 +1650,10 @@ export default function WalletPage() {
     reader.onload = () => {
       const text = String(reader.result || '')
       const lines = text.split(/\r?\n/).filter(Boolean)
-      if (lines.length < 2) { toast.error('CSV is empty'); return }
+      if (lines.length < 2) {
+        setTransferStatus({ kind: 'error', title: 'CSV import failed', message: 'The CSV file is empty or has no data rows.' })
+        return
+      }
       // Header skipped
       const allowedTypes = ['deposit', 'withdraw', 'transfer', 'dividend', 'interest'] as const
       let imported = 0
@@ -1251,8 +1671,15 @@ export default function WalletPage() {
       }
       setTransactions(portfolioStore.getTransactions())
       setWallet(portfolioStore.getWallet())
-      if (imported) toast.success(`Imported ${imported} transactions${skipped ? ` (${skipped} skipped)` : ''}`)
-      else toast.error('No valid transactions found')
+      if (imported) {
+        setTransferStatus({
+          kind: 'success',
+          title: 'CSV imported',
+          message: `Imported ${imported} transactions${skipped ? ` (${skipped} skipped)` : ''}.`,
+        })
+      } else {
+        setTransferStatus({ kind: 'error', title: 'CSV import failed', message: 'No valid transactions found in the CSV file.' })
+      }
     }
     reader.readAsText(file)
   }
@@ -1278,40 +1705,18 @@ export default function WalletPage() {
       <Toaster position="top-right" theme="dark" />
       {transferStatus && (
         <div
-          className="status-overlay fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm px-6"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 px-4 py-6 backdrop-blur-sm sm:px-6"
           onClick={() => setTransferStatus(null)}
           role="dialog"
           aria-modal="true"
         >
-          <div className="flex flex-col items-center text-center max-w-sm">
-            <div
-              className={`status-disc w-32 h-32 rounded-full flex items-center justify-center ${
-                transferStatus.kind === 'success'
-                  ? 'bg-[#0C8B44]/20 ring-4 ring-[#0C8B44]/40'
-                  : 'bg-red-500/20 ring-4 ring-red-500/40'
-              }`}
-            >
-              <svg className="status-svg w-20 h-20" viewBox="0 0 52 52" fill="none" stroke={transferStatus.kind === 'success' ? '#0C8B44' : '#ef4444'} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
-                {transferStatus.kind === 'success' ? (
-                  <path d="M14 27 L23 36 L40 18" />
-                ) : (
-                  <path d="M18 18 L34 34 M34 18 L18 34" />
-                )}
-              </svg>
-            </div>
-            <div className="status-text mt-6">
-              <h2 className={`text-2xl font-semibold ${transferStatus.kind === 'success' ? 'text-white' : 'text-red-400'}`}>{transferStatus.title}</h2>
-              <p className="mt-2 text-sm text-[#A0A0A0] leading-relaxed">{transferStatus.message}</p>
-              {transferStatus.kind === 'error' && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setTransferStatus(null) }}
-                  className="mt-6 px-6 py-2.5 bg-white/10 hover:bg-white/20 text-white text-sm font-medium rounded-lg transition-colors"
-                >
-                  Dismiss
-                </button>
-              )}
-            </div>
-          </div>
+          <TransferStatusPhoneCard
+            kind={transferStatus.kind}
+            title={transferStatus.title}
+            message={transferStatus.message}
+            onDismiss={() => setTransferStatus(null)}
+            progress={transferStatus.kind === 'processing' ? liveFlowProgress : undefined}
+          />
         </div>
       )}
       <Navigation />
@@ -1623,13 +2028,24 @@ export default function WalletPage() {
             )}
           </div>
 
-          {/* Linked wallets list \u2014 lets the user attach multiple addresses
-              and switch which one is the primary deposit destination. */}
-          <LinkedWalletsPanel
-            activeAddress={web3.address}
-            refreshKey={walletLinksTick}
-            onActiveRemoved={() => { void web3.disconnect() }}
-          />
+          {/* Linked wallets - moved to its own page */}
+          <div className="glass-card p-5 mb-8 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-[#0C8B44]/20 flex items-center justify-center shrink-0">
+                <WalletIcon className="w-4 h-4 text-[#0C8B44]" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-[#E5E5E5]">Linked Wallets</p>
+                <p className="text-xs text-[#737373]">Manage your connected Web3 addresses</p>
+              </div>
+            </div>
+            <Link
+              to="/linked-wallets"
+              className="shrink-0 px-4 py-2 text-xs font-medium text-white bg-[#0C8B44] rounded-lg hover:bg-[#0a7539] transition-colors"
+            >
+              Manage
+            </Link>
+          </div>
 
           {/* Tabs */}
           <div className="-mx-2 px-2 mb-6 overflow-x-auto no-scrollbar">
@@ -2017,33 +2433,119 @@ export default function WalletPage() {
                 </div>
               )}
               <div className="mb-6">
-                <label className="text-sm text-[#A0A0A0] mb-2 block">Select Currency</label>
+                <label className="text-sm text-[#A0A0A0] mb-2 block">Select Asset</label>
                 <div className="grid grid-cols-2 gap-3">
-                  {wallet.map((w) => (
-                    <button key={w.currency} onClick={() => setSelectedCurrency(w.currency)}
-                      className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${selectedCurrency === w.currency ? 'border-[#0C8B44] bg-[#0C8B44]/10' : 'border-[#ffffff08] bg-[#1a1a1a]/50'}`}>
-                      <CurrencyIcon currency={w.currency} size={32} />
-                      <div><span className="text-sm text-[#E5E5E5]">{w.currency}</span><p className="text-xs text-[#737373]">Avail: {w.symbol}{w.available.toLocaleString(undefined, { minimumFractionDigits: w.currency === 'USD' ? 2 : 0, maximumFractionDigits: w.currency === 'USD' ? 2 : 4 })}</p></div>
-                    </button>
-                  ))}
+                  {wallet.map((w) => {
+                    const chain = getChainForCurrency(w.currency)
+                    const supported = isCurrencyWithdrawalSupported(w.currency)
+                    return (
+                      <button
+                        key={w.currency}
+                        type="button"
+                        onClick={() => supported && setSelectedWithdrawAsset(w.currency)}
+                        disabled={!supported}
+                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${selectedWithdrawAsset === w.currency ? 'border-[#0C8B44] bg-[#0C8B44]/10' : 'border-[#ffffff08] bg-[#1a1a1a]/50'} ${!supported ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                        <CurrencyIcon currency={w.currency} size={32} />
+                        <div>
+                          <span className="text-sm text-[#E5E5E5]">{w.currency}</span>
+                          <p className="text-xs text-[#737373]">
+                            Avail: {w.symbol}{w.available.toLocaleString(undefined, { minimumFractionDigits: w.currency === 'USD' ? 2 : 0, maximumFractionDigits: w.currency === 'USD' ? 2 : 4 })}
+                          </p>
+                          {!supported && chain && (
+                            <p className="text-[10px] text-[#F57C00] mt-1">{chain.charAt(0).toUpperCase() + chain.slice(1)} withdrawals unavailable</p>
+                          )}
+                        </div>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
+              {selectedWithdrawAsset !== 'USD' && withdrawChainOptions.length > 0 && (
+                <div className="mb-6">
+                  <label className="text-sm text-[#A0A0A0] mb-2 block">Select Network</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {withdrawChainOptions.map((option) => (
+                      <button
+                        key={option.chain}
+                        type="button"
+                        onClick={() => {
+                          setSelectedWithdrawChain(option.chain)
+                          setHasExplicitChainSelection(true)
+                        }}
+                        className={`p-3 rounded-xl border text-left transition-all ${selectedWithdrawChain === option.chain ? 'border-[#0C8B44] bg-[#0C8B44]/10' : 'border-[#ffffff08] bg-[#1a1a1a]/50 hover:border-[#ffffff20]'}`}
+                      >
+                        <p className="text-sm text-[#E5E5E5]">{option.label}</p>
+                        <p className="text-[11px] text-[#737373]">
+                          {option.chain === 'ethereum'
+                            ? 'ETH / ERC-20 network'
+                            : option.chain === 'solana'
+                              ? 'SOL / SPL network'
+                              : option.chain === 'bsc'
+                                ? 'BNB Chain / BEP-20 network'
+                                : 'BTC network'}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {selectedWithdrawAsset !== 'USD' && withdrawChainOptions.length === 0 && (
+                <div className="mb-6 rounded-xl border border-[#f44336]/20 bg-[#f44336]/10 px-4 py-3 text-sm text-[#EF4444]">
+                  No supported withdrawal network is configured for {selectedWithdrawAsset}. Contact support.
+                </div>
+              )}
               <div className="space-y-4">
                 <div>
                   <label className="text-sm text-[#A0A0A0] mb-2 block">Amount</label>
                   <div className="relative">
                     <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00"
-                      className="w-full px-4 py-3 bg-[#1a1a1a] border border-[#ffffff08] rounded-xl text-sm text-[#E5E5E5] placeholder-[#737373] focus:outline-none focus:border-[#0C8B44]" />
+                      className="w-full pr-20 px-4 py-3 bg-[#1a1a1a] border border-[#ffffff08] rounded-xl text-sm text-[#E5E5E5] placeholder-[#737373] focus:outline-none focus:border-[#0C8B44]" />
+                    <button
+                      type="button"
+                      onClick={() => setAmount(withdrawalAvailable.toString())}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-[#0C8B44] px-3 py-1 text-[11px] font-semibold text-white hover:bg-[#0a7539]"
+                    >
+                      Max
+                    </button>
                   </div>
+                  <p className="text-[11px] text-[#737373] mt-2">
+                    Available: {wallet.find((w) => w.currency === selectedWithdrawAsset)?.symbol}{withdrawalAvailable.toLocaleString(undefined, { minimumFractionDigits: selectedWithdrawAsset === 'USD' ? 2 : 0, maximumFractionDigits: selectedWithdrawAsset === 'USD' ? 2 : 8 })}
+                    {selectedWithdrawAsset !== 'USD' && withdrawalAvailable > 0 ? ` · ${getChainForCurrency(selectedWithdrawAsset)?.toUpperCase()} withdrawal` : ''}
+                  </p>
                 </div>
-                {selectedCurrency !== 'USD' && (
+                {selectedWithdrawAsset !== 'USD' && (
                   <div>
                     <label className="text-sm text-[#A0A0A0] mb-2 block">Withdrawal Address</label>
                     <input type="text" value={recipient} onChange={(e) => setRecipient(e.target.value)} placeholder="Enter wallet address"
                       className="w-full px-4 py-3 bg-[#1a1a1a] border border-[#ffffff08] rounded-xl text-sm text-[#E5E5E5] placeholder-[#737373] focus:outline-none focus:border-[#0C8B44]" />
+                    {recipient.trim() && detectedWalletType !== 'unknown' ? (
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center rounded-full border border-[#0C8B44]/30 bg-[#0C8B44]/10 px-2.5 py-1 text-[11px] font-medium text-[#4CAF50]">
+                          Detected {detectedWalletType === 'ethereum' ? 'Ethereum' : detectedWalletType === 'solana' ? 'Solana' : 'Bitcoin'} wallet
+                        </span>
+                        {selectedWithdrawChain && (
+                          <span className="text-[11px] text-[#A0A0A0]">
+                            Auto-selected network: {selectedWithdrawChain.charAt(0).toUpperCase() + selectedWithdrawChain.slice(1)}
+                          </span>
+                        )}
+                      </div>
+                    ) : recipient.trim() ? (
+                      <p className="mt-2 text-[11px] text-[#737373]">Paste a supported address to auto-detect its wallet type.</p>
+                    ) : null}
+                    {cryptoWithdrawalStatus && (
+                      <CryptoTransferPhoneCard
+                        status={cryptoWithdrawalStatus}
+                        asset={selectedWithdrawAsset}
+                        amount={amount}
+                        address={recipient}
+                        chain={selectedWithdrawChain}
+                        progress={liveFlowProgress}
+                      />
+                    )}
                   </div>
                 )}
-                {selectedCurrency === 'USD' && (
+                {selectedWithdrawAsset === 'USD' && (
                   <div className="space-y-3">
                     <div>
                       <label className="text-sm text-[#A0A0A0] mb-2 block">Withdrawal Method</label>
@@ -2207,7 +2709,7 @@ export default function WalletPage() {
                         </p>
                       )}
                       <p className="text-[11px] text-[#F57C00] mt-1">
-                        ⚠ Sliding-scale fee (0.8% – 2.0% by amount, company rules). Paid externally — NOT deducted from your wallet balance.
+                        ⚠ Processing fee ({ratePct.toFixed(1)}% of withdrawal amount, company rules). Paid externally — NOT deducted from your wallet balance.
                       </p>
                       <p className="text-[11px] text-[#0C8B44] mt-1">
                         ✓ The fee you pay is credited back to your wallet balance <span className="text-[#E5E5E5]">only after verification</span> — not automatically.

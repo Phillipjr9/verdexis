@@ -16,6 +16,7 @@ export default function AdminTransfer() {
   const [allowNegative, setAllowNegative] = useState(false)
   const [notify, setNotify] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState(0)
   const [fromError, setFromError] = useState<string | null>(null)
 
   // Source account is always the signed-in admin — it is never user-selectable.
@@ -42,6 +43,24 @@ export default function AdminTransfer() {
       })
     return () => { cancelled = true }
   }, [])
+
+  useEffect(() => {
+    if (!busy) {
+      setProgress(0)
+      return
+    }
+
+    setProgress(12)
+    const timer = window.setInterval(() => {
+      setProgress((value) => {
+        if (value >= 92) return value
+        const step = value < 36 ? 14 : value < 72 ? 8 : 6
+        return Math.min(92, value + step)
+      })
+    }, 700)
+
+    return () => window.clearInterval(timer)
+  }, [busy])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -105,6 +124,17 @@ export default function AdminTransfer() {
             <label className="inline-flex items-center gap-2"><input type="checkbox" checked={allowNegative} onChange={(e) => setAllowNegative(e.target.checked)} className="accent-[#0C8B44]" />Allow negative balance on source</label>
             <label className="inline-flex items-center gap-2"><input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} className="accent-[#0C8B44]" />Notify both users</label>
           </div>
+          {busy && (
+            <div className="rounded-xl border border-[#F59E0B]/20 bg-[#F59E0B]/10 p-3">
+              <div className="flex items-center justify-between text-[11px] text-[#FDE68A]">
+                <span>Transfer is being processed</span>
+                <span>{Math.round(progress)}%</span>
+              </div>
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+                <div className="h-2 rounded-full bg-[#FBBF24] transition-all duration-500" style={{ width: `${progress}%` }} />
+              </div>
+            </div>
+          )}
           <button type="submit" disabled={busy || !from || !to || !amount} className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-[#0C8B44] text-white text-sm rounded-lg hover:bg-[#0a7539] disabled:opacity-50">
             <ArrowRightLeft className="w-4 h-4" />{busy ? 'Transferring…' : 'Transfer funds'}
           </button>

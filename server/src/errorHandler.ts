@@ -19,12 +19,20 @@ export function createErrorResponse(
   details?: unknown,
   path?: string,
 ): ErrorResponse {
-  return {
+  const response: ErrorResponse = {
     error,
-    ...(details && { details }),
     timestamp: new Date().toISOString(),
-    ...(path && { path }),
   }
+
+  if (details !== undefined) {
+    response.details = details
+  }
+
+  if (path) {
+    response.path = path
+  }
+
+  return response
 }
 
 /**

@@ -93,8 +93,8 @@ export class PushNotificationService {
 
       // Remove failed tokens
       const failedTokens = response.responses
-        .map((resp, idx) => (resp.success ? null : tokens[idx]))
-        .filter((token) => token !== null) as string[]
+        .map((resp: { success: boolean }, idx: number) => (resp.success ? null : tokens[idx]))
+        .filter((token: string | null) => token !== null) as string[]
 
       for (const token of failedTokens) {
         await prisma.appSetting.deleteMany({

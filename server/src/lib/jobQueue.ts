@@ -1,12 +1,14 @@
+import { sendEmailNotification } from '../notificationService.js'
+
 let Queue: any
 try {
   Queue = (await import('bull')).default
 } catch (e) {
   Queue = class {
-    constructor(name: string, url?: string) {}
-    async add(data: any, opts?: any) { return { id: Math.random() } }
-    async process(handler: any) {}
-    on(event: string, handler: any) {}
+    constructor(_name: string, _url?: string) {}
+    async add(_data: any, _opts?: any) { return { id: Math.random() } }
+    async process(_handler: any) {}
+    on(_event: string, _handler: any) {}
   }
 }
 
@@ -57,7 +59,7 @@ export const queues = {
  * Verify crypto deposits and credit user account
  */
 depositQueue.process(async (job) => {
-  const { depositId, transactionHash, userAddress } = job.data
+  const { depositId, transactionHash } = job.data
 
   try {
     // Verify transaction on blockchain
@@ -239,15 +241,32 @@ dcaQueue.process(async (job) => {
  * Send email notifications
  */
 emailQueue.process(async (job) => {
-  const { to, subject, template, data } = job.data
+  const { to, subject, body, htmlBody, template, data } = job.data
 
   try {
-    // Send email via your email service
-    // await emailService.send({ to, subject, template, data })
+    const messageTo = typeof to === 'string' ? to : ''
+    const messageSubject = typeof subject === 'string' ? subject : 'Verdexis Notification'
+    const messageBody = typeof body === 'string'
+      ? body
+      : typeof data?.body === 'string'
+        ? data.body
+        : `Notification from Verdexis${typeof template === 'string' ? ` (${template})` : ''}`
+    const messageHtml = typeof htmlBody === 'string'
+      ? htmlBody
+      : typeof data?.htmlBody === 'string'
+        ? data.htmlBody
+        : undefined
 
-    console.log(`[email-job] Sending email to ${to}: ${subject}`)
+    const sent = await sendEmailNotification(messageTo, messageSubject, messageBody, messageHtml, {
+      userId: typeof data?.userId === 'string' ? data.userId : undefined,
+      kind: typeof data?.kind === 'string' ? data.kind : 'email',
+      title: typeof data?.title === 'string' ? data.title : messageSubject,
+      body: typeof data?.body === 'string' ? data.body : messageBody,
+    })
 
-    return { success: true, to, subject }
+    console.log(`[email-job] ${sent ? 'sent' : 'skipped'} email to ${messageTo}: ${messageSubject}`)
+
+    return { success: sent, to: messageTo, subject: messageSubject }
   } catch (error) {
     console.error('[email-job] Error:', error)
     throw error
@@ -259,7 +278,7 @@ emailQueue.process(async (job) => {
  * Generate PDF tax reports
  */
 reportQueue.process(async (job) => {
-  const { userId, year, format } = job.data
+  const { userId, year, format: _format } = job.data
 
   try {
     // Get user trades for the year
@@ -396,12 +415,12 @@ export async function scheduleRecurringJob(
 /**
  * Helper functions (stubs - implement based on your infrastructure)
  */
-async function verifyBlockchainTransaction(hash: string): Promise<boolean> {
+async function verifyBlockchainTransaction(_hash: string): Promise<boolean> {
   // Implement blockchain verification
   return true
 }
 
-async function getCurrentPrice(symbol: string): Promise<number | null> {
+async function getCurrentPrice(_symbol: string): Promise<number | null> {
   // Implement price fetching
   return 100 // Stub
 }

@@ -1,21 +1,37 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Navigation from '../components/Navigation'
 import { ArrowLeft, Settings, Save } from 'lucide-react'
 import { Toaster, toast } from 'sonner'
+import { api } from '../lib/api'
+import { adminApi } from '../lib/adminApi'
 
 export default function AdminSettings() {
-  const [settings, setSettings] = useState({
-    tradingFeeRate: 0.1,
-    minDepositUSD: 100,
-    maxDepositUSD: 100000,
-    withdrawalLockDays: 0,
-    enableTwoFA: true,
-    enableKYC: true,
-  })
+  const [ratePct, setRatePct] = useState<number>(11.8)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
 
-  const handleSave = () => {
-    toast.success('Settings saved successfully')
+  useEffect(() => {
+    api.get<{ ratePct: number }>('/api/admin/withdrawal-fee-config')
+      .then((r) => setRatePct(r.ratePct))
+      .catch(() => { /* keep default */ })
+      .finally(() => setLoading(false))
+  }, [])
+
+  const handleSave = async () => {
+    if (!Number.isFinite(ratePct) || ratePct < 0 || ratePct > 100) {
+      toast.error('Rate must be between 0 and 100')
+      return
+    }
+    setSaving(true)
+    try {
+      await adminApi.post('/withdrawal-fee-config', { ratePct })
+      toast.success(`Withdrawal processing fee updated to ${ratePct}%`)
+    } catch (e) {
+      toast.error((e as { error?: string }).error || 'Failed to save')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -39,91 +55,51 @@ export default function AdminSettings() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
-            <h2 className="text-lg font-medium text-[#E5E5E5] mb-4">Trading</h2>
+        <div className="max-w-md rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
+          <h2 className="text-lg font-medium text-[#E5E5E5] mb-1">Withdrawal Processing Fee</h2>
+          <p className="text-xs text-[#737373] mb-5">
+            Flat-rate fee charged on every withdrawal. Shown to users before they confirm.
+            Changes take effect immediately for all new withdrawal requests.
+          </p>
+
+          {loading ? (
+            <p className="text-xs text-[#737373]">Loading…</p>
+          ) : (
             <div className="space-y-4">
               <div>
-                <label className="text-xs uppercase tracking-wider text-[#737373] mb-2 block">Trading Fee Rate (%)</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={settings.tradingFeeRate}
-                  onChange={(e) => setSettings({ ...settings, tradingFeeRate: parseFloat(e.target.value) })}
-                  className="w-full px-3 py-2 bg-[#0a0f11] border border-[#ffffff10] rounded-lg text-sm text-[#E5E5E5] focus:outline-none focus:border-[#0C8B44]"
-                />
-                <p className="text-[11px] text-[#737373] mt-1">Applied to every trade</p>
+                <label className="text-xs uppercase tracking-wider text-[#737373] mb-2 block">
+                  Processing fee rate (%)
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    value={ratePct}
+                    onChange={(e) => setRatePct(parseFloat(e.target.value))}
+                    className="w-36 px-3 py-2 bg-[#0a0f11] border border-[#ffffff10] rounded-lg text-sm text-[#E5E5E5] focus:outline-none focus:border-[#0C8B44]"
+                  />
+                  <span className="text-sm text-[#737373]">%</span>
+                  <span className="text-xs text-[#A0A0A0]">
+                    e.g. on $10,000 → fee = ${(10000 * (ratePct / 100)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#F57C00] mt-2">
+                  Current default: 11.8% — paid externally by the user, not deducted from balance.
+                </p>
               </div>
-            </div>
-          </div>
 
-          <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
-            <h2 className="text-lg font-medium text-[#E5E5E5] mb-4">Deposits & Withdrawals</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs uppercase tracking-wider text-[#737373] mb-2 block">Min Deposit (USD)</label>
-                <input
-                  type="number"
-                  value={settings.minDepositUSD}
-                  onChange={(e) => setSettings({ ...settings, minDepositUSD: parseFloat(e.target.value) })}
-                  className="w-full px-3 py-2 bg-[#0a0f11] border border-[#ffffff10] rounded-lg text-sm text-[#E5E5E5] focus:outline-none focus:border-[#0C8B44]"
-                />
-              </div>
-              <div>
-                <label className="text-xs uppercase tracking-wider text-[#737373] mb-2 block">Max Deposit (USD)</label>
-                <input
-                  type="number"
-                  value={settings.maxDepositUSD}
-                  onChange={(e) => setSettings({ ...settings, maxDepositUSD: parseFloat(e.target.value) })}
-                  className="w-full px-3 py-2 bg-[#0a0f11] border border-[#ffffff10] rounded-lg text-sm text-[#E5E5E5] focus:outline-none focus:border-[#0C8B44]"
-                />
-              </div>
-              <div>
-                <label className="text-xs uppercase tracking-wider text-[#737373] mb-2 block">Withdrawal Lock (Days)</label>
-                <input
-                  type="number"
-                  value={settings.withdrawalLockDays}
-                  onChange={(e) => setSettings({ ...settings, withdrawalLockDays: parseFloat(e.target.value) })}
-                  className="w-full px-3 py-2 bg-[#0a0f11] border border-[#ffffff10] rounded-lg text-sm text-[#E5E5E5] focus:outline-none focus:border-[#0C8B44]"
-                />
-              </div>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex items-center justify-center gap-2 px-5 py-2.5 bg-[#0C8B44] text-white text-sm font-medium rounded-lg hover:bg-[#0a7539] transition-colors disabled:opacity-50"
+              >
+                <Save className="w-4 h-4" />
+                {saving ? 'Saving…' : 'Save fee rate'}
+              </button>
             </div>
-          </div>
-
-          <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
-            <h2 className="text-lg font-medium text-[#E5E5E5] mb-4">Security</h2>
-            <div className="space-y-3">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.enableTwoFA}
-                  onChange={(e) => setSettings({ ...settings, enableTwoFA: e.target.checked })}
-                  className="w-4 h-4 accent-[#0C8B44]"
-                />
-                <span className="text-sm text-[#E5E5E5]">Require 2FA for all users</span>
-              </label>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={settings.enableKYC}
-                  onChange={(e) => setSettings({ ...settings, enableKYC: e.target.checked })}
-                  className="w-4 h-4 accent-[#0C8B44]"
-                />
-                <span className="text-sm text-[#E5E5E5]">Require KYC verification</span>
-              </label>
-            </div>
-          </div>
-
-          <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
-            <h2 className="text-lg font-medium text-[#E5E5E5] mb-4">Actions</h2>
-            <button
-              onClick={handleSave}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[#0C8B44] text-white text-sm font-medium rounded-lg hover:bg-[#0a7539] transition-colors"
-            >
-              <Save className="w-4 h-4" />
-              Save Settings
-            </button>
-          </div>
+          )}
         </div>
       </div>
     </div>

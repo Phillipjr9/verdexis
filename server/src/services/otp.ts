@@ -5,12 +5,14 @@ interface OTPConfig {
   length: number
   expirationMinutes: number
   maxAttempts: number
+  requestCooldownSeconds: number
 }
 
 const DEFAULT_CONFIG: OTPConfig = {
   length: 6,
   expirationMinutes: 10,
   maxAttempts: 5,
+  requestCooldownSeconds: 60,
 }
 
 export class OTPService {
@@ -21,14 +23,29 @@ export class OTPService {
   }
 
   private generateCode(): string {
-    return Math.floor(100000 + Math.random() * 900000).toString()
+    return crypto.randomInt(100000, 1000000).toString()
   }
 
   private hashCode(code: string): string {
     return crypto.createHash('sha256').update(code).digest('hex')
   }
 
-  async create(userId: string, purpose: 'login' | 'email_verification' | 'transaction' | '2fa' = 'email_verification'): Promise<string> {
+  async create(userId: string, purpose: 'login' | 'email_verification' | 'transaction' | '2fa' = 'email_verification'): Promise<{ code?: string; error?: string }> {
+    const recent = await prisma.otp.findFirst({
+      where: {
+        userId,
+        purpose,
+        used: false,
+        createdAt: { gte: new Date(Date.now() - this.config.requestCooldownSeconds * 1000) },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    if (recent) {
+      const secondsLeft = Math.ceil((recent.createdAt.getTime() + this.config.requestCooldownSeconds * 1000 - Date.now()) / 1000)
+      return { error: `Please wait ${secondsLeft}s before requesting a new code` }
+    }
+
     await prisma.otp.deleteMany({
       where: { userId, purpose, used: false },
     })
@@ -48,7 +65,7 @@ export class OTPService {
       },
     })
 
-    return code
+    return { code }
   }
 
   async verify(userId: string, code: string, purpose: 'login' | 'email_verification' | 'transaction' | '2fa' = 'email_verification'): Promise<{ success: boolean; error?: string }> {
@@ -69,27 +86,17 @@ export class OTPService {
     }
 
     if (record.attempts >= record.maxAttempts) {
-      await prisma.otp.update({
-        where: { id: record.id },
-        data: { used: true },
-      })
+      await prisma.otp.update({ where: { id: record.id }, data: { used: true } })
       return { success: false, error: 'Too many attempts' }
     }
 
-    await prisma.otp.update({
-      where: { id: record.id },
-      data: { attempts: { increment: 1 } },
-    })
-
     if (record.hashedOtp !== hashedCode) {
-      return { success: false, error: 'Invalid code' }
+      await prisma.otp.update({ where: { id: record.id }, data: { attempts: { increment: 1 } } })
+      const remaining = record.maxAttempts - (record.attempts + 1)
+      return { success: false, error: remaining > 0 ? `Invalid code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining` : 'Invalid code' }
     }
 
-    await prisma.otp.update({
-      where: { id: record.id },
-      data: { used: true, verifiedAt: new Date() },
-    })
-
+    await prisma.otp.update({ where: { id: record.id }, data: { used: true, verifiedAt: new Date() } })
     return { success: true }
   }
 

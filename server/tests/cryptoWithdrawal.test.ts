@@ -61,6 +61,46 @@ test('buildWithdrawalTransferPlan maps known Ethereum USDT transfers to ERC20 tr
   assert.equal(plan.amount, 123.45)
 })
 
+test('buildWithdrawalTransferPlan maps known BSC USDT transfers to BEP20 transfers', () => {
+  const plan = buildWithdrawalTransferPlan({
+    asset: 'USDT',
+    amount: 55,
+    destinationAddress: '0x1234567890123456789012345678901234567890',
+    chain: 'bsc',
+  })
+
+  assert.equal(plan.chain, 'bsc')
+  assert.equal(plan.isNative, false)
+  assert.equal(plan.tokenAddress, '0x55d398326f99059ff775485246999027b3197955')
+  assert.equal(plan.decimals, 6)
+  assert.equal(plan.amount, 55)
+})
+
+test('buildWithdrawalTransferPlan uses the configured BNB token contract for BSC withdrawals', () => {
+  const plan = buildWithdrawalTransferPlan({
+    asset: 'BNB',
+    amount: 2.5,
+    destinationAddress: '0x1234567890123456789012345678901234567890',
+    chain: 'bsc',
+  })
+
+  assert.equal(plan.chain, 'bsc')
+  assert.equal(plan.isNative, false)
+  assert.equal(plan.tokenAddress, '0x4734Fe024B9Cb0BBFcd26Ed467a1e0F891aC8888')
+  assert.equal(plan.amount, 2.5)
+})
+
+test('resolveWithdrawalChain maps BNB asset to bsc when chain is not specified', () => {
+  const resolved = resolveWithdrawalChain({
+    asset: 'BNB',
+    destinationAddress: '0x1234567890123456789012345678901234567890',
+    chain: undefined,
+  })
+
+  assert.equal(resolved.chain, 'bsc')
+  assert.equal(resolved.detectedWalletType, 'ethereum')
+})
+
 test('buildWithdrawalTransferPlan maps known Solana USDT transfers to SPL transfers', () => {
   const plan = buildWithdrawalTransferPlan({
     asset: 'USDT',
@@ -117,7 +157,7 @@ test('executeCryptoWithdrawal uses detected chain for unknown asset and returns 
     destinationAddress: 'So11111111111111111111111111111111111111112',
   })
 
-  assert.equal(result.status, 'completed')
+  assert.equal(result.status, 'pending')
   assert.match(result.message, /external wallet/i)
   assert.match(result.message, /Solana/i)
 })
@@ -143,7 +183,7 @@ test('buildTemporaryFundingTransferResult explains the external-wallet funding f
     chain: 'ethereum',
   })
 
-  assert.equal(result.status, 'completed')
+  assert.equal(result.status, 'pending')
   assert.match(result.message, /external wallet/i)
   assert.match(result.message, /real time/i)
   assert.match(result.message, /will not be spendable/i)
@@ -160,7 +200,7 @@ test('executeCryptoWithdrawal completes as a temporary transfer when no custody 
     chain: 'ethereum',
   })
 
-  assert.equal(result.status, 'completed')
+  assert.equal(result.status, 'pending')
   assert.match(result.message, /transfer queued/i)
   assert.match(result.message, /external wallet/i)
 })

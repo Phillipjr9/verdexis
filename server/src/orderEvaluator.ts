@@ -1,4 +1,4 @@
-import { prisma } from '../db.js'
+import { prisma } from './db.js'
 
 export interface OrderWithCalculations {
   id: string
@@ -78,7 +78,7 @@ export class TradeExecutor {
     side: 'buy' | 'sell',
     amount: number,
     currentPrice: number,
-  ): Promise<{ orderId: string; executedAmount: number; executedPrice: number; total: number }> {
+  ): Promise<{ orderId: string; executed: boolean; message: string; executedAmount: number; executedPrice: number; total: number }> {
     // In production: forward to broker API (Alpaca, etc.)
     // For now: simulate execution
     const total = amount * currentPrice
@@ -133,6 +133,8 @@ export class TradeExecutor {
 
     return {
       orderId: order.id,
+      executed: true,
+      message: 'Order executed',
       executedAmount: amount,
       executedPrice: currentPrice,
       total,

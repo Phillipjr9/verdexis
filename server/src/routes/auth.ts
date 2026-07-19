@@ -1,16 +1,18 @@
-import { Router } from 'express'
+import { Router, type Request, type Response, type NextFunction } from 'express'
 import bcrypt from 'bcryptjs'
 import crypto from 'node:crypto'
 import { z } from 'zod'
 import rateLimit from 'express-rate-limit'
 import { prisma } from '../db.js'
-import { signToken, requireAuth, type AuthedRequest } from '../auth.js'
+import { signToken, requireAuth, verifyToken, type AuthedRequest } from '../auth.js'
 import { env } from '../env.js'
 import { generateInvestmentId } from '../investmentId.js'
 import { generateReferralCode, linkReferrer } from '../referrals.js'
 import { isDbUnavailableError } from '../dbError.js'
-import { assignUserToAdmin, isSuperAdmin } from '../lib/adminHierarchy.js'
+import { assignUserToAdmin } from '../lib/adminHierarchy.js'
 import { emailService } from '../services/email.js'
+import { otpService } from '../services/otp.js'
+import { shouldRequireOTPForLogin } from '../middleware/otpAuth.js'
 
 const router = Router()
 
@@ -60,7 +62,7 @@ const resetSchema = z.object({
   password: z.string().min(8).max(200),
 })
 
-function publicUser(u: { id: string; email: string; username?: string | null; name: string; avatar: string | null; prefs: string | null; twoFactor: boolean; role?: string; suspended?: boolean; investmentId?: string | null; kycStatus?: string; kycNotes?: string | null; kycReviewedAt?: Date | null; kycReviewedBy?: string | null; emailVerified?: boolean; emailVerifiedAt?: Date | null }) {
+function publicUser(u: { id: string; email: string; username?: string | null; name: string; avatar: string | null; prefs: string | null; twoFactor: boolean; role?: string; suspended?: boolean; investmentId?: string | null; kycStatus?: string; kycNotes?: string | null; kycReviewedAt?: Date | null; kycReviewedBy?: string | null; emailVerified?: boolean; emailVerifiedAt?: Date | null; phoneVerified?: boolean; phoneVerifiedAt?: Date | null }) {
   let prefs: Record<string, unknown> = {}
   try {
     if (u.prefs) prefs = JSON.parse(u.prefs)
@@ -80,6 +82,8 @@ function publicUser(u: { id: string; email: string; username?: string | null; na
     kycStatus: (u.kycStatus === 'approved' || u.kycStatus === 'pending' || u.kycStatus === 'rejected') ? u.kycStatus : 'none',
     emailVerified: !!u.emailVerified,
     emailVerifiedAt: u.emailVerifiedAt ?? null,
+    phoneVerified: !!u.phoneVerified,
+    phoneVerifiedAt: u.phoneVerifiedAt ?? null,
     prefs,
   }
 }
@@ -206,7 +210,7 @@ async function getSignupBonusConfig(): Promise<SignupBonusConfig | null> {
     }
   } catch {
     return null
-}
+  }
 }
 
 async function awardSignupBonus(userId: string): Promise<void> {
@@ -287,7 +291,17 @@ export async function autoPromoteIfAdminEmail(userId: string, email: string, cur
   return 'admin'
 }
 
-router.post('/signup', authLimiter, async (req, res) => {
+const ensureDbReady = async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`
+    next()
+  } catch (err) {
+    console.error('[verdexis-api] Database not ready:', err)
+    res.status(503).json({ error: 'Service temporarily unavailable', detail: 'Database is initializing. Please try again in a moment.' })
+  }
+}
+
+router.post('/signup', ensureDbReady, authLimiter, async (req, res) => {
   const parsed = signupSchema.safeParse(req.body)
   if (!parsed.success) {
     res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() })
@@ -301,8 +315,8 @@ router.post('/signup', authLimiter, async (req, res) => {
   }
   const passwordHash = await bcrypt.hash(password, 12)
   const investmentId = await generateInvestmentId()
-    const referralCode = await generateReferralCode()
-    const referrerCode = (req.query.ref as string) || ''  // ref query param for signup with referral
+  const referralCode = await generateReferralCode()
+  const referrerCode = (req.query.ref as string) || ''
   let user
   try {
     user = await prisma.user.create({
@@ -311,7 +325,7 @@ router.post('/signup', authLimiter, async (req, res) => {
         name,
         passwordHash,
         investmentId,
-          referralCode,
+        referralCode,
         // First user signed up with an admin-listed email starts as admin.
         role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user',
         // Persist the phone number in prefs so admins can see / contact the
@@ -336,7 +350,7 @@ router.post('/signup', authLimiter, async (req, res) => {
   if (user.role === 'admin') await ensureAdminTreasury(user.id)
   await awardSignupBonus(user.id)
   // Send welcome email
-  emailService.sendWelcome(user.email, user.name).catch(err => {
+  emailService.sendWelcome(user.email, user.name, user.id).catch(err => {
     console.error('[auth] Failed to send welcome email:', err)
   })
   // Auto-assign regular users to a default admin if configured
@@ -365,7 +379,7 @@ router.post('/signup', authLimiter, async (req, res) => {
   res.status(201).json({ token, user: publicUser(user) })
 })
 
-router.post('/login', authLimiter, async (req, res) => {
+router.post('/login', ensureDbReady, authLimiter, async (req, res) => {
   try {
     const parsed = loginSchema.safeParse(req.body)
     if (!parsed.success) {
@@ -420,8 +434,33 @@ router.post('/login', authLimiter, async (req, res) => {
       })
     })
 
+    // Check if OTP is required for login
+    const otpRequired = await shouldRequireOTPForLogin(user.id)
+    if (otpRequired) {
+      const result = await otpService.create(user.id, 'login')
+      if (result.error) {
+        res.status(429).json({ error: result.error })
+        return
+      }
+      await emailService.sendOTP(user.email, user.name, result.code!, 10, user.id)
+      // Store a short-lived pending login token (userId only, no session)
+      const pendingToken = signToken({ sub: user.id, email: user.email, v: user.tokenVersion, otpPending: true })
+      res.status(202).json({ otpRequired: true, pendingToken })
+      return
+    }
+
     const token = signToken({ sub: user.id, email: user.email, v: user.tokenVersion })
-    res.json({ token, user: publicUser({ ...user, role }) })
+    res.json({
+      token,
+      user: publicUser({ ...user, role }),
+      verificationRequired: {
+        emailVerified: user.emailVerified,
+        phoneVerified: user.phoneVerified,
+        message: !user.emailVerified || !user.phoneVerified
+          ? 'Please verify your email and phone number to unlock full account features'
+          : undefined,
+      },
+    })
   } catch (err) {
     console.error('[verdexis-api] /login crashed:', err)
     if (isDbUnavailableError(err)) {
@@ -433,9 +472,45 @@ router.post('/login', authLimiter, async (req, res) => {
     }
     res.status(500).json({
       error: 'Login failed',
-      detail: err instanceof Error ? err.message : String(err),
+      ...(process.env.NODE_ENV !== 'production' ? { detail: err instanceof Error ? err.message : String(err) } : {}),
     })
   }
+})
+
+const loginOtpSchema = z.object({
+  pendingToken: z.string().min(10),
+  code: z.string().length(6).regex(/^\d+$/),
+})
+
+router.post('/login/verify-otp', authLimiter, async (req, res) => {
+  const parsed = loginOtpSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid input' })
+    return
+  }
+  let payload: { sub?: string; otpPending?: boolean } | null = null
+  payload = verifyToken(parsed.data.pendingToken) as { sub?: string; otpPending?: boolean } | null
+  if (!payload?.sub || !payload.otpPending) {
+    res.status(401).json({ error: 'Invalid or expired session' })
+    return
+  }
+  const result = await otpService.verify(payload.sub, parsed.data.code, 'login')
+  if (!result.success) {
+    res.status(400).json({ error: result.error })
+    return
+  }
+  const user = await prisma.user.findUnique({ where: { id: payload.sub } })
+  if (!user || user.suspended) {
+    res.status(403).json({ error: user?.suspended ? 'Account suspended' : 'User not found' })
+    return
+  }
+  const role = await autoPromoteIfAdminEmail(user.id, user.email, user.role)
+  const clientIp = getClientIp(req)
+  setImmediate(() => {
+    recordLoginMetadata(user.id, clientIp, String(req.headers['user-agent'] || '')).catch(() => {})
+  })
+  const token = signToken({ sub: user.id, email: user.email, v: user.tokenVersion })
+  res.json({ token, user: publicUser({ ...user, role }) })
 })
 
 router.post('/forgot', authLimiter, async (req, res) => {
@@ -459,11 +534,12 @@ router.post('/forgot', authLimiter, async (req, res) => {
     })
     const resetUrl = `${process.env.APP_BASE_URL || 'http://localhost:5173'}/reset?token=${rawToken}`
     // Send password reset email
-    emailService.sendPasswordReset(user.email, user.name, resetUrl).catch(err => {
+    emailService.sendPasswordReset(user.email, user.name, resetUrl, user.id).catch(err => {
       console.error('[auth] Failed to send password reset email:', err)
     })
-    // For dev: log it
-    console.log(`[verdexis] password reset for ${email}: ${resetUrl}`)
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[verdexis] password reset for ${email}: ${resetUrl}`)
+    }
   }
   res.json({ ok: true, message: 'If that email exists, a reset link has been sent.' })
 })
@@ -676,7 +752,8 @@ router.post('/verify-email', authLimiter, async (req, res) => {
     prisma.user.update({ where: { id: record.userId }, data: { emailVerified: true, emailVerifiedAt: new Date() } }),
     prisma.emailVerification.update({ where: { id: record.id }, data: { used: true } }),
   ])
-  res.json({ verified: true })
+  const updatedUser = await prisma.user.findUnique({ where: { id: record.userId } })
+  res.json({ verified: true, user: updatedUser ? publicUser(updatedUser) : undefined })
 })
 
 export default router

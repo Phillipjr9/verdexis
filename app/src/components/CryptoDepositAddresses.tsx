@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Copy, Trash2, Plus, QrCode } from 'lucide-react'
+import { Copy, Trash2, Plus, QrCode, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
+import { WalletQrScanner } from './WalletQrScanner'
 
 interface DepositAddress {
   address: string
@@ -127,32 +128,23 @@ export function CryptoDepositAddresses() {
           <h3 className="text-lg font-semibold text-white mb-4">Your {depositAddress.currency.toUpperCase()} Address</h3>
           
           <div className="space-y-4">
-            {/* Network Info */}
-            <div className="bg-[#070C0E] rounded p-3 text-sm text-[#A0A0A0]">
-              <p><strong>Network:</strong> {depositAddress.network}</p>
-              {depositAddress.chainId && <p><strong>Chain ID:</strong> {depositAddress.chainId}</p>}
-            </div>
+            {/* Use new QR Scanner component */}
+            <WalletQrScanner
+              address={depositAddress.address}
+              currency={depositAddress.currency.toUpperCase()}
+              network={depositAddress.network || 'Unknown'}
+            />
 
-            {/* Address */}
-            <div className="bg-[#070C0E] rounded p-4 flex items-center justify-between gap-2">
-              <code className="text-[#0C8B44] font-mono text-sm break-all">{depositAddress.address}</code>
+            {/* QR Code Display Toggle */}
+            <div className="flex items-center gap-2">
               <button
-                onClick={copyAddress}
-                className="text-[#A0A0A0] hover:text-white transition p-2"
-                title="Copy address"
+                onClick={() => setShowQR(!showQR)}
+                className="flex items-center gap-2 text-[#0C8B44] hover:text-[#0a6b35] text-sm font-medium"
               >
-                <Copy size={18} />
+                <QrCode size={16} />
+                {showQR ? 'Hide' : 'Show'} QR Code
               </button>
             </div>
-
-            {/* QR Code Toggle */}
-            <button
-              onClick={() => setShowQR(!showQR)}
-              className="flex items-center gap-2 text-[#0C8B44] hover:text-[#0a6b35] text-sm font-medium"
-            >
-              <QrCode size={16} />
-              {showQR ? 'Hide' : 'Show'} QR Code
-            </button>
 
             {/* QR Code */}
             {showQR && depositAddress.qrCodeUrl && (
@@ -164,11 +156,6 @@ export function CryptoDepositAddresses() {
                 />
               </div>
             )}
-
-            {/* Warning */}
-            <div className="bg-yellow-900/20 border border-yellow-700/50 rounded p-3 text-sm text-yellow-200">
-              ⚠️ Only send {depositAddress.currency.toUpperCase()} to this address on the {depositAddress.network}. Sending other assets may result in loss of funds.
-            </div>
           </div>
         </div>
       )}

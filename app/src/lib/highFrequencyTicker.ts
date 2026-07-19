@@ -165,31 +165,42 @@ class HighFrequencyTicker {
 
       this.ws.onmessage = (event) => {
         try {
-          const data = JSON.parse(event.data as string)
+          const data = JSON.parse(event.data as string) as {
+            type?: string
+            data?: {
+              symbol?: string; price?: number; bid?: number; ask?: number
+              timestamp?: number; volume24h?: number; change24h?: number
+              high24h?: number; low24h?: number; coinId?: string; changePercent24h?: number
+            }
+            prices?: Array<{
+              symbol?: string; price?: number; bid?: number; ask?: number
+              timestamp?: number; volume24h?: number; change24h?: number
+              high24h?: number; low24h?: number; coinId?: string; changePercent24h?: number
+            }>
+          }
 
           // Handle single price update
           if (data.type === 'price' && data.data) {
-            const update = data.data as any
+            const update = data.data
             this.handlePriceUpdate({
-              symbol: update.symbol,
-              price: update.price,
-              bid: update.bid,
-              ask: update.ask,
-              lastUpdate: update.timestamp,
+              symbol: update.symbol ?? '',
+              price: update.price ?? 0,
+              bid: update.bid ?? 0,
+              ask: update.ask ?? 0,
+              lastUpdate: update.timestamp ?? Date.now(),
               volume24h: update.volume24h,
               change24h: update.change24h,
               high24h: update.high24h,
               low24h: update.low24h,
             })
           } else if (data.type === 'batch' && Array.isArray(data.prices)) {
-            // Handle batch update for multiple prices
             for (const price of data.prices) {
               this.handlePriceUpdate({
-                symbol: price.symbol,
-                price: price.price,
-                bid: price.bid,
-                ask: price.ask,
-                lastUpdate: price.timestamp,
+                symbol: price.symbol ?? '',
+                price: price.price ?? 0,
+                bid: price.bid ?? 0,
+                ask: price.ask ?? 0,
+                lastUpdate: price.timestamp ?? Date.now(),
                 volume24h: price.volume24h,
                 change24h: price.change24h,
                 high24h: price.high24h,
@@ -223,34 +234,31 @@ class HighFrequencyTicker {
   /**
    * Private: Handle individual price update
    */
-  private handlePriceUpdate(data: any): void {
+  private handlePriceUpdate(data: HighFreqPrice & { coinId?: string; changePercent24h?: number; timestamp?: number }): void {
     if (!data.symbol || typeof data.price !== 'number') return
 
     const symbol = data.symbol.toUpperCase()
     const price = data.price
 
-    // Update local cache
-    const old = this.prices.get(symbol)
     this.prices.set(symbol, {
       symbol,
       price,
       bid: data.bid ?? price * 0.999,
       ask: data.ask ?? price * 1.001,
-      lastUpdate: data.timestamp ?? Date.now(),
+      lastUpdate: data.lastUpdate ?? Date.now(),
       volume24h: data.volume24h,
       change24h: data.change24h,
       high24h: data.high24h,
       low24h: data.low24h,
     })
 
-    // Buffer price for realTimePrice system (batched every 50ms)
     this.priceBuffer.set(symbol, {
       coinId: data.coinId ?? symbol.toLowerCase(),
       symbol,
       price,
       change24h: data.change24h ?? 0,
       changePercent24h: data.changePercent24h ?? 0,
-      timestamp: data.timestamp ?? Date.now(),
+      timestamp: data.lastUpdate ?? Date.now(),
     })
 
     // Notify chart listeners immediately (ms-level)

@@ -10,6 +10,7 @@ import {
   computeTradeStats, computeMarketRegime, btcCorrelation,
   extractMentionedAssets, findHolding, describeRsi, totalCashFromWallet,
   fmtUsd, fmtPct, fmtBig, fmtNum,
+  computeMarketOpportunities, computeRiskAdvisory,
   type Intent, type PortfolioStats,
 } from './aiBrain'
 
@@ -28,7 +29,7 @@ export interface Persona {
 // Inspired by the 37-agent system in Fincept Terminal — distilled to 7 distinct
 // investor personas that flavour AI responses without needing a remote LLM.
 export const PERSONAS: Persona[] = [
-  { id: 'verdexis', name: 'Verdexis Analyst', title: 'Default · Balanced', bias: 'balanced', color: '#0C8B44', philosophy: 'Diversified, data-driven, risk-aware.', prompts: ['Analyze my portfolio', 'Best trades today?', 'Diversification ideas', 'Market sentiment'] },
+  { id: 'verdexis', name: 'Verdexis Analyst', title: 'Default · Balanced', bias: 'balanced', color: '#0C8B44', philosophy: 'Diversified, data-driven, risk-aware.', prompts: ['Best markets to buy now', 'Risk advisory', 'Buy 0.01 BTC', 'Swap BTC for SOL'] },
   { id: 'buffett', name: 'Warren Buffett', title: 'Long-term value', bias: 'value', color: '#D4AF37', philosophy: 'Buy wonderful businesses at fair prices. Hold forever.', prompts: ['Is BTC a wonderful business?', 'Margin of safety on ETH', 'Should I trim my position?'] },
   { id: 'graham', name: 'Benjamin Graham', title: 'Defensive value', bias: 'value', color: '#7B9CFF', philosophy: 'Margin of safety. Mr. Market is moody — exploit, don\'t follow.', prompts: ['Calculate intrinsic value', 'Is this a defensive position?', 'Find oversold names'] },
   { id: 'lynch', name: 'Peter Lynch', title: 'Growth at reasonable price', bias: 'growth', color: '#52C8A7', philosophy: 'Invest in what you understand. Tenbaggers hide in plain sight.', prompts: ['Spot a tenbagger setup', 'PEG ratio for SOL', 'What\'s the growth story?'] },
@@ -42,6 +43,22 @@ export interface ChatMessage {
   content: string
   timestamp: Date
   persona?: PersonaId
+}
+
+// Structured action payload the UI renders as a confirmation card
+export interface AIAction {
+  type: 'trade' | 'sell' | 'swap'
+  symbol: string
+  name: string
+  quantity: number
+  price: number
+  total: number
+  // swap-specific
+  fromCurrency?: string
+  toCurrency?: string
+  fromAmount?: number
+  toAmount?: number
+  rate?: number
 }
 
 export interface AIInsight {
@@ -334,7 +351,32 @@ class AIService {
         })
       }
 
-      return insights.slice(0, 12)
+      // 14) Live market opportunity scan
+      if (market.length > 0) {
+        const opps = computeMarketOpportunities(market, holdings, 30)
+        const topBuy = opps.filter(o => o.action === 'BUY').slice(0, 2)
+        const topSell = opps.filter(o => o.action === 'SELL' && holdings.some(h => h.symbol.toLowerCase() === o.coin.symbol.toLowerCase())).slice(0, 1)
+        for (const o of topBuy) {
+          insights.push({
+            type: 'recommendation',
+            title: `Buy Signal: ${o.coin.symbol.toUpperCase()}`,
+            description: `Score ${o.score}/100 · ${o.reasons.slice(0, 2).join(' · ')} · Risk: ${o.riskLevel}`,
+            confidence: o.score,
+            timestamp: now,
+          })
+        }
+        for (const o of topSell) {
+          insights.push({
+            type: 'alert',
+            title: `Sell Signal: ${o.coin.symbol.toUpperCase()}`,
+            description: `Score ${o.score}/100 · ${o.reasons.slice(0, 2).join(' · ')}`,
+            confidence: 100 - o.score,
+            timestamp: now,
+          })
+        }
+      }
+
+      return insights.slice(0, 14)
     } catch (error) {
       console.error('Error generating insights:', error)
       return this.getMockInsights()
@@ -344,6 +386,12 @@ class AIService {
   async processQuery(query: string, persona: PersonaId = 'verdexis'): Promise<string> {
     const trimmed = (query || '').trim()
     if (!trimmed) return 'Ask me anything about your portfolio, the market, or a specific asset.'
+
+    // Reset memory when persona changes mid-conversation so context doesn't bleed.
+    const lastPersona = this.history.length > 0 ? this.history[this.history.length - 1].persona : null
+    if (lastPersona && lastPersona !== persona) {
+      this.resetMemory()
+    }
 
     // Try server-side LLM first. If it answers we use that; else fall back
     // to the rich local engine below — never silently fail to the user.
@@ -385,7 +433,9 @@ class AIService {
       'portfolio_overview','portfolio_health','portfolio_risk','allocation','concentration',
       'diversification','asset_quote','asset_signals','compare_assets','market_regime','top_movers',
       'whatif_buy','whatif_sell','rebalance','recommendation','strategy','fundamentals','best_worst',
-      'pnl','market_news',
+      'pnl','market_news','sentiment',
+      'execute_trade','execute_sell','execute_swap',
+      'market_opportunities','risk_advisory',
     ]
     const market: CryptoQuote[] = needsMarket.includes(intent)
       ? await marketData.getCryptoList().catch(() => [])
@@ -416,6 +466,7 @@ class AIService {
       case 'deposit_history':     return this.replyDeposits()
       case 'withdraw_history':    return this.replyWithdrawals()
       case 'transaction_history': return this.replyTransactions()
+      case 'fee_history':         return this.replyFees()
       case 'staking':             return this.replyStaking()
       case 'yield':               return this.replyYield()
       case 'goals':               return this.replyGoals()
@@ -427,6 +478,15 @@ class AIService {
       case 'recommendation':      return this.replyRecommendation(market)
       case 'strategy':            return this.replyStrategy(market)
       case 'fundamentals':        return this.replyFundamentals(query, market)
+      case 'copy_trading':        return this.replyCopyTrading()
+      case 'paper_trading':       return this.replyPaperTrading()
+      case 'sentiment':           return this.replySentiment(market)
+      case 'persona_question':    return this.replyPersonaQuestion(_persona)
+      case 'execute_trade':       return this.replyExecuteTrade(query, market)
+      case 'execute_sell':        return this.replyExecuteSell(query, market)
+      case 'execute_swap':        return this.replyExecuteSwap(query, market)
+      case 'market_opportunities': return this.replyMarketOpportunities(market)
+      case 'risk_advisory':        return this.replyRiskAdvisory(market)
       case 'unknown':
       default:                    return this.replyFallback(query, market)
     }
@@ -438,7 +498,7 @@ class AIService {
     const h = new Date().getHours()
     const slot = h < 12 ? 'Morning' : h < 17 ? 'Afternoon' : h < 21 ? 'Evening' : 'Night'
     const stats = this.snapshot()
-    return `Good ${slot.toLowerCase()}. Net worth is **${fmtUsd(stats.netWorth)}** (${fmtPct(stats.lifetimeReturn)} lifetime). Ask me anything — try *"how risky is my portfolio?"*, *"compare BTC vs ETH"*, or *"what if I sell 50% of my BTC?"*`
+    return `Good ${slot.toLowerCase()}. Net worth is **${fmtUsd(stats.netWorth)}** (${fmtPct(stats.lifetimeReturn)} lifetime). Try *"best markets to buy right now"*, *"risk advisory"*, *"how risky is my portfolio?"*, or *"buy 0.1 BTC"*.`
   }
 
   private replyHelp(): string {
@@ -453,7 +513,9 @@ class AIService {
       ``,
       `**Markets**`,
       `• live quote for any asset ("price of SOL")`,
-      `• technical signals (RSI, SMA cross, support/resistance)`,
+      `• technical signals (RSI, SMA cross, MACD, Bollinger Bands)`,
+      `• **market opportunity scan** — "best markets to buy right now"`,
+      `• **risk advisory** — "should I sell anything? what\'s at risk?"`,
       `• market regime (fear/greed, breadth, BTC dominance)`,
       `• top movers · news headlines`,
       ``,
@@ -688,15 +750,19 @@ class AIService {
   private replyAssetSignals(query: string, market: CryptoQuote[]): string {
     const assets = extractMentionedAssets(query, market)
     const target = assets[0] || (this.lastTopicAsset ? market.find((m) => m.symbol.toLowerCase() === this.lastTopicAsset) : null)
-    if (!target) return `Which asset's signals? Try "RSI on ETH" or "BTC trend".`
+    if (!target) return `Which asset's signals? Try "RSI on ETH" or "BTC trend" or "MACD for SOL".`
     this.lastTopicAsset = target.symbol.toLowerCase()
     const sig = computeSignals(target.sparkline_in_7d?.price)
     if (!sig) return `Not enough sparkline data for ${target.symbol.toUpperCase()} yet — try again in a few minutes.`
+    const bbZone = sig.bbPosition > 0.8 ? 'near upper band (overbought zone)' : sig.bbPosition < 0.2 ? 'near lower band (oversold zone)' : 'mid-band'
+    const macdBias = sig.macdHistogram > 0 ? 'bullish momentum' : 'bearish momentum'
     return [
       `**${target.symbol.toUpperCase()} technicals (7d)**`,
       `• Trend: **${sig.trend}** (strength ${sig.trendStrength}/100)`,
       `• ${describeRsi(sig.rsi)}`,
       `• SMA cross: **${sig.smaCross}** (short ${fmtUsd(sig.sma_short)} vs long ${fmtUsd(sig.sma_long)})`,
+      `• MACD: ${fmtUsd(sig.macd)} | Signal: ${fmtUsd(sig.macdSignal)} | Histogram: ${sig.macdHistogram >= 0 ? '+' : ''}${sig.macdHistogram.toFixed(4)} → **${macdBias}**`,
+      `• Bollinger Bands: ${fmtUsd(sig.bbLower)} / ${fmtUsd(sig.bbMiddle)} / ${fmtUsd(sig.bbUpper)} — price is **${bbZone}** (width ${sig.bbWidth.toFixed(1)}%)`,
       `• Annualised vol ~${sig.vol7d.toFixed(0)}% · 7d max drawdown ${sig.drawdown7d.toFixed(1)}%`,
       `• ${Math.abs(sig.vsHigh).toFixed(1)}% from 7d high · ${sig.vsLow.toFixed(1)}% off 7d low`,
     ].join('\n')
@@ -1014,17 +1080,289 @@ class AIService {
     ].join('\n')
   }
 
+  private replyFees(): string {
+    const txs = portfolioStore.getTransactions()
+    const fees = txs.filter((t) => (t.type as string) === 'fee').sort((a, b) => {
+      const aT = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp).getTime()
+      const bT = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp).getTime()
+      return bT - aT
+    })
+    if (fees.length === 0) return `No fee transactions on record. Verdexis charges a standard 0.4% monthly portfolio management fee — it will appear here once posted.`
+    const total = fees.reduce((s, f) => s + Math.abs(f.amount), 0)
+    const lines = [`**${fees.length} fee transactions totalling ${fmtUsd(total)}**`, '', 'Most recent:']
+    for (const f of fees.slice(0, 8)) {
+      const ts = f.timestamp instanceof Date ? f.timestamp : new Date(f.timestamp)
+      const when = ts.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+      lines.push(`• ${when} — **-${fmtUsd(Math.abs(f.amount))} ${f.currency}** — ${f.description || 'management fee'}`)
+    }
+    return lines.join('\n')
+  }
+
+  private replyCopyTrading(): string {
+    return [
+      `**Copy Trading** lets you mirror the trades of top-performing Verdexis traders automatically.`,
+      ``,
+      `• Browse the **Leaderboard** (/leaderboard) to find traders by win rate, return, and risk score.`,
+      `• Open a trader's profile and click **Copy** to start mirroring their positions proportionally.`,
+      `• Set a **max allocation** so a single copied trade never exceeds your risk budget.`,
+      `• You can pause or stop copying at any time from /copy-trading/dashboard.`,
+      ``,
+      `Tip: favour traders with >60% win rate, >3 months of history, and a Sharpe above 1.`,
+    ].join('\n')
+  }
+
+  private replyPaperTrading(): string {
+    return [
+      `**Paper Trading** lets you practice strategies with simulated money — no real funds at risk.`,
+      ``,
+      `• Go to **/paper-trading** to open a virtual account pre-funded with $100,000 simulated USD.`,
+      `• Place buy/sell orders at live market prices — fills are instant and tracked separately from your real portfolio.`,
+      `• Review your simulated P&L, win rate, and drawdown before committing real capital.`,
+      ``,
+      `Use it to backtest a new strategy, practice sizing, or get comfortable with a new asset class.`,
+    ].join('\n')
+  }
+
+  private replySentiment(market: CryptoQuote[]): string {
+    const regime = computeMarketRegime(market)
+    const holdings = portfolioStore.getHoldings()
+    const lines = [`**Market Sentiment Snapshot**`, '']
+    if (regime) {
+      lines.push(`• Fear/Greed proxy: **${regime.fearGreed}/100** — ${regime.label}`)
+      lines.push(`• Breadth: ${regime.breadth.toFixed(0)}% of top-30 coins advancing`)
+      lines.push(`• BTC dominance: ${regime.btcDominance.toFixed(1)}%`)
+      if (regime.topGainer) lines.push(`• Strongest: **${regime.topGainer.symbol.toUpperCase()}** ${fmtPct(regime.topGainer.price_change_percentage_24h)}`)
+      if (regime.topLoser)  lines.push(`• Weakest:   **${regime.topLoser.symbol.toUpperCase()}** ${fmtPct(regime.topLoser.price_change_percentage_24h)}`)
+    }
+    // Per-holding sentiment from RSI
+    const bullish: string[] = []
+    const bearish: string[] = []
+    for (const h of holdings.slice(0, 8)) {
+      const m = market.find((x) => x.id === h.id || x.symbol.toLowerCase() === h.symbol.toLowerCase())
+      const sig = computeSignals(m?.sparkline_in_7d?.price)
+      if (!sig) continue
+      if (sig.rsi > 55 && sig.trend === 'up') bullish.push(h.symbol)
+      else if (sig.rsi < 45 && sig.trend === 'down') bearish.push(h.symbol)
+    }
+    if (bullish.length) lines.push(``, `• Your bullish positions: **${bullish.join(', ')}**`)
+    if (bearish.length) lines.push(`• Your bearish positions: **${bearish.join(', ')}**`)
+    return lines.join('\n')
+  }
+
+  private replyPersonaQuestion(persona: PersonaId): string {
+    const p = PERSONAS.find((x) => x.id === persona)
+    if (!p) return `I'm the Verdexis AI analyst — ask me anything about your portfolio or the market.`
+    return [
+      `**${p.name}** — *${p.title}*`,
+      ``,
+      `Philosophy: "${p.philosophy}"`,
+      `Analytical bias: **${p.bias}**`,
+      ``,
+      `Try asking me:`,
+      ...p.prompts.map((pr) => `• "${pr}"`),
+      ``,
+      `Switch personas in the header dropdown to see how different legendary investors would frame the same question.`,
+    ].join('\n')
+  }
+
+  private replyMarketOpportunities(market: CryptoQuote[]): string {
+    if (market.length === 0) return `Market data unavailable — try again in a moment.`
+    const holdings = portfolioStore.getHoldings()
+    const opps = computeMarketOpportunities(market, holdings, 50)
+    const buys = opps.filter(o => o.action === 'BUY').slice(0, 5)
+    const sells = opps.filter(o => o.action === 'SELL').slice(0, 3)
+    const regime = computeMarketRegime(market)
+
+    const lines = [`**Market Opportunity Scan** — ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`]
+    if (regime) lines.push(`Regime: **${regime.label}** · Fear/Greed **${regime.fearGreed}/100**`, '')
+
+    if (buys.length > 0) {
+      lines.push('**🟢 Best Buy Opportunities**')
+      for (const o of buys) {
+        const held = holdings.find(h => h.symbol.toLowerCase() === o.coin.symbol.toLowerCase())
+        const heldNote = held ? ` *(you hold ${fmtNum(held.quantity, 4)})*` : ''
+        lines.push(`• **${o.coin.symbol.toUpperCase()}** ${fmtUsd(o.coin.current_price)} — Score ${o.score}/100 · Risk ${o.riskLevel}${heldNote}`)
+        lines.push(`  ${o.reasons.slice(0, 2).join(' · ')}`)
+      }
+    }
+
+    if (sells.length > 0) {
+      lines.push('', '**🔴 Sell / Reduce Signals**')
+      for (const o of sells) {
+        const held = holdings.find(h => h.symbol.toLowerCase() === o.coin.symbol.toLowerCase())
+        if (!held) continue
+        lines.push(`• **${o.coin.symbol.toUpperCase()}** ${fmtUsd(o.coin.current_price)} — Score ${o.score}/100 · you hold ${fmtNum(held.quantity, 4)}`)
+        lines.push(`  ${o.reasons.slice(0, 2).join(' · ')}`)
+      }
+    }
+
+    lines.push('', `*Scores use RSI, SMA cross, MACD, Bollinger Bands & 24h momentum. Not financial advice.*`)
+    return lines.join('\n')
+  }
+
+  private replyRiskAdvisory(market: CryptoQuote[]): string {
+    const holdings = portfolioStore.getHoldings()
+    const s = this.snapshot()
+    const advisory = computeRiskAdvisory(holdings, market, s.netWorth)
+
+    const riskColor = { Low: '🟢', Medium: '🟡', High: '🟠', Critical: '🔴' }
+    const lines = [
+      `**Risk Advisory** — Overall: ${riskColor[advisory.overallRisk]} **${advisory.overallRisk}**`,
+      `Market: ${advisory.regimeSummary}`,
+      '',
+    ]
+
+    if (advisory.sellAdvisories.length > 0) {
+      lines.push('**⚠️ Positions to Review / Reduce**')
+      for (const a of advisory.sellAdvisories) {
+        const urgencyIcon = a.urgency === 'high' ? '🔴' : a.urgency === 'medium' ? '🟠' : '🟡'
+        lines.push(`• ${urgencyIcon} **${a.symbol}** — ${a.reason}`)
+      }
+      lines.push('')
+    } else if (holdings.length > 0) {
+      lines.push('✅ No urgent sell signals on your current holdings.', '')
+    }
+
+    if (advisory.buyOpportunities.length > 0) {
+      lines.push('**💡 Buy Opportunities Right Now**')
+      for (const b of advisory.buyOpportunities) {
+        lines.push(`• **${b.symbol}** — Confidence ${b.score}/100 · ${b.reason}`)
+      }
+      lines.push('')
+    }
+
+    const risk = computePortfolioRisk(holdings, market, s.netWorth)
+    if (risk) {
+      lines.push(`**Portfolio Risk Metrics**`)
+      lines.push(`• Volatility: **${risk.weightedVolPct.toFixed(0)}%** ann · Sharpe **${risk.weightedSharpe.toFixed(2)}** · VaR 95% **${risk.var95Daily.toFixed(2)}%/day**`)
+      lines.push(`• Max 7d drawdown: **${risk.weightedDrawdownPct.toFixed(1)}%** · Grade: **${risk.riskGrade}**`)
+    }
+
+    lines.push('', `*Advisory updates with live market data. Not financial advice — always do your own research.*`)
+    return lines.join('\n')
+  }
+
+  private replyExecuteTrade(query: string, market: CryptoQuote[]): string {
+    const assets = extractMentionedAssets(query, market)
+    const target = assets[0]
+    if (!target) return `Which asset do you want to buy? Try: **"buy 0.1 BTC"** or **"buy $500 of ETH"**.`
+    const { qty, usdAmount } = this.parseTradeSize(query, target.current_price)
+    const s = this.snapshot()
+    const total = qty * target.current_price
+    const lines = [
+      `**Ready to buy ${fmtNum(qty, 6)} ${target.symbol.toUpperCase()} @ ${fmtUsd(target.current_price)}**`,
+      `• Total cost: **${fmtUsd(total)}**`,
+      `• Available cash: ${fmtUsd(s.cash)} ${total > s.cash ? '⚠️ insufficient' : '✓'}`,
+      `• New weight after buy: ~${s.netWorth > 0 ? (((target.current_price * qty + (portfolioStore.getHoldings().find(h => h.symbol.toLowerCase() === target.symbol.toLowerCase())?.value ?? 0)) / (s.netWorth)) * 100).toFixed(1) : '0'}%`,
+      ``,
+      `__ACTION:BUY|${target.symbol.toUpperCase()}|${target.name}|${qty}|${target.current_price}|${total}__`,
+    ]
+    void usdAmount
+    return lines.join('\n')
+  }
+
+  private replyExecuteSell(query: string, market: CryptoQuote[]): string {
+    const assets = extractMentionedAssets(query, market)
+    const target = assets[0]
+    const holding = target ? findHolding(portfolioStore.getHoldings(), target.symbol) : null
+    if (!target || !holding) {
+      const held = portfolioStore.getHoldings().map(h => h.symbol).join(', ')
+      return `You need to hold an asset to sell it. ${held ? `You currently hold: **${held}**.` : 'No holdings found.'}`
+    }
+    const pctMatch = query.match(/(\d+(?:\.\d+)?)\s*%/)
+    const allMatch = /\b(all|everything|full|100)\b/.test(query.toLowerCase())
+    let fraction = 0.5
+    if (pctMatch) fraction = Math.min(1, parseFloat(pctMatch[1]) / 100)
+    else if (allMatch) fraction = 1
+    else {
+      const { qty } = this.parseTradeSize(query, target.current_price)
+      if (qty > 0) fraction = Math.min(1, qty / holding.quantity)
+    }
+    const qty = holding.quantity * fraction
+    const total = qty * target.current_price
+    const realized = (target.current_price - holding.avgBuyPrice) * qty
+    const lines = [
+      `**Ready to sell ${fmtNum(qty, 6)} ${holding.symbol} (${(fraction * 100).toFixed(0)}%) @ ${fmtUsd(target.current_price)}**`,
+      `• Proceeds: **${fmtUsd(total)}**`,
+      `• Est. realized P&L: **${realized >= 0 ? '+' : ''}${fmtUsd(realized)}**`,
+      `• Remaining position: ${fmtNum(holding.quantity - qty, 6)} ${holding.symbol}`,
+      ``,
+      `__ACTION:SELL|${holding.symbol}|${holding.name}|${qty}|${target.current_price}|${total}__`,
+    ]
+    return lines.join('\n')
+  }
+
+  private replyExecuteSwap(query: string, market: CryptoQuote[]): string {
+    // Parse "swap X BTC for ETH" or "swap $500 of BTC to ETH"
+    const assets = extractMentionedAssets(query, market)
+    const wallet = portfolioStore.getWallet()
+    if (assets.length < 2) {
+      const held = wallet.filter(w => w.balance > 0).map(w => w.currency).join(', ')
+      return `Name two assets to swap, e.g. **"swap 0.1 BTC for ETH"**. ${held ? `Your wallet: **${held}**.` : ''}`
+    }
+    const [from, to] = assets
+    const { qty } = this.parseTradeSize(query, from.current_price)
+    const fromBal = wallet.find(w => w.currency.toUpperCase() === from.symbol.toUpperCase())
+    const fromAmount = qty > 0 ? qty : (fromBal?.available ?? 0) * 0.5
+    const rate = to.current_price > 0 ? from.current_price / to.current_price : 0
+    const toAmount = fromAmount * rate
+    const lines = [
+      `**Ready to swap ${fmtNum(fromAmount, 6)} ${from.symbol.toUpperCase()} → ${fmtNum(toAmount, 6)} ${to.symbol.toUpperCase()}**`,
+      `• Rate: 1 ${from.symbol.toUpperCase()} ≈ ${fmtNum(rate, 4)} ${to.symbol.toUpperCase()}`,
+      `• You send: **${fmtUsd(fromAmount * from.current_price)}** worth of ${from.symbol.toUpperCase()}`,
+      `• You receive: **${fmtUsd(toAmount * to.current_price)}** worth of ${to.symbol.toUpperCase()}`,
+      fromBal && fromAmount > fromBal.available ? `• ⚠️ Insufficient ${from.symbol.toUpperCase()} balance (available: ${fmtNum(fromBal.available, 6)})` : '',
+      ``,
+      `__ACTION:SWAP|${from.symbol.toUpperCase()}|${to.symbol.toUpperCase()}|${fromAmount}|${toAmount}|${rate}__`,
+    ]
+    return lines.filter(l => l !== '').join('\n')
+  }
+
+  /** Parse a quantity or USD amount from a trade query */
+  private parseTradeSize(query: string, price: number): { qty: number; usdAmount: number } {
+    // "0.5 BTC", "0.1 eth"
+    const qtyMatch = query.match(/([\d,]+(?:\.\d+)?)\s*(?:btc|eth|sol|bnb|ada|xrp|doge|avax|dot|link|trx|usdc|usdt)/i)
+    if (qtyMatch) {
+      const qty = parseFloat(qtyMatch[1].replace(/,/g, ''))
+      return { qty, usdAmount: qty * price }
+    }
+    // "$500", "500 usd", "5k"
+    const usdMatch = query.match(/\$?\s*([\d,]+(?:\.\d+)?)\s*([kKmM])?/)
+    if (usdMatch) {
+      let usd = parseFloat(usdMatch[1].replace(/,/g, ''))
+      const suf = (usdMatch[2] || '').toLowerCase()
+      if (suf === 'k') usd *= 1_000
+      else if (suf === 'm') usd *= 1_000_000
+      if (usd > 0 && price > 0) return { qty: usd / price, usdAmount: usd }
+    }
+    // Default: 10% of available cash
+    const cash = portfolioStore.getWalletValueUsd()
+    const usdAmount = cash * 0.1
+    return { qty: price > 0 ? usdAmount / price : 0, usdAmount }
+  }
+
   private replyFallback(query: string, market: CryptoQuote[]): string {
     const assets = extractMentionedAssets(query, market)
     if (assets.length === 1) return this.replyAssetQuote(query, market)
     if (assets.length >= 2) return this.replyCompare(query, market)
+
+    // Follow-up resolution: "tell me more", "what about ETH?", "and SOL?"
+    const followUp = /^(tell me more|more detail|elaborate|explain|and |what about|how about|same for)/i.test(query.trim())
+    if (followUp && this.lastTopicAsset) {
+      const m = market.find((x) => x.symbol.toLowerCase() === this.lastTopicAsset)
+      if (m) return this.replyAssetSignals(this.lastTopicAsset, market)
+    }
+
     return [
       `I'm not sure what you're asking. Some things I'm great at:`,
+      `• "Best markets to buy right now"  ·  "Risk advisory for my portfolio"`,
       `• "How is my portfolio doing?"  ·  "What's my risk?"`,
-      `• "RSI on ETH"  ·  "Compare SOL and AVAX"`,
-      `• "Top movers"  ·  "Market regime"`,
+      `• "RSI on ETH"  ·  "MACD for BTC"  ·  "Compare SOL and AVAX"`,
+      `• "Top movers"  ·  "Market sentiment"  ·  "Market regime"`,
       `• "What if I sell 50% of my BTC?"  ·  "Rebalance plan"`,
+      `• "buy 0.1 BTC"  ·  "sell 50% of my ETH"  ·  "swap BTC for SOL"`,
       `• "Show my deposits"  ·  "Goal progress"  ·  "Staking yield"`,
+      `• "Copy trading"  ·  "Paper trading"  ·  "Show my fees"`,
     ].join('\n')
   }
 
@@ -1048,6 +1386,8 @@ class AIService {
       const s = this.snapshot()
       const holdings = portfolioStore.getHoldings()
       const txs = portfolioStore.getTransactions()
+      const trades = portfolioStore.getTrades()
+      const tradeStats = computeTradeStats(trades, holdings)
       const deposits = txs
         .filter((t) => t.type === 'deposit')
         .sort((a, b) => {
@@ -1061,6 +1401,7 @@ class AIService {
         `Unrealized P&L: ${s.unrealizedPnl >= 0 ? '+' : ''}$${s.unrealizedPnl.toFixed(2)} (${s.unrealizedPnlPct.toFixed(2)}%)`,
         `Lifetime: ${s.lifetimeReturn.toFixed(2)}% on $${s.netDeposited.toFixed(2)} net deposited`,
         `Effective positions: ${s.effectivePositions.toFixed(2)} (HHI ${s.hhi.toFixed(0)})`,
+        `Trades: ${tradeStats.count} total, ${tradeStats.buys} buys / ${tradeStats.sells} sells, win rate ${tradeStats.winRate.toFixed(0)}%, avg hold ${tradeStats.avgHoldDays.toFixed(1)}d`,
         'Holdings:',
         ...holdings.map((h) => `  - ${h.symbol} ${h.quantity} @ avg $${(h.avgBuyPrice ?? 0).toFixed(2)} | now $${(h.currentPrice ?? 0).toFixed(2)} | value $${(h.value ?? 0).toFixed(2)} | ${h.allocation}% | pnl ${h.pnlPercent.toFixed(1)}%`),
       ]
@@ -1072,7 +1413,42 @@ class AIService {
           lines.push(`  - ${when} +${Math.abs(d.amount).toFixed(2)} ${d.currency} · ${d.description || 'no reason'} · ${d.status}`)
         }
       }
-      // Add a brief recent-history slice so the model knows the conversation arc.
+      // Staking
+      try {
+        const { stakingStore, pendingRewardFor } = require('./stakingStore')
+        const positions = stakingStore.list()
+        if (positions.length > 0) {
+          lines.push('Staking:')
+          for (const p of positions) {
+            const r = pendingRewardFor(p)
+            lines.push(`  - ${p.asset} ${p.principal} @ ${(p.apy * 100).toFixed(2)}% APY on ${p.protocol}, pending ${r.rewardAsset.toFixed(6)} ${p.asset}`)
+          }
+        }
+      } catch { /* optional */ }
+      // DCA
+      try {
+        const { dcaStore, nextRunMs } = require('./dcaStore')
+        const schedules = dcaStore.list().filter((s: { active: boolean }) => s.active)
+        if (schedules.length > 0) {
+          lines.push('Active DCA schedules:')
+          for (const s of schedules) {
+            const inDays = Math.max(0, (nextRunMs(s) - Date.now()) / 86_400_000)
+            lines.push(`  - ${s.asset} $${s.amountUsd} every ${s.intervalDays}d, next in ${inDays.toFixed(1)}d`)
+          }
+        }
+      } catch { /* optional */ }
+      // Goals
+      try {
+        const { goalsStore, progressFor } = require('./goalsStore')
+        const goals = goalsStore.list()
+        if (goals.length > 0) {
+          lines.push('Goals:')
+          for (const g of goals) {
+            const p = progressFor(g, s.netWorth)
+            lines.push(`  - ${g.title}: ${p.pct.toFixed(0)}% of $${g.target}, ${p.daysLeft}d left, ${p.onTrack ? 'on track' : 'behind'}`)
+          }
+        }
+      } catch { /* optional */ }
       if (this.history.length > 0) {
         lines.push('Recent dialogue (oldest first):')
         for (const m of this.history.slice(-6)) {
@@ -1102,6 +1478,8 @@ class AIService {
         portfolio_risk:      `**Lens — Buffett:** *Risk comes from not knowing what you're doing.* Here are the numbers:\n\n`,
         market_regime:       `**Lens — Buffett:** *The stock market is a device for transferring money from the impatient to the patient.*\n\n`,
         fundamentals:        `**Lens — Buffett:** *Price is what you pay; value is what you get.*\n\n`,
+        market_opportunities:`**Lens — Buffett:** *Only buy something that you'd be perfectly happy to hold if the market shut down for 10 years.*\n\n`,
+        risk_advisory:       `**Lens — Buffett:** *The most important quality for an investor is temperament, not intellect.*\n\n`,
       },
       graham: {
         portfolio_overview:  `**Lens — Graham:** *In the short run the market is a voting machine; in the long run it's a weighing machine.*\n\n`,
@@ -1109,6 +1487,8 @@ class AIService {
         recommendation:      `**Lens — Graham:** *The investor's chief problem — and even his worst enemy — is likely to be himself.*\n\n`,
         whatif_buy:          `**Lens — Graham:** *Demand a margin of safety against your own miscalculation.*\n\n`,
         market_regime:       `**Lens — Graham:** *Mr. Market is moody. Use his prices; ignore his moods.*\n\n`,
+        market_opportunities:`**Lens — Graham:** *Buy when others are despondently selling and sell when others are greedily buying.*\n\n`,
+        risk_advisory:       `**Lens — Graham:** *The margin of safety is always dependent on the price paid.*\n\n`,
       },
       lynch: {
         portfolio_overview:  `**Lens — Lynch:** *Know what you own, and know why you own it.*\n\n`,
@@ -1116,12 +1496,16 @@ class AIService {
         asset_signals:       `**Lens — Lynch:** *Charts are great for predicting the past.* Use them as one input, not the thesis.\n\n`,
         fundamentals:        `**Lens — Lynch:** *Tenbaggers hide in plain sight — usually in something you already use.*\n\n`,
         portfolio_risk:      `**Lens — Lynch:** *The real key to making money in stocks is not to get scared out of them.*\n\n`,
+        market_opportunities:`**Lens — Lynch:** *Go for a business that any idiot can run — because sooner or later, any idiot probably is going to run it.*\n\n`,
+        risk_advisory:       `**Lens — Lynch:** *The person that turns over the most rocks wins the game.*\n\n`,
       },
       munger: {
         portfolio_overview:  `**Lens — Munger:** *Invert, always invert.* What would have to be true for this book to fail?\n\n`,
         recommendation:      `**Lens — Munger:** *All I want to know is where I'm going to die so I'll never go there.*\n\n`,
         whatif_sell:         `**Lens — Munger:** *The big money is not in the buying or the selling, but in the waiting.*\n\n`,
         portfolio_risk:      `**Lens — Munger:** *It's remarkable how much long-term advantage people like us have gotten by trying to be consistently not stupid.*\n\n`,
+        market_opportunities:`**Lens — Munger:** *Invert: what are the worst things that could happen to each of these positions?*\n\n`,
+        risk_advisory:       `**Lens — Munger:** *Show me the incentive and I'll show you the outcome. What's driving this risk?*\n\n`,
       },
       klarman: {
         portfolio_overview:  `**Lens — Klarman:** *Risk is what you didn't see coming. Cash is a position.*\n\n`,
@@ -1129,12 +1513,16 @@ class AIService {
         cash_balance:        `**Lens — Klarman:** *Cash is an option on opportunity. Patience compounds.*\n\n`,
         recommendation:      `**Lens — Klarman:** *Where's the asymmetric upside? If you can't articulate it, don't buy it.*\n\n`,
         whatif_buy:          `**Lens — Klarman:** *The single greatest edge is patience.*\n\n`,
+        market_opportunities:`**Lens — Klarman:** *Value investing is at its core the marriage of a contrarian streak and a calculator.*\n\n`,
+        risk_advisory:       `**Lens — Klarman:** *The stock market is the only market where things go on sale and all the customers run out of the store.*\n\n`,
       },
       wood: {
         portfolio_overview:  `**Lens — Wood:** *Truly disruptive technologies follow exponential curves. Where's the convexity?*\n\n`,
         asset_signals:       `**Lens — Wood:** *Volatility is the price of admission for outsized returns in innovation.*\n\n`,
         recommendation:      `**Lens — Wood:** *Conviction over consensus. Size the position to your conviction, not the noise.*\n\n`,
         fundamentals:        `**Lens — Wood:** *Look at the S-curve, not the quarterly print.*\n\n`,
+        market_opportunities:`**Lens — Wood:** *The biggest risk is not taking enough risk in a world that is changing this rapidly.*\n\n`,
+        risk_advisory:       `**Lens — Wood:** *Short-term volatility is noise. The 5-year exponential trajectory is the signal.*\n\n`,
       },
     }
 

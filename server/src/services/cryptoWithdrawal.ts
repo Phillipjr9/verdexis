@@ -3,7 +3,7 @@ import { createAssociatedTokenAccountInstruction, createTransferCheckedInstructi
 import { Contract, JsonRpcProvider, Wallet, parseUnits } from 'ethers'
 
 export type WithdrawalTransferPlan = {
-  chain: 'solana' | 'ethereum' | 'bitcoin'
+  chain: 'solana' | 'ethereum' | 'bitcoin' | 'bsc'
   asset: string
   amount: number
   destinationAddress: string
@@ -31,8 +31,8 @@ export function resolveWithdrawalChain(input: {
   asset: string
   destinationAddress: string
   chain?: string
-}): { chain: 'solana' | 'ethereum' | 'bitcoin' | undefined; detectedWalletType: WalletAddressType } {
-  const explicitChain = input.chain === 'solana' || input.chain === 'ethereum' || input.chain === 'bitcoin'
+}): { chain: 'solana' | 'ethereum' | 'bitcoin' | 'bsc' | undefined; detectedWalletType: WalletAddressType } {
+  const explicitChain = input.chain === 'solana' || input.chain === 'ethereum' || input.chain === 'bitcoin' || input.chain === 'bsc'
     ? input.chain
     : undefined
 
@@ -56,6 +56,7 @@ export function resolveWithdrawalChain(input: {
   }
 
   if (asset === 'ETH') return { chain: 'ethereum', detectedWalletType }
+  if (asset === 'BNB') return { chain: 'bsc', detectedWalletType }
   if (asset === 'SOL') return { chain: 'solana', detectedWalletType }
   if (asset === 'BTC') return { chain: 'bitcoin', detectedWalletType }
 
@@ -78,9 +79,11 @@ export function buildExternalWalletTransferMessage(input: {
     ? 'Solana'
     : input.chain?.toLowerCase() === 'bitcoin'
       ? 'Bitcoin'
-      : input.chain?.toLowerCase() === 'ethereum'
-        ? 'Ethereum'
-        : 'the configured network'
+      : input.chain?.toLowerCase() === 'bsc'
+        ? 'BSC'
+        : input.chain?.toLowerCase() === 'ethereum'
+          ? 'Ethereum'
+          : 'the configured network'
   const prefix = input.tone === 'funding' ? 'Funding request recorded.' : 'Transfer queued.'
 
   return `${prefix} ${input.amount} ${input.asset} will be sent to the configured external wallet on ${chainName} and appear there in real time, even though it will not be spendable from the account balance.`
@@ -93,8 +96,7 @@ export function buildTemporaryFundingTransferResult(input: {
   chain?: string
 }): WithdrawalTransferResult {
   return {
-    status: 'completed',
-    txHash: `TEMP-FUND-${Date.now()}`,
+    status: 'pending',
     message: buildExternalWalletTransferMessage({
       asset: input.asset,
       amount: input.amount,
@@ -106,8 +108,18 @@ export function buildTemporaryFundingTransferResult(input: {
 
 const SOLANA_USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
 const ETHEREUM_USDC_CONTRACT = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48'
+const BSC_USDC_CONTRACT = '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d'
 const SOLANA_USDT_MINT = 'Es9vMFrzaCERp2c2ZrK4kG4k6JWpFJ2XfcSv7ki7a9'
 const ETHEREUM_USDT_CONTRACT = '0xdAC17F958D2ee523a2206206994597C13D831ec7'
+const BSC_USDT_CONTRACT = '0x55d398326f99059ff775485246999027b3197955'
+const BNB_TOKEN_CONTRACT = (process.env['BNB_TOKEN_ADDRESS'] ?? '0x4734Fe024B9Cb0BBFcd26Ed467a1e0F891aC8888').trim()
+
+// Custom platform token — set ETHEREUM_TOKEN_ADDRESS / BSC_TOKEN_ADDRESS
+// in server/.env after deploying contracts/MyToken.sol.
+// The symbol is read from ETHEREUM_TOKEN_SYMBOL (default "VDX").
+const ETHEREUM_CUSTOM_TOKEN = process.env['ETHEREUM_TOKEN_ADDRESS'] ?? ''
+const BSC_CUSTOM_TOKEN      = process.env['BSC_TOKEN_ADDRESS'] ?? ''
+const CUSTOM_TOKEN_SYMBOL   = (process.env['ETHEREUM_TOKEN_SYMBOL'] ?? 'VDX').toUpperCase()
 
 export function buildWithdrawalTransferPlan(input: {
   asset: string
@@ -131,19 +143,25 @@ export function buildWithdrawalTransferPlan(input: {
       : resolved.detectedWalletType === 'bitcoin' ? 'bitcoin'
       : asset === 'SOL' ? 'solana'
       : asset === 'ETH' ? 'ethereum'
+      : asset === 'BNB' ? 'bsc'
       : asset === 'BTC' ? 'bitcoin'
       : 'bitcoin')
 
-  const isNative = asset === 'SOL' || asset === 'ETH' || asset === 'BTC'
-  const tokenAddress = input.tokenAddress || (asset === 'USDC' && chain === 'solana'
-    ? SOLANA_USDC_MINT
-    : asset === 'USDC' && chain === 'ethereum'
-      ? ETHEREUM_USDC_CONTRACT
-      : asset === 'USDT' && chain === 'solana'
-        ? SOLANA_USDT_MINT
-        : asset === 'USDT' && chain === 'ethereum'
-          ? ETHEREUM_USDT_CONTRACT
-          : undefined)
+  const useBnbContract = asset === 'BNB' && chain === 'bsc' && Boolean(BNB_TOKEN_CONTRACT)
+  const isNative = asset === 'SOL' || asset === 'ETH' || asset === 'BTC' || (asset === 'BNB' && !useBnbContract)
+  const tokenAddress = input.tokenAddress || (
+    asset === 'USDC' && chain === 'solana'   ? SOLANA_USDC_MINT :
+    asset === 'USDC' && chain === 'ethereum' ? ETHEREUM_USDC_CONTRACT :
+    asset === 'USDC' && chain === 'bsc'      ? BSC_USDC_CONTRACT :
+    asset === 'USDT' && chain === 'solana'   ? SOLANA_USDT_MINT :
+    asset === 'USDT' && chain === 'ethereum' ? ETHEREUM_USDT_CONTRACT :
+    asset === 'USDT' && chain === 'bsc'      ? BSC_USDT_CONTRACT :
+    asset === 'BNB' && chain === 'bsc' && BNB_TOKEN_CONTRACT ? BNB_TOKEN_CONTRACT :
+    // Custom platform token (VDX or whatever ETHEREUM_TOKEN_SYMBOL is set to)
+    asset === CUSTOM_TOKEN_SYMBOL && chain === 'ethereum' && ETHEREUM_CUSTOM_TOKEN ? ETHEREUM_CUSTOM_TOKEN :
+    asset === CUSTOM_TOKEN_SYMBOL && chain === 'bsc'      && BSC_CUSTOM_TOKEN      ? BSC_CUSTOM_TOKEN :
+    undefined
+  )
 
   return {
     chain,
@@ -187,11 +205,7 @@ export async function executeCryptoWithdrawal(input: {
 async function executeSolanaWithdrawal(plan: WithdrawalTransferPlan): Promise<WithdrawalTransferResult> {
   const privateKey = process.env['SOLANA_WITHDRAWAL_PRIVATE_KEY']
   if (!privateKey) {
-    return {
-      status: 'completed',
-      txHash: `TEMPORARY-SOL-${Date.now()}`,
-      message: buildExternalWalletTransferMessage({ asset: plan.asset, amount: plan.amount, chain: plan.chain, tone: 'withdrawal' }),
-    }
+    return buildTemporaryFundingTransferResult(plan)
   }
 
   try {
@@ -274,31 +288,34 @@ async function executeBitcoinWithdrawal(plan: WithdrawalTransferPlan): Promise<W
   const enabled = process.env['BTC_WITHDRAWAL_ENABLED'] === 'true'
   if (!enabled) {
     return {
-      status: 'completed',
-      txHash: `TEMPORARY-BTC-${Date.now()}`,
-      message: buildExternalWalletTransferMessage({ asset: plan.asset, amount: plan.amount, chain: plan.chain, tone: 'withdrawal' }),
+      status: 'pending',
+      message: 'Bitcoin withdrawal is not configured on this server. Your request has been queued for manual processing by an administrator.',
     }
   }
 
   return {
-    status: 'completed',
-    txHash: `SIMULATED-BTC-${Date.now()}`,
-    message: `Simulated Bitcoin withdrawal to ${plan.destinationAddress}: ${plan.amount} ${plan.asset}`,
+    status: 'pending',
+    message: 'Bitcoin withdrawals require manual processing. An administrator will review and process your request.',
   }
 }
 
 async function executeEthereumWithdrawal(plan: WithdrawalTransferPlan): Promise<WithdrawalTransferResult> {
-  const privateKey = process.env['ETHEREUM_WITHDRAWAL_PRIVATE_KEY']
+  const chainKey = plan.chain === 'bsc' ? 'BSC' : 'ETHEREUM'
+  const privateKey = process.env[`${chainKey}_WITHDRAWAL_PRIVATE_KEY`]
   if (!privateKey) {
-    return {
-      status: 'completed',
-      txHash: `TEMPORARY-ETH-${Date.now()}`,
-      message: buildExternalWalletTransferMessage({ asset: plan.asset, amount: plan.amount, chain: plan.chain, tone: 'withdrawal' }),
-    }
+    return buildTemporaryFundingTransferResult(plan)
   }
 
   try {
-    const provider = new JsonRpcProvider(process.env['ETHEREUM_RPC_ENDPOINT'] || 'https://ethereum.publicnode.com')
+    const rpcUrl = process.env[`${chainKey}_RPC_ENDPOINT`] || (chainKey === 'ETHEREUM' ? 'https://ethereum.publicnode.com' : undefined)
+    if (!rpcUrl) {
+      return {
+        status: 'pending',
+        message: `No RPC endpoint configured for ${plan.chain}.`,
+      }
+    }
+
+    const provider = new JsonRpcProvider(rpcUrl)
     const wallet = new Wallet(privateKey, provider)
 
     if (plan.isNative) {
@@ -310,7 +327,7 @@ async function executeEthereumWithdrawal(plan: WithdrawalTransferPlan): Promise<
       return {
         status: 'completed',
         txHash: tx.hash,
-        message: `Ethereum withdrawal submitted: ${tx.hash}`,
+        message: `${plan.chain === 'bsc' ? 'BSC' : 'Ethereum'} withdrawal submitted: ${tx.hash}`,
       }
     }
 
@@ -323,7 +340,7 @@ async function executeEthereumWithdrawal(plan: WithdrawalTransferPlan): Promise<
 
     const contract = new Contract(plan.tokenAddress as string, ['function transfer(address,uint256) returns (bool)'], wallet)
     const value = parseUnits(plan.amount.toString(), plan.decimals ?? 18)
-    const tx = await (contract as any).transfer(plan.destinationAddress, value)
+    const tx = await (contract['transfer'] as (to: string, amount: bigint) => Promise<{ hash: string; wait: () => Promise<unknown> }>)(plan.destinationAddress, value)
     await tx.wait()
 
     return {
@@ -334,7 +351,7 @@ async function executeEthereumWithdrawal(plan: WithdrawalTransferPlan): Promise<
   } catch (error) {
     return {
       status: 'pending',
-      message: error instanceof Error ? error.message : 'Ethereum withdrawal failed',
+      message: error instanceof Error ? error.message : `${plan.chain === 'bsc' ? 'BSC' : 'Ethereum'} withdrawal failed`,
     }
   }
 }

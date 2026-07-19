@@ -144,7 +144,8 @@ router.post('/devices/:deviceId/trust', async (req: AuthedRequest, res) => {
 })
 
 router.delete('/devices/:deviceId', async (req: AuthedRequest, res) => {
-  await trustedDeviceService.revokeDevice(req.userId!, req.params.deviceId)
+  const deviceId = req.params.deviceId ?? ''
+  await trustedDeviceService.revokeDevice(req.userId!, deviceId)
   res.json({ success: true })
 })
 
@@ -208,7 +209,8 @@ router.get('/sessions', async (req: AuthedRequest, res) => {
 })
 
 router.delete('/sessions/:sessionId', async (req: AuthedRequest, res) => {
-  await sessionManagementService.revokeSession(req.params.sessionId)
+  const sessionId = req.params.sessionId ?? ''
+  await sessionManagementService.revokeSession(sessionId)
   res.json({ success: true })
 })
 

@@ -5,8 +5,7 @@ import { requireAuth, type AuthedRequest } from '../auth.js'
 import { prisma } from '../db.js'
 import { otpService } from '../services/otp.js'
 import { emailService } from '../services/email.js'
-import { awsOTPService } from '../services/awsOTP.js'
-import { smsService } from '../services/sms.js'
+import { cognitoOTPService } from '../services/cognitoOTP.js'
 import { getUserOTPSettings } from '../middleware/otpAuth.js'
 
 const router = Router()
@@ -72,7 +71,14 @@ router.post('/send-otp', requireAuth, otpLimiter, async (req: AuthedRequest, res
   }
 
   try {
-    const code = await otpService.create(user.id, parsed.data.purpose)
+    const result = await otpService.create(user.id, parsed.data.purpose)
+    
+    if (result.error) {
+      res.status(429).json({ error: result.error })
+      return
+    }
+    
+    const code = result.code!
     
     // Determine delivery method
     let deliveryMethod = parsed.data.method
@@ -90,16 +96,11 @@ router.post('/send-otp', requireAuth, otpLimiter, async (req: AuthedRequest, res
         return
       }
 
-      // Try AWS OTP service first, fallback to regular SMS
-      deliveryResult = await awsOTPService.sendOTP(phoneNumber, code, parsed.data.purpose, user.id)
-      
-      if (!deliveryResult.success) {
-        // Fallback to regular SMS service
-        deliveryResult = await smsService.sendOTP(phoneNumber, code, 10)
-      }
+      // Use AWS Cognito for SMS OTP
+      deliveryResult = await cognitoOTPService.sendOTP(phoneNumber, user.id)
     } else {
       // Send via email
-      await emailService.sendOTP(user.email, user.name, code, 10)
+      await emailService.sendOTP(user.email, user.name, code, 10, user.id)
       deliveryResult = { success: true, provider: 'email' }
     }
 
@@ -209,5 +210,247 @@ async function getUserPhoneNumber(userId: string): Promise<string | null> {
     return null
   }
 }
+
+// --- Phone Verification with OTP ---
+
+const sendPhoneVerificationSchema = z.object({
+  phoneNumber: z.string().min(7).max(32).regex(/^[+0-9 ()\-.]+$/, 'Invalid phone number'),
+})
+
+router.post('/send-phone-verification', requireAuth, otpLimiter, async (req: AuthedRequest, res) => {
+  const parsed = sendPhoneVerificationSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() })
+    return
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: req.userId! },
+    select: { id: true, email: true, name: true, phoneVerified: true, prefs: true },
+  })
+
+  if (!user) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+
+  try {
+    // Create OTP for phone verification
+    const result = await otpService.create(user.id, 'phone_verification')
+    
+    if (result.error) {
+      res.status(429).json({ error: result.error })
+      return
+    }
+
+    const code = result.code!
+
+    // Store phone number in prefs temporarily for verification
+    let prefs: Record<string, unknown> = {}
+    try {
+      if (user.prefs) prefs = JSON.parse(user.prefs)
+    } catch {
+      prefs = {}
+    }
+
+    prefs.pendingPhoneNumber = parsed.data.phoneNumber
+    prefs.phoneVerificationStartedAt = new Date().toISOString()
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { prefs: JSON.stringify(prefs) },
+    })
+
+    // Send OTP via SMS or email
+    await emailService.sendOTP(user.email, user.name, code, 10, user.id, `Phone verification code: ${code}`)
+
+    res.json({
+      sent: true,
+      expiresIn: 10,
+      message: 'Verification code sent to your email',
+      phoneNumber: parsed.data.phoneNumber,
+    })
+  } catch (error) {
+    console.error('[otp] Failed to send phone verification:', error)
+    res.status(500).json({ error: 'Failed to send verification code' })
+  }
+})
+
+const verifyPhoneSchema = z.object({
+  code: z.string().length(6).regex(/^\d+$/, 'Code must be 6 digits'),
+  phoneNumber: z.string().min(7).max(32).regex(/^[+0-9 ()\-.]+$/, 'Invalid phone number'),
+})
+
+router.post('/verify-phone', requireAuth, otpLimiter, async (req: AuthedRequest, res) => {
+  const parsed = verifyPhoneSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() })
+    return
+  }
+
+  const result = await otpService.verify(req.userId!, parsed.data.code, 'phone_verification')
+
+  if (!result.success) {
+    res.status(400).json({ error: result.error })
+    return
+  }
+
+  // Update user with verified phone
+  const user = await prisma.user.findUnique({
+    where: { id: req.userId! },
+    select: { prefs: true },
+  })
+
+  let prefs: Record<string, unknown> = {}
+  try {
+    if (user?.prefs) prefs = JSON.parse(user.prefs)
+  } catch {
+    prefs = {}
+  }
+
+  // Store verified phone in prefs
+  prefs.phone = parsed.data.phoneNumber
+  delete (prefs as { pendingPhoneNumber?: unknown }).pendingPhoneNumber
+  delete (prefs as { phoneVerificationStartedAt?: unknown }).phoneVerificationStartedAt
+
+  await prisma.user.update({
+    where: { id: req.userId! },
+    data: {
+      phoneVerified: true,
+      phoneVerifiedAt: new Date(),
+      prefs: JSON.stringify(prefs),
+    },
+  })
+
+  res.json({
+    verified: true,
+    phoneVerified: true,
+    phoneNumber: parsed.data.phoneNumber,
+    message: 'Phone number verified successfully',
+  })
+})
+
+// --- Email Verification with OTP ---
+
+router.post('/send-email-verification', requireAuth, otpLimiter, async (req: AuthedRequest, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.userId! },
+    select: { id: true, email: true, name: true, emailVerified: true },
+  })
+
+  if (!user) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+
+  if (user.emailVerified) {
+    res.json({ alreadyVerified: true, message: 'Email already verified' })
+    return
+  }
+
+  try {
+    // Create OTP for email verification
+    const result = await otpService.create(user.id, 'email_verification')
+    
+    if (result.error) {
+      res.status(429).json({ error: result.error })
+      return
+    }
+
+    const code = result.code!
+
+    // Send OTP via email
+    await emailService.sendOTP(user.email, user.name, code, 10, user.id, `Email verification code: ${code}`)
+
+    res.json({
+      sent: true,
+      expiresIn: 10,
+      message: 'Verification code sent to your email',
+      email: user.email,
+    })
+  } catch (error) {
+    console.error('[otp] Failed to send email verification:', error)
+    res.status(500).json({ error: 'Failed to send verification code' })
+  }
+})
+
+const verifyEmailOtpSchema = z.object({
+  code: z.string().length(6).regex(/^\d+$/, 'Code must be 6 digits'),
+})
+
+router.post('/verify-email-otp', requireAuth, otpLimiter, async (req: AuthedRequest, res) => {
+  const parsed = verifyEmailOtpSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() })
+    return
+  }
+
+  const result = await otpService.verify(req.userId!, parsed.data.code, 'email_verification')
+
+  if (!result.success) {
+    res.status(400).json({ error: result.error })
+    return
+  }
+
+  // Update user with verified email
+  await prisma.user.update({
+    where: { id: req.userId! },
+    data: {
+      emailVerified: true,
+      emailVerifiedAt: new Date(),
+    },
+  })
+
+  res.json({
+    verified: true,
+    emailVerified: true,
+    message: 'Email verified successfully',
+  })
+})
+
+// Get verification status
+router.get('/verification-status', requireAuth, async (req: AuthedRequest, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.userId! },
+    select: {
+      id: true,
+      email: true,
+      emailVerified: true,
+      emailVerifiedAt: true,
+      phoneVerified: true,
+      phoneVerifiedAt: true,
+      prefs: true,
+    },
+  })
+
+  if (!user) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+
+  let prefs: Record<string, unknown> = {}
+  try {
+    if (user.prefs) prefs = JSON.parse(user.prefs)
+  } catch {
+    prefs = {}
+  }
+
+  const phone = (prefs as { phone?: string }).phone || null
+
+  res.json({
+    userId: user.id,
+    email: user.email,
+    emailVerified: user.emailVerified,
+    emailVerifiedAt: user.emailVerifiedAt,
+    phoneVerified: user.phoneVerified,
+    phoneVerifiedAt: user.phoneVerifiedAt,
+    phone,
+    allVerified: user.emailVerified && user.phoneVerified,
+    verificationRequired: !user.emailVerified || !user.phoneVerified,
+    message: !user.emailVerified || !user.phoneVerified
+      ? `Please verify your ${!user.emailVerified ? 'email' : ''} ${!user.emailVerified && !user.phoneVerified ? 'and' : ''} ${!user.phoneVerified ? 'phone number' : ''}`
+      : 'All verifications complete',
+  })
+})
 
 export default router

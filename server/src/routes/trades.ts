@@ -5,7 +5,7 @@ import { prisma } from '../db.js'
 import { requireAuth, type AuthedRequest } from '../auth.js'
 import { brokerEnabled, submitPaperOrder } from '../broker.js'
 import { idempotency } from '../idempotency.js'
-import { sendError, VALIDATION_LIMITS, isValidSymbol, isValidAmount } from '../errorHandler.js'
+import { VALIDATION_LIMITS, isValidSymbol, isValidAmount } from '../errorHandler.js'
 
 const router = Router()
 
