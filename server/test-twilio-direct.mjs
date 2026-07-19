@@ -1,9 +1,9 @@
 import twilio from 'twilio'
 
-const accountSid = 'process.env.TWILIO_ACCOUNT_SID'
-const authToken = 'process.env.TWILIO_AUTH_TOKEN'
-const twilioPhone = '+17372583742'
-const testPhone = '+17372583742'
+const accountSid = process.env.TWILIO_ACCOUNT_SID
+const authToken = process.env.TWILIO_AUTH_TOKEN
+const twilioPhone = process.env.TWILIO_PHONE_NUMBER
+const testPhone = process.env.TEST_PHONE_NUMBER
 
 console.log('🔍 Twilio SMS OTP Configuration Test\n')
 console.log('Configuration:')
