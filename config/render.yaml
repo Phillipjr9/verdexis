@@ -10,7 +10,7 @@ services:
     runtime: node
     plan: starter
     buildCommand: cd server && npm install && npm run build
-    startCommand: cd server && npm run start:migrate
+    startCommand: cd server && npx prisma db push --skip-generate && npm run start
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
