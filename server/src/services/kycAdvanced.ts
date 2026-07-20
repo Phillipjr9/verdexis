@@ -261,7 +261,7 @@ export class KYCService {
     else if (score >= 40) level = 'medium'
 
     // Store risk score
-    await prisma.riskScore.upsert({
+    const stored = await prisma.riskScore.upsert({
       where: { userId },
       create: {
         userId,
@@ -277,7 +277,7 @@ export class KYCService {
       },
     })
 
-    return { userId, score, level, factors, updatedAt: new Date() }
+    return { userId, score, level: level as RiskLevel, factors, updatedAt: new Date() }
   }
 
   /**
