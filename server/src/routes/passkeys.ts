@@ -167,8 +167,8 @@ router.post('/register/verify', requireAuth, async (req: AuthedRequest, res) => 
     const passkey = await prisma.passkey.create({
       data: {
         userId: req.userId!,
-        credentialId: credentialID as any,
-        publicKey: credentialPublicKey as any,
+        credentialId: typeof credentialID === 'string' ? credentialID : Buffer.from(credentialID).toString('base64'),
+        publicKey: typeof credentialPublicKey === 'string' ? credentialPublicKey : Buffer.from(credentialPublicKey).toString('base64'),
         counter,
         deviceName,
       },
@@ -256,17 +256,20 @@ router.post('/auth/verify', async (req, res) => {
 
     challenges.delete(challengeKey)
 
-    // Find the passkey by credential ID
-    const credentialIdBuffer = typeof response.id === 'string'
-      ? Buffer.from(response.id, 'base64url')
-      : Buffer.from(new Uint8Array(response.id as any))
+    // Find the passkey by credential ID - convert to base64 string
+    let credentialIdStr: string
+    if (typeof response.id === 'string') {
+      credentialIdStr = response.id
+    } else {
+      credentialIdStr = Buffer.from(response.id as any).toString('base64')
+    }
 
     const passkey = await prisma.passkey.findFirst({
-      where: { credentialId: credentialIdBuffer },
+      where: { credentialId: credentialIdStr },
       include: { user: true },
-    })
+    }) as any
 
-    if (!passkey) {
+    if (!passkey || !passkey.user) {
       return res.status(404).json({ error: 'Passkey not found' })
     }
 
@@ -276,8 +279,8 @@ router.post('/auth/verify', async (req, res) => {
       expectedOrigin: ORIGIN,
       expectedRPID: RP_ID,
       credential: {
-        id: passkey.credentialId as any,
-        publicKey: passkey.publicKey as any,
+        id: Buffer.from(passkey.credentialId, 'base64'),
+        publicKey: Buffer.from(passkey.publicKey, 'base64'),
         counter: passkey.counter,
         transports: ['usb', 'ble', 'nfc', 'internal'] as const,
       },
