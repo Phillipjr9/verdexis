@@ -229,24 +229,22 @@ export const sanitizeResponseHeaders = (_req: Request, res: Response, next: Next
   next()
 }
 
-/**
- * Log security events
- */
 export const logSecurityEvents = (req: Request, res: Response, next: NextFunction) => {
-  const securityEvents: { path: string | RegExp; method: string; event: string }[] = [
+  const adminRe = new RegExp('^/api/admin/')
+  const walletRe = new RegExp('^/api/wallet/')
+  type SecurityEvent = { path: string | RegExp; method: string; event: string }
+  const securityEvents: SecurityEvent[] = [
     { path: '/api/auth/login', method: 'POST', event: 'LOGIN_ATTEMPT' },
     { path: '/api/auth/logout', method: 'POST', event: 'LOGOUT' },
-    { path: /^\/api\/admin\//, method: 'POST', event: 'ADMIN_ACTION' },
-    { path: /^\/api\/wallet\//, method: 'POST', event: 'WALLET_ACTION' },
+    { path: adminRe, method: 'POST', event: 'ADMIN_ACTION' },
+    { path: walletRe, method: 'POST', event: 'WALLET_ACTION' },
   ]
-
   securityEvents.forEach(({ path, method, event }) => {
-    const pathMatch = typeof path === 'string' ? req.path === path : path.test(req.path)
+    const pathMatch = typeof path === 'string' ? req.path === path : (path as RegExp).test(req.path)
     if (pathMatch && req.method === method) {
-      console.log(`[SECURITY] ${event} - IP: ${req.ip}, User: ${(req as AuthedRequest).userId || 'anonymous'}`)
+      console.log('[SECURITY] ' + event + ' - IP: ' + req.ip + ', User: ' + ((req as AuthedRequest).userId || 'anonymous'))
     }
   })
-
   next()
 }
 
