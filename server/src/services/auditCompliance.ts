@@ -66,6 +66,11 @@ export class AuditComplianceService {
     })
 
     return { ...log, action: log.action as AuditAction }
+  }
+
+  /**
+   * Get audit trail for user
+   */
   static async getUserAuditTrail(userId: string, limit: number = 100): Promise<AuditLog[]> {
     const logs = await prisma.auditLog.findMany({
       where: { userId },
