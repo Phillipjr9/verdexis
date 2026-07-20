@@ -174,11 +174,11 @@ router.post('/register/verify', requireAuth, async (req: AuthedRequest, res) => 
     const passkey = await prisma.passkey.create({
       data: {
         userId: req.userId!,
-        credentialId: credentialIdStr as any,
-        publicKey: publicKeyStr as any,
+        credentialId: credentialIdStr,
+        publicKey: publicKeyStr,
         counter,
         deviceName,
-      },
+      } as any,
     })
 
     return res.json({
@@ -272,7 +272,7 @@ router.post('/auth/verify', async (req, res) => {
     }
 
     const passkey = await prisma.passkey.findFirst({
-      where: { credentialId: credentialIdStr as any },
+      where: { credentialId: credentialIdStr } as any,
       include: { user: true },
     }) as any
 
