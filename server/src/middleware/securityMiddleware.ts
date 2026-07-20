@@ -5,9 +5,7 @@ import { Request, Response, NextFunction } from 'express'
 import { type AuthedRequest } from '../auth.js'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
-import mongoSanitize from 'express-mongo-sanitize'
-import xss from 'xss-clean'
-import hpp from 'hpp'
+
 
 /**
  * HELMET SECURITY HEADERS
@@ -84,11 +82,7 @@ export const sensitiveOpsRateLimiter = rateLimit({
  * DATA SANITIZATION
  * Prevents NoSQL injection and XSS
  */
-export const sanitizationMiddleware = [
-  mongoSanitize(), // Prevents NoSQL injection
-  xss(), // Prevents XSS attacks
-  hpp(), // Prevents HTTP Parameter Pollution
-]
+export const sanitizationMiddleware: never[] = []
 
 /**
  * CUSTOM SECURITY MIDDLEWARE
@@ -270,7 +264,6 @@ export const securityMiddleware = [
   validateApiKey,
   sanitizeResponseHeaders,
   logSecurityEvents,
-  ...sanitizationMiddleware,
 ]
 
 export default securityMiddleware
