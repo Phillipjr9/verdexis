@@ -48,6 +48,8 @@ export class DeviceFingerprintService {
         fingerprint,
         deviceName,
         ipAddress,
+        location: '',
+        deviceHash: crypto.createHash('sha256').update(fingerprint).digest('hex'),
         isTrusted: true,
         trustLevel: 100,
         expiresAt,

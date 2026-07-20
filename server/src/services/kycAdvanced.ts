@@ -330,7 +330,8 @@ export class KYCService {
     })
 
     const documents = await this.getUserDocuments(userId)
-    const riskScore = await prisma.riskScore.findUnique({ where: { userId } })
+    const riskScoreData = await prisma.riskScore.findUnique({ where: { userId } })
+    const riskScore = riskScoreData ? { ...riskScoreData, level: riskScoreData.level as RiskLevel } : null
 
     return {
       kycStatus: user?.kycStatus || 'none',
