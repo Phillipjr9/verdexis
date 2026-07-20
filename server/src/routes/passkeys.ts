@@ -167,7 +167,7 @@ router.post('/register/verify', requireAuth, async (req: AuthedRequest, res) => 
     const passkey = await prisma.passkey.create({
       data: {
         userId: req.userId!,
-        credentialId: typeof credentialID === 'string' ? credentialID : Buffer.from(credentialID).toString('base64'),
+        credentialId: Buffer.from(typeof credentialID === 'string' ? Buffer.from(credentialID, 'base64url') : credentialID).toString('base64'),
         publicKey: Buffer.from(credentialPublicKey).toString('base64'),
         counter,
         deviceName,
