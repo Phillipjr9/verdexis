@@ -48,6 +48,8 @@ export class DeviceFingerprintService {
         fingerprint,
         deviceName,
         ipAddress,
+        isTrusted: true,
+        trustLevel: 100,
         expiresAt,
       },
     })

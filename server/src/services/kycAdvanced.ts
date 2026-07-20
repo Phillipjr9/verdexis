@@ -73,7 +73,7 @@ export class KYCService {
       },
     })
 
-    return document
+    return { ...document, type: document.type as DocumentType, status: document.status as VerificationStatus }
   }
 
   /**
@@ -109,17 +109,18 @@ export class KYCService {
       }
     }
 
-    return document
+    return { ...document, type: document.type as DocumentType, status: document.status as VerificationStatus }
   }
 
   /**
    * Get user's KYC documents
    */
   static async getUserDocuments(userId: string): Promise<KYCDocument[]> {
-    return prisma.kYCDocument.findMany({
+    const docs = await prisma.kYCDocument.findMany({
       where: { userId },
       orderBy: { uploadedAt: 'desc' },
     })
+    return docs.map(d => ({ ...d, type: d.type as DocumentType, status: d.status as VerificationStatus }))
   }
 
   /**
@@ -276,7 +277,7 @@ export class KYCService {
       },
     })
 
-    return { userId, score, level: level as RiskLevel, factors, updatedAt: new Date() }
+    return { userId, score, level, factors, updatedAt: new Date() }
   }
 
   /**

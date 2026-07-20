@@ -106,7 +106,7 @@ router.post('/register/options', requireAuth, async (req: AuthedRequest, res) =>
       userDisplayName: user.name || user.email,
       attestationType: 'none',
       excludeCredentials: existingPasskeys.map((pk) => ({
-        id: pk.credentialId,
+        id: pk.credentialId as any,
         transports: ['usb', 'ble', 'nfc', 'internal'] as const,
       })),
     })
@@ -217,7 +217,7 @@ router.post('/auth/options', async (req, res) => {
     const options = await generateAuthenticationOptions({
       rpID: RP_ID,
       allowCredentials: passkeys.map((pk) => ({
-        id: pk.credentialId,
+        id: pk.credentialId as any,
         transports: ['usb', 'ble', 'nfc', 'internal'] as const,
       })),
     })
@@ -276,7 +276,7 @@ router.post('/auth/verify', async (req, res) => {
       expectedOrigin: ORIGIN,
       expectedRPID: RP_ID,
       credential: {
-        id: passkey.credentialId,
+        id: passkey.credentialId as any,
         publicKey: Buffer.from(passkey.publicKey, 'base64'),
         counter: passkey.counter,
         transports: ['usb', 'ble', 'nfc', 'internal'] as const,

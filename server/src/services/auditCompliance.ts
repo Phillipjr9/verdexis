@@ -65,7 +65,7 @@ export class AuditComplianceService {
       },
     })
 
-    return { ...log, action: log.action as AuditAction }
+    return { ...log, action: log.action as AuditAction, status: log.status as 'success' | 'failure', changes: JSON.parse(log.changes) }
   }
 
   /**
@@ -81,6 +81,7 @@ export class AuditComplianceService {
     return logs.map(log => ({
       ...log,
       action: log.action as AuditAction,
+      status: log.status as 'success' | 'failure',
       changes: JSON.parse(log.changes),
     }))
   }
@@ -98,6 +99,7 @@ export class AuditComplianceService {
     return logs.map(log => ({
       ...log,
       action: log.action as AuditAction,
+      status: log.status as 'success' | 'failure',
       changes: JSON.parse(log.changes),
     }))
   }
@@ -115,6 +117,7 @@ export class AuditComplianceService {
     return logs.map(log => ({
       ...log,
       action: log.action as AuditAction,
+      status: log.status as 'success' | 'failure',
       changes: JSON.parse(log.changes),
     }))
   }
@@ -155,6 +158,7 @@ export class AuditComplianceService {
     return logs.map(log => ({
       ...log,
       action: log.action as AuditAction,
+      status: log.status as 'success' | 'failure',
       changes: JSON.parse(log.changes),
     }))
   }
@@ -210,7 +214,7 @@ export class AuditComplianceService {
 
     for (const log of logs) {
       actionCounts[log.action] = (actionCounts[log.action] || 0) + 1
-      statusCounts[log.status]++
+      statusCounts[log.status as 'success' | 'failure']++
       userActions[log.userId] = (userActions[log.userId] || 0) + 1
     }
 

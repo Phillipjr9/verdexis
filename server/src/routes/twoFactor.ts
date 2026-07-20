@@ -136,7 +136,7 @@ router.post('/verify', requireAuth, async (req: AuthedRequest, res) => {
 
   // Try TOTP first
   if (code.length === 6) {
-    const isValid = await totpService.verifyTwoFactor(req.userId!, code)
+    const isValid = await TOTPService.verifyTwoFactor(req.userId!, code)
     if (isValid) {
       res.json({ verified: true })
       return
@@ -145,7 +145,7 @@ router.post('/verify', requireAuth, async (req: AuthedRequest, res) => {
 
   // Try backup code
   if (code.length === 8) {
-    const isValid = await totpService.useBackupCode(req.userId!, code)
+    const isValid = await TOTPService.useBackupCode(req.userId!, code)
     if (isValid) {
       res.json({ verified: true, backupCodeUsed: true })
       return
