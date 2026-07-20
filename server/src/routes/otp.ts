@@ -262,7 +262,7 @@ router.post('/send-phone-verification', requireAuth, otpLimiter, async (req: Aut
     })
 
     // Send OTP via SMS or email
-    await emailService.sendOTP(user.email, user.name, code, 10, user.id, `Phone verification code: ${code}`)
+    await emailService.sendOTP(user.email, user.name, code, 10, user.id)
 
     res.json({
       sent: true,
@@ -360,7 +360,7 @@ router.post('/send-email-verification', requireAuth, otpLimiter, async (req: Aut
     const code = result.code!
 
     // Send OTP via email
-    await emailService.sendOTP(user.email, user.name, code, 10, user.id, `Email verification code: ${code}`)
+    await emailService.sendOTP(user.email, user.name, code, 10, user.id)
 
     res.json({
       sent: true,

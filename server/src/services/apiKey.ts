@@ -47,7 +47,7 @@ export class APIKeyService {
     const { key, prefix } = this.generateKey()
     const keyHash = this.hashKey(key)
 
-    const apiKey = await prisma.apiKey.create({
+    const apiKey = await prisma.aPIKey.create({
       data: {
         userId,
         name,
@@ -69,7 +69,7 @@ export class APIKeyService {
   static async verifyAPIKey(key: string): Promise<{ userId: string; permissions: string[]; rateLimit: number } | null> {
     const keyHash = this.hashKey(key)
 
-    const apiKey = await prisma.apiKey.findFirst({
+    const apiKey = await prisma.aPIKey.findFirst({
       where: {
         keyHash,
         active: true,
@@ -82,7 +82,7 @@ export class APIKeyService {
     }
 
     // Update last used time
-    await prisma.apiKey.update({
+    await prisma.aPIKey.update({
       where: { id: apiKey.id },
       data: { lastUsedAt: new Date() },
     })
@@ -98,7 +98,7 @@ export class APIKeyService {
    * Get user's API keys
    */
   static async getAPIKeys(userId: string): Promise<APIKey[]> {
-    const keys = await prisma.apiKey.findMany({
+    const keys = await prisma.aPIKey.findMany({
       where: { userId },
       select: {
         id: true,
@@ -121,7 +121,7 @@ export class APIKeyService {
    * Revoke API key
    */
   static async revokeAPIKey(userId: string, keyId: string): Promise<boolean> {
-    const result = await prisma.apiKey.updateMany({
+    const result = await prisma.aPIKey.updateMany({
       where: { id: keyId, userId },
       data: { active: false },
     })
@@ -133,7 +133,7 @@ export class APIKeyService {
    * Delete API key
    */
   static async deleteAPIKey(userId: string, keyId: string): Promise<boolean> {
-    const result = await prisma.apiKey.deleteMany({
+    const result = await prisma.aPIKey.deleteMany({
       where: { id: keyId, userId },
     })
 
@@ -144,7 +144,7 @@ export class APIKeyService {
    * Update API key permissions
    */
   static async updateAPIKeyPermissions(userId: string, keyId: string, permissions: string[]): Promise<boolean> {
-    const result = await prisma.apiKey.updateMany({
+    const result = await prisma.aPIKey.updateMany({
       where: { id: keyId, userId },
       data: { permissions },
     })
@@ -158,14 +158,14 @@ export class APIKeyService {
   static async checkRateLimit(keyId: string, windowSeconds: number = 60): Promise<{ allowed: boolean; remaining: number }> {
     const since = new Date(Date.now() - windowSeconds * 1000)
 
-    const count = await prisma.apiKeyUsage.count({
+    const count = await prisma.aPIKeyUsage.count({
       where: {
         apiKeyId: keyId,
         createdAt: { gte: since },
       },
     })
 
-    const apiKey = await prisma.apiKey.findUnique({
+    const apiKey = await prisma.aPIKey.findUnique({
       where: { id: keyId },
       select: { rateLimit: true },
     })
@@ -183,7 +183,7 @@ export class APIKeyService {
    * Record API key usage
    */
   static async recordUsage(keyId: string, endpoint: string, method: string, statusCode: number): Promise<void> {
-    await prisma.apiKeyUsage.create({
+    await prisma.aPIKeyUsage.create({
       data: {
         apiKeyId: keyId,
         endpoint,

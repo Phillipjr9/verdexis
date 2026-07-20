@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { requireAuth, type AuthedRequest } from '../auth.js'
-import { totpService } from '../services/totp.js'
+import { TOTPService } from '../services/totp.js'
 import { prisma } from '../db.js'
 
 const router = Router()

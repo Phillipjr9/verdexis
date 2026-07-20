@@ -52,7 +52,7 @@ export class KYCService {
     documentUrl: string,
   ): Promise<KYCDocument> {
     // Check if document already exists
-    const existing = await prisma.kycDocument.findFirst({
+    const existing = await prisma.kYCDocument.findFirst({
       where: { userId, type, status: { not: 'rejected' } },
     })
 
@@ -60,7 +60,7 @@ export class KYCService {
       throw new Error(`${type} already uploaded and pending verification`)
     }
 
-    const document = await prisma.kycDocument.create({
+    const document = await prisma.kYCDocument.create({
       data: {
         userId,
         type,
@@ -85,7 +85,7 @@ export class KYCService {
     approved: boolean,
     rejectionReason?: string,
   ): Promise<KYCDocument> {
-    const document = await prisma.kycDocument.update({
+    const document = await prisma.kYCDocument.update({
       where: { id: documentId },
       data: {
         status: approved ? 'approved' : 'rejected',
@@ -97,7 +97,7 @@ export class KYCService {
 
     // Update user KYC status
     if (approved) {
-      const allDocuments = await prisma.kycDocument.findMany({
+      const allDocuments = await prisma.kYCDocument.findMany({
         where: { userId: document.userId, status: 'approved' },
       })
 
@@ -116,7 +116,7 @@ export class KYCService {
    * Get user's KYC documents
    */
   static async getUserDocuments(userId: string): Promise<KYCDocument[]> {
-    return prisma.kycDocument.findMany({
+    return prisma.kYCDocument.findMany({
       where: { userId },
       orderBy: { uploadedAt: 'desc' },
     })
@@ -276,7 +276,7 @@ export class KYCService {
       },
     })
 
-    return { userId, score, level, factors, updatedAt: new Date() } as RiskScore
+    return { userId, score, level: level as RiskLevel, factors, updatedAt: new Date() }
   }
 
   /**

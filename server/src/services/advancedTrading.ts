@@ -56,15 +56,15 @@ export class AdvancedTradingService {
         symbol,
         type: 'limit',
         side,
-        quantity,
-        price,
+        amount: quantity,
+        basePrice: price,
         status: 'pending',
-        filledQuantity: 0,
+        filledAmount: 0,
         expiresAt,
       },
     })
 
-    return order
+    return { ...order, quantity: order.amount, price: order.basePrice, filledQuantity: order.filledAmount } as unknown as Order
   }
 
   /**
@@ -83,15 +83,15 @@ export class AdvancedTradingService {
         symbol,
         type: 'stop_loss',
         side: 'sell',
-        quantity,
-        price: limitPrice || stopPrice,
+        amount: quantity,
+        basePrice: limitPrice || stopPrice,
         stopPrice,
         status: 'pending',
-        filledQuantity: 0,
+        filledAmount: 0,
       },
     })
 
-    return order
+    return { ...order, quantity: order.amount, price: order.basePrice, filledQuantity: order.filledAmount } as unknown as Order
   }
 
   /**
@@ -109,14 +109,14 @@ export class AdvancedTradingService {
         symbol,
         type: 'take_profit',
         side: 'sell',
-        quantity,
-        price: targetPrice,
+        amount: quantity,
+        basePrice: targetPrice,
         status: 'pending',
-        filledQuantity: 0,
+        filledAmount: 0,
       },
     })
 
-    return order
+    return { ...order, quantity: order.amount, price: order.basePrice, filledQuantity: order.filledAmount } as unknown as Order
   }
 
   /**
@@ -128,17 +128,18 @@ export class AdvancedTradingService {
       data: { status: 'cancelled' },
     })
 
-    return order
+    return { ...order, quantity: order.amount, price: order.basePrice, filledQuantity: order.filledAmount } as unknown as Order
   }
 
   /**
    * Get user's orders
    */
   static async getUserOrders(userId: string, status?: OrderStatus): Promise<Order[]> {
-    return prisma.order.findMany({
+    const orders = await prisma.order.findMany({
       where: { userId, ...(status ? { status } : {}) },
       orderBy: { createdAt: 'desc' },
     })
+    return orders.map(o => ({ ...o, quantity: o.amount, price: o.basePrice, filledQuantity: o.filledAmount })) as unknown as Order[]
   }
 
   /**

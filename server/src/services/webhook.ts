@@ -172,6 +172,36 @@ export class WebhookService {
   }
 
   /**
+   * Get webhook statistics
+   */
+  static async getWebhookStats(): Promise<{ total: number; active: number; failed: number }> {
+    const [total, active, failed] = await Promise.all([
+      prisma.webhook.count(),
+      prisma.webhook.count({ where: { active: true } }),
+      prisma.webhook.count({ where: { failureCount: { gt: 0 } } }),
+    ])
+    return { total, active, failed }
+  }
+
+  /**
+   * Send a security webhook event
+   */
+  static async sendSecurityWebhook(data: {
+    eventType: string
+    severity: string
+    userId: string
+    description: string
+    [key: string]: unknown
+  }): Promise<boolean> {
+    try {
+      await this.triggerEvent('account.suspended' as WebhookEvent, data, data.userId)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /**
    * Verify webhook signature
    */
   static verifySignature(body: string, signature: string, timestamp: string, secret: string): boolean {
@@ -182,6 +212,25 @@ export class WebhookService {
       .digest('hex')
 
     return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature))
+  }
+  /**
+   * Get webhook statistics (instance method)
+   */
+  async getWebhookStats(): Promise<{ total: number; active: number; failed: number }> {
+    return WebhookService.getWebhookStats()
+  }
+
+  /**
+   * Send a security webhook event (instance method)
+   */
+  async sendSecurityWebhook(data: {
+    eventType: string
+    severity: string
+    userId: string
+    description: string
+    [key: string]: unknown
+  }): Promise<boolean> {
+    return WebhookService.sendSecurityWebhook(data)
   }
 }
 

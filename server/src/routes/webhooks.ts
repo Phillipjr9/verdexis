@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { requireAuth, type AuthedRequest } from '../auth.js'
-import { webhookService, type WebhookEvent } from '../services/webhook.js'
+import { WebhookService, type WebhookEvent } from '../services/webhook.js'
 
 const router = Router()
 

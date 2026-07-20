@@ -69,6 +69,72 @@ export class TOTPService {
     return false
   }
 
+  async getTOTPStatus(userId: string): Promise<{ enabled: boolean; unusedBackupCodes: number }> {
+    const userRecord = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { twoFactor: true, prefs: true },
+    })
+
+    let prefs: Record<string, unknown> = {}
+    try {
+      if (userRecord?.prefs) prefs = JSON.parse(userRecord.prefs)
+    } catch {
+      prefs = {}
+    }
+
+    const backupCodes = (prefs as { twoFactorBackupCodes?: string[] }).twoFactorBackupCodes || []
+    return { enabled: userRecord?.twoFactor || false, unusedBackupCodes: backupCodes.length }
+  }
+
+  async setupTOTP(userId: string, email: string): Promise<{ secret: string; qrCodeUrl: string }> {
+    const secret = TOTPService.generateSecret()
+    const qrCodeUrl = TOTPService.generateQRCodeURL(secret, email)
+
+    const userRecord = await prisma.user.findUnique({ where: { id: userId }, select: { prefs: true } })
+    let prefs: Record<string, unknown> = {}
+    try { if (userRecord?.prefs) prefs = JSON.parse(userRecord.prefs) } catch { prefs = {} }
+    prefs.twoFactorPendingSecret = secret
+
+    await prisma.user.update({ where: { id: userId }, data: { prefs: JSON.stringify(prefs) } })
+    return { secret, qrCodeUrl }
+  }
+
+  async enableTOTP(userId: string, token: string): Promise<boolean> {
+    const userRecord = await prisma.user.findUnique({ where: { id: userId }, select: { prefs: true } })
+    let prefs: Record<string, unknown> = {}
+    try { if (userRecord?.prefs) prefs = JSON.parse(userRecord.prefs) } catch { prefs = {} }
+
+    const secret = (prefs as { twoFactorPendingSecret?: string }).twoFactorPendingSecret
+    if (!secret || !TOTPService.verifyToken(secret, token)) return false
+
+    const backupCodes = TOTPService.generateBackupCodes()
+    prefs.twoFactorSecret = secret
+    prefs.twoFactorBackupCodes = backupCodes.map(c => TOTPService.hashBackupCode(c))
+    prefs.twoFactorEnabledAt = new Date().toISOString()
+    delete (prefs as { twoFactorPendingSecret?: unknown }).twoFactorPendingSecret
+
+    await prisma.user.update({ where: { id: userId }, data: { prefs: JSON.stringify(prefs), twoFactor: true } })
+    return true
+  }
+
+  async disableTOTP(userId: string): Promise<void> {
+    return TOTPService.disableTwoFactor(userId)
+  }
+
+  async regenerateBackupCodes(userId: string): Promise<string[]> {
+    const userRecord = await prisma.user.findUnique({ where: { id: userId }, select: { twoFactor: true, prefs: true } })
+    if (!userRecord?.twoFactor) throw new Error('TOTP not enabled')
+
+    let prefs: Record<string, unknown> = {}
+    try { if (userRecord.prefs) prefs = JSON.parse(userRecord.prefs) } catch { prefs = {} }
+
+    const backupCodes = TOTPService.generateBackupCodes()
+    prefs.twoFactorBackupCodes = backupCodes.map(c => TOTPService.hashBackupCode(c))
+
+    await prisma.user.update({ where: { id: userId }, data: { prefs: JSON.stringify(prefs) } })
+    return backupCodes
+  }
+
   /**
    * Generate QR code URL for authenticator apps
    */

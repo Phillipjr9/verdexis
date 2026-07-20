@@ -14,8 +14,8 @@ export interface TrustedDevice {
   id: string
   userId: string
   fingerprint: string
-  name: string
-  lastUsedAt: Date
+  deviceName: string
+  lastSeenAt: Date
   createdAt: Date
   expiresAt: Date
 }
@@ -46,7 +46,7 @@ export class DeviceFingerprintService {
       data: {
         userId,
         fingerprint,
-        name: deviceName,
+        deviceName,
         ipAddress,
         expiresAt,
       },
@@ -71,7 +71,7 @@ export class DeviceFingerprintService {
       // Update last used time
       await prisma.trustedDevice.update({
         where: { id: device.id },
-        data: { lastUsedAt: new Date() },
+        data: { lastSeenAt: new Date() },
       })
       return true
     }
@@ -88,7 +88,7 @@ export class DeviceFingerprintService {
         userId,
         expiresAt: { gt: new Date() },
       },
-      orderBy: { lastUsedAt: 'desc' },
+      orderBy: { lastSeenAt: 'desc' },
     })
   }
 

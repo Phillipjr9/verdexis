@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { requireAuth, type AuthedRequest } from '../auth.js'
-import { apiKeyService } from '../services/apiKey.js'
+import { APIKeyService } from '../services/apiKey.js'
 
 const router = Router()
 

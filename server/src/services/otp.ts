@@ -30,7 +30,7 @@ export class OTPService {
     return crypto.createHash('sha256').update(code).digest('hex')
   }
 
-  async create(userId: string, purpose: 'login' | 'email_verification' | 'transaction' | '2fa' = 'email_verification'): Promise<{ code?: string; error?: string }> {
+  async create(userId: string, purpose: 'login' | 'email_verification' | 'transaction' | '2fa' | 'phone_verification' = 'email_verification'): Promise<{ code?: string; error?: string }> {
     const recent = await prisma.otp.findFirst({
       where: {
         userId,
@@ -68,7 +68,7 @@ export class OTPService {
     return { code }
   }
 
-  async verify(userId: string, code: string, purpose: 'login' | 'email_verification' | 'transaction' | '2fa' = 'email_verification'): Promise<{ success: boolean; error?: string }> {
+  async verify(userId: string, code: string, purpose: 'login' | 'email_verification' | 'transaction' | '2fa' | 'phone_verification' = 'email_verification'): Promise<{ success: boolean; error?: string }> {
     const hashedCode = this.hashCode(code)
 
     const record = await prisma.otp.findFirst({

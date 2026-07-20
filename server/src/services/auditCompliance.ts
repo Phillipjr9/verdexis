@@ -65,12 +65,7 @@ export class AuditComplianceService {
       },
     })
 
-    return log
-  }
-
-  /**
-   * Get audit trail for user
-   */
+    return { ...log, action: log.action as AuditAction }
   static async getUserAuditTrail(userId: string, limit: number = 100): Promise<AuditLog[]> {
     const logs = await prisma.auditLog.findMany({
       where: { userId },
@@ -80,6 +75,7 @@ export class AuditComplianceService {
 
     return logs.map(log => ({
       ...log,
+      action: log.action as AuditAction,
       changes: JSON.parse(log.changes),
     }))
   }
@@ -96,6 +92,7 @@ export class AuditComplianceService {
 
     return logs.map(log => ({
       ...log,
+      action: log.action as AuditAction,
       changes: JSON.parse(log.changes),
     }))
   }
@@ -112,6 +109,7 @@ export class AuditComplianceService {
 
     return logs.map(log => ({
       ...log,
+      action: log.action as AuditAction,
       changes: JSON.parse(log.changes),
     }))
   }
@@ -151,6 +149,7 @@ export class AuditComplianceService {
 
     return logs.map(log => ({
       ...log,
+      action: log.action as AuditAction,
       changes: JSON.parse(log.changes),
     }))
   }

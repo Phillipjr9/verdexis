@@ -1,4 +1,4 @@
-import admin from 'firebase-admin'
+import * as admin from 'firebase-admin'
 import { env } from '../env.js'
 
 /**
@@ -7,7 +7,7 @@ import { env } from '../env.js'
  */
 
 // Initialize Firebase Admin SDK
-let firebaseApp: admin.app.App | null = null
+let firebaseApp: admin.App | null = null
 
 export function initializeFirebase() {
   if (firebaseApp) return firebaseApp
@@ -16,15 +16,14 @@ export function initializeFirebase() {
     // Check if running in production (Cloud Functions) or local development
     if (process.env.FIREBASE_CONFIG) {
       // Production: Cloud Functions environment
-      firebaseApp = admin.initializeApp()
+      firebaseApp = admin.initializeApp() as admin.App
     } else {
-      // Development: Use service account key
       const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || './firebase-service-account.json'
       
       firebaseApp = admin.initializeApp({
         credential: admin.credential.cert(require(serviceAccountPath)),
         projectId: env.FIREBASE_PROJECT_ID,
-      })
+      }) as admin.App
     }
 
     console.log('[firebase] ✅ Firebase Admin SDK initialized')
@@ -36,7 +35,7 @@ export function initializeFirebase() {
 }
 
 export class FirebasePhoneOTPService {
-  private auth: admin.auth.Auth
+  private auth: admin.Auth
 
   constructor() {
     const app = initializeFirebase()
@@ -129,7 +128,7 @@ export class FirebasePhoneOTPService {
   /**
    * Get user by phone number
    */
-  async getUserByPhone(phoneNumber: string): Promise<admin.auth.UserRecord | null> {
+  async getUserByPhone(phoneNumber: string): Promise<admin.UserRecord | null> {
     try {
       return await this.auth.getUserByPhoneNumber(phoneNumber)
     } catch (error) {

@@ -106,8 +106,7 @@ router.post('/register/options', requireAuth, async (req: AuthedRequest, res) =>
       userDisplayName: user.name || user.email,
       attestationType: 'none',
       excludeCredentials: existingPasskeys.map((pk) => ({
-        id: Buffer.from(pk.credentialId, 'base64'),
-        type: 'public-key' as const,
+        id: pk.credentialId,
         transports: ['usb', 'ble', 'nfc', 'internal'] as const,
       })),
     })
@@ -159,13 +158,16 @@ router.post('/register/verify', requireAuth, async (req: AuthedRequest, res) => 
       return res.status(400).json({ error: 'Registration verification failed' })
     }
 
-    const { credentialID, credentialPublicKey, counter } = verification.registrationInfo
+    const { credential } = verification.registrationInfo
+    const credentialID = credential.id
+    const credentialPublicKey = credential.publicKey
+    const counter = credential.counter
 
     // Store the passkey
     const passkey = await prisma.passkey.create({
       data: {
         userId: req.userId!,
-        credentialId: Buffer.from(credentialID).toString('base64'),
+        credentialId: typeof credentialID === 'string' ? credentialID : Buffer.from(credentialID).toString('base64'),
         publicKey: Buffer.from(credentialPublicKey).toString('base64'),
         counter,
         deviceName,
@@ -215,8 +217,7 @@ router.post('/auth/options', async (req, res) => {
     const options = await generateAuthenticationOptions({
       rpID: RP_ID,
       allowCredentials: passkeys.map((pk) => ({
-        id: Buffer.from(pk.credentialId, 'base64'),
-        type: 'public-key' as const,
+        id: pk.credentialId,
         transports: ['usb', 'ble', 'nfc', 'internal'] as const,
       })),
     })
@@ -256,9 +257,9 @@ router.post('/auth/verify', async (req, res) => {
     challenges.delete(challengeKey)
 
     // Find the passkey by credential ID
-    const credentialId = Buffer.from(
-      typeof response.id === 'string' ? response.id : new Uint8Array(response.id as any)
-    ).toString('base64')
+    const credentialId = typeof response.id === 'string'
+      ? response.id
+      : Buffer.from(new Uint8Array(response.id as any)).toString('base64')
 
     const passkey = await prisma.passkey.findFirst({
       where: { credentialId },
@@ -275,7 +276,7 @@ router.post('/auth/verify', async (req, res) => {
       expectedOrigin: ORIGIN,
       expectedRPID: RP_ID,
       credential: {
-        id: Buffer.from(passkey.credentialId, 'base64'),
+        id: passkey.credentialId,
         publicKey: Buffer.from(passkey.publicKey, 'base64'),
         counter: passkey.counter,
         transports: ['usb', 'ble', 'nfc', 'internal'] as const,
@@ -296,8 +297,8 @@ router.post('/auth/verify', async (req, res) => {
     })
 
     // Generate JWT token
-    const { generateToken } = await import('../auth.js')
-    const token = generateToken(passkey.user.id)
+    const { signToken } = await import('../auth.js')
+    const token = signToken({ sub: passkey.user.id, email: passkey.user.email })
 
     return res.json({
       verified: true,
