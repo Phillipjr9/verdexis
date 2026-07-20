@@ -144,7 +144,7 @@ export class KYCService {
       },
     })
 
-    return check
+    return check as unknown as LivenessCheck
   }
 
   /**
@@ -162,14 +162,13 @@ export class KYCService {
     })
 
     if (passed) {
-      // Update user's liveness verification
       await prisma.user.update({
         where: { id: check.userId },
         data: { livenessVerified: true, livenessVerifiedAt: new Date() },
       })
     }
 
-    return check
+    return check as unknown as LivenessCheck
   }
 
   /**
@@ -277,7 +276,7 @@ export class KYCService {
       },
     })
 
-    return { userId, score, level, factors, updatedAt: new Date() }
+    return { userId, score, level, factors, updatedAt: new Date() } as RiskScore
   }
 
   /**

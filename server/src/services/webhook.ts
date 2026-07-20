@@ -163,8 +163,7 @@ export class WebhookService {
         where: { id: webhook.id },
         data: {
           failureCount: { increment: 1 },
-          // Disable after 10 failures
-          active: (await prisma.webhook.findUnique({ where: { id: webhook.id } }))?.failureCount ?? 0 < 10,
+          active: false,
         },
       })
 

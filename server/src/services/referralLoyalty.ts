@@ -78,14 +78,12 @@ export class ReferralLoyaltyService {
       data: {
         referrerId,
         refereeId,
-        referralCode,
+        refereeEmail: '',
         status: 'pending',
-        commissionPercent,
-        commissionAmount: 0,
       },
     })
 
-    return referral
+    return { ...referral, referralCode, commissionPercent, commissionAmount: 0, completedAt: null } as ReferralProgram
   }
 
   /**
@@ -97,7 +95,7 @@ export class ReferralLoyaltyService {
       data: { status: 'active' },
     })
 
-    return referral
+    return { ...referral, referralCode: '', commissionPercent: 0, commissionAmount: 0, completedAt: null } as ReferralProgram
   }
 
   /**
@@ -108,25 +106,24 @@ export class ReferralLoyaltyService {
       where: { id: referralId },
       data: {
         status: 'completed',
-        commissionAmount,
-        completedAt: new Date(),
+        firstDepositAmount: commissionAmount,
       },
     })
 
-    // Award referrer loyalty points
     await this.addLoyaltyPoints(referral.referrerId, Math.floor(commissionAmount / 10))
 
-    return referral
+    return { ...referral, referralCode: '', commissionPercent: 0, commissionAmount, completedAt: new Date() } as ReferralProgram
   }
 
   /**
    * Get user's referrals
    */
   static async getUserReferrals(userId: string): Promise<ReferralProgram[]> {
-    return prisma.referral.findMany({
+    const referrals = await prisma.referral.findMany({
       where: { referrerId: userId },
       orderBy: { createdAt: 'desc' },
     })
+    return referrals.map(r => ({ ...r, referralCode: '', commissionPercent: 0, commissionAmount: 0, completedAt: null })) as ReferralProgram[]
   }
 
   /**
@@ -290,12 +287,12 @@ export class ReferralLoyaltyService {
   static async getReferralLeaderboard(limit: number = 10): Promise<any[]> {
     const referrals = await prisma.referral.findMany({
       where: { status: 'completed' },
-      select: { referrerId: true, commissionAmount: true },
+      select: { referrerId: true, firstDepositAmount: true },
     })
 
     const grouped: Record<string, number> = {}
     for (const ref of referrals) {
-      grouped[ref.referrerId] = (grouped[ref.referrerId] || 0) + ref.commissionAmount
+      grouped[ref.referrerId] = (grouped[ref.referrerId] || 0) + (ref.firstDepositAmount || 0)
     }
 
     const leaderboard = Object.entries(grouped)

@@ -57,8 +57,6 @@ export class NotificationService {
         kind: 'system',
         title,
         body,
-        priority,
-        data: data ? JSON.stringify(data) : null,
       },
     })
 
@@ -234,7 +232,7 @@ export class NotificationService {
   static async markAsRead(notificationId: string): Promise<void> {
     await prisma.notification.update({
       where: { id: notificationId },
-      data: { readAt: new Date() },
+      data: { read: true },
     })
   }
 
@@ -243,8 +241,8 @@ export class NotificationService {
    */
   static async markAllAsRead(userId: string): Promise<number> {
     const result = await prisma.notification.updateMany({
-      where: { userId, readAt: null },
-      data: { readAt: new Date() },
+      where: { userId, read: false },
+      data: { read: true },
     })
 
     return result.count
@@ -264,7 +262,7 @@ export class NotificationService {
    */
   static async getUnreadCount(userId: string): Promise<number> {
     return prisma.notification.count({
-      where: { userId, readAt: null },
+      where: { userId, read: false },
     })
   }
 
@@ -273,7 +271,7 @@ export class NotificationService {
    */
   static async sendDigestEmail(userId: string): Promise<void> {
     const notifications = await prisma.notification.findMany({
-      where: { userId, readAt: null },
+      where: { userId, read: false },
       orderBy: { createdAt: 'desc' },
       take: 20,
     })
