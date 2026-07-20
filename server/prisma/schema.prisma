@@ -2,7 +2,7 @@ generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
   // Prevent N+1 queries with relation loading
-  previewFeatures = ["relationJoins"]
+
 }
 
 datasource db {
