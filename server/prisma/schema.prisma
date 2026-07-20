@@ -105,7 +105,6 @@ model User {
   
   // API Management
   apiKeys APIKey[]
-  apiKeyUsage APIKeyUsage[]
   
   // Audit & Compliance
   auditLogs AuditLog[]
