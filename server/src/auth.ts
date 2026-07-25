@@ -31,6 +31,10 @@ export interface AuthedRequest extends Request {
   userId?: string
   userEmail?: string
   userRole?: Role
+  body: any
+  params: any
+  query: any
+  headers: any
 }
 
 export async function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) {
