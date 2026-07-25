@@ -122,7 +122,7 @@ async function fetchGeoForIp(ip: string): Promise<LoginGeo | null> {
   if (!ip || isPrivateOrLocalIp(ip)) return null
   try {
     const ac = new AbortController()
-    const t = setTimeout(() => ac.abort(), 1000) // Reduced from 1500ms to 1000ms - faster timeout
+    const t = setTimeout(() => ac.abort(), 300) // Reduced to 300ms - fail fast
     const response = await fetch(`https://ipwho.is/${encodeURIComponent(ip)}`, { signal: ac.signal })
     clearTimeout(t)
     if (!response.ok) return null
@@ -161,7 +161,8 @@ async function recordLoginMetadata(userId: string, ip: string, userAgent?: strin
     let prefs: Record<string, unknown> = {}
     try { if (current?.prefs) prefs = JSON.parse(current.prefs) } catch { prefs = {} }
 
-    const geo = await fetchGeoForIp(ip)
+    // Fetch geo in parallel with parsing prefs, but don't wait for it
+    const geoPromise = fetchGeoForIp(ip).catch(() => null)
     const security = (typeof prefs.security === 'object' && prefs.security) ? prefs.security as Record<string, unknown> : {}
     const history = Array.isArray(security.loginHistory) ? security.loginHistory as Array<Record<string, unknown>> : []
     const entry: Record<string, unknown> = {
@@ -169,6 +170,12 @@ async function recordLoginMetadata(userId: string, ip: string, userAgent?: strin
       ip,
       userAgent: (userAgent || '').slice(0, 300),
     }
+    
+    // Get geo result with timeout
+    const geo = await Promise.race([
+      geoPromise,
+      new Promise<null>(resolve => setTimeout(() => resolve(null), 250))
+    ])
     if (geo) entry.geo = geo
 
     const nextSecurity = {
@@ -349,9 +356,11 @@ router.post('/signup', ensureDbReady, authLimiter, async (req, res) => {
   }
   if (user.role === 'admin') await ensureAdminTreasury(user.id)
   await awardSignupBonus(user.id)
-  // Send welcome email
-  emailService.sendWelcome(user.email, user.name, user.id).catch(err => {
-    console.error('[auth] Failed to send welcome email:', err)
+  // Send welcome email in background
+  process.nextTick(() => {
+    emailService.sendWelcome(user.email, user.name, user.id).catch(err => {
+      console.error('[auth] Failed to send welcome email:', err)
+    })
   })
   // Auto-assign regular users to a default admin if configured
   if (user.role === 'user') {
@@ -428,7 +437,8 @@ router.post('/login', ensureDbReady, authLimiter, async (req, res) => {
 
     // Record login metadata in background - don't await to avoid blocking response
     const clientIp = getClientIp(req)
-    setImmediate(() => {
+    // Use process.nextTick for faster scheduling than setImmediate
+    process.nextTick(() => {
       recordLoginMetadata(user.id, clientIp, String(req.headers['user-agent'] || '')).catch(() => {
         // Best-effort - errors already caught inside recordLoginMetadata
       })
@@ -442,7 +452,12 @@ router.post('/login', ensureDbReady, authLimiter, async (req, res) => {
         res.status(429).json({ error: result.error })
         return
       }
-      await emailService.sendOTP(user.email, user.name, result.code!, 10, user.id)
+      // Send OTP email in background - don't wait
+      process.nextTick(() => {
+        emailService.sendOTP(user.email, user.name, result.code!, 10, user.id).catch(err => {
+          console.error('[auth] Failed to send OTP email:', err)
+        })
+      })
       // Store a short-lived pending login token (userId only, no session)
       const pendingToken = signToken({ sub: user.id, email: user.email, v: user.tokenVersion, otpPending: true })
       res.status(202).json({ otpRequired: true, pendingToken })
@@ -506,7 +521,7 @@ router.post('/login/verify-otp', authLimiter, async (req, res) => {
   }
   const role = await autoPromoteIfAdminEmail(user.id, user.email, user.role)
   const clientIp = getClientIp(req)
-  setImmediate(() => {
+  process.nextTick(() => {
     recordLoginMetadata(user.id, clientIp, String(req.headers['user-agent'] || '')).catch(() => {})
   })
   const token = signToken({ sub: user.id, email: user.email, v: user.tokenVersion })
@@ -533,9 +548,11 @@ router.post('/forgot', authLimiter, async (req, res) => {
       },
     })
     const resetUrl = `${process.env.APP_BASE_URL || 'http://localhost:5173'}/reset?token=${rawToken}`
-    // Send password reset email
-    emailService.sendPasswordReset(user.email, user.name, resetUrl, user.id).catch(err => {
-      console.error('[auth] Failed to send password reset email:', err)
+    // Send password reset email in background
+    process.nextTick(() => {
+      emailService.sendPasswordReset(user.email, user.name, resetUrl, user.id).catch(err => {
+        console.error('[auth] Failed to send password reset email:', err)
+      })
     })
     if (process.env.NODE_ENV !== 'production') {
       console.log(`[verdexis] password reset for ${email}: ${resetUrl}`)

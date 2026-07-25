@@ -100,29 +100,37 @@ async function request<T>(path: string, init: RequestOpts = {}): Promise<T> {
   if (token) headers.set('Authorization', `Bearer ${token}`)
   if (init.idempotencyKey) headers.set('Idempotency-Key', init.idempotencyKey)
 
-  const res = await fetch(`${BASE}${path}`, { ...init, headers })
-  let body: unknown
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 15000) // 15s timeout
+  
   try {
-    body = await res.json()
-  } catch {
-    body = {}
-  }
-  if (!res.ok) {
-    const err = body as { error?: string; details?: unknown; whatsapp?: string; telegram?: string; reason?: string }
-    const apiErr: ApiError = {
-      error: err.error || `Request failed with ${res.status}`,
-      details: err.details,
-      status: res.status,
+    const res = await fetch(`${BASE}${path}`, { ...init, headers, signal: controller.signal })
+    clearTimeout(timeout)
+    let body: unknown
+    try {
+      body = await res.json()
+    } catch {
+      body = {}
     }
-    // Forward known soft-fail fields so callers can surface contextual UI
-    // (e.g. the bonus-lock modal needs the whatsapp / telegram URLs from
-    // the server's 423 payload).
-    if (err.whatsapp) (apiErr as ApiError & { whatsapp?: string }).whatsapp = err.whatsapp
-    if (err.telegram) (apiErr as ApiError & { telegram?: string }).telegram = err.telegram
-    if (err.reason) (apiErr as ApiError & { reason?: string }).reason = err.reason
-    throw apiErr
+    if (!res.ok) {
+      const err = body as { error?: string; details?: unknown; whatsapp?: string; telegram?: string; reason?: string }
+      const apiErr: ApiError = {
+        error: err.error || `Request failed with ${res.status}`,
+        details: err.details,
+        status: res.status,
+      }
+      // Forward known soft-fail fields so callers can surface contextual UI
+      // (e.g. the bonus-lock modal needs the whatsapp / telegram URLs from
+      // the server's 423 payload).
+      if (err.whatsapp) (apiErr as ApiError & { whatsapp?: string }).whatsapp = err.whatsapp
+      if (err.telegram) (apiErr as ApiError & { telegram?: string }).telegram = err.telegram
+      if (err.reason) (apiErr as ApiError & { reason?: string }).reason = err.reason
+      throw apiErr
+    }
+    return body as T
+  } finally {
+    clearTimeout(timeout)
   }
-  return body as T
 }
 
 export const api = {

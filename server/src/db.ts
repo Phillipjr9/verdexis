@@ -32,17 +32,20 @@ const prismaClientOptions: any = {
   errorFormat: 'minimal',
 }
 
-// For RDS PostgreSQL connections with SSL
+// For RDS PostgreSQL connections with SSL and optimized pooling
 if (databaseUrl.includes('rds.amazonaws.com')) {
+  const poolSize = Math.min(parseInt(process.env.DATABASE_POOL_SIZE || '20'), 30)
+  const connectionTimeout = parseInt(process.env.DATABASE_CONNECTION_TIMEOUT || '10000')
   prismaClientOptions.datasources = {
     db: {
-      url: `${databaseUrl}${databaseUrl.includes('?') ? '&' : '?'}sslmode=require`,
+      url: `${databaseUrl}${databaseUrl.includes('?') ? '&' : '?'}sslmode=require&connection_limit=${poolSize}&connect_timeout=${connectionTimeout}`,
     },
   }
 } else {
+  const poolSize = Math.min(parseInt(process.env.DATABASE_POOL_SIZE || '20'), 30)
   prismaClientOptions.datasources = {
     db: {
-      url: databaseUrl,
+      url: `${databaseUrl}${databaseUrl.includes('?') ? '&' : '?'}connection_limit=${poolSize}`,
     },
   }
 }
