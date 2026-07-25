@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "build": "npm --prefix app install && npm --prefix app run build"
+    "build": "node build.js"
   },
   "dependencies": {
     "@vercel/node": "^3.0.0"
