@@ -35,6 +35,11 @@ export interface AuthedRequest extends Request {
   params: any
   query: any
   headers: any
+  baseUrl?: string
+  path?: string
+  ip?: string
+  file?: any
+  authInfo?: any
 }
 
 export async function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) {
