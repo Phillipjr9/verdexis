@@ -37,6 +37,7 @@ export interface AuthedRequest extends Request {
   headers: any
   baseUrl?: string
   path?: string
+  method?: string
   ip?: string
   file?: any
   authInfo?: any
