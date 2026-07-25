@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "build": "cd server && npm install --no-package-lock && npm run build && cd ../app && npm install && npm run build"
+    "build": "cd server && npm install --no-package-lock && npm run build && cd ../app && npm install --legacy-peer-deps && npm run build"
   },
   "dependencies": {
     "@vercel/node": "^3.0.0"
