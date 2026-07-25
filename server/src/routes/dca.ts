@@ -1,6 +1,6 @@
 import { Router, type Response } from 'express'
 import { z } from 'zod'
-import { dcaService } from '../services/dcaService'
+import { dcaService } from '../services/dcaService.js'
 import { requireAuth, type AuthedRequest } from '../auth.js'
 
 const router = Router()

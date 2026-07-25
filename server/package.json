@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "(npx prisma generate || echo 'prisma generate failed, continuing') && npx tsc -p tsconfig.json --skipLibCheck",
+    "build": "node -e \"import('dotenv/config').then(()=>import('node:child_process')).then(({spawnSync})=>{ const provider=process.env.DATABASE_PROVIDER||'postgresql'; const schema='prisma/schema.prisma'; const envs={...process.env}; if(provider==='sqlite'){ envs.DATABASE_URL = envs.DATABASE_URL || 'postgresql://local:local@localhost:5432/verdexis'; } const result = spawnSync('npx', ['prisma', 'generate', '--schema', schema], { stdio: 'inherit', shell: true, env: envs }); process.exit(result.status === null ? 0 : result.status); })\" && npx tsc -p tsconfig.json --skipLibCheck",
     "start": "node dist/index.js",
     "token-registry-agent": "tsx src/scripts/tokenRegistryAgent.ts",
     "start:migrate": "npx prisma migrate deploy && node dist/index.js",

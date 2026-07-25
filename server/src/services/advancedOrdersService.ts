@@ -1,5 +1,5 @@
-import { prisma } from '../db'
-import { getCurrentCryptoPrice } from '../historicalPrice'
+import { prisma } from '../db.js'
+import { getCurrentCryptoPrice } from '../historicalPrice.js'
 import type { Order, Trade, Prisma } from '@prisma/client'
 
 export type AdvancedOrderType = 'stop_loss' | 'take_profit' | 'limit'

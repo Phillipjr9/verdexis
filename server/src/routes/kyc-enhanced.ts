@@ -120,7 +120,7 @@ const KYC_TIERS: Record<string, KycTier> = {
   },
 }
 
-router.get('/csrf-token', csrfProtection, (req, res) => {
+router.get('/csrf-token', csrfProtection as any, (req, res) => {
   res.json({ csrfToken: req.csrfToken() })
 })
 
@@ -130,7 +130,7 @@ router.get('/csrf-token', csrfProtection, (req, res) => {
 router.post(
   '/upload/:documentType',
   requireAuth,
-  csrfProtection,
+  csrfProtection as any,
   documentUploadLimiter,
   upload.single('document'),
   async (req: AuthedRequest, res) => {
@@ -249,7 +249,7 @@ router.get('/documents', requireAuth, async (req: AuthedRequest, res) => {
 router.delete(
   '/document/:id',
   requireAuth,
-  csrfProtection,
+  csrfProtection as any,
   async (req: AuthedRequest, res) => {
     try {
       const user = await prisma.user.findUnique({ where: { id: req.userId! } })
@@ -291,7 +291,7 @@ router.delete(
 router.post(
   '/submit',
   requireAuth,
-  csrfProtection,
+  csrfProtection as any,
   kycSubmitLimiter,
   async (req: AuthedRequest, res) => {
     const parsed = submitKycSchema.safeParse(req.body)

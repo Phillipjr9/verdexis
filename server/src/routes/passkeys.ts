@@ -101,12 +101,12 @@ router.post('/register/options', requireAuth, async (req: AuthedRequest, res) =>
     const options = await generateRegistrationOptions({
       rpID: RP_ID,
       rpName: RP_NAME,
-      userID: user.id,
+      userID: new Uint8Array(Buffer.from(user.id)),
       userName: user.email,
       userDisplayName: user.name || user.email,
       attestationType: 'none',
       excludeCredentials: existingPasskeys.map((pk) => ({
-        id: pk.credentialId as any,
+        id: pk.credentialId,
         transports: ['usb', 'ble', 'nfc', 'internal'] as const,
       })),
     })
@@ -286,7 +286,7 @@ router.post('/auth/verify', async (req, res) => {
       expectedOrigin: ORIGIN,
       expectedRPID: RP_ID,
       credential: {
-        id: Buffer.from(passkey.credentialId, 'base64'),
+        id: passkey.credentialId as any,
         publicKey: Buffer.from(passkey.publicKey, 'base64'),
         counter: passkey.counter,
         transports: ['usb', 'ble', 'nfc', 'internal'] as const,

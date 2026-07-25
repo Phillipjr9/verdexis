@@ -1,5 +1,5 @@
-import { prisma } from '../db'
-import { getCurrentCryptoPrice, getHistoricalStockPrice } from '../historicalPrice'
+import { prisma } from '../db.js'
+import { getCurrentCryptoPrice, getHistoricalStockPrice } from '../historicalPrice.js'
 
 export interface DCAScheduleRecord {
   id: string

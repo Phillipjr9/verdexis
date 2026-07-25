@@ -2,7 +2,7 @@ generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
   // Prevent N+1 queries with relation loading
-  previewFeatures = ["relationJoins"]
+
 }
 
 datasource db {
@@ -48,6 +48,10 @@ model User {
   kycDocumentsJson String?
   emailVerified   Boolean   @default(false)
   emailVerifiedAt DateTime?
+  phoneVerified   Boolean   @default(false)
+  phoneVerifiedAt DateTime?
+  livenessVerified Boolean  @default(false)
+  livenessVerifiedAt DateTime?
   dailyWithdrawLimit  Float?
   monthlyWithdrawLimit Float?
   dailyTransferLimit  Float?
@@ -94,6 +98,30 @@ model User {
   complianceFindings ComplianceFinding[]
   fraudRules FraudRule[]
   
+  // KYC & Compliance
+  kycDocuments KYCDocument[]
+  livenessChecks LivenessCheck[]
+  riskScore RiskScore?
+  
+  // API Management
+  apiKeys APIKey[]
+  
+  // Audit & Compliance
+  auditLogs AuditLog[]
+  userActions UserAction[]
+  
+  // Rate Limiting
+  rateLimitLogs RateLimitLog[]
+  
+  // Webhooks
+  webhooks Webhook[]
+  
+  // Loyalty
+  loyalty UserLoyalty?
+  
+  // Device Management
+  loginAttempts LoginAttempt[]
+  
   // Copy Trading relationships
   traderProfile TraderProfile?
   followers     CopyRelationship[] @relation("Trader")
@@ -124,6 +152,171 @@ model User {
   
   // Transaction Export
   transactionExports TransactionExport[] @relation("TransactionExports")
+}
+
+// KYC & Compliance Models
+model KYCDocument {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type String
+  documentNumber String
+  documentUrl String
+  issuedAt DateTime
+  expiresAt DateTime
+  country String
+  status String @default("pending")
+  uploadedAt DateTime @default(now())
+  verifiedAt DateTime?
+  verifiedBy String?
+  rejectionReason String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, type])
+  @@index([userId])
+  @@index([status])
+}
+
+model LivenessCheck {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status String @default("pending")
+  score Float @default(0)
+  attempts Int @default(0)
+  createdAt DateTime @default(now())
+  completedAt DateTime?
+
+  @@index([userId])
+  @@index([status])
+}
+
+model RiskScore {
+  userId String @id
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  score Int @default(0)
+  level String @default("low")
+  factors String[] @default([])
+  updatedAt DateTime @updatedAt
+}
+
+model APIKey {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name String
+  keyPrefix String
+  keyHash String @unique
+  permissions String[] @default(["read"])
+  rateLimit Int @default(1000)
+  active Boolean @default(true)
+  lastUsedAt DateTime?
+  createdAt DateTime @default(now())
+  expiresAt DateTime?
+  usage APIKeyUsage[]
+
+  @@index([userId])
+  @@index([active])
+}
+
+model APIKeyUsage {
+  id String @id @default(cuid())
+  apiKeyId String
+  apiKey APIKey @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  endpoint String
+  method String
+  statusCode Int
+  createdAt DateTime @default(now())
+
+  @@index([apiKeyId])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action String
+  resource String
+  resourceId String
+  changes String
+  ipAddress String
+  userAgent String
+  status String @default("success")
+  errorMessage String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model UserAction {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action String
+  details String
+  ipAddress String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+}
+
+model RateLimitLog {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint String
+  statusCode Int
+  createdAt DateTime @default(now())
+
+  @@index([userId, endpoint, createdAt])
+  @@index([createdAt])
+}
+
+model Webhook {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  url String
+  events String[] @default([])
+  secretHash String
+  active Boolean @default(true)
+  lastTriggeredAt DateTime?
+  failureCount Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([active])
+}
+
+model UserLoyalty {
+  userId String @id
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  points Int @default(0)
+  tier String @default("Bronze")
+  totalSpent Float @default(0)
+  referralsCount Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model LoginAttempt {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  success Boolean
+  ipAddress String
+  userAgent String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([success])
+  @@index([createdAt])
 }
 
 model TrustedDevice {
