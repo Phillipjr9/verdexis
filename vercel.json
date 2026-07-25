@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
-  "buildCommand": "cd server && npm install --no-package-lock && npm run build && cd ../app && npm install --legacy-peer-deps && npm run build",
+  "buildCommand": "bash build.sh",
   "outputDirectory": "app/dist",
   "framework": null,
   "rewrites": [
