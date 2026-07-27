@@ -29,6 +29,19 @@ export interface EmailTransportConfig {
     pass: string
   }
   from: string
+  fromName?: string
+  replyTo?: string
+  unsubscribeUrl?: string
+}
+
+function formatFromAddress(address: string, fromName?: string): string {
+  const trimmedAddress = address.trim()
+  const trimmedName = (fromName ?? '').trim()
+
+  if (!trimmedAddress) return ''
+  if (!trimmedName) return trimmedAddress
+
+  return `${trimmedName} <${trimmedAddress}>`
 }
 
 export function resolveEmailTransportConfig(
@@ -39,14 +52,20 @@ export function resolveEmailTransportConfig(
   const secure = (overrides.SMTP_SECURE ?? env.SMTP_SECURE ?? 'false').toLowerCase() === 'true'
   const user = (overrides.SMTP_USER ?? env.SMTP_USER ?? '').trim()
   const pass = (overrides.SMTP_PASS ?? overrides.SMTP_PASSWORD ?? env.SMTP_PASS ?? '').trim()
-  const from = (overrides.SMTP_FROM ?? env.SMTP_FROM ?? 'noreply@verdexis.com').trim()
+  const fromAddress = (overrides.SMTP_FROM ?? env.SMTP_FROM ?? 'noreply@verdexis.com').trim()
+  const fromName = (overrides.SMTP_FROM_NAME ?? env.SMTP_FROM_NAME ?? 'Verdexis').trim()
+  const replyTo = (overrides.SMTP_REPLY_TO ?? env.SMTP_REPLY_TO ?? '').trim()
+  const unsubscribeUrl = (overrides.SMTP_UNSUBSCRIBE_URL ?? env.SMTP_UNSUBSCRIBE_URL ?? '').trim()
 
   return {
     host,
     port,
     secure,
     auth: { user, pass },
-    from,
+    from: formatFromAddress(fromAddress, fromName),
+    fromName,
+    replyTo: replyTo || undefined,
+    unsubscribeUrl: unsubscribeUrl || undefined,
   }
 }
 
@@ -89,9 +108,19 @@ function appendTrackingButtonToHtml(html: string, trackingUrl: string): string {
 
 export function buildNotificationEmailHtml(subject: string, body: string, htmlBody?: string, trackingUrl?: string): string {
   const resolvedTrackingUrl = trackingUrl ?? buildTrackedNotificationUrl()
+  const preheader = `${subject} — ${body.replace(/\n/g, ' ').slice(0, 120)}`
 
   if (htmlBody) {
-    return appendTrackingButtonToHtml(htmlBody, resolvedTrackingUrl)
+    const withButton = appendTrackingButtonToHtml(htmlBody, resolvedTrackingUrl)
+    // ensure a hidden preheader for inbox preview and a footer with unsubscribe if configured
+    const preheaderSpan = `<div style="display:none!important;visibility:hidden;opacity:0;color:transparent;height:0;width:0;">${escapeHtml(preheader)}</div>`
+    const unsubscribe = env.SMTP_UNSUBSCRIBE_URL ? `<p style="font-size:12px;color:#64748b;margin-top:24px;">To stop receiving these emails, <a href="${env.SMTP_UNSUBSCRIBE_URL}">unsubscribe</a>.</p>` : ''
+    if (withButton.toLowerCase().includes('</body>')) {
+      return withButton.replace(/<body([^>]*)>/i, `<body$1>${preheaderSpan}`)
+        .replace(/<\/body>/i, `${unsubscribe}</body>`)
+    }
+
+    return `${preheaderSpan}${withButton}${unsubscribe}`
   }
 
   const safeBody = escapeHtml(body).replace(/\n/g, '<br />')
@@ -111,6 +140,7 @@ export function buildNotificationEmailHtml(subject: string, body: string, htmlBo
         <a href="${resolvedTrackingUrl}" style="display: inline-block; background: #0f4c81; color: #ffffff; text-decoration: none; padding: 10px 16px; border-radius: 999px; font-weight: 600;">View in Verdexis</a>
       </p>
       <p style="font-size: 12px; color: #64748b; margin-top: 24px;">This message was sent by Verdexis.</p>
+      ${env.SMTP_UNSUBSCRIBE_URL ? `<p style="font-size:12px;color:#64748b;margin-top:8px;">To stop receiving these emails, <a href="${env.SMTP_UNSUBSCRIBE_URL}">unsubscribe</a>.</p>` : ''}
     </div>
   </body>
 </html>`
@@ -167,12 +197,36 @@ export async function sendEmailNotification(
     }
 
     const config = resolveEmailTransportConfig()
+    const headers: Record<string, string> = {
+      'X-Mailer': 'Verdexis',
+      // Indicate this is not an automated vacation/auto-reply message
+      'Auto-Submitted': 'no',
+    }
+
+    if (config.replyTo) {
+      headers['Reply-To'] = config.replyTo
+    }
+
+    if (config.unsubscribeUrl) {
+      headers['List-Unsubscribe'] = `<${config.unsubscribeUrl}>`
+      headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click'
+    }
+
+    // Prefer the authenticated SMTP user as the envelope/sender to avoid SPF/DMARC alignment issues
+    const envelopeFrom = config.auth?.user || config.from
+    headers['Sender'] = envelopeFrom
+
     await transporter.sendMail({
-      from: config.from,
+      // Use the authenticated SMTP user as the visible From address (with brand name)
+      from: `${config.fromName || 'Verdexis'} <${envelopeFrom}>`,
       to: email,
+      replyTo: config.replyTo,
       subject,
       text: `${body}\n\nView in Verdexis: ${trackingUrl}`,
       html,
+      headers,
+      // Ensure the SMTP envelope (MAIL FROM) matches the authenticated user
+      envelope: { from: envelopeFrom, to: email },
     })
 
     if (options.userId && options.createWebNotification !== false) {

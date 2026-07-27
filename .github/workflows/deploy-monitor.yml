@@ -1,0 +1,62 @@
+name: Monitor Deployment Health
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  monitor-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Wait a bit for deployment to start
+        run: sleep 30
+
+      - name: Poll healthcheck URL
+        env:
+          APP_HEALTHCHECK_URL: ${{ secrets.APP_HEALTHCHECK_URL }}
+          RETRIES: 12
+          SLEEP_SECONDS: 10
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+        run: |
+          if [ -z "$APP_HEALTHCHECK_URL" ]; then
+            echo "APP_HEALTHCHECK_URL not configured — skipping healthcheck step"
+            exit 0
+          fi
+
+          i=0
+          until [ $i -ge $RETRIES ]
+          do
+            status=$(curl -s -o /dev/null -w "%{http_code}" "$APP_HEALTHCHECK_URL" || echo "000")
+            echo "Attempt $((i+1)) - HTTP $status"
+            if [ "$status" = "200" ]; then
+              echo "Healthcheck OK"
+              exit 0
+            fi
+            i=$((i+1))
+            sleep $SLEEP_SECONDS
+          done
+
+          echo "Healthcheck failed after $RETRIES attempts"
+
+          # Optionally fetch provider deployment lists if tokens provided for debugging
+          if [ -n "$VERCEL_TOKEN" ] && [ -n "$VERCEL_PROJECT_ID" ]; then
+            echo "Fetching recent Vercel deployments (for debugging)"
+            curl -s -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID" | tee vercel-deploys.json
+            echo "Vercel deploys saved to vercel-deploys.json"
+          fi
+
+          if [ -n "$RENDER_API_KEY" ] && [ -n "$RENDER_SERVICE_ID" ]; then
+            echo "Fetching recent Render deploys (for debugging)"
+            curl -s -H "Accept: application/json" -H "Authorization: Bearer $RENDER_API_KEY" "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys" | tee render-deploys.json
+            echo "Render deploys saved to render-deploys.json"
+          fi
+
+          echo "Failing workflow due to unhealthy deployment"
+          exit 1

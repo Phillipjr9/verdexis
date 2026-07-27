@@ -15,6 +15,9 @@ export interface EmailConfig {
     pass: string
   }
   from: string
+  fromName?: string
+  replyTo?: string
+  unsubscribeUrl?: string
 }
 
 const DEFAULT_CONFIG: EmailConfig = {
@@ -26,6 +29,9 @@ const DEFAULT_CONFIG: EmailConfig = {
     pass: process.env.SMTP_PASS || '',
   },
   from: process.env.SMTP_FROM || 'noreply@verdexis.com',
+  fromName: process.env.SMTP_FROM_NAME || 'Verdexis',
+  replyTo: process.env.SMTP_REPLY_TO || '',
+  unsubscribeUrl: process.env.SMTP_UNSUBSCRIBE_URL || '',
 }
 
 export class EmailService {
@@ -148,12 +154,35 @@ export class EmailService {
     const html = this.replaceVariables(template, variables)
 
     try {
+      const headers: Record<string, string> = {
+        'X-Mailer': 'Verdexis',
+        // Mark as not an auto-reply to improve filtering
+        'Auto-Submitted': 'no',
+      }
+
+      if (this.config.replyTo) {
+        headers['Reply-To'] = this.config.replyTo
+      }
+
+      if (this.config.unsubscribeUrl) {
+        headers['List-Unsubscribe'] = `<${this.config.unsubscribeUrl}>`
+        headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click'
+      }
+
+      // Use the authenticated SMTP user as envelope/from to avoid alignment issues when a custom domain
+      // is not available (e.g. Mailgun sandbox or provider-owned domains).
+      const envelopeFrom = this.config.auth?.user || this.config.from
+      headers['Sender'] = envelopeFrom
+
       await this.transporter.sendMail({
-        from: this.config.from,
+        from: this.config.fromName ? `${this.config.fromName} <${envelopeFrom}>` : envelopeFrom,
         to,
+        replyTo: this.config.replyTo,
         subject: `🔐 ${title} - Verdexis`,
         html,
         text: `${message}\n\nYour verification code: ${otp}\n\nThis code expires in ${expirationMinutes} minutes.\n\n© ${new Date().getFullYear()} Verdexis`,
+        headers,
+        envelope: { from: envelopeFrom, to },
       })
       return true
     } catch (error) {

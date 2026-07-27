@@ -44,11 +44,20 @@ export class EmailDigestService {
 
     const html = this.generateDigestHTML(user.name, metrics, holdings, trades, alerts)
 
+    const from = env.SMTP_FROM_NAME ? `${env.SMTP_FROM_NAME} <${env.SMTP_FROM || 'noreply@verdexis.com'}>` : (env.SMTP_FROM || 'noreply@verdexis.com')
+
     await this.transporter.sendMail({
-      from: env.SMTP_FROM || 'noreply@verdexis.app',
+      from,
+      replyTo: env.SMTP_REPLY_TO || undefined,
       to: user.email,
       subject: `Your VERDEXIS Daily Summary - ${new Date().toLocaleDateString()}`,
       html,
+      headers: {
+        'X-Mailer': 'Verdexis',
+        'Auto-Submitted': 'auto-generated',
+        ...(env.SMTP_REPLY_TO ? { 'Reply-To': env.SMTP_REPLY_TO } : {}),
+        ...(env.SMTP_UNSUBSCRIBE_URL ? { 'List-Unsubscribe': `<${env.SMTP_UNSUBSCRIBE_URL}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } : {}),
+      },
     })
 
     console.log(`[email-digest] sent to ${user.email}`)

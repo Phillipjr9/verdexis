@@ -55,6 +55,9 @@ const schema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   SMTP_FROM: z.string().optional(),
+  SMTP_FROM_NAME: z.string().optional(),
+  SMTP_REPLY_TO: z.string().optional(),
+  SMTP_UNSUBSCRIBE_URL: z.string().optional(),
   // SMS configuration for OTP delivery
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),
