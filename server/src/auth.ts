@@ -11,6 +11,7 @@ export interface AuthPayload {
   email: string
   v?: number // tokenVersion at issue time
   otpPending?: boolean
+  signupVerification?: boolean
 }
 
 export function signToken(payload: AuthPayload): string {

@@ -14,6 +14,7 @@ import { emailService } from '../services/email.js'
 import { otpService } from '../services/otp.js'
 import { shouldRequireOTPForLogin } from '../middleware/otpAuth.js'
 import { createLocalUser, findLocalUserByEmailOrUsername, getLocalUserById, updateLocalUserPassword } from '../lib/localAuthStore.js'
+import type { LocalAuthUser } from '../lib/localAuthStore.js'
 import { buildPendingVerificationPayload } from '../lib/authVerification.js'
 
 const router = Router()
@@ -460,11 +461,11 @@ router.post('/signup/resend-otp', ensureDbReady, authLimiter, async (req, res) =
   }
 
   const { email } = parsed.data
-  let user = await prisma.user.findUnique({ where: { email } })
+  let user: Awaited<ReturnType<typeof prisma.user.findUnique>> | LocalAuthUser | null = await prisma.user.findUnique({ where: { email } })
   if (!user) {
     const fallbackUser = await findLocalUserByEmailOrUsername(email)
     if (fallbackUser) {
-      user = fallbackUser as Awaited<ReturnType<typeof prisma.user.findUnique>>
+      user = fallbackUser
     }
   }
 
