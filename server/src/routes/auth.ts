@@ -14,6 +14,7 @@ import { emailService } from '../services/email.js'
 import { otpService } from '../services/otp.js'
 import { shouldRequireOTPForLogin } from '../middleware/otpAuth.js'
 import { createLocalUser, findLocalUserByEmailOrUsername, getLocalUserById, updateLocalUserPassword } from '../lib/localAuthStore.js'
+import { buildPendingVerificationPayload } from '../lib/authVerification.js'
 
 const router = Router()
 
@@ -390,6 +391,25 @@ router.post('/signup', ensureDbReady, authLimiter, async (req, res) => {
   } catch {
     // best-effort only
   }
+
+  let pendingVerificationPayload: ReturnType<typeof buildPendingVerificationPayload> | null = null
+  let signupOtpCode: string | undefined
+  try {
+    const otpResult = await otpService.create(user.id, 'email_verification')
+    if (!otpResult.error && otpResult.code) {
+      signupOtpCode = otpResult.code
+      process.nextTick(() => {
+        emailService.sendOTP(user.email, user.name, otpResult.code!, 10, user.id).catch(err => {
+          console.error('[auth] Failed to send signup OTP email:', err)
+        })
+      })
+      const pendingToken = signToken({ sub: user.id, email: user.email, v: (user as { tokenVersion?: number }).tokenVersion ?? 0, otpPending: true, signupVerification: true })
+      pendingVerificationPayload = buildPendingVerificationPayload({ kind: 'signup', pendingToken, email: user.email })
+    }
+  } catch (signupOtpErr) {
+    console.error('[auth] Failed to create signup verification OTP:', signupOtpErr)
+  }
+
   process.nextTick(() => {
     emailService.sendWelcome(user.email, user.name, user.id).catch(err => {
       console.error('[auth] Failed to send welcome email:', err)
@@ -415,8 +435,69 @@ router.post('/signup', ensureDbReady, authLimiter, async (req, res) => {
       // best-effort only
     }
   }
+  if (pendingVerificationPayload) {
+    const isDev = (env.NODE_ENV || 'development') !== 'production'
+    res.status(201).json({
+      ...pendingVerificationPayload,
+      ...(isDev ? { devCode: signupOtpCode } : {}),
+    })
+    return
+  }
+
   const token = signToken({ sub: user.id, email: user.email, v: (user as { tokenVersion?: number }).tokenVersion ?? 0 })
   res.status(201).json({ token, user: publicUser({ ...user, role: user.role }) })
+})
+
+const resendSignupOtpSchema = z.object({
+  email: z.string().email().toLowerCase().trim(),
+})
+
+router.post('/signup/resend-otp', ensureDbReady, authLimiter, async (req, res) => {
+  const parsed = resendSignupOtpSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() })
+    return
+  }
+
+  const { email } = parsed.data
+  let user = await prisma.user.findUnique({ where: { email } })
+  if (!user) {
+    const fallbackUser = await findLocalUserByEmailOrUsername(email)
+    if (fallbackUser) {
+      user = fallbackUser as Awaited<ReturnType<typeof prisma.user.findUnique>>
+    }
+  }
+
+  if (!user) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+
+  if (user.emailVerified) {
+    res.status(409).json({ error: 'Email already verified' })
+    return
+  }
+
+  const otpResult = await otpService.create(user.id, 'email_verification')
+  if (otpResult.error) {
+    res.status(429).json({ error: otpResult.error })
+    return
+  }
+
+  process.nextTick(() => {
+    emailService.sendOTP(user!.email, user!.name, otpResult.code!, 10, user!.id).catch(err => {
+      console.error('[auth] Failed to resend signup OTP email:', err)
+    })
+  })
+
+  const pendingToken = signToken({ sub: user.id, email: user.email, v: (user as { tokenVersion?: number }).tokenVersion ?? 0, otpPending: true, signupVerification: true })
+  const payload = buildPendingVerificationPayload({ kind: 'signup', pendingToken, email: user.email })
+  const isDev = (env.NODE_ENV || 'development') !== 'production'
+
+  res.status(202).json({
+    ...payload,
+    ...(isDev ? { devCode: otpResult.code } : {}),
+  })
 })
 
 router.post('/login', ensureDbReady, authLimiter, async (req, res) => {
@@ -496,7 +577,12 @@ router.post('/login', ensureDbReady, authLimiter, async (req, res) => {
         })
       })
       const pendingToken = signToken({ sub: user.id, email: user.email, v: (user as { tokenVersion?: number }).tokenVersion ?? 0, otpPending: true })
-      res.status(202).json({ otpRequired: true, pendingToken })
+      const pendingPayload = buildPendingVerificationPayload({ kind: 'login', pendingToken, email: user.email })
+      const isDev = (env.NODE_ENV || 'development') !== 'production'
+      res.status(202).json({
+        ...pendingPayload,
+        ...(isDev ? { devCode: result.code } : {}),
+      })
       return
     }
 
@@ -562,6 +648,52 @@ router.post('/login/verify-otp', authLimiter, async (req, res) => {
   })
   const token = signToken({ sub: user.id, email: user.email, v: user.tokenVersion })
   res.json({ token, user: publicUser({ ...user, role }) })
+})
+
+const signupOtpSchema = z.object({
+  pendingToken: z.string().min(10),
+  code: z.string().length(6).regex(/^\d+$/),
+})
+
+router.post('/signup/verify-otp', authLimiter, async (req, res) => {
+  const parsed = signupOtpSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid input' })
+    return
+  }
+
+  const payload = verifyToken(parsed.data.pendingToken) as { sub?: string; otpPending?: boolean; signupVerification?: boolean } | null
+  if (!payload?.sub || !payload.otpPending || !payload.signupVerification) {
+    res.status(401).json({ error: 'Invalid or expired session' })
+    return
+  }
+
+  const result = await otpService.verify(payload.sub, parsed.data.code, 'email_verification')
+  if (!result.success) {
+    res.status(400).json({ error: result.error })
+    return
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: payload.sub } })
+  if (!user || user.suspended) {
+    res.status(403).json({ error: user?.suspended ? 'Account suspended' : 'User not found' })
+    return
+  }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { emailVerified: true, emailVerifiedAt: new Date() },
+  })
+
+  const role = await autoPromoteIfAdminEmail(user.id, user.email, user.role)
+  const token = signToken({ sub: user.id, email: user.email, v: user.tokenVersion })
+  res.json({
+    token,
+    user: publicUser({ ...user, role, emailVerified: true, emailVerifiedAt: new Date() }),
+    verified: true,
+    emailVerified: true,
+    message: 'Email verified successfully',
+  })
 })
 
 router.post('/forgot', authLimiter, async (req, res) => {

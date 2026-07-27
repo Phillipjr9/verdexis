@@ -22,7 +22,10 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
   const [loading, setLoading] = useState(false)
   const [resetSent, setResetSent] = useState(false)
   const [pendingToken, setPendingToken] = useState('')
+  const [pendingFlow, setPendingFlow] = useState<'login' | 'signup'>('login')
   const [otpCode, setOtpCode] = useState('')
+  const [otpMessage, setOtpMessage] = useState('')
+  const [resendLoading, setResendLoading] = useState(false)
 
   // Lock body scroll while the modal is open so the fixed overlay always
   // sits centered in the current viewport (prevents the user from having
@@ -82,10 +85,12 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
           setLoading(false)
           return
         }
-        const res = await api.loginVerifyOtp(pendingToken, otpCode)
+        const res = pendingFlow === 'signup'
+          ? await api.signupVerifyOtp(pendingToken, otpCode)
+          : await api.loginVerifyOtp(pendingToken, otpCode)
         setToken(res.token)
         setStoredUser(res.user)
-        toast.success('Welcome back')
+        toast.success(pendingFlow === 'signup' ? 'Email verified and account created' : 'Welcome back')
         setLoading(false)
         onClose()
         window.dispatchEvent(new Event('storage'))
@@ -109,6 +114,8 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
         : await api.login(form.email, form.password)
       if ('otpRequired' in res && res.otpRequired) {
         setPendingToken(res.pendingToken)
+        setPendingFlow(res.verificationType === 'signup' ? 'signup' : 'login')
+        setOtpMessage(res.message || 'Check your email for the 6-digit code')
         setOtpCode('')
         setError('')
         setMode('otp')
@@ -145,6 +152,10 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
     setMode(mode === 'login' ? 'signup' : 'login')
     setError('')
     setResetSent(false)
+    setPendingToken('')
+    setPendingFlow('login')
+    setOtpCode('')
+    setOtpMessage('')
   }
 
   const goForgot = () => {
@@ -157,6 +168,10 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
     setMode('login')
     setError('')
     setResetSent(false)
+    setPendingToken('')
+    setPendingFlow('login')
+    setOtpCode('')
+    setOtpMessage('')
   }
 
   const handlePasskeyLogin = async () => {
@@ -253,7 +268,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
             {mode === 'otp' && (
               <div>
                 <p className="text-sm text-[#A3A3A3] mb-4 text-center">
-                  A 6-digit code was sent to your email. Enter it below to complete sign in.
+                  {otpMessage || (pendingFlow === 'signup' ? 'A 6-digit code was sent to your email. Enter it below to verify your address and finish creating your account.' : 'A 6-digit code was sent to your email. Enter it below to complete sign in.')}
                 </p>
                 <div>
                   <label className="text-xs text-[#737373] mb-1.5 block">Verification code</label>
@@ -278,11 +293,42 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
                   disabled={loading || otpCode.length !== 6}
                   className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#0C8B44] text-white text-sm font-medium rounded-xl hover:bg-[#0a7539] transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-4"
                 >
-                  {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><Shield className="w-4 h-4" /> Verify & Sign In</>}
+                  {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><Shield className="w-4 h-4" /> {pendingFlow === 'signup' ? 'Verify & Create Account' : 'Verify & Sign In'}</>}
                 </button>
+                {pendingFlow === 'signup' && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setError('')
+                      if (!form.email) {
+                        setError('Email is missing from the signup form.')
+                        return
+                      }
+                      setResendLoading(true)
+                      try {
+                        const res = await api.signupResendOtp(form.email)
+                        setPendingToken(res.pendingToken)
+                        setOtpMessage(res.message || `A new code was sent to ${res.email}`)
+                        if (res.devCode) {
+                          setOtpMessage((prev) => `${prev} Dev code: ${res.devCode}`)
+                        }
+                        toast.success('Verification code resent')
+                      } catch (err) {
+                        const e = err as ApiError
+                        setError(e.error || 'Could not resend verification code.')
+                      } finally {
+                        setResendLoading(false)
+                      }
+                    }}
+                    disabled={resendLoading}
+                    className="w-full mt-2 py-3.5 text-sm text-[#E5E5E5] bg-[#1a1a1a] border border-[#ffffff08] rounded-xl hover:bg-[#252525] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {resendLoading ? 'Resending…' : 'Resend code'}
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => { setMode('login'); setError(''); setOtpCode(''); setPendingToken('') }}
+                  onClick={() => { setMode('login'); setError(''); setOtpCode(''); setPendingToken(''); setPendingFlow('login'); setOtpMessage('') }}
                   className="w-full mt-2 text-xs text-[#737373] hover:text-[#E5E5E5] transition-colors"
                 >
                   ← Back to sign in

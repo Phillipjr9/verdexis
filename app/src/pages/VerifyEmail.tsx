@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { CheckCircle2, AlertCircle, Loader2, MailCheck } from 'lucide-react'
-import { api } from '../lib/api'
+import { api, setStoredUser } from '../lib/api'
 
 type State = 'pending' | 'verifying' | 'success' | 'error'
 
@@ -17,13 +17,18 @@ export default function VerifyEmail() {
     let cancelled = false
     void (async () => {
       try {
-        await api.verifyEmail(token)
+        const result = await api.verifyEmail(token)
         if (cancelled) return
         setState('success')
         setMessage('Your email is verified — redirecting to your dashboard…')
-        // Refresh `me` so emailVerified flips on the auth shape that
-        // populates the dashboard banner before the user navigates.
-        try { await api.me() } catch { /* tolerated; banner refresh is best-effort */ }
+        if (result.user) {
+          try {
+            setStoredUser(result.user)
+          } catch {
+            /* ignore */
+          }
+          window.dispatchEvent(new Event('verdexis:profile'))
+        }
         setTimeout(() => navigate('/dashboard'), 1500)
       } catch (e) {
         if (cancelled) return

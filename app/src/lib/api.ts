@@ -45,7 +45,18 @@ export function setToken(token: string | null) {
 
 export function setStoredUser(user: ApiUser) {
   try {
-    localStorage.setItem(USER_KEY, JSON.stringify({ id: user.id, email: user.email, username: user.username, name: user.name, role: user.role, suspended: user.suspended, investmentId: user.investmentId, kycStatus: user.kycStatus }))
+    localStorage.setItem(USER_KEY, JSON.stringify({
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      name: user.name,
+      role: user.role,
+      suspended: user.suspended,
+      investmentId: user.investmentId,
+      kycStatus: user.kycStatus,
+      emailVerified: user.emailVerified,
+      emailVerifiedAt: user.emailVerifiedAt ?? null,
+    }))
     if (user.avatar) localStorage.setItem('verdexis_avatar', user.avatar)
     else localStorage.removeItem('verdexis_avatar')
     if (user.prefs && Object.keys(user.prefs).length) {
@@ -144,12 +155,22 @@ export const api = {
 
   // Auth
   signup: (email: string, password: string, name: string, phone: string) =>
-    request<{ token: string; user: ApiUser }>('/api/auth/signup', {
+    request<{ token: string; user: ApiUser } | { otpRequired: true; pendingToken: string; verificationType?: 'login' | 'signup'; message?: string; devCode?: string }>('/api/auth/signup', {
       method: 'POST',
       body: JSON.stringify({ email, password, name, phone }),
     }),
+  signupVerifyOtp: (pendingToken: string, code: string) =>
+    request<{ token: string; user: ApiUser; verified: boolean; emailVerified: boolean; message?: string }>('/api/auth/signup/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ pendingToken, code }),
+    }),
+  signupResendOtp: (email: string) =>
+    request<{ otpRequired: true; pendingToken: string; verificationType: 'signup'; email: string; message: string; devCode?: string }>('/api/auth/signup/resend-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
   login: (identifier: string, password: string) =>
-    request<{ token: string; user: ApiUser } | { otpRequired: true; pendingToken: string }>('/api/auth/login', {
+    request<{ token: string; user: ApiUser } | { otpRequired: true; pendingToken: string; verificationType?: 'login' | 'signup'; message?: string; devCode?: string }>('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ identifier, password }),
     }),
