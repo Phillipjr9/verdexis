@@ -1,0 +1,95 @@
+name: Vercel Deploy
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install frontend dependencies
+        working-directory: app
+        run: npm install --no-audit --no-fund
+
+      - name: Build frontend
+        working-directory: app
+        run: npm run build
+
+      - name: Install server dependencies
+        working-directory: server
+        run: npm install --no-audit --no-fund
+
+      - name: Build server
+        working-directory: server
+        env:
+          DATABASE_PROVIDER: sqlite
+          DATABASE_URL: file:./vercel.db
+        run: npm run build
+
+      - name: Deploy to Vercel
+        uses: amondnet/vercel-action@v20
+        with:
+          vercel-token: ${{ secrets.VERCEL_TOKEN }}
+          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
+          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          vercel-args: '--prod --confirm --prebuilt'
+
+  monitor:
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Wait for Vercel deployment to warm up
+        run: sleep 30
+
+      - name: Poll deployment healthcheck
+        env:
+          APP_HEALTHCHECK_URL: ${{ secrets.APP_HEALTHCHECK_URL }}
+          RETRIES: 12
+          SLEEP_SECONDS: 10
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          if [ -z "$APP_HEALTHCHECK_URL" ]; then
+            echo "APP_HEALTHCHECK_URL not configured — skipping healthcheck step"
+            exit 0
+          fi
+
+          i=0
+          until [ $i -ge $RETRIES ]
+          do
+            status=$(curl -s -o /dev/null -w "%{http_code}" "$APP_HEALTHCHECK_URL" || echo "000")
+            echo "Attempt $((i+1)) - HTTP $status"
+            if [ "$status" = "200" ]; then
+              echo "Healthcheck OK"
+              exit 0
+            fi
+            i=$((i+1))
+            sleep $SLEEP_SECONDS
+          done
+
+          echo "Healthcheck failed after $RETRIES attempts"
+          if [ -n "$VERCEL_TOKEN" ] && [ -n "$VERCEL_PROJECT_ID" ]; then
+            echo "Fetching recent Vercel deployments for debugging"
+            curl -s -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID" | tee vercel-deploys.json
+            echo "Saved recent Vercel deployments to vercel-deploys.json"
+          fi
+
+          echo "Failing workflow because healthcheck did not return 200"
+          exit 1
