@@ -9,7 +9,8 @@ if (process.env.NODE_ENV === 'test') {
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
-  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required').default('file:./dev.db'),
+  DATABASE_PROVIDER: z.enum(['postgresql', 'sqlite']).default('postgresql'),
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required').default('postgresql://postgres:postgres@127.0.0.1:5432/verdexis'),
   JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 chars').default('verdexis-dev-secret-key-2024-minimum-32-chars-required'),
   JWT_EXPIRES_IN: z.string().default('7d'),
   CORS_ORIGIN: z.string().default('http://localhost:5173,http://localhost:3000'),

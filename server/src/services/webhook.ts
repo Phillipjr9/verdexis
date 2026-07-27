@@ -1,5 +1,21 @@
 import crypto from 'node:crypto'
-import { prisma } from '../db.js'
+import { prisma, databaseProvider } from '../db.js'
+
+function normalizeEventsForDb(events: string[]): any {
+  return databaseProvider === 'sqlite' ? JSON.stringify(events) : events
+}
+
+function parseEventsFromDb(value: string | string[] | null | undefined): string[] {
+  if (!value) return []
+  if (Array.isArray(value)) return value
+  try {
+    const parsed = JSON.parse(value)
+    if (Array.isArray(parsed)) return parsed.map((item) => String(item))
+  } catch {
+    // Fall through
+  }
+  return [String(value)]
+}
 
 export type WebhookEvent =
   | 'user.created'
@@ -44,7 +60,7 @@ export class WebhookService {
       data: {
         userId,
         url,
-        events,
+        events: normalizeEventsForDb(events),
         secretHash,
         active,
       },
@@ -57,7 +73,7 @@ export class WebhookService {
    * Get user's webhooks
    */
   static async getWebhooks(userId: string) {
-    return prisma.webhook.findMany({
+    const webhooks = await prisma.webhook.findMany({
       where: { userId },
       select: {
         id: true,
@@ -69,6 +85,10 @@ export class WebhookService {
         failureCount: true,
       },
     })
+    return webhooks.map((webhook) => ({
+      ...webhook,
+      events: parseEventsFromDb(webhook.events),
+    }))
   }
 
   /**
@@ -79,9 +99,13 @@ export class WebhookService {
     webhookId: string,
     data: { url?: string; events?: WebhookEvent[]; active?: boolean },
   ) {
+    const updateData: any = { ...data }
+    if (data.events) {
+      updateData.events = normalizeEventsForDb(data.events)
+    }
     return prisma.webhook.updateMany({
       where: { id: webhookId, userId },
-      data,
+      data: updateData,
     })
   }
 
@@ -100,10 +124,13 @@ export class WebhookService {
    * Trigger webhook event
    */
   static async triggerEvent(event: WebhookEvent, data: Record<string, unknown>, userId?: string): Promise<void> {
+    const eventFilter: any = databaseProvider === 'sqlite'
+      ? { events: { contains: `"${event}"` } }
+      : { events: { has: event } }
     const webhooks = await prisma.webhook.findMany({
       where: {
         active: true,
-        events: { has: event },
+        ...eventFilter,
         ...(userId ? { userId } : {}),
       },
     })

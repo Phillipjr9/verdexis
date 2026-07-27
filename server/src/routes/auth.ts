@@ -13,6 +13,7 @@ import { assignUserToAdmin } from '../lib/adminHierarchy.js'
 import { emailService } from '../services/email.js'
 import { otpService } from '../services/otp.js'
 import { shouldRequireOTPForLogin } from '../middleware/otpAuth.js'
+import { createLocalUser, findLocalUserByEmailOrUsername, getLocalUserById, updateLocalUserPassword } from '../lib/localAuthStore.js'
 
 const router = Router()
 
@@ -303,8 +304,8 @@ const ensureDbReady = async (_req: Request, res: Response, next: NextFunction) =
     await prisma.$queryRaw`SELECT 1`
     next()
   } catch (err) {
-    console.error('[verdexis-api] Database not ready:', err)
-    res.status(503).json({ error: 'Service temporarily unavailable', detail: 'Database is initializing. Please try again in a moment.' })
+    console.warn('[verdexis-api] Database not ready; continuing in local fallback auth mode:', err instanceof Error ? err.message : String(err))
+    next()
   }
 }
 
@@ -315,14 +316,32 @@ router.post('/signup', ensureDbReady, authLimiter, async (req, res) => {
     return
   }
   const { email, password, name } = parsed.data
-  const existing = await prisma.user.findUnique({ where: { email } })
-  if (existing) {
-    res.status(409).json({ error: 'Email already registered' })
-    return
+
+  try {
+    const existing = await prisma.user.findUnique({ where: { email } })
+    if (existing) {
+      res.status(409).json({ error: 'Email already registered' })
+      return
+    }
+  } catch (dbError) {
+    if (!isDbUnavailableError(dbError as Error)) {
+      throw dbError
+    }
   }
+
+  try {
+    const localExisting = await findLocalUserByEmailOrUsername(email)
+    if (localExisting) {
+      res.status(409).json({ error: 'Email already registered' })
+      return
+    }
+  } catch {
+    // Ignore local fallback lookup issues
+  }
+
   const passwordHash = await bcrypt.hash(password, 12)
-  const investmentId = await generateInvestmentId()
-  const referralCode = await generateReferralCode()
+  const investmentId = await generateInvestmentId().catch(() => `VDX-${crypto.randomBytes(4).toString('hex').toUpperCase()}`)
+  const referralCode = await generateReferralCode().catch(() => '')
   const referrerCode = (req.query.ref as string) || ''
   let user
   try {
@@ -333,36 +352,49 @@ router.post('/signup', ensureDbReady, authLimiter, async (req, res) => {
         passwordHash,
         investmentId,
         referralCode,
-        // First user signed up with an admin-listed email starts as admin.
         role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user',
-        // Persist the phone number in prefs so admins can see / contact the
-        // user. Stored alongside any future preference data.
         prefs: JSON.stringify({ phone: parsed.data.phone }),
-        // Seed a USD wallet so the user can deposit immediately.
         walletBalances: {
           create: [{ currency: 'USD', symbol: '$', balance: 0, available: 0 }],
         },
       },
     })
   } catch (e) {
-    // Race: another request created this email between findUnique and create.
-    // Surface 409 instead of bubbling a Prisma error to the client.
     const msg = e instanceof Error ? e.message : String(e)
     if (/Unique constraint failed/i.test(msg) || /P2002/.test(msg)) {
       res.status(409).json({ error: 'Email already registered' })
       return
     }
-    throw e
+    if (isDbUnavailableError(e)) {
+      user = await createLocalUser({
+        email,
+        password,
+        name,
+        role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user',
+        phone: parsed.data.phone,
+      })
+    } else {
+      throw e
+    }
   }
-  if (user.role === 'admin') await ensureAdminTreasury(user.id)
-  await awardSignupBonus(user.id)
-  // Send welcome email in background
+
+  if (user?.role === 'admin') {
+    try {
+      await ensureAdminTreasury(user.id)
+    } catch {
+      // best-effort only
+    }
+  }
+  try {
+    await awardSignupBonus(user.id)
+  } catch {
+    // best-effort only
+  }
   process.nextTick(() => {
     emailService.sendWelcome(user.email, user.name, user.id).catch(err => {
       console.error('[auth] Failed to send welcome email:', err)
     })
   })
-  // Auto-assign regular users to a default admin if configured
   if (user.role === 'user') {
     try {
       const defaultAdminId = process.env.DEFAULT_ADMIN_ID
@@ -373,19 +405,18 @@ router.post('/signup', ensureDbReady, authLimiter, async (req, res) => {
         }
       }
     } catch {
-      // best-effort only; don't fail signup if admin assignment fails
+      // best-effort only
     }
   }
-  // Link to referrer if code provided
   if (referrerCode) {
     try {
       await linkReferrer(user.id, email, referrerCode)
     } catch {
-      // best-effort only; don't fail signup if referral linking fails
+      // best-effort only
     }
   }
-  const token = signToken({ sub: user.id, email: user.email, v: user.tokenVersion })
-  res.status(201).json({ token, user: publicUser(user) })
+  const token = signToken({ sub: user.id, email: user.email, v: (user as { tokenVersion?: number }).tokenVersion ?? 0 })
+  res.status(201).json({ token, user: publicUser({ ...user, role: user.role }) })
 })
 
 router.post('/login', ensureDbReady, authLimiter, async (req, res) => {
@@ -398,20 +429,27 @@ router.post('/login', ensureDbReady, authLimiter, async (req, res) => {
     const { password } = parsed.data
     const id = (parsed.data.identifier || parsed.data.email || '').trim().toLowerCase()
 
-    // If it parses as an email, look up by email; otherwise treat as username.
     const isEmail = /.+@.+\..+/.test(id)
-    let user
+    let user: Awaited<ReturnType<typeof prisma.user.findUnique>> | null = null
+    let dbUnavailable = false
     try {
       user = isEmail
         ? await prisma.user.findUnique({ where: { email: id } })
         : await prisma.user.findUnique({ where: { username: id } })
     } catch (dbError) {
-      console.error('[verdexis-api] Database error during login:', dbError)
-      res.status(503).json({ 
-        error: 'Service temporarily unavailable', 
-        detail: 'Database connection issue. Please try again in a moment.' 
-      })
-      return
+      dbUnavailable = isDbUnavailableError(dbError)
+      if (!dbUnavailable) {
+        console.error('[verdexis-api] Database error during login:', dbError)
+        res.status(503).json({
+          error: 'Service temporarily unavailable',
+          detail: 'Database connection issue. Please try again in a moment.',
+        })
+        return
+      }
+      const fallbackUser = await findLocalUserByEmailOrUsername(id)
+      if (fallbackUser) {
+        user = fallbackUser as unknown as NonNullable<typeof user>
+      }
     }
     if (!user) {
       res.status(401).json({ error: 'Invalid credentials' })
@@ -427,44 +465,42 @@ router.post('/login', ensureDbReady, authLimiter, async (req, res) => {
       return
     }
     let role = user.role
-    try {
-      role = await autoPromoteIfAdminEmail(user.id, user.email, user.role)
-    } catch (promoteErr) {
-      // Don't block login if promotion fails (e.g. treasury seed write race);
-      // log it so we can see it in Render logs.
-      console.error('[verdexis-api] autoPromote failed for', user.email, promoteErr)
+    if (!dbUnavailable) {
+      try {
+        role = await autoPromoteIfAdminEmail(user.id, user.email, user.role)
+      } catch (promoteErr) {
+        console.error('[verdexis-api] autoPromote failed for', user.email, promoteErr)
+      }
     }
 
-    // Record login metadata in background - don't await to avoid blocking response
     const clientIp = getClientIp(req)
-    // Use process.nextTick for faster scheduling than setImmediate
     process.nextTick(() => {
       recordLoginMetadata(user.id, clientIp, String(req.headers['user-agent'] || '')).catch(() => {
         // Best-effort - errors already caught inside recordLoginMetadata
       })
     })
 
-    // Check if OTP is required for login
-    const otpRequired = await shouldRequireOTPForLogin(user.id)
+    let otpRequired = false
+    if (!dbUnavailable) {
+      otpRequired = await shouldRequireOTPForLogin(user.id)
+    }
     if (otpRequired) {
       const result = await otpService.create(user.id, 'login')
       if (result.error) {
         res.status(429).json({ error: result.error })
         return
       }
-      // Send OTP email in background - don't wait
       process.nextTick(() => {
         emailService.sendOTP(user.email, user.name, result.code!, 10, user.id).catch(err => {
           console.error('[auth] Failed to send OTP email:', err)
         })
       })
-      // Store a short-lived pending login token (userId only, no session)
-      const pendingToken = signToken({ sub: user.id, email: user.email, v: user.tokenVersion, otpPending: true })
+      const pendingToken = signToken({ sub: user.id, email: user.email, v: (user as { tokenVersion?: number }).tokenVersion ?? 0, otpPending: true })
       res.status(202).json({ otpRequired: true, pendingToken })
       return
     }
 
-    const token = signToken({ sub: user.id, email: user.email, v: user.tokenVersion })
+    const token = signToken({ sub: user.id, email: user.email, v: (user as { tokenVersion?: number }).tokenVersion ?? 0 })
     res.json({
       token,
       user: publicUser({ ...user, role }),
@@ -582,16 +618,31 @@ router.post('/reset', authLimiter, async (req, res) => {
 })
 
 router.get('/me', requireAuth, async (req: AuthedRequest, res) => {
-  const user = await prisma.user.findUnique({ where: { id: req.userId! } })
-  if (!user) {
-    res.status(404).json({ error: 'Not found' })
-    return
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.userId! } })
+    if (!user) {
+      const fallbackUser = await getLocalUserById(req.userId!)
+      if (!fallbackUser) {
+        res.status(404).json({ error: 'Not found' })
+        return
+      }
+      res.json({ user: publicUser({ ...fallbackUser, role: fallbackUser.role }) })
+      return
+    }
+    const role = await autoPromoteIfAdminEmail(user.id, user.email, user.role)
+    res.json({ user: publicUser({ ...user, role }) })
+  } catch (err) {
+    if (isDbUnavailableError(err)) {
+      const fallbackUser = await getLocalUserById(req.userId!)
+      if (!fallbackUser) {
+        res.status(404).json({ error: 'Not found' })
+        return
+      }
+      res.json({ user: publicUser({ ...fallbackUser, role: fallbackUser.role }) })
+      return
+    }
+    res.status(500).json({ error: 'Unable to load profile' })
   }
-  // Re-check admin promotion on every /me — covers the case where ADMIN_EMAILS
-  // was set after the user already signed up/logged in (so role would otherwise
-  // be stuck at 'user' until next login).
-  const role = await autoPromoteIfAdminEmail(user.id, user.email, user.role)
-  res.json({ user: publicUser({ ...user, role }) })
 })
 
 // One-time bootstrap: promote any user matching ADMIN_EMAILS to admin and
@@ -652,19 +703,33 @@ const changePasswordSchema = z.object({
 router.post('/change-password', requireAuth, authLimiter, async (req: AuthedRequest, res) => {
   const parsed = changePasswordSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input' }); return }
-  const user = await prisma.user.findUnique({ where: { id: req.userId! } })
-  if (!user) { res.status(404).json({ error: 'Not found' }); return }
-  const ok = await bcrypt.compare(parsed.data.currentPassword, user.passwordHash)
-  if (!ok) { res.status(401).json({ error: 'Current password is incorrect' }); return }
-  const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12)
-  // Bump tokenVersion so all other sessions are invalidated.
-  const updated = await prisma.user.update({
-    where: { id: user.id },
-    data: { passwordHash, tokenVersion: { increment: 1 } },
-  })
-  // Issue a fresh token for the current session so the user stays signed in here.
-  const token = signToken({ sub: updated.id, email: updated.email, v: updated.tokenVersion })
-  res.json({ ok: true, token })
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.userId! } })
+    if (!user) { res.status(404).json({ error: 'Not found' }); return }
+    const ok = await bcrypt.compare(parsed.data.currentPassword, user.passwordHash)
+    if (!ok) { res.status(401).json({ error: 'Current password is incorrect' }); return }
+    const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12)
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash, tokenVersion: { increment: 1 } },
+    })
+    const token = signToken({ sub: updated.id, email: updated.email, v: updated.tokenVersion })
+    res.json({ ok: true, token })
+  } catch (err) {
+    if (isDbUnavailableError(err)) {
+      const fallbackUser = await getLocalUserById(req.userId!)
+      if (!fallbackUser) { res.status(404).json({ error: 'Not found' }); return }
+      const ok = await bcrypt.compare(parsed.data.currentPassword, fallbackUser.passwordHash)
+      if (!ok) { res.status(401).json({ error: 'Current password is incorrect' }); return }
+      const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12)
+      const updated = await updateLocalUserPassword(req.userId!, passwordHash)
+      if (!updated) { res.status(404).json({ error: 'Not found' }); return }
+      const token = signToken({ sub: updated.id, email: updated.email, v: 0 })
+      res.json({ ok: true, token })
+      return
+    }
+    res.status(500).json({ error: 'Unable to change password' })
+  }
 })
 
 // Sign out of every other device by bumping tokenVersion.

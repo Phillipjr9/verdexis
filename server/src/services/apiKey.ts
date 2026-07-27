@@ -1,5 +1,21 @@
 import crypto from 'node:crypto'
-import { prisma } from '../db.js'
+import { prisma, databaseProvider } from '../db.js'
+
+function normalizePermissionsForDb(permissions: string[]): any {
+  return databaseProvider === 'sqlite' ? JSON.stringify(permissions) : permissions
+}
+
+function parsePermissionsFromDb(value: string | string[] | null | undefined): string[] {
+  if (!value) return []
+  if (Array.isArray(value)) return value
+  try {
+    const parsed = JSON.parse(value)
+    if (Array.isArray(parsed)) return parsed.map((item) => String(item))
+  } catch {
+    // Fall through
+  }
+  return [String(value)]
+}
 
 export interface APIKey {
   id: string
@@ -53,7 +69,7 @@ export class APIKeyService {
         name,
         keyPrefix: prefix,
         keyHash,
-        permissions,
+        permissions: normalizePermissionsForDb(permissions),
         rateLimit,
         active: true,
         expiresAt,
@@ -89,7 +105,7 @@ export class APIKeyService {
 
     return {
       userId: apiKey.userId,
-      permissions: apiKey.permissions,
+      permissions: parsePermissionsFromDb(apiKey.permissions),
       rateLimit: apiKey.rateLimit,
     }
   }
@@ -114,7 +130,10 @@ export class APIKeyService {
       },
     })
 
-    return keys
+    return keys.map((key) => ({
+      ...key,
+      permissions: parsePermissionsFromDb(key.permissions),
+    }))
   }
 
   /**
@@ -146,7 +165,7 @@ export class APIKeyService {
   static async updateAPIKeyPermissions(userId: string, keyId: string, permissions: string[]): Promise<boolean> {
     const result = await prisma.aPIKey.updateMany({
       where: { id: keyId, userId },
-      data: { permissions },
+      data: { permissions: normalizePermissionsForDb(permissions) },
     })
 
     return result.count > 0

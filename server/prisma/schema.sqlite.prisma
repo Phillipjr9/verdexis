@@ -1,0 +1,1092 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+  // Prevent N+1 queries with relation loading
+
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+  // Connection pool settings for production
+  // connectionLimit = 10  // Maximum number of connections in the pool
+  // poolTimeout = 10      // Seconds to wait for a connection
+  // connectionTimeout = 5 // Seconds to wait for connection establishment
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  username     String?  @unique
+  investmentId String?  @unique
+  name         String
+  passwordHash String
+  avatar       String?
+  prefs        String?
+  twoFactor    Boolean  @default(false)
+  role         String   @default("user")
+  suspended    Boolean  @default(false)
+  suspendedReason String?
+  holdActive   Boolean  @default(false)
+  holdType     String?
+  holdReason   String?
+  holdNote     String?
+  holdAt       DateTime?
+  kycStatus    String   @default("none")
+  kycNotes     String?
+  kycReviewedAt DateTime?
+  kycReviewedBy String?
+  kycFirstName  String?
+  kycLastName   String?
+  kycDob        String?
+  kycCountry    String?
+  kycSsnEncrypted String?
+  kycAddressStreet String?
+  kycAddressCity String?
+  kycAddressZip String?
+  kycIdDocType  String?
+  kycDocumentsJson String?
+  emailVerified   Boolean   @default(false)
+  emailVerifiedAt DateTime?
+  phoneVerified   Boolean   @default(false)
+  phoneVerifiedAt DateTime?
+  livenessVerified Boolean  @default(false)
+  livenessVerifiedAt DateTime?
+  dailyWithdrawLimit  Float?
+  monthlyWithdrawLimit Float?
+  dailyTransferLimit  Float?
+  monthlyTransferLimit Float?
+  kycTier     String   @default("UNVERIFIED")
+  kycTierUpdatedAt DateTime?
+  ipAllowlist  String?
+  walletAddress  String?
+  walletChainId  String?
+  walletProvider String?
+  walletLinkedAt DateTime?
+  tokenVersion Int      @default(0)
+  referralCode String?  @unique
+  referrerId   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  emailVerifications EmailVerification[]
+  otps          Otp[]
+  holdings      Holding[]
+  walletBalances WalletBalance[]
+  transactions  Transaction[]
+  trades        Trade[]
+  orders        Order[]
+  resetTokens   PasswordReset[]
+  watchlist     Watchlist[]
+  alerts        PriceAlert[]
+  notifications Notification[]
+  pendingDeposits PendingDeposit[]
+  walletLinks   WalletLink[]
+  reviews       Review[]
+  adminAudits   AdminAudit[]   @relation("AdminActor")
+  audited       AdminAudit[]   @relation("AdminTarget")
+  referrals     Referral[]     @relation("Referrer")
+  referralBonuses ReferralBonus[]
+  dcaSchedules  DcaSchedule[]
+  passkeys      Passkey[]
+  trustedDevices TrustedDevice[]
+  securityEvents SecurityEvent[]
+  securityAudits SecurityAudit[]
+  riskAssessments RiskAssessment[]
+  recoveryCodes RecoveryCode[]
+  complianceReports ComplianceReport[]
+  complianceFindings ComplianceFinding[]
+  fraudRules FraudRule[]
+  
+  // KYC & Compliance
+  kycDocuments KYCDocument[]
+  livenessChecks LivenessCheck[]
+  riskScore RiskScore?
+  
+  // API Management
+  apiKeys APIKey[]
+  
+  // Audit & Compliance
+  auditLogs AuditLog[]
+  userActions UserAction[]
+  
+  // Rate Limiting
+  rateLimitLogs RateLimitLog[]
+  
+  // Webhooks
+  webhooks Webhook[]
+  
+  // Loyalty
+  loyalty UserLoyalty?
+  
+  // Device Management
+  loginAttempts LoginAttempt[]
+  
+  // Copy Trading relationships
+  traderProfile TraderProfile?
+  followers     CopyRelationship[] @relation("Trader")
+  following     CopyRelationship[] @relation("Follower")
+  copyTrades    CopyTrade[]
+
+  // Admin hierarchy
+  adminHierarchy AdminHierarchy? @relation("AdminHierarchy")
+  assignedUsers  UserAdminAssignment[] @relation("AssignedUsers")
+  userAssignments UserAdminAssignment[] @relation("UserAdminAssignment")
+  
+  // Balance history
+  balanceHistory BalanceHistory[]
+  
+  // Withdrawal Management
+  withdrawalRequests WithdrawalRequest[] @relation("WithdrawalRequests")
+  
+  // Investment Portfolio
+  investmentPortfolio InvestmentPortfolio? @relation("InvestmentPortfolio")
+  
+  // Staking
+  stakingPositions StakingPosition[] @relation("StakingPositions")
+  yieldRewards YieldReward[] @relation("YieldRewards")
+  
+  // Limits
+  depositLimits DepositLimit[] @relation("DepositLimits")
+  withdrawalLimits WithdrawalLimit[] @relation("WithdrawalLimits")
+  
+  // Transaction Export
+  transactionExports TransactionExport[] @relation("TransactionExports")
+}
+
+// KYC & Compliance Models
+model KYCDocument {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type String
+  documentNumber String
+  documentUrl String
+  issuedAt DateTime
+  expiresAt DateTime
+  country String
+  status String @default("pending")
+  uploadedAt DateTime @default(now())
+  verifiedAt DateTime?
+  verifiedBy String?
+  rejectionReason String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, type])
+  @@index([userId])
+  @@index([status])
+}
+
+model LivenessCheck {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status String @default("pending")
+  score Float @default(0)
+  attempts Int @default(0)
+  createdAt DateTime @default(now())
+  completedAt DateTime?
+
+  @@index([userId])
+  @@index([status])
+}
+
+model RiskScore {
+  userId String @id
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  score Int @default(0)
+  level String @default("low")
+  factors String @default("[]")
+  updatedAt DateTime @updatedAt
+}
+
+model APIKey {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name String
+  keyPrefix String
+  keyHash String @unique
+  permissions String @default("[\"read\"]")
+  rateLimit Int @default(1000)
+  active Boolean @default(true)
+  lastUsedAt DateTime?
+  createdAt DateTime @default(now())
+  expiresAt DateTime?
+  usage APIKeyUsage[]
+
+  @@index([userId])
+  @@index([active])
+}
+
+model APIKeyUsage {
+  id String @id @default(cuid())
+  apiKeyId String
+  apiKey APIKey @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  endpoint String
+  method String
+  statusCode Int
+  createdAt DateTime @default(now())
+
+  @@index([apiKeyId])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action String
+  resource String
+  resourceId String
+  changes String
+  ipAddress String
+  userAgent String
+  status String @default("success")
+  errorMessage String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model UserAction {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action String
+  details String
+  ipAddress String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+}
+
+model RateLimitLog {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint String
+  statusCode Int
+  createdAt DateTime @default(now())
+
+  @@index([userId, endpoint, createdAt])
+  @@index([createdAt])
+}
+
+model Webhook {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  url String
+  events String @default("[]")
+  secretHash String
+  active Boolean @default(true)
+  lastTriggeredAt DateTime?
+  failureCount Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([active])
+}
+
+model UserLoyalty {
+  userId String @id
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  points Int @default(0)
+  tier String @default("Bronze")
+  totalSpent Float @default(0)
+  referralsCount Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model LoginAttempt {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  success Boolean
+  ipAddress String
+  userAgent String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([success])
+  @@index([createdAt])
+}
+
+model TrustedDevice {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceHash  String
+  deviceName  String
+  fingerprint String
+  ipAddress   String?
+  location    String?
+  isTrusted   Boolean  @default(false)
+  trustLevel  Int      @default(0)
+  expiresAt   DateTime
+  lastSeenAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, isTrusted])
+  @@index([deviceHash])
+}
+
+model SecurityEvent {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  eventType   String
+  severity    String   @default("medium")
+  description String?
+  metadata    String?
+  resolved    Boolean  @default(false)
+  resolvedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([severity, createdAt])
+}
+
+model SecurityAudit {
+  id            String   @id @default(cuid())
+  userId        String?
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action        String
+  resource      String?
+  details       String?
+  errorMessage  String?
+  ipAddress     String?
+  success       Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+}
+
+model RiskAssessment {
+  id                    String   @id @default(cuid())
+  userId                String
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action                String
+  riskScore             Int
+  riskLevel             String
+  factors               String
+  context               String
+  requiresOTP           Boolean  @default(false)
+  requiresAdminApproval Boolean  @default(false)
+  recommendedAction     String
+  createdAt             DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model RecoveryCode {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code      String
+  type      String   @default("account_recovery")
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, used])
+}
+
+model ComplianceReport {
+  id           String   @id @default(cuid())
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  type         String
+  period       String?
+  data         String
+  generatedBy  String?
+  generatedAt  DateTime @default(now())
+
+  @@index([type, generatedAt])
+}
+
+model ComplianceFinding {
+  id          String   @id @default(cuid())
+  txId        String   @unique
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  suspect     Boolean  @default(false)
+  reason      String
+  payload     String
+  reviewed    Boolean  @default(false)
+  reviewedAt  DateTime?
+  reviewNote  String?
+  actioned    String?
+  actionedAt  DateTime?
+  actionNote  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([suspect])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model FraudRule {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  conditions  String
+  action      String
+  severity    String
+  active      Boolean  @default(true)
+  createdBy   String?
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  @@index([active, severity])
+}
+
+model WalletLink {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  address     String
+  chainId     String?
+  provider    String?
+  label       String?
+  isPrimary   Boolean  @default(false)
+  linkedAt    DateTime @default(now())
+  
+  verification WalletVerification?
+  withdrawalRequests WithdrawalRequest[]
+
+  @@unique([userId, address])
+  @@index([userId, isPrimary])
+}
+
+model PendingDeposit {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  txHash      String   @unique
+  chainId     String
+  toAddress   String
+  fromAddress String
+  asset       String
+  amount      Float
+  status      String   @default("pending")
+  note        String?
+  creditedTxId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+}
+
+model PasswordReset {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model EmailVerification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Holding {
+  id        String  @id @default(cuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbol    String
+  name      String
+  amount    Float
+  avgPrice  Float
+  type      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, symbol])
+  @@index([userId])
+}
+
+model WalletBalance {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currency  String
+  symbol    String
+  balance   Float    @default(0)
+  available Float    @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, currency])
+  @@index([userId])
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind        String
+  currency    String
+  amount      Float
+  status      String   @default("completed")
+  reference   String?
+  reversedFromId String?
+  subType     String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([reversedFromId])
+}
+
+model Trade {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbol    String
+  side      String
+  amount    Float
+  price     Float
+  total     Float
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model Order {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbol           String
+  side             String
+  type             String
+  status           String   @default("open")
+  basePrice        Float
+  amount           Float
+  filledAmount     Float    @default(0)
+  limitPrice       Float?
+  stopPrice        Float?
+  trailAmount      Float?
+  trailType        String?
+  takeProfitPrice  Float?
+  stopLossPrice    Float?
+  timeInForce      String   @default("GTC")
+  parentOrderId    String?
+  expiresAt        DateTime?
+  filledAt         DateTime?
+  cancelledAt      DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([userId, status, createdAt])
+  @@index([symbol, status])
+  @@index([parentOrderId])
+}
+
+model Watchlist {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbol    String
+  name      String
+  type      String   @default("crypto")
+  createdAt DateTime @default(now())
+
+  @@unique([userId, symbol])
+  @@index([userId])
+}
+
+model PriceAlert {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbol     String
+  name       String
+  direction  String
+  target     Float
+  active     Boolean  @default(true)
+  triggered  Boolean  @default(false)
+  triggeredAt DateTime?
+  alertType  String   @default("price")
+  technicalIndicator String?
+  percentageChange Float?
+  timeWindow Int      @default(24)
+  portfolioTarget Float?
+  createdAt  DateTime @default(now())
+
+  @@index([userId, active])
+  @@index([alertType, active])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      String
+  title     String
+  body      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model AdminAudit {
+  id           String   @id @default(cuid())
+  actorId      String
+  actor        User     @relation("AdminActor", fields: [actorId], references: [id], onDelete: Cascade)
+  targetUserId String?
+  target       User?    @relation("AdminTarget", fields: [targetUserId], references: [id], onDelete: SetNull)
+  action       String
+  payload      String?
+  createdAt    DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([targetUserId, createdAt])
+}
+
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating    Int
+  text      String
+  authorName   String
+  authorAvatar String?
+  approved  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([approved, createdAt])
+}
+
+model Referral {
+  id        String   @id @default(cuid())
+  referrerId String
+  referrer   User     @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  refereeId  String
+  refereeEmail String
+  status    String   @default("pending")
+  firstDepositAt DateTime?
+  firstDepositAmount Float?
+  referrerBonusUsd Float?
+  refereeBonusUsd  Float?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([referrerId, createdAt])
+  @@index([refereeEmail])
+  @@index([status])
+}
+
+model ReferralBonus {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount       Float
+  bonusType    String
+  paymentMethod String  @default("trading_credit")
+  status       String   @default("pending")
+  creditedAt   DateTime?
+  creditedTransactionId String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([status])
+}
+
+model DcaSchedule {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset         String
+  assetId       String
+  name          String
+  amountUsd     Float
+  frequency     String
+  paused        Boolean  @default(false)
+  intervalDays  Int
+  active        Boolean  @default(true)
+  totalInvested Float    @default(0)
+  totalAcquired Float    @default(0)
+  runs          Int      @default(0)
+  lastRunAt     DateTime?
+  nextRunAt     DateTime
+  lastSkipReason String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+  @@index([active, nextRunAt])
+}
+
+model Passkey {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  credentialId     String   @unique
+  publicKey        String
+  counter          Int      @default(0)
+  transports       String?
+  deviceName       String?
+  lastUsedAt       DateTime?
+  createdAt        DateTime @default(now())
+
+  @@index([userId])
+}
+
+// Copy Trading Models
+model TraderProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  displayName     String
+  bio             String?
+  isPublic        Boolean  @default(false)
+  allowCopying    Boolean  @default(false)
+  minCopyAmount   Float    @default(100)
+  maxCopiers      Int      @default(100)
+  performanceFee  Float    @default(0)
+  totalPnl        Float    @default(0)
+  totalPnlPercent Float    @default(0)
+  roi30d          Float    @default(0)
+  roi90d          Float    @default(0)
+  roisAllTime     Float    @default(0)
+  winRate         Float    @default(0)
+  totalTrades     Int      @default(0)
+  totalCopiers    Int      @default(0)
+  activeCopiers   Int      @default(0)
+  rank            Int?
+  verified        Boolean  @default(false)
+  lastTradeAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([isPublic, allowCopying])
+  @@index([roi30d])
+  @@index([rank])
+}
+
+model CopyRelationship {
+  id              String   @id @default(cuid())
+  followerId      String
+  follower        User     @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  traderId        String
+  trader          User     @relation("Trader", fields: [traderId], references: [id], onDelete: Cascade)
+  allocationUsd   Float
+  allocationPercent Float  @default(100)
+  status          String   @default("active")
+  totalCopied     Float    @default(0)
+  totalPnl        Float    @default(0)
+  totalPnlPercent Float    @default(0)
+  copyCount       Int      @default(0)
+  pausedAt        DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([followerId, traderId])
+  @@index([followerId, status])
+  @@index([traderId, status])
+}
+
+model CopyTrade {
+  id              String   @id @default(cuid())
+  followerId      String
+  follower        User     @relation(fields: [followerId], references: [id], onDelete: Cascade)
+  traderId        String
+  traderTradeId   String
+  symbol          String
+  side            String
+  amount          Float
+  price           Float
+  total           Float
+  pnl             Float    @default(0)
+  pnlPercent      Float    @default(0)
+  status          String   @default("executed")
+  createdAt       DateTime @default(now())
+
+  @@index([followerId, createdAt])
+  @@index([traderId, createdAt])
+  @@index([traderTradeId])
+}
+
+// Multi-Admin Hierarchy Models
+model AdminHierarchy {
+  id                  String   @id @default(cuid())
+  adminId             String   @unique
+  admin               User     @relation("AdminHierarchy", fields: [adminId], references: [id], onDelete: Cascade)
+  parentAdminId       String?
+  parentAdmin         AdminHierarchy? @relation("AdminChildren", fields: [parentAdminId], references: [id], onDelete: SetNull)
+  children            AdminHierarchy[] @relation("AdminChildren")
+  canCreateAdmins     Boolean  @default(false)
+  canManageUsers      Boolean  @default(true)
+  canManageDeposits   Boolean  @default(true)
+  canManageTransactions Boolean @default(true)
+  createdBy           String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([adminId])
+  @@index([parentAdminId])
+}
+
+model UserAdminAssignment {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation("UserAdminAssignment", fields: [userId], references: [id], onDelete: Cascade)
+  adminId     String
+  admin       User     @relation("AssignedUsers", fields: [adminId], references: [id], onDelete: Cascade)
+  assignedBy  String
+  assignedAt  DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, adminId])
+  @@index([userId])
+  @@index([adminId])
+}
+
+model AdminBankAccount {
+  id            String   @id @default(cuid())
+  userId        String
+  adminId       String
+  bankName      String
+  accountNumber String
+  routingNumber String?
+  accountHolder String
+  accountType   String   @default("checking")
+  country       String?
+  verifiedAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+  @@index([adminId])
+}
+
+model AdminWalletDetail {
+  id            String   @id @default(cuid())
+  userId        String
+  adminId       String
+  walletAddress String
+  chainId       String?
+  walletType    String   @default("ethereum")
+  label         String?
+  notes         String?
+  verifiedAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+  @@index([adminId])
+}
+
+model BalanceHistory {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currency    String
+  balance     Float
+  available   Float
+  totalWorthUsd Float  @default(0)
+  snapshotAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([userId, currency, snapshotAt])
+  @@index([userId, snapshotAt])
+}
+
+model Otp {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hashedOtp   String
+  purpose     String
+  expiresAt   DateTime
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(5)
+  used        Boolean   @default(false)
+  verifiedAt  DateTime?
+  metadata    String?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+  @@index([purpose])
+  @@index([expiresAt])
+  @@index([userId, purpose, used])
+}
+
+model WithdrawalRequest {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation("WithdrawalRequests", fields: [userId], references: [id], onDelete: Cascade)
+  walletLinkId  String
+  walletLink    WalletLink @relation(fields: [walletLinkId], references: [id], onDelete: Cascade)
+  amount        Float
+  asset         String
+  fee           Float    @default(0)
+  status        String   @default("pending")
+  txHash        String?  @unique
+  approvedBy    String?
+  approvedAt    DateTime?
+  rejectedReason String?
+  completedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId, status])
+  @@index([status, createdAt])
+  @@index([walletLinkId])
+}
+
+model InvestmentPortfolio {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  user                  User     @relation("InvestmentPortfolio", fields: [userId], references: [id], onDelete: Cascade)
+  totalInvested         Float    @default(0)
+  currentValue          Float    @default(0)
+  totalGainLoss         Float    @default(0)
+  totalGainLossPercent  Float    @default(0)
+  targetAllocation      String?
+  rebalanceFrequency    String   @default("monthly")
+  lastRebalancedAt      DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model StakingPosition {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation("StakingPositions", fields: [userId], references: [id], onDelete: Cascade)
+  asset             String
+  amount            Float
+  apy               Float
+  startedAt         DateTime @default(now())
+  unstakedAt        DateTime?
+  totalYieldEarned  Float    @default(0)
+  yieldFrequency    String   @default("daily")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  yieldRewards      YieldReward[]
+
+  @@index([userId, unstakedAt])
+  @@index([userId, asset])
+}
+
+model YieldReward {
+  id                  String   @id @default(cuid())
+  userId              String
+  user                User     @relation("YieldRewards", fields: [userId], references: [id], onDelete: Cascade)
+  stakingPositionId   String
+  stakingPosition     StakingPosition @relation(fields: [stakingPositionId], references: [id], onDelete: Cascade)
+  amount              Float
+  asset               String
+  earnedAt            DateTime @default(now())
+  claimedAt           DateTime?
+  createdAt           DateTime @default(now())
+
+  @@index([userId, earnedAt])
+  @@index([stakingPositionId])
+}
+
+model WalletVerification {
+  id                      String   @id @default(cuid())
+  walletLinkId            String   @unique
+  walletLink              WalletLink @relation(fields: [walletLinkId], references: [id], onDelete: Cascade)
+  verificationChallenge   String
+  signature               String?
+  verifiedAt              DateTime?
+  expiresAt               DateTime
+  createdAt               DateTime @default(now())
+
+  @@index([walletLinkId])
+}
+
+model DepositLimit {
+  id                    String   @id @default(cuid())
+  userId                String
+  user                  User     @relation("DepositLimits", fields: [userId], references: [id], onDelete: Cascade)
+  asset                 String?
+  dailyLimit            Float?
+  monthlyLimit          Float?
+  perTransactionLimit   Float?
+  dailyUsed             Float    @default(0)
+  monthlyUsed           Float    @default(0)
+  dailyResetAt          DateTime?
+  monthlyResetAt        DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([userId, asset])
+  @@index([userId])
+}
+
+model WithdrawalLimit {
+  id                    String   @id @default(cuid())
+  userId                String
+  user                  User     @relation("WithdrawalLimits", fields: [userId], references: [id], onDelete: Cascade)
+  asset                 String?
+  dailyLimit            Float?
+  monthlyLimit          Float?
+  perTransactionLimit   Float?
+  dailyUsed             Float    @default(0)
+  monthlyUsed           Float    @default(0)
+  dailyResetAt          DateTime?
+  monthlyResetAt        DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@unique([userId, asset])
+  @@index([userId])
+}
+
+model TransactionExport {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation("TransactionExports", fields: [userId], references: [id], onDelete: Cascade)
+  format        String   @default("csv")
+  startDate     DateTime
+  endDate       DateTime
+  status        String   @default("pending")
+  fileUrl       String?
+  downloadCount Int      @default(0)
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+
+  @@index([userId, status])
+  @@index([expiresAt])
+}
+

@@ -357,31 +357,36 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     } catch (error) {
       console.warn('[verdexis-api] Redis initialization failed, continuing without cache:', error)
     }
-    
-    if (env.ALERT_POLL_ENABLED) {
-      startAlertPoller({ intervalMs: env.ALERT_POLL_INTERVAL_MS })
-    }
-    if (env.ALERT_POLL_ENABLED) {
-      startDcaPoller({ intervalMs: 60_000 })
-    }
-    startKeepAlive()
-      // Register compliance webhook routes
-      registerComplianceRoutes(app)
-      // Register compliance admin routes
-      registerComplianceAdminRoutes(app)
-    // Initialize deposit monitor after DB is ready
-    if (DB_READY) {
+
+    const startPersistenceServices = () => {
+      if (!DB_READY) {
+        console.warn('[verdexis-api] Database not ready yet; delaying persistence-backed startup tasks')
+        const retryTimer = setInterval(() => {
+          if (DB_READY) {
+            clearInterval(retryTimer)
+            startPersistenceServices()
+          }
+        }, 1000)
+        return
+      }
+
+      if (env.ALERT_POLL_ENABLED) {
+        startAlertPoller({ intervalMs: env.ALERT_POLL_INTERVAL_MS })
+      }
+      if (env.ALERT_POLL_ENABLED) {
+        startDcaPoller({ intervalMs: 60_000 })
+      }
+
       depositMonitor.initialize().then(() => depositMonitor.start()).catch(e => console.error('[deposit-monitor] init failed:', e))
-    } else {
-      // Wait for DB, then start monitor
-      const checkDb = setInterval(() => {
-        if (DB_READY) {
-          clearInterval(checkDb)
-          depositMonitor.initialize().then(() => depositMonitor.start()).catch(e => console.error('[deposit-monitor] init failed:', e))
-        }
-      }, 500)
+      promoteAllAdminEmails().catch((e) => console.error('[verdexis-api] admin bootstrap failed:', e))
+      startOTPCleanup()
     }
-    promoteAllAdminEmails().catch((e) => console.error('[verdexis-api] admin bootstrap failed:', e))
-    startOTPCleanup()
+
+    startKeepAlive()
+    // Register compliance webhook routes
+    registerComplianceRoutes(app)
+    // Register compliance admin routes
+    registerComplianceAdminRoutes(app)
+    startPersistenceServices()
   })
 }

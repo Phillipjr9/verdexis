@@ -1,5 +1,21 @@
 import crypto from 'node:crypto'
-import { prisma } from '../db.js'
+import { prisma, databaseProvider } from '../db.js'
+
+function normalizeFactorsForDb(factors: string[]): any {
+  return databaseProvider === 'sqlite' ? JSON.stringify(factors) : factors
+}
+
+function parseFactorsFromDb(value: string | string[] | null | undefined): string[] {
+  if (!value) return []
+  if (Array.isArray(value)) return value
+  try {
+    const parsed = JSON.parse(value)
+    if (Array.isArray(parsed)) return parsed.map((item) => String(item))
+  } catch {
+    // Fall through
+  }
+  return [String(value)]
+}
 
 export type DocumentType = 'passport' | 'driver_license' | 'national_id' | 'residence_permit'
 export type VerificationStatus = 'pending' | 'approved' | 'rejected' | 'expired'
@@ -267,12 +283,12 @@ export class KYCService {
         userId,
         score,
         level,
-        factors,
+        factors: normalizeFactorsForDb(factors),
       },
       update: {
         score,
         level,
-        factors,
+        factors: normalizeFactorsForDb(factors),
         updatedAt: new Date(),
       },
     })
@@ -331,7 +347,7 @@ export class KYCService {
 
     const documents = await this.getUserDocuments(userId)
     const riskScoreData = await prisma.riskScore.findUnique({ where: { userId } })
-    const riskScore = riskScoreData ? { ...riskScoreData, level: riskScoreData.level as RiskLevel } : null
+    const riskScore = riskScoreData ? { ...riskScoreData, level: riskScoreData.level as RiskLevel, factors: parseFactorsFromDb(riskScoreData.factors) } : null
 
     return {
       kycStatus: user?.kycStatus || 'none',
