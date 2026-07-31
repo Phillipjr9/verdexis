@@ -1,0 +1,39 @@
+name: Build and deploy app to Cloudflare Pages
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install and build app
+        working-directory: ./app
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install Wrangler (Cloudflare CLI)
+        run: |
+          npm install -g wrangler
+
+      - name: Publish to Cloudflare Pages
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_PAGES_PROJECT_NAME: ${{ secrets.CF_PAGES_PROJECT_NAME }}
+        run: |
+          if [ -z "$CF_API_TOKEN" ] || [ -z "$CF_PAGES_PROJECT_NAME" ]; then
+            echo "Missing required secrets: CF_API_TOKEN and/or CF_PAGES_PROJECT_NAME" >&2
+            exit 1
+          fi
+          wrangler pages publish ./app/dist --project-name "$CF_PAGES_PROJECT_NAME" --branch main
