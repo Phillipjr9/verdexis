@@ -4,6 +4,13 @@ import { useNavigate } from 'react-router-dom'
 import { X, Mail, Lock, User, Eye, EyeOff, ArrowRight, Shield, Fingerprint, KeyRound, ArrowLeft, Phone } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, setToken, setStoredUser, type ApiError } from '../lib/api'
+import {
+  resetPasswordFirebase,
+  signInWithFirebase,
+  signOutFirebase,
+  signUpWithFirebase,
+  toFirebaseUserShape,
+} from '../lib/firebase-auth'
 
 interface AuthModalProps {
   isOpen: boolean
@@ -58,18 +65,14 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
       }
       setLoading(true)
       try {
-        await api.forgot(form.email)
+        await resetPasswordFirebase(form.email)
         setResetSent(true)
         toast.success('Reset link sent', { description: `Check ${form.email} for next steps.` })
       } catch (err) {
-        // Even on error, show generic success to avoid user enumeration UX surprises.
-        const e = err as ApiError
-        if (e.status && e.status >= 400 && e.status < 500) {
-          setResetSent(true)
-          toast.success('Reset link sent', { description: 'If that email exists, a link is on the way.' })
-        } else {
-          setError('Could not reach the server. Please try again.')
-        }
+        const e = err as Error
+        setResetSent(true)
+        toast.success('Reset link sent', { description: 'If that email exists, a link is on the way.' })
+        console.warn('Password reset error:', e.message)
       } finally {
         setLoading(false)
       }
@@ -109,21 +112,13 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
           return
         }
       }
-      const res = mode === 'signup'
-        ? await api.signup(form.email, form.password, `${form.firstName} ${form.lastName}`.trim() || 'User', form.phone.trim())
-        : await api.login(form.email, form.password)
-      if ('otpRequired' in res && res.otpRequired) {
-        setPendingToken(res.pendingToken)
-        setPendingFlow(res.verificationType === 'signup' ? 'signup' : 'login')
-        setOtpMessage(res.message || 'Check your email for the 6-digit code')
-        setOtpCode('')
-        setError('')
-        setMode('otp')
-        setLoading(false)
-        return
-      }
-      setToken(res.token)
-      setStoredUser(res.user)
+      const authResult = mode === 'signup'
+        ? await signUpWithFirebase(form.email, form.password, `${form.firstName} ${form.lastName}`.trim() || 'User', form.phone.trim())
+        : await signInWithFirebase(form.email, form.password)
+      const firebaseUser = authResult.user
+      const storedUser = toFirebaseUserShape(firebaseUser, authResult.profile)
+      setToken(firebaseUser.uid)
+      setStoredUser(storedUser)
       toast.success(mode === 'signup' ? 'Account created' : 'Welcome back')
       setLoading(false)
       onClose()
@@ -134,14 +129,10 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
       navigate(dest, { replace: true })
       return
     } catch (err) {
-      const e = err as ApiError
-      // Surface a helpful message instead of a silent landing-page redirect.
-      // (We previously stored a half-broken "offline" session that lacked a token,
-      // which caused RequireAuth to bounce the user back to '/'.)
-      const msg = e.error
-        || (e.status >= 500 ? 'Server is waking up — please try again in a moment.'
-        : !e.status ? 'Network error — check your connection and try again.'
-        : 'Authentication failed')
+      const e = err as Error & { code?: string }
+      const msg = e.code === 'auth/invalid-credential'
+        ? 'The email or password is incorrect. Please try again.'
+        : e.message || 'Authentication failed'
       setError(msg)
       setLoading(false)
       return

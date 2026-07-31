@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { toast } from 'sonner'
-import { getToken, api } from '../lib/api'
+import { getToken } from '../lib/api'
+import { auth, isFirebaseConfigured } from '../lib/firebase'
+import { onAuthStateChanged } from 'firebase/auth'
+import { get, ref } from 'firebase/database'
+import { db } from '../lib/firebase'
 
 /**
  * Gates a route to authenticated *admin* users. We re-validate against the
@@ -17,38 +21,34 @@ export default function RequireAdmin({ children }: { children: React.ReactNode }
     if (check !== 'pending') return
     let cancelled = false
 
-    const validateAdmin = async (attempt = 0) => {
-      try {
-        const { user } = await api.me()
-        if (cancelled) return
-        if (user.role === 'admin') {
-          setCheck('ok')
-        } else {
-          toast.error('Admin access required')
-          setCheck('redirect')
-        }
-      } catch (err) {
-        if (cancelled) return
-        const error = err as { error?: string; status?: number }
-        
-        // Retry once on network errors
-        if (attempt === 0 && (error.status === 0 || error.status === 503)) {
-          setRetrying(true)
-          setTimeout(() => {
-            if (!cancelled) {
-              setRetrying(false)
-              validateAdmin(1)
-            }
-          }, 500)
-          return
-        }
-        
-        console.warn('Admin validation failed:', error.error)
+    const validateAdmin = async () => {
+      if (!isFirebaseConfigured || !auth || !db) {
         setCheck('redirect')
+        return
       }
+
+      const unsubscribe = onAuthStateChanged(auth, async (user) => {
+        if (!user || cancelled) return
+        try {
+          const snap = await get(ref(db, `users/${user.uid}`))
+          if (cancelled) return
+          const role = snap.exists() ? snap.val()?.role : 'user'
+          if (role === 'admin') {
+            setCheck('ok')
+          } else {
+            toast.error('Admin access required')
+            setCheck('redirect')
+          }
+        } catch (err) {
+          console.warn('Admin validation failed:', err)
+          if (!cancelled) setCheck('redirect')
+        }
+      })
+
+      return () => unsubscribe()
     }
 
-    validateAdmin()
+    void validateAdmin()
     return () => { cancelled = true }
   }, [check])
 

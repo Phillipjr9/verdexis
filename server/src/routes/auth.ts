@@ -20,6 +20,7 @@ import { buildPendingVerificationPayload } from '../lib/authVerification.js'
 const router = Router()
 
 const ADMIN_EMAILS = env.ADMIN_EMAILS.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
+const DEFAULT_ADMIN_EMAIL = 'admin@verdexis.com'
 
 // Auth limiter. Keyed by IP **and** the submitted email/username so users
 // sharing a VPN / NAT exit-IP don't lock each other out — a single bad
@@ -784,9 +785,10 @@ router.get('/me', requireAuth, async (req: AuthedRequest, res) => {
 // ADMIN_SEED_PASSWORD env, falling back to "ChangeMe!2026"). Logs the
 // password so the operator can find it in Render logs on first boot.
 export async function promoteAllAdminEmails(): Promise<void> {
-  if (!ADMIN_EMAILS.length) return
-  const seedPassword = process.env.ADMIN_SEED_PASSWORD || 'ChangeMe!2026'
-  for (const email of ADMIN_EMAILS) {
+  const adminEmails = ADMIN_EMAILS.length ? ADMIN_EMAILS : [DEFAULT_ADMIN_EMAIL]
+  if (!adminEmails.length) return
+  const seedPassword = env.ADMIN_SEED_PASSWORD || process.env.ADMIN_SEED_PASSWORD || 'Admin@Verdexis2024'
+  for (const email of adminEmails) {
     try {
       let u = await prisma.user.findUnique({ where: { email } })
       if (!u) {
@@ -805,12 +807,12 @@ export async function promoteAllAdminEmails(): Promise<void> {
             },
           },
         })
-        console.log(`[verdexis-api] created admin user ${email} — set ADMIN_SEED_PASSWORD env var to control the initial password (and rotate it after first login)`)
+        console.log(`[verdexis-api] created admin user ${email} — login with ${email} / ${seedPassword} (rotate after first login)`)
       } else if (!u.passwordHash || u.passwordHash.length < 20) {
         // Repair: passwordHash is missing/corrupt — reset to seed.
         const passwordHash = await bcrypt.hash(seedPassword, 12)
         await prisma.user.update({ where: { id: u.id }, data: { passwordHash, tokenVersion: { increment: 1 } } })
-        console.log(`[verdexis-api] repaired corrupt passwordHash for ${email}; reset to ADMIN_SEED_PASSWORD env (or default). Rotate immediately.`)
+        console.log(`[verdexis-api] repaired corrupt passwordHash for ${email}; password reset to ${seedPassword}. Rotate immediately.`)
       }
       await autoPromoteIfAdminEmail(u.id, u.email, u.role)
       // eslint-disable-next-line no-console

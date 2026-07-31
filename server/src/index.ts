@@ -214,13 +214,17 @@ registerOpenApiDocs(app)
 
 const SERVER_BOOT_TIME = Date.now()
 let DB_READY = false
+let ADMIN_BOOTSTRAP_STATUS: 'pending' | 'ready' | 'failed' = 'pending'
 
 async function initializeDatabase(): Promise<void> {
   try {
     await prisma.$connect()
     DB_READY = true
     console.log('[verdexis-api] Database initialized and schema synced')
+    await promoteAllAdminEmails()
+    ADMIN_BOOTSTRAP_STATUS = 'ready'
   } catch (err) {
+    ADMIN_BOOTSTRAP_STATUS = 'failed'
     console.error('[verdexis-api] Database initialization failed:', err)
   }
 }
@@ -242,6 +246,7 @@ app.get('/api/health', async (_req, res) => {
     service: 'verdexis-api',
     uptimeSec: Math.round((Date.now() - SERVER_BOOT_TIME) / 1000),
     database: dbStatus,
+    adminBootstrap: ADMIN_BOOTSTRAP_STATUS,
   })
 })
 

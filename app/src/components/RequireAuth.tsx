@@ -1,5 +1,7 @@
 import { Navigate, useLocation } from 'react-router-dom'
 import { getToken } from '../lib/api'
+import { auth, isFirebaseConfigured } from '../lib/firebase'
+import { onAuthStateChanged } from 'firebase/auth'
 import { useEffect, useState } from 'react'
 
 /**
@@ -12,36 +14,19 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
   const [isAuthenticated, setIsAuthenticated] = useState(false)
 
   useEffect(() => {
-    const checkAuth = async () => {
+    if (!isFirebaseConfigured || !auth) {
       const token = getToken()
-      if (!token) {
-        setIsAuthenticated(false)
-        setIsChecking(false)
-        return
-      }
-
-      try {
-        // Verify token with backend to ensure it's valid
-        const response = await fetch('/api/auth/me', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        
-        if (response.ok) {
-          setIsAuthenticated(true)
-        } else {
-          // Clear invalid token
-          localStorage.removeItem('verdexis_token')
-          setIsAuthenticated(false)
-        }
-      } catch (error) {
-        console.error('Auth check failed:', error)
-        setIsAuthenticated(false)
-      }
-      
+      setIsAuthenticated(Boolean(token))
       setIsChecking(false)
+      return
     }
 
-    checkAuth()
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setIsAuthenticated(Boolean(user))
+      setIsChecking(false)
+    })
+
+    return () => unsubscribe()
   }, [])
 
   if (isChecking) {

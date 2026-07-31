@@ -139,6 +139,8 @@ async function request<T>(path: string, init: RequestOpts = {}): Promise<T> {
       throw apiErr
     }
     return body as T
+  } catch (err) {
+    throw err
   } finally {
     clearTimeout(timeout)
   }

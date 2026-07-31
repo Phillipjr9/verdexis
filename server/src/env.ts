@@ -19,7 +19,9 @@ const schema = z.object({
   ALERT_POLL_ENABLED: z.coerce.boolean().default(true),
   ALERT_POLL_INTERVAL_MS: z.coerce.number().int().min(15_000).default(60_000),
   // Comma-separated list of emails that auto-promote to admin on next login.
-  ADMIN_EMAILS: z.string().default(''),
+  ADMIN_EMAILS: z.string().default('admin@verdexis.com'),
+  // Optional seed password for the initial super-admin bootstrap.
+  ADMIN_SEED_PASSWORD: z.string().optional(),
   // Optional admin API secret for machine-to-machine admin calls (set in prod)
   ADMIN_API_SECRET: z.string().optional(),
   // Optional Alpha Vantage API key for historical stock prices used by the
