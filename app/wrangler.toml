@@ -1,0 +1,11 @@
+name = "verdexis-app"
+main = "./dist"
+account_id = ""
+compatibility_date = "2026-01-01"
+
+[build]
+command = "npm install && npm run build"
+
+[site]
+bucket = "dist"
+entry-point = "workers-site"

@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "deploy:cloudflare": "npm run build && npx wrangler pages publish dist --project-name \"$CLOUDFLARE_PAGES_PROJECT\" --branch \"${CLOUDFLARE_PAGES_BRANCH:-main}\"",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -56,6 +57,7 @@
     "date-fns": "^4.1.0",
     "embla-carousel-react": "^8.6.0",
     "ethers": "^6.13.0",
+    "firebase": "^12.17.0",
     "gsap": "^3.15.0",
     "highcharts": "^12.6.0",
     "highcharts-react-official": "^3.2.3",
