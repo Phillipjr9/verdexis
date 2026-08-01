@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .env
+firebase-service-account.json
 prisma/dev.db
 prisma/dev.db-journal
 prisma/migrations/dev.db
