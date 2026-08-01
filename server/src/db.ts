@@ -14,12 +14,25 @@ const isSqliteUrl = (value: string): boolean => /^(file:|sqlite:)/i.test(value)
 
 let databaseUrl = (process.env.DATABASE_URL || '').trim()
 let provider = rawDatabaseProvider
+let databaseUrlSource = 'env'
+
+const maskDatabaseUrl = (url: string): string => {
+  if (!url) return '<unset>'
+  try {
+    const parsed = new URL(url)
+    if (parsed.password) parsed.password = '***'
+    return parsed.toString()
+  } catch {
+    return url.replace(/:(?:[^:@]*?)@/, ':***@')
+  }
+}
 
 if (databaseUrl && isSqliteUrl(databaseUrl)) {
   provider = 'sqlite'
 }
 
 if (!databaseUrl) {
+  databaseUrlSource = 'default'
   if (provider === 'sqlite') {
     console.warn('[verdexis-api] DATABASE_URL not set; using local SQLite fallback file: ./dev.db')
     databaseUrl = DEFAULT_DATABASE_URL
@@ -28,9 +41,11 @@ if (!databaseUrl) {
     databaseUrl = DEFAULT_DATABASE_URL
   }
 } else if (provider === 'sqlite' && !isSqliteUrl(databaseUrl)) {
+  databaseUrlSource = 'fallback'
   console.warn(`[verdexis-api] DATABASE_PROVIDER=sqlite but DATABASE_URL '${databaseUrl}' is not a valid SQLite URL; using default SQLite file: ./dev.db`)
   databaseUrl = 'file:./dev.db'
 } else if (provider !== 'sqlite' && !isPostgresUrl(databaseUrl)) {
+  databaseUrlSource = 'fallback'
   console.warn(`[verdexis-api] DATABASE_URL '${databaseUrl}' is not a valid Postgres URL; using default Postgres fallback`)
   databaseUrl = DEFAULT_DATABASE_URL
 }
@@ -51,8 +66,10 @@ if (provider === 'sqlite' && databaseUrl.includes('%')) {
   }
 }
 
+console.log('[verdexis-api] Prisma raw DATABASE_PROVIDER env:', rawDatabaseProvider)
 console.log('[verdexis-api] Prisma provider:', provider)
-console.log('[verdexis-api] Prisma database URL:', databaseUrl)
+console.log('[verdexis-api] Prisma database URL:', maskDatabaseUrl(databaseUrl))
+console.log('[verdexis-api] Prisma database URL source:', databaseUrlSource)
 
 const prismaClientOptions: any = {
   log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],

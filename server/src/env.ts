@@ -105,6 +105,18 @@ const schema = z.object({
   SECURITY_WEBHOOK_URL: z.string().optional(),
 })
 
+const maskSecret = (value: string | undefined): string => {
+  if (!value) return '<unset>'
+  try {
+    const url = new URL(value)
+    if (url.password) url.password = '***'
+    return url.toString()
+  } catch {
+    if (value.length > 32) return `${value.slice(0, 16)}...${value.slice(-8)}`
+    return value
+  }
+}
+
 const parsed = schema.safeParse(process.env)
 if (!parsed.success) {
   console.error('\n[verdexis-api] Invalid environment configuration:')
@@ -114,5 +126,22 @@ if (!parsed.success) {
   console.error('\nSee server/.env.example for the required variables.\n')
   process.exit(1)
 }
+
+const envSummary = {
+  NODE_ENV: parsed.data.NODE_ENV,
+  PORT: parsed.data.PORT,
+  DATABASE_PROVIDER: parsed.data.DATABASE_PROVIDER,
+  DATABASE_URL: maskSecret(process.env.DATABASE_URL),
+  DATABASE_URL_SET: !!process.env.DATABASE_URL,
+  JWT_SECRET_SET: !!process.env.JWT_SECRET,
+  CORS_ORIGIN: parsed.data.CORS_ORIGIN,
+  APP_BASE_URL: parsed.data.APP_BASE_URL,
+  PRODUCTION_ORIGIN: parsed.data.PRODUCTION_ORIGIN,
+  FIREBASE_PROJECT_ID_SET: !!parsed.data.FIREBASE_PROJECT_ID,
+  GOOGLE_GENAI_API_KEY_SET: !!parsed.data.GOOGLE_GENAI_API_KEY,
+  REDIS_URL_SET: !!process.env.REDIS_URL,
+  AWS_COGNITO_USER_POOL_ID_SET: !!parsed.data.AWS_COGNITO_USER_POOL_ID,
+}
+console.log('[verdexis-api] Environment summary:', JSON.stringify(envSummary, null, 2))
 
 export const env = parsed.data

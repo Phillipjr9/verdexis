@@ -347,6 +347,15 @@ app.use((err: Error, req: express.Request, res: express.Response, _next: express
 
 export default app
 
+process.on('unhandledRejection', (reason) => {
+  console.error('[verdexis-api] unhandledRejection:', reason)
+})
+
+process.on('uncaughtException', (error) => {
+  console.error('[verdexis-api] uncaughtException:', error)
+  process.exit(1)
+})
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const server = http.createServer(app)
   const wss = new WebSocketServer({ server })
