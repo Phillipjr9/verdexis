@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit'
 import { z } from 'zod'
 import { requireAuth, type AuthedRequest } from '../auth.js'
 import { VALIDATION_LIMITS } from '../errorHandler.js'
+import { env } from '../env.js'
 
 const router: Router = Router()
 
@@ -56,34 +57,72 @@ router.post('/chat', requireAuth, aiLimiter, async (req, res) => {
   ].join('\n\n')
 
   try {
-    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+    if (process.env.OPENAI_API_KEY) {
+      const apiKey = process.env.OPENAI_API_KEY
+      const r = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0.4,
+          max_tokens: 600,
+          messages: [
+            { role: 'system', content: system },
+            { role: 'user', content: query },
+          ],
+        }),
+      })
+      if (!r.ok) {
+        const text = await r.text()
+        console.warn('[ai] OpenAI', r.status, text.slice(0, 200))
+        const fallback = r.status === 401 || r.status === 403 || r.status === 429
+        res.status(fallback ? 503 : 502).json({ error: fallback ? 'LLM unavailable' : 'LLM upstream error' })
+        return
+      }
+      const data = await r.json() as { choices?: Array<{ message?: { content?: string } }> }
+      const answer = data.choices?.[0]?.message?.content?.trim() || ''
+      res.json({ answer, model })
+      return
+    }
+
+    const googleKey = env.GOOGLE_GENAI_API_KEY
+    const googleProject = env.GOOGLE_GENAI_PROJECT_ID
+    const googleLocation = env.GOOGLE_GENAI_LOCATION
+    const googleModel = env.GOOGLE_GENAI_MODEL
+
+    if (!googleProject) {
+      res.status(503).json({ error: 'LLM not configured' })
+      return
+    }
+
+    const url = `https://us-central1-aiplatform.googleapis.com/v1/projects/${encodeURIComponent(googleProject)}/locations/${encodeURIComponent(googleLocation)}/models/${encodeURIComponent(googleModel)}:generateMessage?key=${encodeURIComponent(googleKey as string)}`
+    const r = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model,
-        temperature: 0.4,
-        max_tokens: 600,
         messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: query },
+          { author: 'system', content: system },
+          { author: 'user', content: query },
         ],
+        temperature: 0.4,
+        maxOutputTokens: 600,
       }),
     })
     if (!r.ok) {
       const text = await r.text()
-      console.warn('[ai] OpenAI', r.status, text.slice(0, 200))
-      // Treat auth/quota failures the same as "not configured" so the client
-      // falls back to its built-in rule-based answer instead of erroring.
+      console.warn('[ai] Google GenAI', r.status, text.slice(0, 200))
       const fallback = r.status === 401 || r.status === 403 || r.status === 429
       res.status(fallback ? 503 : 502).json({ error: fallback ? 'LLM unavailable' : 'LLM upstream error' })
       return
     }
-    const data = await r.json() as { choices?: Array<{ message?: { content?: string } }> }
-    const answer = data.choices?.[0]?.message?.content?.trim() || ''
-    res.json({ answer, model })
+    const data = await r.json() as { candidates?: Array<{ content?: string }> }
+    const answer = data.candidates?.[0]?.content?.trim() || ''
+    res.json({ answer, model: googleModel })
   } catch (e) {
     console.warn('[ai] failed', e)
     res.status(502).json({ error: 'LLM upstream error' })

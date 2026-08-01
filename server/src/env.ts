@@ -96,6 +96,10 @@ const schema = z.object({
   FIREBASE_PROJECT_ID: z.string().optional(),
   FIREBASE_PRIVATE_KEY: z.string().optional(),
   FIREBASE_CLIENT_EMAIL: z.string().optional(),
+  GOOGLE_GENAI_API_KEY: z.string().optional(),
+  GOOGLE_GENAI_PROJECT_ID: z.string().optional(),
+  GOOGLE_GENAI_LOCATION: z.string().default('us-central1'),
+  GOOGLE_GENAI_MODEL: z.string().default('chat-bison@002'),
   // Webhook notifications
   WEBHOOK_SECRET: z.string().optional(),
   SECURITY_WEBHOOK_URL: z.string().optional(),
