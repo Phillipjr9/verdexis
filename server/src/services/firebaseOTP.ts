@@ -13,13 +13,19 @@ export function initializeFirebase() {
   if (firebaseApp) return firebaseApp
 
   try {
-    // Check if running in production (Cloud Functions) or local development
+    // Check if running in a Firebase environment (Cloud Functions) or local development.
     if (process.env.FIREBASE_CONFIG) {
-      // Production: Cloud Functions environment
       firebaseApp = admin.initializeApp() as admin.App
+    } else if (env.FIREBASE_PROJECT_ID && env.FIREBASE_PRIVATE_KEY && env.FIREBASE_CLIENT_EMAIL) {
+      firebaseApp = admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId: env.FIREBASE_PROJECT_ID,
+          privateKey: env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+          clientEmail: env.FIREBASE_CLIENT_EMAIL,
+        }),
+      }) as admin.App
     } else {
       const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || './firebase-service-account.json'
-      
       firebaseApp = admin.initializeApp({
         credential: admin.credential.cert(require(serviceAccountPath)),
         projectId: env.FIREBASE_PROJECT_ID,

@@ -1,11 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { toast } from 'sonner'
-import { getToken } from '../lib/api'
-import { auth, isFirebaseConfigured } from '../lib/firebase'
-import { onAuthStateChanged } from 'firebase/auth'
-import { get, ref } from 'firebase/database'
-import { db } from '../lib/firebase'
+import { api, getToken } from '../lib/api'
 
 /**
  * Gates a route to authenticated *admin* users. We re-validate against the
@@ -15,37 +11,26 @@ import { db } from '../lib/firebase'
 export default function RequireAdmin({ children }: { children: React.ReactNode }) {
   const location = useLocation()
   const [check, setCheck] = useState<'pending' | 'ok' | 'redirect'>(() => (getToken() ? 'pending' : 'redirect'))
-  const [retrying, setRetrying] = useState(false)
 
   useEffect(() => {
     if (check !== 'pending') return
     let cancelled = false
 
     const validateAdmin = async () => {
-      if (!isFirebaseConfigured || !auth || !db) {
-        setCheck('redirect')
-        return
-      }
+      try {
+        const { user } = await api.me()
+        if (cancelled) return
 
-      const unsubscribe = onAuthStateChanged(auth, async (user) => {
-        if (!user || cancelled) return
-        try {
-          const snap = await get(ref(db, `users/${user.uid}`))
-          if (cancelled) return
-          const role = snap.exists() ? snap.val()?.role : 'user'
-          if (role === 'admin') {
-            setCheck('ok')
-          } else {
-            toast.error('Admin access required')
-            setCheck('redirect')
-          }
-        } catch (err) {
-          console.warn('Admin validation failed:', err)
-          if (!cancelled) setCheck('redirect')
+        if (user.role === 'admin') {
+          setCheck('ok')
+        } else {
+          toast.error('Admin access required')
+          setCheck('redirect')
         }
-      })
-
-      return () => unsubscribe()
+      } catch (err) {
+        console.warn('Admin validation failed:', err)
+        if (!cancelled) setCheck('redirect')
+      }
     }
 
     void validateAdmin()
@@ -56,7 +41,6 @@ export default function RequireAdmin({ children }: { children: React.ReactNode }
     return (
       <div className="min-h-screen bg-[#070C0E] flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-[#0C8B44] border-t-transparent rounded-full animate-spin" />
-        {retrying && <p className="text-xs text-[#A0A0A0] absolute bottom-8">Retrying...</p>}
       </div>
     )
   }

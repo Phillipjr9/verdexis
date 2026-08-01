@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "deploy:cloudflare": "npm run build && npx wrangler pages publish dist --project-name \"$CLOUDFLARE_PAGES_PROJECT\" --branch \"${CLOUDFLARE_PAGES_BRANCH:-main}\"",
+    "deploy:cloudflare": "npm run build && npx wrangler pages publish dist --project-name \"$CF_PAGES_PROJECT_NAME\" --branch \"${CF_PAGES_BRANCH:-main}\"",
     "lint": "eslint .",
     "preview": "vite preview"
   },

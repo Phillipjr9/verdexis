@@ -181,6 +181,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ pendingToken, code }),
     }),
+  google: (idToken: string) =>
+    request<{ token: string; user: ApiUser }>('/api/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ idToken }),
+    }),
   forgot: (email: string) =>
     request<{ ok: boolean; message: string }>('/api/auth/forgot', {
       method: 'POST',

@@ -1,7 +1,5 @@
 import { Navigate, useLocation } from 'react-router-dom'
 import { getToken } from '../lib/api'
-import { auth, isFirebaseConfigured } from '../lib/firebase'
-import { onAuthStateChanged } from 'firebase/auth'
 import { useEffect, useState } from 'react'
 
 /**
@@ -14,19 +12,9 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
   const [isAuthenticated, setIsAuthenticated] = useState(false)
 
   useEffect(() => {
-    if (!isFirebaseConfigured || !auth) {
-      const token = getToken()
-      setIsAuthenticated(Boolean(token))
-      setIsChecking(false)
-      return
-    }
-
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setIsAuthenticated(Boolean(user))
-      setIsChecking(false)
-    })
-
-    return () => unsubscribe()
+    const token = getToken()
+    setIsAuthenticated(Boolean(token))
+    setIsChecking(false)
   }, [])
 
   if (isChecking) {

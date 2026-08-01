@@ -4,8 +4,10 @@ import crypto from 'node:crypto'
 import { z } from 'zod'
 import rateLimit from 'express-rate-limit'
 import { prisma } from '../db.js'
+import admin from 'firebase-admin'
 import { signToken, requireAuth, verifyToken, type AuthedRequest } from '../auth.js'
 import { env } from '../env.js'
+import { initializeFirebase } from '../services/firebaseOTP.js'
 import { generateInvestmentId } from '../investmentId.js'
 import { generateReferralCode, linkReferrer } from '../referrals.js'
 import { isDbUnavailableError } from '../dbError.js'
@@ -64,6 +66,117 @@ const forgotSchema = z.object({
 const resetSchema = z.object({
   token: z.string().min(10).max(200),
   password: z.string().min(8).max(200),
+})
+
+const googleSchema = z.object({
+  idToken: z.string().min(10),
+})
+
+router.post('/google', ensureDbReady, authLimiter, async (req, res) => {
+  const parsed = googleSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid input' })
+    return
+  }
+
+  if (!env.FIREBASE_PROJECT_ID || !env.FIREBASE_PRIVATE_KEY || !env.FIREBASE_CLIENT_EMAIL) {
+    res.status(501).json({ error: 'Firebase Google auth is not configured' })
+    return
+  }
+
+  let decoded: admin.auth.DecodedIdToken
+  try {
+    initializeFirebase()
+    decoded = await admin.auth().verifyIdToken(parsed.data.idToken)
+  } catch (err) {
+    console.error('[auth] Google token verification failed:', err)
+    res.status(401).json({ error: 'Invalid Google ID token' })
+    return
+  }
+
+  const email = decoded.email?.toLowerCase()
+  if (!email) {
+    res.status(400).json({ error: 'Google account did not provide an email address' })
+    return
+  }
+
+  const name = (decoded.name && decoded.name.trim()) || email.split('@')[0]
+  let user: Awaited<ReturnType<typeof prisma.user.findUnique>> | LocalAuthUser | null = null
+  let dbUnavailable = false
+
+  try {
+    user = await prisma.user.findUnique({ where: { email } })
+  } catch (dbError) {
+    dbUnavailable = isDbUnavailableError(dbError)
+    if (!dbUnavailable) {
+      console.error('[verdexis-api] Database error during Google auth:', dbError)
+      res.status(503).json({ error: 'Service temporarily unavailable' })
+      return
+    }
+    user = await findLocalUserByEmailOrUsername(email)
+  }
+
+  if (!user) {
+    const randomPassword = crypto.randomBytes(32).toString('hex')
+    const passwordHash = await bcrypt.hash(randomPassword, 12)
+    if (!dbUnavailable) {
+      try {
+        user = await prisma.user.create({
+          data: {
+            email,
+            name,
+            passwordHash,
+            role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user',
+            emailVerified: true,
+            emailVerifiedAt: new Date(),
+            walletBalances: {
+              create: [{ currency: 'USD', symbol: '$', balance: 0, available: 0 }],
+            },
+          },
+        })
+      } catch (creationError) {
+        if (isDbUnavailableError(creationError)) {
+          dbUnavailable = true
+          user = await createLocalUser({ email, password: randomPassword, name, role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user' })
+          user.emailVerified = true
+        } else {
+          throw creationError
+        }
+      }
+    } else {
+      user = await createLocalUser({ email, password: randomPassword, name, role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user' })
+      user.emailVerified = true
+    }
+  }
+
+  if (user.suspended) {
+    res.status(403).json({ error: 'Account suspended' })
+    return
+  }
+
+  if (!dbUnavailable && 'emailVerified' in user && !user.emailVerified) {
+    try {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { emailVerified: true, emailVerifiedAt: new Date() },
+      })
+      user.emailVerified = true
+    } catch {
+      // Best-effort only
+    }
+  }
+
+  let role = user.role
+  if (!dbUnavailable) {
+    try {
+      role = await autoPromoteIfAdminEmail(user.id, user.email, user.role)
+    } catch {
+      // Best-effort only
+    }
+  }
+
+  const token = signToken({ sub: user.id, email: user.email, v: (user as { tokenVersion?: number }).tokenVersion ?? 0 })
+  res.json({ token, user: publicUser({ ...user, role, emailVerified: !!user.emailVerified, phoneVerified: !!user.phoneVerified }) })
 })
 
 function publicUser(u: { id: string; email: string; username?: string | null; name: string; avatar: string | null; prefs: string | null; twoFactor: boolean; role?: string; suspended?: boolean; investmentId?: string | null; kycStatus?: string; kycNotes?: string | null; kycReviewedAt?: Date | null; kycReviewedBy?: string | null; emailVerified?: boolean; emailVerifiedAt?: Date | null; phoneVerified?: boolean; phoneVerifiedAt?: Date | null }) {

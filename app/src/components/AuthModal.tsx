@@ -3,14 +3,9 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { X, Mail, Lock, User, Eye, EyeOff, ArrowRight, Shield, Fingerprint, KeyRound, ArrowLeft, Phone } from 'lucide-react'
 import { toast } from 'sonner'
+import { signInWithPopup } from 'firebase/auth'
 import { api, setToken, setStoredUser, type ApiError } from '../lib/api'
-import {
-  resetPasswordFirebase,
-  signInWithFirebase,
-  signOutFirebase,
-  signUpWithFirebase,
-  toFirebaseUserShape,
-} from '../lib/firebase-auth'
+import { auth, googleAuthProvider, isFirebaseConfigured } from '../lib/firebase'
 
 interface AuthModalProps {
   isOpen: boolean
@@ -65,14 +60,13 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
       }
       setLoading(true)
       try {
-        await resetPasswordFirebase(form.email)
+        await api.forgot(form.email)
         setResetSent(true)
-        toast.success('Reset link sent', { description: `Check ${form.email} for next steps.` })
+        toast.success('Reset link sent', { description: `If that email exists, a reset link has been sent to ${form.email}.` })
       } catch (err) {
-        const e = err as Error
+        console.warn('Password reset error:', err)
         setResetSent(true)
-        toast.success('Reset link sent', { description: 'If that email exists, a link is on the way.' })
-        console.warn('Password reset error:', e.message)
+        toast.success('Reset link sent', { description: 'If that email exists, a reset link has been sent.' })
       } finally {
         setLoading(false)
       }
@@ -112,27 +106,32 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
           return
         }
       }
+
       const authResult = mode === 'signup'
-        ? await signUpWithFirebase(form.email, form.password, `${form.firstName} ${form.lastName}`.trim() || 'User', form.phone.trim())
-        : await signInWithFirebase(form.email, form.password)
-      const firebaseUser = authResult.user
-      const storedUser = toFirebaseUserShape(firebaseUser, authResult.profile)
-      setToken(firebaseUser.uid)
-      setStoredUser(storedUser)
+        ? await api.signup(form.email, form.password, `${form.firstName} ${form.lastName}`.trim() || 'User', form.phone.trim())
+        : await api.login(form.email, form.password)
+
+      if ('otpRequired' in authResult && authResult.otpRequired) {
+        setPendingToken(authResult.pendingToken)
+        setPendingFlow(authResult.verificationType === 'signup' ? 'signup' : 'login')
+        setOtpMessage(authResult.message || '')
+        setMode('otp')
+        setLoading(false)
+        return
+      }
+
+      setToken(authResult.token)
+      setStoredUser(authResult.user)
       toast.success(mode === 'signup' ? 'Account created' : 'Welcome back')
       setLoading(false)
       onClose()
       window.dispatchEvent(new Event('storage'))
       window.dispatchEvent(new Event('verdexis:profile'))
-      // Keep admin and portfolio controls unified in one place: dashboard.
-      const dest = '/dashboard'
-      navigate(dest, { replace: true })
+      navigate('/dashboard', { replace: true })
       return
     } catch (err) {
-      const e = err as Error & { code?: string }
-      const msg = e.code === 'auth/invalid-credential'
-        ? 'The email or password is incorrect. Please try again.'
-        : e.message || 'Authentication failed'
+      const e = err as ApiError
+      const msg = e.error || 'Authentication failed'
       setError(msg)
       setLoading(false)
       return
@@ -163,6 +162,34 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
     setPendingFlow('login')
     setOtpCode('')
     setOtpMessage('')
+  }
+
+  const handleGoogleSignIn = async () => {
+    setError('')
+    setLoading(true)
+    if (!isFirebaseConfigured || !auth || !googleAuthProvider) {
+      setError('Google sign-in is not configured. Please add Firebase config.')
+      setLoading(false)
+      return
+    }
+
+    try {
+      const credential = await signInWithPopup(auth, googleAuthProvider)
+      const idToken = await credential.user.getIdToken()
+      const result = await api.google(idToken)
+      setToken(result.token)
+      setStoredUser(result.user)
+      toast.success('Welcome back')
+      setLoading(false)
+      onClose()
+      window.dispatchEvent(new Event('storage'))
+      window.dispatchEvent(new Event('verdexis:profile'))
+      navigate('/dashboard', { replace: true })
+    } catch (err: any) {
+      const msg = err?.error || err?.message || 'Google authentication failed'
+      setError(msg)
+      setLoading(false)
+    }
   }
 
   const handlePasskeyLogin = async () => {
@@ -485,6 +512,14 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
                 >
                   <Fingerprint className="w-5 h-5" />
                   Sign in with passkey
+                </button>
+                <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  disabled={loading || !isFirebaseConfigured}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 bg-white/10 border border-[#ffffff15] text-[#E5E5E5] text-sm font-medium rounded-xl hover:bg-white/15 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <span className="text-sm">Sign in with Google</span>
                 </button>
               </>
             )}
