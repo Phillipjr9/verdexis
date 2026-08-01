@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { X, Mail, Lock, User, Eye, EyeOff, ArrowRight, Shield, Fingerprint, KeyRound, ArrowLeft, Phone } from 'lucide-react'
 import { toast } from 'sonner'
-import { signInWithPopup } from 'firebase/auth'
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, updateProfile } from 'firebase/auth'
 import { api, setToken, setStoredUser, type ApiError } from '../lib/api'
 import { auth, googleAuthProvider, isFirebaseConfigured } from '../lib/firebase'
 
@@ -107,21 +107,27 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
         }
       }
 
-      const authResult = mode === 'signup'
-        ? await api.signup(form.email, form.password, `${form.firstName} ${form.lastName}`.trim() || 'User', form.phone.trim())
-        : await api.login(form.email, form.password)
-
-      if ('otpRequired' in authResult && authResult.otpRequired) {
-        setPendingToken(authResult.pendingToken)
-        setPendingFlow(authResult.verificationType === 'signup' ? 'signup' : 'login')
-        setOtpMessage(authResult.message || '')
-        setMode('otp')
+      if (!isFirebaseConfigured || !auth) {
+        setError('Firebase auth is not configured. Please add Firebase config.')
         setLoading(false)
         return
       }
 
-      setToken(authResult.token)
-      setStoredUser(authResult.user)
+      let credential
+      if (mode === 'signup') {
+        credential = await createUserWithEmailAndPassword(auth, form.email, form.password)
+        await updateProfile(credential.user, {
+          displayName: `${form.firstName} ${form.lastName}`.trim() || undefined,
+        })
+      } else {
+        credential = await signInWithEmailAndPassword(auth, form.email, form.password)
+      }
+
+      const idToken = await credential.user.getIdToken()
+      const result = await api.firebaseAuth(idToken, mode === 'signup' ? form.phone.trim() || undefined : undefined)
+
+      setToken(result.token)
+      setStoredUser(result.user)
       toast.success(mode === 'signup' ? 'Account created' : 'Welcome back')
       setLoading(false)
       onClose()

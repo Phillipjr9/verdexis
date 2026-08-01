@@ -181,8 +181,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ pendingToken, code }),
     }),
+  firebaseAuth: (idToken: string, phone?: string) =>
+    request<{ token: string; user: ApiUser }>('/api/auth/firebase', {
+      method: 'POST',
+      body: JSON.stringify({ idToken, phone }),
+    }),
   google: (idToken: string) =>
-    request<{ token: string; user: ApiUser }>('/api/auth/google', {
+    request<{ token: string; user: ApiUser }>('/api/auth/firebase', {
       method: 'POST',
       body: JSON.stringify({ idToken }),
     }),

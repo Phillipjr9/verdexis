@@ -68,39 +68,43 @@ const resetSchema = z.object({
   password: z.string().min(8).max(200),
 })
 
-const googleSchema = z.object({
+const firebaseLoginSchema = z.object({
   idToken: z.string().min(10),
+  phone: z.string().trim().min(7).max(32).regex(/^[+0-9 ()\-.]+$/, 'Invalid phone number').optional(),
 })
 
-router.post('/google', ensureDbReady, authLimiter, async (req, res) => {
-  const parsed = googleSchema.safeParse(req.body)
+async function handleFirebaseAuth(req: Request, res: Response) {
+  const parsed = firebaseLoginSchema.safeParse(req.body)
   if (!parsed.success) {
     res.status(400).json({ error: 'Invalid input' })
     return
   }
 
   if (!env.FIREBASE_PROJECT_ID || !env.FIREBASE_PRIVATE_KEY || !env.FIREBASE_CLIENT_EMAIL) {
-    res.status(501).json({ error: 'Firebase Google auth is not configured' })
+    res.status(501).json({ error: 'Firebase auth is not configured' })
     return
   }
 
-  let decoded: admin.auth.DecodedIdToken
+  let decoded: admin.auth.DecodedIdToken & { email?: string; name?: string; email_verified?: boolean; phone_number?: string }
   try {
     initializeFirebase()
-    decoded = await admin.auth().verifyIdToken(parsed.data.idToken)
+    decoded = await admin.auth().verifyIdToken(parsed.data.idToken) as admin.auth.DecodedIdToken & { email?: string; name?: string; email_verified?: boolean; phone_number?: string }
   } catch (err) {
-    console.error('[auth] Google token verification failed:', err)
-    res.status(401).json({ error: 'Invalid Google ID token' })
+    console.error('[auth] Firebase token verification failed:', err)
+    res.status(401).json({ error: 'Invalid Firebase ID token' })
     return
   }
 
   const email = decoded.email?.toLowerCase()
   if (!email) {
-    res.status(400).json({ error: 'Google account did not provide an email address' })
+    res.status(400).json({ error: 'Firebase account did not provide an email address' })
     return
   }
 
   const name = (decoded.name && decoded.name.trim()) || email.split('@')[0]
+  const isVerified = !!decoded.email_verified
+  const phone = parsed.data.phone?.trim() || decoded.phone_number || undefined
+
   let user: Awaited<ReturnType<typeof prisma.user.findUnique>> | LocalAuthUser | null = null
   let dbUnavailable = false
 
@@ -109,7 +113,7 @@ router.post('/google', ensureDbReady, authLimiter, async (req, res) => {
   } catch (dbError) {
     dbUnavailable = isDbUnavailableError(dbError)
     if (!dbUnavailable) {
-      console.error('[verdexis-api] Database error during Google auth:', dbError)
+      console.error('[verdexis-api] Database error during Firebase auth:', dbError)
       res.status(503).json({ error: 'Service temporarily unavailable' })
       return
     }
@@ -127,8 +131,9 @@ router.post('/google', ensureDbReady, authLimiter, async (req, res) => {
             name,
             passwordHash,
             role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user',
-            emailVerified: true,
-            emailVerifiedAt: new Date(),
+            emailVerified: isVerified,
+            emailVerifiedAt: isVerified ? new Date() : null,
+            prefs: phone ? JSON.stringify({ phone }) : undefined,
             walletBalances: {
               create: [{ currency: 'USD', symbol: '$', balance: 0, available: 0 }],
             },
@@ -137,15 +142,15 @@ router.post('/google', ensureDbReady, authLimiter, async (req, res) => {
       } catch (creationError) {
         if (isDbUnavailableError(creationError)) {
           dbUnavailable = true
-          user = await createLocalUser({ email, password: randomPassword, name, role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user' })
-          user.emailVerified = true
+          user = await createLocalUser({ email, password: randomPassword, name, role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user', phone })
+          user.emailVerified = isVerified
         } else {
           throw creationError
         }
       }
     } else {
-      user = await createLocalUser({ email, password: randomPassword, name, role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user' })
-      user.emailVerified = true
+      user = await createLocalUser({ email, password: randomPassword, name, role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user', phone })
+      user.emailVerified = isVerified
     }
   }
 
@@ -154,7 +159,7 @@ router.post('/google', ensureDbReady, authLimiter, async (req, res) => {
     return
   }
 
-  if (!dbUnavailable && 'emailVerified' in user && !user.emailVerified) {
+  if (!dbUnavailable && 'emailVerified' in user && !user.emailVerified && isVerified) {
     try {
       user = await prisma.user.update({
         where: { id: user.id },
@@ -177,7 +182,10 @@ router.post('/google', ensureDbReady, authLimiter, async (req, res) => {
 
   const token = signToken({ sub: user.id, email: user.email, v: (user as { tokenVersion?: number }).tokenVersion ?? 0 })
   res.json({ token, user: publicUser({ ...user, role, emailVerified: !!user.emailVerified, phoneVerified: !!user.phoneVerified }) })
-})
+}
+
+router.post('/firebase', ensureDbReady, authLimiter, handleFirebaseAuth)
+router.post('/google', ensureDbReady, authLimiter, handleFirebaseAuth)
 
 function publicUser(u: { id: string; email: string; username?: string | null; name: string; avatar: string | null; prefs: string | null; twoFactor: boolean; role?: string; suspended?: boolean; investmentId?: string | null; kycStatus?: string; kycNotes?: string | null; kycReviewedAt?: Date | null; kycReviewedBy?: string | null; emailVerified?: boolean; emailVerifiedAt?: Date | null; phoneVerified?: boolean; phoneVerifiedAt?: Date | null }) {
   let prefs: Record<string, unknown> = {}
@@ -415,7 +423,7 @@ export async function autoPromoteIfAdminEmail(userId: string, email: string, cur
   return 'admin'
 }
 
-const ensureDbReady = async (_req: Request, res: Response, next: NextFunction) => {
+async function ensureDbReady(_req: Request, res: Response, next: NextFunction) {
   try {
     await prisma.$queryRaw`SELECT 1`
     next()
