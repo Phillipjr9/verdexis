@@ -27,5 +27,7 @@ RUN cd server && npm run build && cd ..
 # Run migrations and start server
 EXPOSE 4000
 
+WORKDIR /app/server
+
 # Resolve failed migration, run migrations, then start server
-CMD cd server && (npx prisma migrate resolve --rolled-back 20260120000000_seed_admin_treasury || true) && npx prisma migrate deploy && cd .. && node server/dist/index.js
+CMD ["sh", "-c", "./node_modules/.bin/prisma migrate resolve --rolled-back 20260120000000_seed_admin_treasury || true && ./node_modules/.bin/prisma migrate deploy --schema prisma/schema.prisma && node dist/index.js"]
