@@ -30,4 +30,4 @@ EXPOSE 4000
 WORKDIR /app/server
 
 # Resolve failed migration, run migrations, then start server
-CMD ["sh", "-c", "./node_modules/.bin/prisma migrate resolve --rolled-back 20260120000000_seed_admin_treasury || true && ./node_modules/.bin/prisma migrate deploy --schema prisma/schema.prisma && node dist/index.js"]
+CMD ["sh", "-c", "node scripts/resolve-failed-migration.js || true && ./node_modules/.bin/prisma migrate deploy --schema prisma/schema.prisma && node dist/index.js"]
