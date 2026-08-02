@@ -64,8 +64,15 @@ CREATE INDEX IF NOT EXISTS idx_dcaSchedule_active ON "DcaSchedule"(active);
 CREATE INDEX IF NOT EXISTS idx_dcaSchedule_nextRunAt ON "DcaSchedule"("nextRunAt");
 
 -- Passkey table indices
-CREATE INDEX IF NOT EXISTS idx_passkey_userId ON "Passkey"("userId");
-CREATE INDEX IF NOT EXISTS idx_passkey_credentialId ON "Passkey"("credentialId");
+-- Passkey table indices (only create if table exists)
+DO $$
+BEGIN
+	IF EXISTS (SELECT 1 FROM pg_class WHERE relname = 'Passkey') THEN
+		EXECUTE 'CREATE INDEX IF NOT EXISTS idx_passkey_userId ON "Passkey"("userId")';
+		EXECUTE 'CREATE INDEX IF NOT EXISTS idx_passkey_credentialId ON "Passkey"("credentialId")';
+	END IF;
+END
+$$;
 
 -- Referral table indices
 CREATE INDEX IF NOT EXISTS idx_referral_referrerId ON "Referral"("referrerId");
