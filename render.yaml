@@ -1,0 +1,49 @@
+services:
+  - type: web
+    name: verdexis-backend
+    runtime: node
+    plan: starter
+    buildCommand: cd server && npm install --legacy-peer-deps && npm run build
+    startCommand: cd server && npm run start:migrate
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_PROVIDER
+        value: postgresql
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: CORS_ORIGIN
+        sync: false
+      - key: APP_BASE_URL
+        sync: false
+      - key: PRODUCTION_ORIGIN
+        sync: false
+      - key: ALERT_POLL_ENABLED
+        value: "true"
+      - key: ALERT_POLL_INTERVAL_MS
+        value: "60000"
+      - key: KEEP_ALIVE_ENABLED
+        value: "true"
+      - key: ADMIN_EMAILS
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: COINGECKO_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
