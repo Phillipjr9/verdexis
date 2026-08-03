@@ -6,12 +6,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-  // Connection pool settings for production
-  // connectionLimit = 10  // Maximum number of connections in the pool
-  // poolTimeout = 10      // Seconds to wait for a connection
-  // connectionTimeout = 5 // Seconds to wait for connection establishment
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
