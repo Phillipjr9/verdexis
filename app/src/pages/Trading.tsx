@@ -396,6 +396,32 @@ export default function Trading() {
             </div>
           </div>
 
+          <div className="rounded-2xl border border-[#ffffff08] bg-[#0f1619]/50 p-4 sm:p-5 mb-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.16em] text-[#737373]">Trading guide</p>
+                <h2 className="text-base font-medium text-[#E5E5E5] mt-1">Start with a market, confirm the preview, and stay on top of the move</h2>
+                <p className="text-sm text-[#A0A0A0] mt-1">Choose a pair, review the chart, and use alerts and balances to keep your next trade informed.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Link to="/wallet" className="rounded-full border border-[#ffffff08] bg-[#1a1a1a]/70 px-3 py-2 text-sm text-[#E5E5E5] transition-colors hover:border-[#0C8B44]/30 hover:bg-[#0C8B44]/10">Review balances</Link>
+                <Link to="/alerts" className="rounded-full border border-[#ffffff08] bg-[#1a1a1a]/70 px-3 py-2 text-sm text-[#E5E5E5] transition-colors hover:border-[#0C8B44]/30 hover:bg-[#0C8B44]/10">Set alerts</Link>
+              </div>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              {[
+                { title: 'Pick a market', description: selectedCrypto ? `Focused on ${selectedCrypto.symbol?.toUpperCase() || 'your selected pair'}` : 'Search across the latest crypto markets' },
+                { title: 'Review the preview', description: 'Check the live estimate, fee, and available balance before submitting' },
+                { title: 'Stay ready', description: 'Use alerts and watchlists to act fast once the setup is right' },
+              ].map((step) => (
+                <div key={step.title} className="rounded-xl border border-[#ffffff05] bg-[#1a1a1a]/50 p-3">
+                  <p className="text-sm font-medium text-[#E5E5E5]">{step.title}</p>
+                  <p className="text-xs text-[#737373] mt-1">{step.description}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Main Content */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
             {/* Left Sidebar — full list on lg+; collapsed dropdown on mobile

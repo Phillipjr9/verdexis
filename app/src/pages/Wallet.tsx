@@ -1741,6 +1741,28 @@ export default function WalletPage() {
             </div>
           </div>
 
+          <div className="rounded-2xl border border-[#ffffff08] bg-[#0f1619]/50 p-4 sm:p-5 mb-6">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.16em] text-[#737373]">Quick start</p>
+                <h2 className="text-base font-medium text-[#E5E5E5] mt-1">Move money in and out without losing context</h2>
+                <p className="text-sm text-[#A0A0A0] mt-1">Use the shortcuts below to fund your account, move assets, or review incoming income.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { label: 'Deposit', tab: 'deposit' as TabType, hint: 'Add cash or crypto' },
+                  { label: 'Transfer', tab: 'transfer' as TabType, hint: 'Move between wallets' },
+                  { label: 'Income', tab: 'income' as TabType, hint: 'View dividends and interest' },
+                ].map((action) => (
+                  <button key={action.label} onClick={() => setActiveTab(action.tab)} className="rounded-full border border-[#ffffff08] bg-[#1a1a1a]/70 px-3 py-2 text-left transition-colors hover:border-[#0C8B44]/30 hover:bg-[#0C8B44]/10">
+                    <p className="text-sm font-medium text-[#E5E5E5]">{action.label}</p>
+                    <p className="text-xs text-[#737373]">{action.hint}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
           {/* Main Balance */}
           <div className="liquid-card p-8 mb-6" style={{ '--fill-color': 'rgba(12,139,68,0.15)' } as React.CSSProperties}>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">

@@ -151,6 +151,31 @@ function AlertsInner() {
             </div>
           </div>
 
+          <div className="rounded-2xl border border-[#ffffff08] bg-[#0f1619]/50 p-4 sm:p-5 mb-6">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.16em] text-[#737373]">Alert workflow</p>
+                <h2 className="text-base font-medium text-[#E5E5E5] mt-1">Set a few useful alerts and let the system watch for you</h2>
+                <p className="text-sm text-[#A0A0A0] mt-1">The best setups are simple: one price alert, one percentage move, and one portfolio threshold.</p>
+              </div>
+              <div className="rounded-full border border-[#0C8B44]/20 bg-[#0C8B44]/10 px-3 py-1 text-sm font-medium text-[#0C8B44]">
+                {alerts.filter((alert) => alert.active && !alert.triggered).length} active
+              </div>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              {[
+                { title: 'Price watch', description: 'Track a coin that you already follow' },
+                { title: 'Momentum trigger', description: 'React quickly to sudden percentage moves' },
+                { title: 'Portfolio guardrail', description: 'Keep exposure aligned with your plan' },
+              ].map((step) => (
+                <div key={step.title} className="rounded-xl border border-[#ffffff05] bg-[#1a1a1a]/50 p-3">
+                  <p className="text-sm font-medium text-[#E5E5E5]">{step.title}</p>
+                  <p className="text-xs text-[#737373] mt-1">{step.description}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-1 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6 h-fit">
               <h2 className="text-sm font-medium text-[#E5E5E5] mb-4 flex items-center gap-2">
