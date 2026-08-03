@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { fileToAvatarDataUrl, getAvatar, updateProfile } from '../lib/userProfile'
 import { applyTheme } from '../lib/themeApplier'
-import { api, clearStoredAuth, getToken, setStoredUser } from '../lib/api'
+import { api, clearStoredAuth, getToken, setStoredUser, setToken } from '../lib/api'
 import { adminApi } from '../lib/adminApi'
 
 type Section = 'profile' | 'security' | 'trading' | 'connections' | 'notifications' | 'preferences' | 'privacy' | 'admin'
@@ -39,6 +39,7 @@ interface UserPrefs {
   hideBalances: boolean
   hideSmallBalances: boolean
   requireTradeConfirmation: boolean
+  priceAlertsEnabled: boolean
   defaultOrderType: OrderType
   slippageTolerance: number
   maxSingleTrade: number
@@ -66,6 +67,7 @@ const DEFAULT_PREFS: UserPrefs = {
   hideBalances: false,
   hideSmallBalances: false,
   requireTradeConfirmation: true,
+  priceAlertsEnabled: true,
   defaultOrderType: 'market',
   slippageTolerance: 0.5,
   maxSingleTrade: 0,
@@ -250,7 +252,7 @@ export default function Settings() {
   const handleSaveFeeRate = async () => {
     setSavingFee(true)
     try {
-      await adminApi.post('/withdrawal-fee-config', { ratePct: withdrawalFeeRate })
+      await adminApi.setWithdrawalFeeConfig({ ratePct: withdrawalFeeRate })
       toast.success(`Withdrawal fee updated to ${withdrawalFeeRate}%`)
     } catch (e) {
       toast.error((e as { error?: string }).error || 'Failed to save')
@@ -384,9 +386,9 @@ export default function Settings() {
                   <div className="border-t border-[#ffffff08] pt-6">
                     <h3 className="text-sm font-medium text-[#A0A0A0] mb-4">Passkeys</h3>
                     <p className="text-xs text-[#737373] mb-3">Use biometrics or a security key to sign in without a password.</p>
-                    <a href="/settings" onClick={() => {}} className="text-xs text-[#0C8B44] hover:underline flex items-center gap-1">
+                    <button type="button" onClick={() => setSection('security')} className="text-xs text-[#0C8B44] hover:underline flex items-center gap-1">
                       <Fingerprint className="w-3.5 h-3.5" /> Manage passkeys in Security settings
-                    </a>
+                    </button>
                   </div>
                   <Toggle icon={<Shield className="w-5 h-5 text-[#0C8B44]" />} title="Two-factor authentication"
                     description="Require a verification code on every login."
@@ -433,7 +435,7 @@ export default function Settings() {
                   <h2 className="text-xl font-light text-[#E5E5E5]">Notifications</h2>
                   <Toggle icon={<Bell className="w-5 h-5 text-[#0C8B44]" />} title="Price alerts"
                     description="Get notified when your price alerts trigger."
-                    enabled={true} onChange={() => {}} />
+                    enabled={prefs.priceAlertsEnabled} onChange={(v) => update('priceAlertsEnabled', v)} />
                   <a href="/settings/notifications" className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#0a0e10] border border-[#ffffff10] rounded-lg text-sm text-[#A0A0A0] hover:text-[#E5E5E5] transition-colors">
                     <Bell className="w-4 h-4" /> Advanced notification settings
                   </a>

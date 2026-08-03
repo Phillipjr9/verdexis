@@ -253,11 +253,14 @@ export interface AdminAuditLog {
 export const adminApi = {
   get: (path: string) => request<any>(`/api/admin${path}`),
   post: (path: string, body?: unknown) => request<any>(`/api/admin${path}`, { method: 'POST', body: JSON.stringify(body ?? {}) }),
+  put: (path: string, body?: unknown) => request<any>(`/api/admin${path}`, { method: 'PUT', body: JSON.stringify(body ?? {}) }),
 
   stats: () => request<AdminStats>('/api/admin/stats'),
   getSignupBonus: () => request<AdminSignupBonusSettings>('/api/admin/signup-bonus'),
   setSignupBonus: (input: { enabled: boolean; amountUsd: number; note?: string }) =>
     request<AdminSignupBonusSettings>('/api/admin/signup-bonus', { method: 'PUT', body: JSON.stringify(input) }),
+  setWithdrawalFeeConfig: (input: { ratePct: number }) =>
+    request<{ ratePct: number }>('/api/admin/withdrawal-fee-config', { method: 'PUT', body: JSON.stringify(input) }),
 
   // --- Pending deposit approval queue ---
   listPendingDeposits: () =>
@@ -302,13 +305,14 @@ export const adminApi = {
       { method: 'POST', body: JSON.stringify({ note: note || '' }) },
     ),
 
-  listUsers: (params: { q?: string; page?: number; limit?: number; role?: 'user' | 'admin' | 'all'; suspended?: 'true' | 'false' | 'all' } = {}) => {
+  listUsers: (params: { q?: string; page?: number; limit?: number; role?: 'user' | 'admin' | 'all'; suspended?: 'true' | 'false' | 'all'; kycStatus?: 'none' | 'pending' | 'approved' | 'rejected' } = {}) => {
     const q = new URLSearchParams()
     if (params.q) q.set('q', params.q)
     if (params.page) q.set('page', String(params.page))
     if (params.limit) q.set('limit', String(params.limit))
     if (params.role) q.set('role', params.role)
     if (params.suspended) q.set('suspended', params.suspended)
+    if (params.kycStatus) q.set('kycStatus', params.kycStatus)
     return request<{ users: AdminUserSummary[]; total: number; page: number; limit: number }>(`/api/admin/users?${q.toString()}`)
   },
 
@@ -511,4 +515,24 @@ export const adminApi = {
   // Email
   emailUser: (userId: string, input: { subject: string; body: string; template?: string }) =>
     request<{ notification: AdminNotification; deliveredVia: string }>(`/api/admin/users/${userId}/email`, { method: 'POST', body: JSON.stringify(input) }),
+
+  // Settings
+  getAllSettings: () =>
+    request<{ settings: any[]; logs: any[] }>('/api/admin/settings/all'),
+  getSetting: (key: string) =>
+    request<{ setting: any }>(`/api/admin/settings/${key}`),
+  saveSetting: (key: string, value: string) =>
+    request<{ success: boolean; setting: any }>(`/api/admin/settings/${key}/save`, { method: 'POST', body: JSON.stringify({ value }) }),
+  verifySetting: (id: string) =>
+    request<{ verified: boolean; setting: any; error?: string }>(`/api/admin/settings/${id}/verify`, { method: 'POST' }),
+  verifyAllSettings: () =>
+    request<{ verified: number; failed: number; total: number; verificationRate: number }>('/api/admin/settings/verify-all', { method: 'POST' }),
+  getSettingsLogs: (limit?: number, filter?: 'success' | 'failed') => {
+    const qs = new URLSearchParams()
+    if (limit) qs.set('limit', String(limit))
+    if (filter) qs.set('filter', filter)
+    return request<{ logs: any[] }>(`/api/admin/settings/logs?${qs.toString()}`)
+  },
+  getSettingsSummary: () =>
+    request<{ total: number; verified: number; failed: number; pending: number; verificationRate: number; byCategory: Record<string, any> }>('/api/admin/settings/summary'),
 }
