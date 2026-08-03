@@ -108,7 +108,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
         }
       }
 
-      if (isSupabaseConfigured) {
+      if (false && isSupabaseConfigured) {
         const trimmedName = `${form.firstName} ${form.lastName}`.trim()
         let sessionData
         if (mode === 'signup') {
@@ -142,27 +142,29 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
         return
       }
 
-      if (!isFirebaseConfigured || !auth) {
-        setError('Firebase auth is not configured. Please add Firebase config.')
+      // Use backend directly for email/password (Firebase only used for Google sign-in)
+      const name = `${form.firstName} ${form.lastName}`.trim()
+      let result
+      if (mode === 'signup') {
+        result = await api.signup(form.email, form.password, name, form.phone.trim())
+      } else {
+        result = await api.login(form.email, form.password)
+      }
+
+      if ('otpRequired' in result || 'pendingToken' in result) {
+        const r = result as { pendingToken: string; message?: string; devCode?: string }
+        setPendingToken(r.pendingToken)
+        setPendingFlow(mode === 'signup' ? 'signup' : 'login')
+        setOtpMessage(r.message || '')
+        if (r.devCode) setOtpMessage((prev) => `${prev} Dev code: ${r.devCode}`)
+        setMode('otp')
         setLoading(false)
         return
       }
 
-      let credential
-      if (mode === 'signup') {
-        credential = await createUserWithEmailAndPassword(auth, form.email, form.password)
-        await updateProfile(credential.user, {
-          displayName: `${form.firstName} ${form.lastName}`.trim() || undefined,
-        })
-      } else {
-        credential = await signInWithEmailAndPassword(auth, form.email, form.password)
-      }
-
-      const idToken = await credential.user.getIdToken()
-      const result = await api.firebaseAuth(idToken, mode === 'signup' ? form.phone.trim() || undefined : undefined)
-
-      setToken(result.token)
-      setStoredUser(result.user)
+      const r = result as { token: string; user: import('../lib/api').ApiUser }
+      setToken(r.token)
+      setStoredUser(r.user)
       toast.success(mode === 'signup' ? 'Account created' : 'Welcome back')
       setLoading(false)
       onClose()
