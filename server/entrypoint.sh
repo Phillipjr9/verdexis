@@ -16,19 +16,45 @@ timeout 20 node scripts/resolve-failed-migration.js || {
   fi
 }
 
-# Attempt to run migrations (with timeout)
+# Attempt to run migrations with retry logic
 echo "Running Prisma migrations..."
-timeout 45 npx prisma migrate deploy --schema prisma/schema.prisma || {
+MAX_RETRIES=3
+RETRY=0
+MIGRATION_SUCCESS=0
+
+while [ $RETRY -lt $MAX_RETRIES ]; do
+  echo "Migration attempt $((RETRY + 1))/$MAX_RETRIES..."
+  
+  # Increased timeout to 180s (3 minutes) to allow for slow database initialization
+  timeout 180 npx prisma migrate deploy --schema prisma/schema.prisma
   EXIT_CODE=$?
-  if [ $EXIT_CODE -eq 124 ]; then
-    echo "⚠ Prisma migrate timed out - possible database connectivity issue"
-    echo "  Attempting to start server anyway..."
-  elif [ $EXIT_CODE -eq 0 ]; then
+  
+  if [ $EXIT_CODE -eq 0 ]; then
     echo "✓ Migrations completed successfully"
+    MIGRATION_SUCCESS=1
+    break
+  elif [ $EXIT_CODE -eq 124 ]; then
+    echo "⚠ Attempt $((RETRY + 1)) timed out - retrying..."
+    RETRY=$((RETRY + 1))
+    sleep 5
   else
-    echo "⚠ Prisma migrate exited with code $EXIT_CODE - continuing startup"
+    # Non-timeout error
+    if [ $RETRY -lt $((MAX_RETRIES - 1)) ]; then
+      echo "⚠ Attempt $((RETRY + 1)) failed with code $EXIT_CODE - retrying..."
+      RETRY=$((RETRY + 1))
+      sleep 5
+    else
+      echo "⚠ Final migration attempt failed - continuing startup"
+      break
+    fi
   fi
-}
+done
+
+if [ $MIGRATION_SUCCESS -eq 1 ]; then
+  echo "✓ Database schema ready"
+else
+  echo "⚠ Migrations may not have completed - database tables may not exist"
+fi
 
 # Start the server (use exec to replace this process)
 echo "Starting server..."
