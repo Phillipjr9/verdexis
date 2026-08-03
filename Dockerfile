@@ -1,5 +1,7 @@
 FROM node:20-alpine
 
+# Force rebuild - clear cache with timestamp
+# Build timestamp: 2026-08-03T12:00:00Z
 # Install OpenSSL for Prisma (Alpine uses OpenSSL 3)
 RUN apk add --no-cache openssl
 
