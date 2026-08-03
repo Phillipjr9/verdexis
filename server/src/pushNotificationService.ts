@@ -1,6 +1,7 @@
-import admin from 'firebase-admin'
+import { getMessaging } from 'firebase-admin/messaging'
 import { env } from './env.js'
 import { prisma } from './db.js'
+import { initializeFirebaseAdmin, getFirebaseAdminApp } from './services/firebaseAdmin.js'
 
 interface PushNotification {
   title: string
@@ -22,13 +23,7 @@ export class PushNotificationService {
     }
 
     try {
-      admin.initializeApp({
-        credential: admin.credential.cert({
-          projectId: env.FIREBASE_PROJECT_ID,
-          privateKey: env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-          clientEmail: env.FIREBASE_CLIENT_EMAIL,
-        }),
-      })
+      initializeFirebaseAdmin()
       this.initialized = true
       console.log('[push-notifications] Firebase initialized')
     } catch (err) {
@@ -77,15 +72,13 @@ export class PushNotificationService {
       const tokens = fcmTokens.map((t) => t.value)
 
       // Send multicast message (up to 500 tokens at a time)
-      const response = await admin.messaging().sendMulticast({
+      const messaging = getMessaging(getFirebaseAdminApp())
+      const response = await messaging.sendEachForMulticast({
         notification,
         data: notification.data,
         tokens,
         android: {
           priority: 'high',
-        },
-        webpush: {
-          urgency: 'high',
         },
       })
 

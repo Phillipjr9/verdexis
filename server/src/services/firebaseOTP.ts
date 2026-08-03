@@ -1,51 +1,31 @@
-import * as admin from 'firebase-admin'
 import { env } from '../env.js'
+import { initializeFirebaseAdmin, getFirebaseAuth } from './firebaseAdmin.js'
 
 /**
  * Firebase Phone OTP Authentication Service
  * Replaces Twilio for OTP delivery - completely free
  */
 
-// Initialize Firebase Admin SDK
-let firebaseApp: admin.App | null = null
+let isFirebaseAvailable = false
 
 export function initializeFirebase() {
-  if (firebaseApp) return firebaseApp
-
   try {
-    // Check if running in a Firebase environment (Cloud Functions) or local development.
-    if (process.env.FIREBASE_CONFIG) {
-      firebaseApp = admin.initializeApp() as admin.App
-    } else if (env.FIREBASE_PROJECT_ID && env.FIREBASE_PRIVATE_KEY && env.FIREBASE_CLIENT_EMAIL) {
-      firebaseApp = admin.initializeApp({
-        credential: admin.credential.cert({
-          projectId: env.FIREBASE_PROJECT_ID,
-          privateKey: env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-          clientEmail: env.FIREBASE_CLIENT_EMAIL,
-        }),
-      }) as admin.App
-    } else {
-      const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH || './firebase-service-account.json'
-      firebaseApp = admin.initializeApp({
-        credential: admin.credential.cert(require(serviceAccountPath)),
-        projectId: env.FIREBASE_PROJECT_ID,
-      }) as admin.App
-    }
-
-    console.log('[firebase] ✅ Firebase Admin SDK initialized')
-    return firebaseApp
+    initializeFirebaseAdmin()
+    isFirebaseAvailable = true
   } catch (error) {
-    console.error('[firebase] ❌ Failed to initialize Firebase:', error)
-    throw error
+    console.warn('[firebase-otp] Firebase not available, OTP service will fail')
+    isFirebaseAvailable = false
   }
 }
 
 export class FirebasePhoneOTPService {
-  private auth: admin.Auth
+  private auth: ReturnType<typeof getFirebaseAuth> | null = null
 
-  constructor() {
-    const app = initializeFirebase()
-    this.auth = admin.auth(app)
+  private getAuth() {
+    if (!this.auth) {
+      this.auth = getFirebaseAuth()
+    }
+    return this.auth
   }
 
   /**
@@ -54,23 +34,36 @@ export class FirebasePhoneOTPService {
    */
   async sendOTP(phoneNumber: string): Promise<{ sessionInfo: string; success: boolean }> {
     try {
+      if (!isFirebaseAvailable) {
+        console.error('[firebase-otp] Firebase not initialized')
+        return {
+          sessionInfo: '',
+          success: false,
+        }
+      }
+
       console.log(`[firebase-otp] Sending OTP to ${phoneNumber}`)
 
-      // Create a session for phone sign-in
-      // Note: This is typically done on the client-side with Firebase SDK
-      // For server-side, we create a custom token instead
-      
-      const customToken = await this.auth.createCustomToken(phoneNumber)
-      
+      const auth = this.getAuth()
+      if (!auth) {
+        console.error('[firebase-otp] Firebase Auth not available')
+        return {
+          sessionInfo: '',
+          success: false,
+        }
+      }
+
+      const customToken = await auth.createCustomToken(phoneNumber)
+
       return {
         sessionInfo: customToken,
-        success: true
+        success: true,
       }
     } catch (error) {
       console.error('[firebase-otp] Error sending OTP:', error)
       return {
         sessionInfo: '',
-        success: false
+        success: false,
       }
     }
   }
@@ -80,19 +73,25 @@ export class FirebasePhoneOTPService {
    */
   async verifyOTP(idToken: string): Promise<{ uid: string; phoneNumber: string; success: boolean }> {
     try {
-      const decodedToken = await this.auth.verifyIdToken(idToken)
+      const auth = this.getAuth()
+      if (!auth) {
+        console.error('[firebase-otp] Firebase Auth not available')
+        return { uid: '', phoneNumber: '', success: false }
+      }
       
+      const decodedToken = await auth.verifyIdToken(idToken)
+
       return {
         uid: decodedToken.uid,
         phoneNumber: decodedToken.phone_number || '',
-        success: true
+        success: true,
       }
     } catch (error) {
       console.error('[firebase-otp] Error verifying OTP:', error)
       return {
         uid: '',
         phoneNumber: '',
-        success: false
+        success: false,
       }
     }
   }
@@ -102,7 +101,13 @@ export class FirebasePhoneOTPService {
    */
   async createUserWithPhone(phoneNumber: string, displayName?: string): Promise<{ uid: string; success: boolean }> {
     try {
-      const user = await this.auth.createUser({
+      const auth = this.getAuth()
+      if (!auth) {
+        console.error('[firebase-otp] Firebase Auth not available')
+        return { uid: '', success: false }
+      }
+      
+      const user = await auth.createUser({
         phoneNumber,
         displayName,
       })
@@ -116,7 +121,10 @@ export class FirebasePhoneOTPService {
     } catch (error: any) {
       // User might already exist
       if (error.code === 'auth/phone-number-already-exists') {
-        const users = await this.auth.getUserByPhoneNumber(phoneNumber)
+        const auth = this.getAuth()
+        if (!auth) return { uid: '', success: false }
+        
+        const users = await auth.getUserByPhoneNumber(phoneNumber)
         return {
           uid: users.uid,
           success: true
@@ -134,9 +142,14 @@ export class FirebasePhoneOTPService {
   /**
    * Get user by phone number
    */
-  async getUserByPhone(phoneNumber: string): Promise<admin.UserRecord | null> {
+  async getUserByPhone(phoneNumber: string): Promise<ReturnType<typeof getFirebaseAuth> extends { getUserByPhoneNumber(phoneNumber: string): Promise<infer U> } ? U : null> {
     try {
-      return await this.auth.getUserByPhoneNumber(phoneNumber)
+      const auth = this.getAuth()
+      if (!auth) {
+        console.error('[firebase-otp] Firebase Auth not available')
+        return null
+      }
+      return await auth.getUserByPhoneNumber(phoneNumber)
     } catch (error) {
       console.error('[firebase-otp] Error getting user:', error)
       return null
@@ -148,7 +161,12 @@ export class FirebasePhoneOTPService {
    */
   async deleteUser(uid: string): Promise<boolean> {
     try {
-      await this.auth.deleteUser(uid)
+      const auth = this.getAuth()
+      if (!auth) {
+        console.error('[firebase-otp] Firebase Auth not available')
+        return false
+      }
+      await auth.deleteUser(uid)
       return true
     } catch (error) {
       console.error('[firebase-otp] Error deleting user:', error)
@@ -161,7 +179,12 @@ export class FirebasePhoneOTPService {
    */
   async revokeRefreshTokens(uid: string): Promise<boolean> {
     try {
-      await this.auth.revokeRefreshTokens(uid)
+      const auth = this.getAuth()
+      if (!auth) {
+        console.error('[firebase-otp] Firebase Auth not available')
+        return false
+      }
+      await auth.revokeRefreshTokens(uid)
       return true
     } catch (error) {
       console.error('[firebase-otp] Error revoking tokens:', error)
@@ -170,7 +193,16 @@ export class FirebasePhoneOTPService {
   }
 }
 
-export const firebasePhoneOTP = new FirebasePhoneOTPService()
+let firebasePhoneOTPInstance: FirebasePhoneOTPService | null = null
+
+try {
+  firebasePhoneOTPInstance = new FirebasePhoneOTPService()
+} catch (error) {
+  console.warn('[firebase-otp] Failed to instantiate Firebase OTP service:', error instanceof Error ? error.message : String(error))
+  firebasePhoneOTPInstance = new FirebasePhoneOTPService() // Still create instance, but it will fail gracefully
+}
+
+export const firebasePhoneOTP = firebasePhoneOTPInstance
 
 export default {
   initializeFirebase,

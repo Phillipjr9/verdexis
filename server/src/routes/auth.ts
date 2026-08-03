@@ -4,10 +4,12 @@ import crypto from 'node:crypto'
 import { z } from 'zod'
 import rateLimit from 'express-rate-limit'
 import { prisma } from '../db.js'
-import admin from 'firebase-admin'
 import { signToken, requireAuth, verifyToken, type AuthedRequest } from '../auth.js'
 import { env } from '../env.js'
 import { initializeFirebase } from '../services/firebaseOTP.js'
+import { getFirebaseAuth } from '../services/firebaseAdmin.js'
+import { createUser, getUserByEmail, getUserById, findUserByEmailOrUsername, updateUser } from '../services/userStore.js'
+import { isSupabaseConfigured, supabase } from '../supabaseClient.js'
 import { generateInvestmentId } from '../investmentId.js'
 import { generateReferralCode, linkReferrer } from '../referrals.js'
 import { isDbUnavailableError } from '../dbError.js'
@@ -15,8 +17,6 @@ import { assignUserToAdmin } from '../lib/adminHierarchy.js'
 import { emailService } from '../services/email.js'
 import { otpService } from '../services/otp.js'
 import { shouldRequireOTPForLogin } from '../middleware/otpAuth.js'
-import { createLocalUser, findLocalUserByEmailOrUsername, getLocalUserById, updateLocalUserPassword } from '../lib/localAuthStore.js'
-import type { LocalAuthUser } from '../lib/localAuthStore.js'
 import { buildPendingVerificationPayload } from '../lib/authVerification.js'
 
 const router = Router()
@@ -85,10 +85,18 @@ async function handleFirebaseAuth(req: Request, res: Response) {
     return
   }
 
-  let decoded: admin.auth.DecodedIdToken & { email?: string; name?: string; email_verified?: boolean; phone_number?: string }
+  type DecodedFirebaseToken = {
+    uid: string
+    email?: string
+    name?: string
+    email_verified?: boolean
+    phone_number?: string
+  }
+
+  let decoded: DecodedFirebaseToken
   try {
     initializeFirebase()
-    decoded = await admin.auth().verifyIdToken(parsed.data.idToken) as admin.auth.DecodedIdToken & { email?: string; name?: string; email_verified?: boolean; phone_number?: string }
+    decoded = await getFirebaseAuth().verifyIdToken(parsed.data.idToken) as DecodedFirebaseToken
   } catch (err) {
     console.error('[auth] Firebase token verification failed:', err)
     res.status(401).json({ error: 'Invalid Firebase ID token' })
@@ -105,53 +113,35 @@ async function handleFirebaseAuth(req: Request, res: Response) {
   const isVerified = !!decoded.email_verified
   const phone = parsed.data.phone?.trim() || decoded.phone_number || undefined
 
-  let user: Awaited<ReturnType<typeof prisma.user.findUnique>> | LocalAuthUser | null = null
-  let dbUnavailable = false
+  let user: Awaited<ReturnType<typeof getUserByEmail>> | null = null
 
   try {
-    user = await prisma.user.findUnique({ where: { email } })
+    user = await getUserByEmail(email)
   } catch (dbError) {
-    dbUnavailable = isDbUnavailableError(dbError)
-    if (!dbUnavailable) {
+    if (!isDbUnavailableError(dbError)) {
       console.error('[verdexis-api] Database error during Firebase auth:', dbError)
       res.status(503).json({ error: 'Service temporarily unavailable' })
       return
     }
-    user = await findLocalUserByEmailOrUsername(email)
+    res.status(503).json({ error: 'Database unavailable' })
+    return
   }
 
   if (!user) {
     const randomPassword = crypto.randomBytes(32).toString('hex')
     const passwordHash = await bcrypt.hash(randomPassword, 12)
-    if (!dbUnavailable) {
-      try {
-        user = await prisma.user.create({
-          data: {
-            email,
-            name,
-            passwordHash,
-            role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user',
-            emailVerified: isVerified,
-            emailVerifiedAt: isVerified ? new Date() : null,
-            prefs: phone ? JSON.stringify({ phone }) : undefined,
-            walletBalances: {
-              create: [{ currency: 'USD', symbol: '$', balance: 0, available: 0 }],
-            },
-          },
-        })
-      } catch (creationError) {
-        if (isDbUnavailableError(creationError)) {
-          dbUnavailable = true
-          user = await createLocalUser({ email, password: randomPassword, name, role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user', phone })
-          user.emailVerified = isVerified
-        } else {
-          throw creationError
-        }
-      }
-    } else {
-      user = await createLocalUser({ email, password: randomPassword, name, role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user', phone })
-      user.emailVerified = isVerified
-    }
+    user = await createUser({
+      email,
+      name,
+      passwordHash,
+      role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user',
+      emailVerified: isVerified,
+      emailVerifiedAt: isVerified ? new Date() : null,
+      prefs: phone ? JSON.stringify({ phone }) : undefined,
+      walletBalances: {
+        create: [{ currency: 'USD', symbol: '$', balance: 0, available: 0 }],
+      },
+    })
   }
 
   if (user.suspended) {
@@ -159,12 +149,9 @@ async function handleFirebaseAuth(req: Request, res: Response) {
     return
   }
 
-  if (!dbUnavailable && 'emailVerified' in user && !user.emailVerified && isVerified) {
+  if ('emailVerified' in user && !user.emailVerified && isVerified) {
     try {
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: { emailVerified: true, emailVerifiedAt: new Date() },
-      })
+      user = await updateUser(user.id, { emailVerified: true, emailVerifiedAt: new Date() })
       user.emailVerified = true
     } catch {
       // Best-effort only
@@ -172,12 +159,87 @@ async function handleFirebaseAuth(req: Request, res: Response) {
   }
 
   let role = user.role
-  if (!dbUnavailable) {
-    try {
-      role = await autoPromoteIfAdminEmail(user.id, user.email, user.role)
-    } catch {
-      // Best-effort only
+  try {
+    role = await autoPromoteIfAdminEmail(user.id, user.email, user.role)
+  } catch {
+    // Best-effort only
+  }
+
+  const token = signToken({ sub: user.id, email: user.email, v: (user as { tokenVersion?: number }).tokenVersion ?? 0 })
+  res.json({ token, user: publicUser({ ...user, role, emailVerified: !!user.emailVerified, phoneVerified: !!user.phoneVerified }) })
+}
+
+const supabaseAuthSchema = z.object({
+  accessToken: z.string().min(10),
+})
+
+async function handleSupabaseAuth(req: Request, res: Response) {
+  const parsed = supabaseAuthSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid input' })
+    return
+  }
+
+  if (!isSupabaseConfigured || !supabase) {
+    res.status(501).json({ error: 'Supabase auth is not configured' })
+    return
+  }
+
+  const { data, error } = await supabase.auth.getUser(parsed.data.accessToken)
+  if (error || !data.user) {
+    console.error('[auth] Supabase token verification failed:', error?.message ?? error)
+    res.status(401).json({ error: 'Invalid Supabase access token' })
+    return
+  }
+
+  const userData = data.user
+  const email = userData.email?.toLowerCase()
+  if (!email) {
+    res.status(400).json({ error: 'Supabase user did not provide an email address' })
+    return
+  }
+
+  let user: Awaited<ReturnType<typeof getUserByEmail>> | null = null
+
+  try {
+    user = await getUserByEmail(email)
+  } catch (dbError) {
+    if (!isDbUnavailableError(dbError)) {
+      console.error('[verdexis-api] Database error during Supabase auth:', dbError)
+      res.status(503).json({ error: 'Service temporarily unavailable' })
+      return
     }
+    res.status(503).json({ error: 'Database unavailable' })
+    return
+  }
+
+  if (!user) {
+    const randomPassword = crypto.randomBytes(32).toString('hex')
+    const passwordHash = await bcrypt.hash(randomPassword, 12)
+    user = await createUser({
+      email,
+      name: (userData.user_metadata?.name || userData.user_metadata?.full_name || email.split('@')[0]).toString(),
+      passwordHash,
+      role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user',
+      emailVerified: Boolean(userData.email_confirmed_at),
+      emailVerifiedAt: userData.email_confirmed_at ? new Date(userData.email_confirmed_at) : null,
+      prefs: JSON.stringify({ supabaseId: userData.id }),
+      walletBalances: {
+        create: [{ currency: 'USD', symbol: '$', balance: 0, available: 0 }],
+      },
+    })
+  }
+
+  if (user.suspended) {
+    res.status(403).json({ error: 'Account suspended' })
+    return
+  }
+
+  let role = user.role
+  try {
+    role = await autoPromoteIfAdminEmail(user.id, user.email, user.role)
+  } catch {
+    // Best-effort only
   }
 
   const token = signToken({ sub: user.id, email: user.email, v: (user as { tokenVersion?: number }).tokenVersion ?? 0 })
@@ -186,14 +248,26 @@ async function handleFirebaseAuth(req: Request, res: Response) {
 
 router.post('/firebase', ensureDbReady, authLimiter, handleFirebaseAuth)
 router.post('/google', ensureDbReady, authLimiter, handleFirebaseAuth)
+router.post('/supabase', ensureDbReady, authLimiter, handleSupabaseAuth)
 
-function publicUser(u: { id: string; email: string; username?: string | null; name: string; avatar: string | null; prefs: string | null; twoFactor: boolean; role?: string; suspended?: boolean; investmentId?: string | null; kycStatus?: string; kycNotes?: string | null; kycReviewedAt?: Date | null; kycReviewedBy?: string | null; emailVerified?: boolean; emailVerifiedAt?: Date | null; phoneVerified?: boolean; phoneVerifiedAt?: Date | null }) {
+function normalizeDate(value: string | Date | null | undefined): string | null {
+  if (!value) return null
+  const date = value instanceof Date ? value : new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}
+
+function publicUser(u: { id: string; email: string; username?: string | null; name: string; avatar?: string | null; prefs?: string | Record<string, unknown> | null; twoFactor?: boolean; role?: string; suspended?: boolean; investmentId?: string | null; kycStatus?: string; kycNotes?: string | null; kycReviewedAt?: Date | null; kycReviewedBy?: string | null; emailVerified?: boolean; emailVerifiedAt?: string | Date | null; phoneVerified?: boolean; phoneVerifiedAt?: string | Date | null }) {
   let prefs: Record<string, unknown> = {}
-  try {
-    if (u.prefs) prefs = JSON.parse(u.prefs)
-  } catch {
-    prefs = {}
+  if (typeof u.prefs === 'string') {
+    try {
+      prefs = JSON.parse(u.prefs)
+    } catch {
+      prefs = {}
+    }
+  } else if (u.prefs && typeof u.prefs === 'object') {
+    prefs = u.prefs
   }
+
   return {
     id: u.id,
     email: u.email,
@@ -206,9 +280,9 @@ function publicUser(u: { id: string; email: string; username?: string | null; na
     investmentId: u.investmentId ?? null,
     kycStatus: (u.kycStatus === 'approved' || u.kycStatus === 'pending' || u.kycStatus === 'rejected') ? u.kycStatus : 'none',
     emailVerified: !!u.emailVerified,
-    emailVerifiedAt: u.emailVerifiedAt ?? null,
+    emailVerifiedAt: normalizeDate(u.emailVerifiedAt),
     phoneVerified: !!u.phoneVerified,
-    phoneVerifiedAt: u.phoneVerifiedAt ?? null,
+    phoneVerifiedAt: normalizeDate(u.phoneVerifiedAt),
     prefs,
   }
 }
@@ -282,7 +356,7 @@ async function fetchGeoForIp(ip: string): Promise<LoginGeo | null> {
 
 async function recordLoginMetadata(userId: string, ip: string, userAgent?: string): Promise<void> {
   try {
-    const current = await prisma.user.findUnique({ where: { id: userId }, select: { prefs: true } })
+    const current = await getUserById(userId)
     let prefs: Record<string, unknown> = {}
     try { if (current?.prefs) prefs = JSON.parse(current.prefs) } catch { prefs = {} }
 
@@ -309,10 +383,7 @@ async function recordLoginMetadata(userId: string, ip: string, userAgent?: strin
       loginHistory: [entry, ...history].slice(0, 10),
     }
 
-    await prisma.user.update({
-      where: { id: userId },
-      data: { prefs: JSON.stringify({ ...prefs, security: nextSecurity }) },
-    })
+    await updateUser(userId, { prefs: JSON.stringify({ ...prefs, security: nextSecurity }) })
   } catch {
     // best-effort only
   }
@@ -418,19 +489,13 @@ export async function autoPromoteIfAdminEmail(userId: string, email: string, cur
     return 'admin'
   }
   if (!ADMIN_EMAILS.includes(email.toLowerCase())) return currentRole
-  await prisma.user.update({ where: { id: userId }, data: { role: 'admin' } })
+  await updateUser(userId, { role: 'admin' })
   await ensureAdminTreasury(userId)
   return 'admin'
 }
 
-async function ensureDbReady(_req: Request, res: Response, next: NextFunction) {
-  try {
-    await prisma.$queryRaw`SELECT 1`
-    next()
-  } catch (err) {
-    console.warn('[verdexis-api] Database not ready; continuing in local fallback auth mode:', err instanceof Error ? err.message : String(err))
-    next()
-  }
+function ensureDbReady(_req: Request, _res: Response, next: NextFunction) {
+  next()
 }
 
 router.post('/signup', ensureDbReady, authLimiter, async (req, res) => {
@@ -442,7 +507,7 @@ router.post('/signup', ensureDbReady, authLimiter, async (req, res) => {
   const { email, password, name } = parsed.data
 
   try {
-    const existing = await prisma.user.findUnique({ where: { email } })
+    const existing = await getUserByEmail(email)
     if (existing) {
       res.status(409).json({ error: 'Email already registered' })
       return
@@ -453,36 +518,22 @@ router.post('/signup', ensureDbReady, authLimiter, async (req, res) => {
     }
   }
 
-  try {
-    const localExisting = await findLocalUserByEmailOrUsername(email)
-    if (localExisting) {
-      res.status(409).json({ error: 'Email already registered' })
-      return
-    }
-  } catch {
-    // Ignore local fallback lookup issues
-  }
-
   const passwordHash = await bcrypt.hash(password, 12)
   const investmentId = await generateInvestmentId().catch(() => `VDX-${crypto.randomBytes(4).toString('hex').toUpperCase()}`)
   const referralCode = await generateReferralCode().catch(() => '')
   const referrerCode = (req.query.ref as string) || ''
   let user
   try {
-    user = await prisma.user.create({
-      data: {
-        email,
-        name,
-        passwordHash,
-        investmentId,
-        referralCode,
-        role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user',
-        prefs: JSON.stringify({ phone: parsed.data.phone }),
-        walletBalances: {
-          create: [{ currency: 'USD', symbol: '$', balance: 0, available: 0 }],
-        },
-      },
-    })
+    const createData: any = {
+      email,
+      name,
+      passwordHash,
+      investmentId,
+      referralCode,
+      role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user',
+      prefs: JSON.stringify({ phone: parsed.data.phone }),
+    }
+    user = await createUser(createData)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     if (/Unique constraint failed/i.test(msg) || /P2002/.test(msg)) {
@@ -490,16 +541,10 @@ router.post('/signup', ensureDbReady, authLimiter, async (req, res) => {
       return
     }
     if (isDbUnavailableError(e)) {
-      user = await createLocalUser({
-        email,
-        password,
-        name,
-        role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user',
-        phone: parsed.data.phone,
-      })
-    } else {
-      throw e
+      res.status(503).json({ error: 'Database unavailable' })
+      return
     }
+    throw e
   }
 
   if (user?.role === 'admin') {
@@ -583,13 +628,7 @@ router.post('/signup/resend-otp', ensureDbReady, authLimiter, async (req, res) =
   }
 
   const { email } = parsed.data
-  let user: Awaited<ReturnType<typeof prisma.user.findUnique>> | LocalAuthUser | null = await prisma.user.findUnique({ where: { email } })
-  if (!user) {
-    const fallbackUser = await findLocalUserByEmailOrUsername(email)
-    if (fallbackUser) {
-      user = fallbackUser
-    }
-  }
+  const user = await getUserByEmail(email)
 
   if (!user) {
     res.status(404).json({ error: 'User not found' })
@@ -633,16 +672,11 @@ router.post('/login', ensureDbReady, authLimiter, async (req, res) => {
     const { password } = parsed.data
     const id = (parsed.data.identifier || parsed.data.email || '').trim().toLowerCase()
 
-    const isEmail = /.+@.+\..+/.test(id)
-    let user: Awaited<ReturnType<typeof prisma.user.findUnique>> | null = null
-    let dbUnavailable = false
+    let user: Awaited<ReturnType<typeof findUserByEmailOrUsername>> | null = null
     try {
-      user = isEmail
-        ? await prisma.user.findUnique({ where: { email: id } })
-        : await prisma.user.findUnique({ where: { username: id } })
+      user = await findUserByEmailOrUsername(id)
     } catch (dbError) {
-      dbUnavailable = isDbUnavailableError(dbError)
-      if (!dbUnavailable) {
+      if (!isDbUnavailableError(dbError)) {
         console.error('[verdexis-api] Database error during login:', dbError)
         res.status(503).json({
           error: 'Service temporarily unavailable',
@@ -650,10 +684,8 @@ router.post('/login', ensureDbReady, authLimiter, async (req, res) => {
         })
         return
       }
-      const fallbackUser = await findLocalUserByEmailOrUsername(id)
-      if (fallbackUser) {
-        user = fallbackUser as unknown as NonNullable<typeof user>
-      }
+      res.status(503).json({ error: 'Database unavailable' })
+      return
     }
     if (!user) {
       res.status(401).json({ error: 'Invalid credentials' })
@@ -669,12 +701,10 @@ router.post('/login', ensureDbReady, authLimiter, async (req, res) => {
       return
     }
     let role = user.role
-    if (!dbUnavailable) {
-      try {
-        role = await autoPromoteIfAdminEmail(user.id, user.email, user.role)
-      } catch (promoteErr) {
-        console.error('[verdexis-api] autoPromote failed for', user.email, promoteErr)
-      }
+    try {
+      role = await autoPromoteIfAdminEmail(user.id, user.email, user.role)
+    } catch (promoteErr) {
+      console.error('[verdexis-api] autoPromote failed for', user.email, promoteErr)
     }
 
     const clientIp = getClientIp(req)
@@ -684,10 +714,7 @@ router.post('/login', ensureDbReady, authLimiter, async (req, res) => {
       })
     })
 
-    let otpRequired = false
-    if (!dbUnavailable) {
-      otpRequired = await shouldRequireOTPForLogin(user.id)
-    }
+    const otpRequired = await shouldRequireOTPForLogin(user.id)
     if (otpRequired) {
       const result = await otpService.create(user.id, 'login')
       if (result.error) {
@@ -759,7 +786,7 @@ router.post('/login/verify-otp', authLimiter, async (req, res) => {
     res.status(400).json({ error: result.error })
     return
   }
-  const user = await prisma.user.findUnique({ where: { id: payload.sub } })
+  const user = await getUserById(payload.sub)
   if (!user || user.suspended) {
     res.status(403).json({ error: user?.suspended ? 'Account suspended' : 'User not found' })
     return
@@ -797,16 +824,13 @@ router.post('/signup/verify-otp', authLimiter, async (req, res) => {
     return
   }
 
-  const user = await prisma.user.findUnique({ where: { id: payload.sub } })
+  const user = await getUserById(payload.sub)
   if (!user || user.suspended) {
     res.status(403).json({ error: user?.suspended ? 'Account suspended' : 'User not found' })
     return
   }
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { emailVerified: true, emailVerifiedAt: new Date() },
-  })
+  await updateUser(user.id, { emailVerified: true, emailVerifiedAt: new Date().toISOString() })
 
   const role = await autoPromoteIfAdminEmail(user.id, user.email, user.role)
   const token = signToken({ sub: user.id, email: user.email, v: user.tokenVersion })
@@ -826,7 +850,7 @@ router.post('/forgot', authLimiter, async (req, res) => {
     return
   }
   const { email } = parsed.data
-  const user = await prisma.user.findUnique({ where: { email } })
+  const user = await getUserByEmail(email)
   // Always return ok to avoid user enumeration.
   if (user) {
     const rawToken = crypto.randomBytes(32).toString('hex')
@@ -865,35 +889,23 @@ router.post('/reset', authLimiter, async (req, res) => {
     return
   }
   const passwordHash = await bcrypt.hash(parsed.data.password, 12)
-  await prisma.$transaction([
-    prisma.user.update({ where: { id: record.userId }, data: { passwordHash } }),
-    prisma.passwordReset.update({ where: { id: record.id }, data: { used: true } }),
-  ])
+  await updateUser(record.userId, { passwordHash })
+  await prisma.passwordReset.update({ where: { id: record.id }, data: { used: true } })
   res.json({ ok: true })
 })
 
 router.get('/me', requireAuth, async (req: AuthedRequest, res) => {
   try {
-    const user = await prisma.user.findUnique({ where: { id: req.userId! } })
+    const user = await getUserById(req.userId!)
     if (!user) {
-      const fallbackUser = await getLocalUserById(req.userId!)
-      if (!fallbackUser) {
-        res.status(404).json({ error: 'Not found' })
-        return
-      }
-      res.json({ user: publicUser({ ...fallbackUser, role: fallbackUser.role }) })
+      res.status(404).json({ error: 'Not found' })
       return
     }
     const role = await autoPromoteIfAdminEmail(user.id, user.email, user.role)
     res.json({ user: publicUser({ ...user, role }) })
   } catch (err) {
     if (isDbUnavailableError(err)) {
-      const fallbackUser = await getLocalUserById(req.userId!)
-      if (!fallbackUser) {
-        res.status(404).json({ error: 'Not found' })
-        return
-      }
-      res.json({ user: publicUser({ ...fallbackUser, role: fallbackUser.role }) })
+      res.status(503).json({ error: 'Database unavailable' })
       return
     }
     res.status(500).json({ error: 'Unable to load profile' })
@@ -911,28 +923,24 @@ export async function promoteAllAdminEmails(): Promise<void> {
   const seedPassword = env.ADMIN_SEED_PASSWORD || process.env.ADMIN_SEED_PASSWORD || 'Admin@Verdexis2024'
   for (const email of adminEmails) {
     try {
-      let u = await prisma.user.findUnique({ where: { email } })
+      let u = await getUserByEmail(email)
       if (!u) {
         // Create the admin user fresh.
         const passwordHash = await bcrypt.hash(seedPassword, 12)
         const investmentId = await generateInvestmentId()
-        u = await prisma.user.create({
-          data: {
-            email,
-            name: 'Admin',
-            passwordHash,
-            investmentId,
-            role: 'admin',
-            walletBalances: {
-              create: [{ currency: 'USD', symbol: '$', balance: 0, available: 0 }],
-            },
-          },
-        })
+        const createData: any = {
+          email,
+          name: 'Admin',
+          passwordHash,
+          investmentId,
+          role: 'admin',
+        }
+        u = await createUser(createData)
         console.log(`[verdexis-api] created admin user ${email} — login with ${email} / ${seedPassword} (rotate after first login)`)
       } else if (!u.passwordHash || u.passwordHash.length < 20) {
         // Repair: passwordHash is missing/corrupt — reset to seed.
         const passwordHash = await bcrypt.hash(seedPassword, 12)
-        await prisma.user.update({ where: { id: u.id }, data: { passwordHash, tokenVersion: { increment: 1 } } })
+        await updateUser(u.id, { passwordHash, tokenVersion: (u.tokenVersion ?? 0) + 1 })
         console.log(`[verdexis-api] repaired corrupt passwordHash for ${email}; password reset to ${seedPassword}. Rotate immediately.`)
       }
       await autoPromoteIfAdminEmail(u.id, u.email, u.role)
@@ -960,28 +968,17 @@ router.post('/change-password', requireAuth, authLimiter, async (req: AuthedRequ
   const parsed = changePasswordSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input' }); return }
   try {
-    const user = await prisma.user.findUnique({ where: { id: req.userId! } })
+    const user = await getUserById(req.userId!)
     if (!user) { res.status(404).json({ error: 'Not found' }); return }
     const ok = await bcrypt.compare(parsed.data.currentPassword, user.passwordHash)
     if (!ok) { res.status(401).json({ error: 'Current password is incorrect' }); return }
     const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12)
-    const updated = await prisma.user.update({
-      where: { id: user.id },
-      data: { passwordHash, tokenVersion: { increment: 1 } },
-    })
+    const updated = await updateUser(user.id, { passwordHash, tokenVersion: (user.tokenVersion ?? 0) + 1 })
     const token = signToken({ sub: updated.id, email: updated.email, v: updated.tokenVersion })
     res.json({ ok: true, token })
   } catch (err) {
     if (isDbUnavailableError(err)) {
-      const fallbackUser = await getLocalUserById(req.userId!)
-      if (!fallbackUser) { res.status(404).json({ error: 'Not found' }); return }
-      const ok = await bcrypt.compare(parsed.data.currentPassword, fallbackUser.passwordHash)
-      if (!ok) { res.status(401).json({ error: 'Current password is incorrect' }); return }
-      const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12)
-      const updated = await updateLocalUserPassword(req.userId!, passwordHash)
-      if (!updated) { res.status(404).json({ error: 'Not found' }); return }
-      const token = signToken({ sub: updated.id, email: updated.email, v: 0 })
-      res.json({ ok: true, token })
+      res.status(503).json({ error: 'Database unavailable' })
       return
     }
     res.status(500).json({ error: 'Unable to change password' })
@@ -990,10 +987,12 @@ router.post('/change-password', requireAuth, authLimiter, async (req: AuthedRequ
 
 // Sign out of every other device by bumping tokenVersion.
 router.post('/logout-all', requireAuth, async (req: AuthedRequest, res) => {
-  const updated = await prisma.user.update({
-    where: { id: req.userId! },
-    data: { tokenVersion: { increment: 1 } },
-  })
+  const current = await getUserById(req.userId!)
+  if (!current) {
+    res.status(404).json({ error: 'Not found' })
+    return
+  }
+  const updated = await updateUser(req.userId!, { tokenVersion: (current.tokenVersion ?? 0) + 1 })
   const token = signToken({ sub: updated.id, email: updated.email, v: updated.tokenVersion })
   res.json({ ok: true, token })
 })
@@ -1002,7 +1001,7 @@ router.post('/logout-all', requireAuth, async (req: AuthedRequest, res) => {
 router.get('/export', requireAuth, async (req: AuthedRequest, res) => {
   const id = req.userId!
   const [user, holdings, walletBalances, transactions, trades, watchlist, alerts, notifications] = await Promise.all([
-    prisma.user.findUnique({ where: { id } }),
+    getUserById(id),
     prisma.holding.findMany({ where: { userId: id } }),
     prisma.walletBalance.findMany({ where: { userId: id } }),
     prisma.transaction.findMany({ where: { userId: id } }),
@@ -1046,7 +1045,7 @@ function clientOriginFromReq(req: { headers: Record<string, string | string[] | 
 }
 
 router.post('/send-verification', requireAuth, verifyLimiter, async (req: AuthedRequest, res) => {
-  const user = await prisma.user.findUnique({ where: { id: req.userId! }, select: { id: true, email: true, emailVerified: true } })
+  const user = await getUserById(req.userId!)
   if (!user) { res.status(404).json({ error: 'User not found' }); return }
   if (user.emailVerified) { res.json({ alreadyVerified: true }); return }
 
@@ -1086,12 +1085,9 @@ router.post('/verify-email', authLimiter, async (req, res) => {
     res.status(400).json({ error: 'Invalid or expired verification link' })
     return
   }
-  await prisma.$transaction([
-    prisma.user.update({ where: { id: record.userId }, data: { emailVerified: true, emailVerifiedAt: new Date() } }),
-    prisma.emailVerification.update({ where: { id: record.id }, data: { used: true } }),
-  ])
-  const updatedUser = await prisma.user.findUnique({ where: { id: record.userId } })
-  res.json({ verified: true, user: updatedUser ? publicUser(updatedUser) : undefined })
+  const updatedUser = await updateUser(record.userId, { emailVerified: true, emailVerifiedAt: new Date().toISOString() })
+  await prisma.emailVerification.update({ where: { id: record.id }, data: { used: true } })
+  res.json({ verified: true, user: publicUser(updatedUser) })
 })
 
 export default router

@@ -191,6 +191,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ idToken }),
     }),
+  supabaseAuth: (accessToken: string) =>
+    request<{ token: string; user: ApiUser }>('/api/auth/supabase', {
+      method: 'POST',
+      body: JSON.stringify({ accessToken }),
+    }),
   forgot: (email: string) =>
     request<{ ok: boolean; message: string }>('/api/auth/forgot', {
       method: 'POST',

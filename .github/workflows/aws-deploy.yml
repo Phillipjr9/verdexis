@@ -1,0 +1,43 @@
+name: Build, Push to ECR, Deploy to ECS
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-2
+
+      - name: Login to ECR
+        run: |
+          aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-2.amazonaws.com
+
+      - name: Build and push image
+        env:
+          AWS_REGION: us-east-2
+          AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+          ECR_REPO: verdexis-server
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          chmod +x ./scripts/push-to-ecr.sh
+          ./scripts/push-to-ecr.sh "$IMAGE_TAG"
+
+      - name: Deploy to ECS
+        env:
+          AWS_REGION: us-east-2
+          CLUSTER_NAME: verdexis-prod
+          SERVICE_NAME: verdexis-service
+          IMAGE_URI: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-2.amazonaws.com/verdexis-server:${{ github.sha }}
+        run: |
+          chmod +x ./scripts/deploy-to-ecs.sh
+          ./scripts/deploy-to-ecs.sh "$AWS_REGION" "$CLUSTER_NAME" "$SERVICE_NAME" "$IMAGE_URI"

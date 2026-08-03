@@ -1,16 +1,11 @@
-databases:
-  - name: verdexis-db
-    plan: starter
-    databaseName: verdexis
-    user: verdexis
-
 services:
   - type: web
     name: verdexis-backend
-    runtime: node
+    env: docker
     plan: starter
-    buildCommand: cd server && npm install --legacy-peer-deps && npm run build
-    startCommand: cd server && npm run start:migrate
+    dockerContext: .
+    dockerfilePath: ./Dockerfile
+    dockerCommand: 'sh -lc "node scripts/resolve-failed-migration.js || true && npx prisma migrate deploy --schema server/prisma/schema.prisma && node dist/index.js"'
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
@@ -18,9 +13,9 @@ services:
       - key: PORT
         value: 4000
       - key: DATABASE_URL
-        fromDatabase:
-          name: verdexis-db
-          property: connectionString
+        sync: false
+      - key: DATABASE_PROVIDER
+        value: postgresql
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_EXPIRES_IN

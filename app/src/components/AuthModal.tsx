@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, updateProfile } from 'firebase/auth'
 import { api, setToken, setStoredUser, type ApiError } from '../lib/api'
 import { auth, googleAuthProvider, isFirebaseConfigured } from '../lib/firebase'
+import { isSupabaseConfigured, signInWithEmail, signUpWithEmail } from '../lib/supabase'
 
 interface AuthModalProps {
   isOpen: boolean
@@ -105,6 +106,40 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
           setLoading(false)
           return
         }
+      }
+
+      if (isSupabaseConfigured) {
+        const trimmedName = `${form.firstName} ${form.lastName}`.trim()
+        let sessionData
+        if (mode === 'signup') {
+          const signUpResult = await signUpWithEmail(form.email, form.password)
+          if (!signUpResult.session?.access_token) {
+            setError('Check your email to verify your Supabase account before logging in.')
+            setLoading(false)
+            return
+          }
+          sessionData = signUpResult.session
+        } else {
+          const signInResult = await signInWithEmail(form.email, form.password)
+          sessionData = signInResult.session
+        }
+
+        if (!sessionData?.access_token) {
+          setError('Unable to authenticate with Supabase.')
+          setLoading(false)
+          return
+        }
+
+        const result = await api.supabaseAuth(sessionData.access_token)
+        setToken(result.token)
+        setStoredUser(result.user)
+        toast.success(mode === 'signup' ? 'Account created' : 'Welcome back')
+        setLoading(false)
+        onClose()
+        window.dispatchEvent(new Event('storage'))
+        window.dispatchEvent(new Event('verdexis:profile'))
+        navigate('/dashboard', { replace: true })
+        return
       }
 
       if (!isFirebaseConfigured || !auth) {
