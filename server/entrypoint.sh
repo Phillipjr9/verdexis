@@ -11,6 +11,6 @@ node scripts/resolve-failed-migration.js || true
 echo "Running Prisma migrations..."
 npx prisma migrate deploy --schema prisma/schema.prisma
 
-# Start the server
-echo "Starting server..."
-node dist/index.js
+# Start the server (use exec to replace this process)
+echo "Starting server on port ${PORT:-4000}..."
+exec node dist/index.js
