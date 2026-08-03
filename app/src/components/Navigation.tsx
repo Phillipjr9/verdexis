@@ -38,7 +38,7 @@ const adminPrivateLinks = [
   { label: 'Dashboard', path: '/dashboard' },
   { label: 'Users', path: '/admin/users' },
   { label: 'Audit', path: '/admin/audit' },
-  { label: 'Settings', path: '/admin/settings' },
+  { label: 'Settings', path: '/settings' },
 ]
 
 function readAuthSnapshot() {
