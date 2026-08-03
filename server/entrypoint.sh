@@ -26,7 +26,7 @@ while [ $RETRY -lt $MAX_RETRIES ]; do
   echo "Migration attempt $((RETRY + 1))/$MAX_RETRIES..."
   
   # Increased timeout to 180s (3 minutes) to allow for slow database initialization
-  timeout 180 npx prisma migrate deploy --schema prisma/schema.prisma
+  timeout 180 npx prisma migrate deploy --schema prisma/schema.prisma 2>&1
   EXIT_CODE=$?
   
   if [ $EXIT_CODE -eq 0 ]; then
