@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Navigation from '../components/Navigation'
-import { Users, TrendingUp, Pause, Play, X, ExternalLink, DollarSign } from 'lucide-react'
+import { Users, TrendingUp, X, ExternalLink, DollarSign } from 'lucide-react'
 import { api } from '../lib/api'
 import { toast } from 'sonner'
 
@@ -41,10 +41,6 @@ export default function CopyTradingDashboard() {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'following' | 'followers'>('following')
 
-  useEffect(() => {
-    loadData()
-  }, [])
-
   async function loadData() {
     setLoading(true)
     try {
@@ -54,13 +50,23 @@ export default function CopyTradingDashboard() {
       ])
       setFollowing(followingRes.following)
       setFollowers(followersRes.followers)
-    } catch (err) {
-      toast.error('Failed to load data')
+    } catch (err: unknown) {
+      const apiErr = err as { error?: unknown }
+      const message = err instanceof Error
+        ? err.message
+        : typeof apiErr.error === 'string'
+          ? apiErr.error
+          : 'Failed to load data'
+      toast.error(message)
       console.error(err)
     } finally {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    void Promise.resolve().then(loadData)
+  }, [])
 
   async function handleUnfollow(traderId: string, traderName: string) {
     if (!confirm(`Stop copying ${traderName}? You can follow them again later.`)) return
@@ -68,16 +74,21 @@ export default function CopyTradingDashboard() {
     try {
       await api.copyTrading.unfollow(traderId)
       toast.success(`Stopped copying ${traderName}`)
-      loadData()
-    } catch (err: any) {
-      toast.error(err.error || 'Failed to unfollow')
+      void loadData()
+    } catch (err: unknown) {
+      const apiErr = err as { error?: unknown }
+      const message = err instanceof Error
+        ? err.message
+        : typeof apiErr.error === 'string'
+          ? apiErr.error
+          : 'Failed to unfollow'
+      toast.error(message)
     }
   }
 
   const activeFollowing = following.filter((f) => f.status === 'active')
   const totalAllocated = activeFollowing.reduce((sum, f) => sum + f.allocationUsd, 0)
   const totalPnl = following.reduce((sum, f) => sum + f.totalPnl, 0)
-  const totalCopied = following.reduce((sum, f) => sum + f.totalCopied, 0)
 
   return (
     <div className="min-h-screen bg-[#070C0E]">

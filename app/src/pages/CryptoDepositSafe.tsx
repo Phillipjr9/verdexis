@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Navigation from '../components/Navigation'
 import { toast, Toaster } from 'sonner'
-import { Copy, QrCode, AlertCircle, ChevronLeft, Check, ExternalLink, Clock, Bell, BellOff, Shield, TrendingUp, AlertTriangle } from 'lucide-react'
+import { QrCode, AlertCircle, ChevronLeft, Check, Clock, AlertTriangle } from 'lucide-react'
 import { api, getToken } from '../lib/api'
 import QRCode from 'qrcode'
 
@@ -29,24 +29,16 @@ const CRYPTO_ASSETS = [
 
 export default function CryptoDepositSafe() {
   const navigate = useNavigate()
-  const [selectedAsset, setSelectedAsset] = useState(CRYPTO_ASSETS[0])
+  const [selectedAsset] = useState(CRYPTO_ASSETS[0])
   const [depositAddress, setDepositAddress] = useState<DepositAddress | null>(null)
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('')
-  const [loading, setLoading] = useState(false)
+  const [, setLoading] = useState(false)
   const [selectedNetwork, setSelectedNetwork] = useState<string>('')
   const [step, setStep] = useState<DepositStep>('select_network')
   const [addressVerified, setAddressVerified] = useState(false)
   const [submittingTx, setSubmittingTx] = useState(false)
 
-  useEffect(() => {
-    if (!getToken()) {
-      navigate('/dashboard')
-      return
-    }
-    loadDepositAddress()
-  }, [selectedAsset, selectedNetwork])
-
-  const loadDepositAddress = async () => {
+  const loadDepositAddress = useCallback(async () => {
     setLoading(true)
     try {
       const res = await api.getMyDepositAddresses()
@@ -61,7 +53,7 @@ export default function CryptoDepositSafe() {
           minDeposit: selectedAsset.minDeposit,
           confirmations: selectedAsset.confirmations,
           note: addr.notes,
-          alternateNetworks: selectedAsset.alternateNetworks,
+          alternateNetworks: addr.alternateNetworks,
         })
         setStep('select_network')
       } else {
@@ -73,7 +65,15 @@ export default function CryptoDepositSafe() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [selectedAsset, selectedNetwork])
+
+  useEffect(() => {
+    if (!getToken()) {
+      navigate('/dashboard')
+      return
+    }
+    void Promise.resolve().then(loadDepositAddress)
+  }, [selectedAsset, selectedNetwork, navigate, loadDepositAddress])
 
   useEffect(() => {
     if (depositAddress?.address) {
@@ -156,7 +156,7 @@ export default function CryptoDepositSafe() {
       const network = selectedNetwork || selectedAsset.network
       
       // Submit to backend
-      const result = await api.recordPendingDeposit({
+      await api.recordPendingDeposit({
         txHash: txHashInput,
         chainId: network,
         toAddress: depositAddress.address,

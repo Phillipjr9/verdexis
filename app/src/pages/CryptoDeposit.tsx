@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import Navigation from '../components/Navigation'
 import { toast, Toaster } from 'sonner'
@@ -101,17 +101,7 @@ export default function CryptoDeposit() {
   const [emailNotifications, setEmailNotifications] = useState(true)
   const [verificationTier, setVerificationTier] = useState<'unverified' | 'basic' | 'advanced'>('basic')
 
-  useEffect(() => {
-    if (!getToken()) {
-      navigate('/dashboard')
-      return
-    }
-    loadDepositAddress()
-    loadPendingDeposits()
-    loadUserPreferences()
-  }, [selectedAsset, selectedNetwork])
-
-  const loadDepositAddress = async () => {
+  const loadDepositAddress = useCallback(async () => {
     setLoading(true)
     try {
       const res = await api.getMyDepositAddresses()
@@ -126,7 +116,7 @@ export default function CryptoDeposit() {
           minDeposit: selectedAsset.minDeposit,
           confirmations: selectedAsset.confirmations,
           note: addr.notes,
-          alternateNetworks: selectedAsset.alternateNetworks,
+          alternateNetworks: addr.alternateNetworks,
         })
       } else {
         setDepositAddress(null)
@@ -137,9 +127,9 @@ export default function CryptoDeposit() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [selectedAsset, selectedNetwork])
 
-  const loadPendingDeposits = async () => {
+  const loadPendingDeposits = useCallback(async () => {
     try {
       // Load actual pending deposits from backend
       // For now, show empty until backend implements this endpoint
@@ -147,9 +137,9 @@ export default function CryptoDeposit() {
     } catch (err) {
       console.error('Failed to load pending deposits:', err)
     }
-  }
+  }, [])
 
-  const loadUserPreferences = async () => {
+  const loadUserPreferences = useCallback(async () => {
     try {
       const prefs = JSON.parse(localStorage.getItem('verdexis_prefs') || '{}')
       setEmailNotifications(prefs.emailAlerts !== false)
@@ -157,7 +147,21 @@ export default function CryptoDeposit() {
     } catch (err) {
       console.error('Failed to load preferences:', err)
     }
-  }
+  }, [])
+  useEffect(() => {
+    if (!getToken()) {
+      navigate('/dashboard')
+      return
+    }
+
+    const init = async () => {
+      await loadDepositAddress()
+      await loadPendingDeposits()
+      await loadUserPreferences()
+    }
+
+    void init()
+  }, [selectedAsset, selectedNetwork, navigate, loadDepositAddress, loadPendingDeposits, loadUserPreferences])
 
   useEffect(() => {
     if (depositAddress?.address) {
@@ -211,8 +215,15 @@ export default function CryptoDeposit() {
     return tierLimits[verificationTier]
   }
 
-  const formatTimeAgo = (date: Date) => {
-    const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
+  const [timeNow, setTimeNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setTimeNow(Date.now()), 60000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  const formatTimeAgo = (date: Date, now: number) => {
+    const seconds = Math.floor((now - date.getTime()) / 1000)
     if (seconds < 60) return `${seconds}s ago`
     const minutes = Math.floor(seconds / 60)
     if (minutes < 60) return `${minutes}m ago`
@@ -340,7 +351,7 @@ export default function CryptoDeposit() {
                                 {deposit.status === 'pending' ? `${deposit.confirmations}/${deposit.requiredConfirmations}` : deposit.status}
                               </span>
                             </div>
-                            <span className="text-xs text-[#737373]">{formatTimeAgo(deposit.timestamp)}</span>
+                            <span className="text-xs text-[#737373]">{formatTimeAgo(deposit.timestamp, timeNow)}</span>
                           </div>
                           <p className="text-xs text-[#737373] font-mono truncate">TX: {deposit.txHash}</p>
                           <div className="mt-2 w-full bg-[#1a1a1a] rounded-full h-1.5">
