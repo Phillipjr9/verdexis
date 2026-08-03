@@ -24,10 +24,9 @@ COPY server/scripts ./server/scripts
 # Build
 RUN cd server && npm run build && cd ..
 
-# Run migrations and start server
 EXPOSE 4000
 
 WORKDIR /app/server
 
 # Resolve failed migration, run migrations, then start server
-CMD ["sh", "-c", "node scripts/resolve-failed-migration.js || true && ./node_modules/.bin/prisma migrate deploy --schema prisma/schema.prisma && node dist/index.js"]
+CMD ["sh", "-c", "node scripts/resolve-failed-migration.js || true && npx prisma migrate deploy --schema prisma/schema.prisma && node dist/index.js"]
