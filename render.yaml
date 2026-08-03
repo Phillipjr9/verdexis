@@ -5,7 +5,6 @@ services:
     plan: starter
     dockerContext: .
     dockerfilePath: ./Dockerfile
-    dockerCommand: sh -c "node scripts/resolve-failed-migration.js || true && ./node_modules/.bin/prisma migrate deploy --schema prisma/schema.prisma && node dist/index.js"
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
