@@ -37,11 +37,30 @@ export async function listPasskeys(): Promise<Passkey[]> {
 }
 
 export async function registerPasskey(deviceName: string): Promise<{ id: string; deviceName: string }> {
-  throw new Error('Passkeys require HTTPS or proper domain configuration. Currently only available in production.')
+  const { options, challengeKey } = await passkeyRequest<{ options: PublicKeyCredentialCreationOptionsJSON; challengeKey: string }>(
+    '/api/passkeys/register/options',
+    { method: 'POST', body: JSON.stringify({}) }
+  )
+  const response = await startRegistration({ optionsJSON: options })
+  const result = await passkeyRequest<{ verified: boolean; passkey: { id: string; deviceName: string } }>(
+    '/api/passkeys/register/verify',
+    { method: 'POST', body: JSON.stringify({ response, deviceName, challengeKey }) }
+  )
+  if (!result.verified) throw new Error('Passkey registration failed')
+  return result.passkey
 }
 
 export async function authenticateWithPasskey(email?: string): Promise<{ token: string; user: any }> {
-  throw new Error('Passkeys require HTTPS or proper domain configuration. Currently only available in production.')
+  if (!email) throw new Error('Email is required for passkey authentication')
+  const { options, challengeKey } = await passkeyRequest<{ options: PublicKeyCredentialRequestOptionsJSON; challengeKey: string }>(
+    '/api/passkeys/auth/options',
+    { method: 'POST', body: JSON.stringify({ email }) }
+  )
+  const response = await startAuthentication({ optionsJSON: options })
+  return passkeyRequest<{ token: string; user: any }>(
+    '/api/passkeys/auth/verify',
+    { method: 'POST', body: JSON.stringify({ response, challengeKey }) }
+  )
 }
 
 export async function deletePasskey(id: string): Promise<void> {
