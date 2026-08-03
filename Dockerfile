@@ -1,7 +1,8 @@
 FROM node:20-alpine
 
-# Force rebuild - clear cache with timestamp
-# Build timestamp: 2026-08-03T12:00:00Z
+# Cache busting marker - update this to force full rebuild
+ENV BUILD_ID="2026-08-03-11-35-00"
+
 # Install OpenSSL for Prisma (Alpine uses OpenSSL 3)
 RUN apk add --no-cache openssl
 
@@ -18,6 +19,8 @@ RUN npm install --legacy-peer-deps && \
     cd ..
 
 # Copy source code
+# Cache invalidation: 2026-08-03T11:35:00Z
+RUN echo "Preparing to copy source files..."
 COPY server/src ./server/src
 COPY server/tsconfig.json ./server/
 COPY server/prisma ./server/prisma
