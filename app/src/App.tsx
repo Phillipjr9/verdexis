@@ -84,6 +84,7 @@ const NFTPortfolio = withLazyErrorBoundary(() => import('./pages/NFTPortfolio'),
 const Integrations = withLazyErrorBoundary(() => import('./pages/Integrations'), 'Integrations')
 const Changelog = withLazyErrorBoundary(() => import('./pages/Changelog'), 'Changelog')
 const AdminSettings = withLazyErrorBoundary(() => import('./pages/AdminSettings'), 'Admin Settings')
+const AdminAnalytics = withLazyErrorBoundary(() => import('./pages/AdminAnalytics'), 'Admin Analytics')
 const AdvancedOrders = withLazyErrorBoundary(() => import('./pages/AdvancedOrders'), 'Advanced Orders')
 const OrderHistory = withLazyErrorBoundary(() => import('./pages/OrderHistory'), 'Order History')
 const CryptoDeposit = withLazyErrorBoundary(() => import('./pages/CryptoDeposit'), 'Crypto Deposit')
@@ -156,6 +157,7 @@ function RoutedPages() {
           <Route path="/admin/referrals" element={<RequireAdmin><AdminReferrals /></RequireAdmin>} />
           <Route path="/admin/signup-bonus" element={<RequireAdmin><AdminSignupBonus /></RequireAdmin>} />
           <Route path="/admin/settings" element={<RequireAdmin><AdminSettings /></RequireAdmin>} />
+          <Route path="/admin/analytics" element={<RequireAdmin><AdminAnalytics /></RequireAdmin>} />
           <Route path="/paper-trading" element={<RequireAuth><PaperTrading /></RequireAuth>} />
           <Route path="/calendar" element={<EconomicCalendar />} />
           <Route path="/screener" element={<Screener />} />

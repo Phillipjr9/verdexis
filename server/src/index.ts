@@ -80,6 +80,7 @@ app.set('trust proxy', 1)
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginResourcePolicy: { policy: 'cross-origin' },
+  frameguard: { action: 'deny' },
 }))
 app.use(compression())
 const corsOptions = {
@@ -94,29 +95,8 @@ const corsOptions = {
       return callback(null, true)
     }
 
-    // In production, only allow specific domains
+    // In production, only allow explicit origins from configuration.
     if (IS_PROD) {
-      // Allow Render deployments
-      if (/^https:\/\/[a-z0-9-]+\.onrender\.com$/i.test(origin)) {
-        return callback(null, true)
-      }
-      
-      // Allow Vercel deployments
-      if (/^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin)) {
-        return callback(null, true)
-      }
-
-      // Allow Railway deployments
-      if (/^https:\/\/[a-z0-9-]+\.railway\.app$/i.test(origin)) {
-        return callback(null, true)
-      }
-
-      // Allow Firebase Hosting deployments
-      if (/^https:\/\/[a-z0-9-]+\.web\.app$/i.test(origin) || /^https:\/\/[a-z0-9-]+\.firebaseapp\.com$/i.test(origin)) {
-        return callback(null, true)
-      }
-      
-      // Log blocked origins in production for monitoring
       console.warn(`[CORS] Blocked origin in production: ${origin}`)
       return callback(new Error('Not allowed by CORS'), false)
     }

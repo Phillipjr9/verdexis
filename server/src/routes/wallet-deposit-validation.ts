@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../db.js'
-import { requireAuth, type AuthedRequest } from '../auth.js'
+import { requireAuth, requireAdmin, type AuthedRequest } from '../auth.js'
 
 const router = Router()
 
@@ -15,7 +15,7 @@ const validatePendingDepositSchema = z.object({
 })
 
 // Admin validates on-chain deposit before crediting wallet
-router.post('/admin/pending-deposits/:id/validate', async (req: AuthedRequest, res) => {
+router.post('/admin/pending-deposits/:id/validate', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
   const parsed = validatePendingDepositSchema.safeParse(req.body)
   if (!parsed.success) {
     res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() })
@@ -73,7 +73,7 @@ router.post('/admin/pending-deposits/:id/validate', async (req: AuthedRequest, r
 })
 
 // Reject deposit if validation fails
-router.post('/admin/pending-deposits/:id/reject', async (req: AuthedRequest, res) => {
+router.post('/admin/pending-deposits/:id/reject', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
   const rejectSchema = z.object({
     reason: z.enum([
       'wrong_network',

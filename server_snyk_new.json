@@ -1,0 +1,346 @@
+{
+  "vulnerabilities": [
+    {
+      "id": "SNYK-JS-BIGINTBUFFER-3364597",
+      "title": "Buffer Overflow",
+      "CVSSv3": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H/E:P",
+      "credit": [
+        "Cris Staicu"
+      ],
+      "semver": {
+        "vulnerable": [
+          ">=0.0.0"
+        ]
+      },
+      "exploit": "Proof of Concept",
+      "fixedIn": [],
+      "patches": [],
+      "insights": {
+        "triageAdvice": null
+      },
+      "language": "js",
+      "severity": "high",
+      "cvssScore": 8.7,
+      "functions": [],
+      "malicious": false,
+      "isDisputed": false,
+      "moduleName": "bigint-buffer",
+      "references": [
+        {
+          "url": "https://www.usenix.org/system/files/sec23fall-prepub-262_staicu.pdf",
+          "title": "Native Node Extension Risks"
+        },
+        {
+          "url": "https://github.com/no2chem/bigint-buffer/blob/master/src/index.ts%23L25",
+          "title": "Vulnerable Code"
+        }
+      ],
+      "cvssDetails": [],
+      "cvssSources": [
+        {
+          "type": "primary",
+          "vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N/E:P",
+          "assigner": "Snyk",
+          "severity": "high",
+          "baseScore": 8.7,
+          "cvssVersion": "4.0",
+          "modificationTime": "2026-07-18T15:25:28.337257Z"
+        },
+        {
+          "type": "secondary",
+          "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H/E:P",
+          "assigner": "Snyk",
+          "severity": "high",
+          "baseScore": 7.5,
+          "cvssVersion": "3.1",
+          "modificationTime": "2026-07-18T15:25:28.337257Z"
+        }
+      ],
+      "description": "## Overview\n[bigint-buffer](https://www.npmjs.com/package/bigint-buffer) is a Node utility that converts TC39 Proposed BigInts to and from buffers\n\nAffected versions of this package are vulnerable to Buffer Overflow in the `toBigIntLE()` function. Attackers can exploit this to crash the application.\n## PoC\n```js\r\nlet be = require('bigint-buffer');\r\nconsole.log(be.toBigIntLE(null));\r\n```\n## Remediation\nThere is no fixed version for `bigint-buffer`.\n## References\n- [Native Node Extension Risks](https://www.usenix.org/system/files/sec23fall-prepub-262_staicu.pdf)\n- [Vulnerable Code](https://github.com/no2chem/bigint-buffer/blob/master/src/index.ts#L25)\n",
+      "epssDetails": {
+        "percentile": "0.42837",
+        "probability": "0.00565",
+        "modelVersion": "v2026.06.15"
+      },
+      "identifiers": {
+        "CVE": [
+          "CVE-2025-3194"
+        ],
+        "CWE": [
+          "CWE-120"
+        ]
+      },
+      "packageName": "bigint-buffer",
+      "proprietary": true,
+      "creationTime": "2023-03-20T12:22:41.448457Z",
+      "functions_new": [],
+      "alternativeIds": [],
+      "disclosureTime": "2023-03-20T12:07:38Z",
+      "exploitDetails": {
+        "sources": [
+          "Snyk"
+        ],
+        "maturityLevels": [
+          {
+            "type": "secondary",
+            "level": "Proof of Concept",
+            "format": "CVSSv3"
+          },
+          {
+            "type": "primary",
+            "level": "Proof of Concept",
+            "format": "CVSSv4"
+          }
+        ]
+      },
+      "packageManager": "npm",
+      "publicationTime": "2025-04-03T10:33:34.404923Z",
+      "severityBasedOn": "CVSS",
+      "modificationTime": "2026-07-18T15:25:28.337257Z",
+      "socialTrendAlert": false,
+      "severityWithCritical": "high",
+      "from": [
+        "verdexis-server@0.1.0",
+        "@solana/spl-token@0.4.15",
+        "@solana/buffer-layout-utils@0.3.0",
+        "bigint-buffer@1.1.5"
+      ],
+      "upgradePath": [],
+      "isUpgradable": false,
+      "isPatchable": false,
+      "name": "bigint-buffer",
+      "version": "1.1.5"
+    }
+  ],
+  "ok": false,
+  "dependencyCount": 503,
+  "org": "phillipjr9",
+  "policy": "# Snyk (https://snyk.io) policy file, patches or ignores known vulnerabilities.\nversion: v1.25.1\nignore: {}\npatch: {}\n",
+  "isPrivate": true,
+  "licensesPolicy": {
+    "severities": {},
+    "orgLicenseRules": {
+      "AGPL-1.0": {
+        "licenseType": "AGPL-1.0",
+        "severity": "high",
+        "instructions": ""
+      },
+      "AGPL-3.0": {
+        "licenseType": "AGPL-3.0",
+        "severity": "high",
+        "instructions": ""
+      },
+      "Artistic-1.0": {
+        "licenseType": "Artistic-1.0",
+        "severity": "medium",
+        "instructions": ""
+      },
+      "Artistic-2.0": {
+        "licenseType": "Artistic-2.0",
+        "severity": "medium",
+        "instructions": ""
+      },
+      "CDDL-1.0": {
+        "licenseType": "CDDL-1.0",
+        "severity": "medium",
+        "instructions": ""
+      },
+      "CPOL-1.02": {
+        "licenseType": "CPOL-1.02",
+        "severity": "high",
+        "instructions": ""
+      },
+      "EPL-1.0": {
+        "licenseType": "EPL-1.0",
+        "severity": "medium",
+        "instructions": ""
+      },
+      "GPL-2.0": {
+        "licenseType": "GPL-2.0",
+        "severity": "high",
+        "instructions": ""
+      },
+      "GPL-3.0": {
+        "licenseType": "GPL-3.0",
+        "severity": "high",
+        "instructions": ""
+      },
+      "LGPL-2.0": {
+        "licenseType": "LGPL-2.0",
+        "severity": "medium",
+        "instructions": ""
+      },
+      "LGPL-2.1": {
+        "licenseType": "LGPL-2.1",
+        "severity": "medium",
+        "instructions": ""
+      },
+      "LGPL-3.0": {
+        "licenseType": "LGPL-3.0",
+        "severity": "medium",
+        "instructions": ""
+      },
+      "MPL-1.1": {
+        "licenseType": "MPL-1.1",
+        "severity": "medium",
+        "instructions": ""
+      },
+      "MPL-2.0": {
+        "licenseType": "MPL-2.0",
+        "severity": "medium",
+        "instructions": ""
+      },
+      "MS-RL": {
+        "licenseType": "MS-RL",
+        "severity": "medium",
+        "instructions": ""
+      },
+      "SimPL-2.0": {
+        "licenseType": "SimPL-2.0",
+        "severity": "high",
+        "instructions": ""
+      }
+    }
+  },
+  "packageManager": "npm",
+  "ignoreSettings": {
+    "adminOnly": false,
+    "reasonRequired": false,
+    "disregardFilesystemIgnores": false,
+    "autoApproveIgnores": false,
+    "approvalWorkflowEnabled": false
+  },
+  "summary": "1 vulnerable dependency path",
+  "remediation": {
+    "unresolved": [
+      {
+        "id": "SNYK-JS-BIGINTBUFFER-3364597",
+        "title": "Buffer Overflow",
+        "CVSSv3": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H/E:P",
+        "credit": [
+          "Cris Staicu"
+        ],
+        "semver": {
+          "vulnerable": [
+            ">=0.0.0"
+          ]
+        },
+        "exploit": "Proof of Concept",
+        "fixedIn": [],
+        "patches": [],
+        "insights": {
+          "triageAdvice": null
+        },
+        "language": "js",
+        "severity": "high",
+        "cvssScore": 8.7,
+        "functions": [],
+        "malicious": false,
+        "isDisputed": false,
+        "moduleName": "bigint-buffer",
+        "references": [
+          {
+            "url": "https://www.usenix.org/system/files/sec23fall-prepub-262_staicu.pdf",
+            "title": "Native Node Extension Risks"
+          },
+          {
+            "url": "https://github.com/no2chem/bigint-buffer/blob/master/src/index.ts%23L25",
+            "title": "Vulnerable Code"
+          }
+        ],
+        "cvssDetails": [],
+        "cvssSources": [
+          {
+            "type": "primary",
+            "vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N/E:P",
+            "assigner": "Snyk",
+            "severity": "high",
+            "baseScore": 8.7,
+            "cvssVersion": "4.0",
+            "modificationTime": "2026-07-18T15:25:28.337257Z"
+          },
+          {
+            "type": "secondary",
+            "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H/E:P",
+            "assigner": "Snyk",
+            "severity": "high",
+            "baseScore": 7.5,
+            "cvssVersion": "3.1",
+            "modificationTime": "2026-07-18T15:25:28.337257Z"
+          }
+        ],
+        "description": "## Overview\n[bigint-buffer](https://www.npmjs.com/package/bigint-buffer) is a Node utility that converts TC39 Proposed BigInts to and from buffers\n\nAffected versions of this package are vulnerable to Buffer Overflow in the `toBigIntLE()` function. Attackers can exploit this to crash the application.\n## PoC\n```js\r\nlet be = require('bigint-buffer');\r\nconsole.log(be.toBigIntLE(null));\r\n```\n## Remediation\nThere is no fixed version for `bigint-buffer`.\n## References\n- [Native Node Extension Risks](https://www.usenix.org/system/files/sec23fall-prepub-262_staicu.pdf)\n- [Vulnerable Code](https://github.com/no2chem/bigint-buffer/blob/master/src/index.ts#L25)\n",
+        "epssDetails": {
+          "percentile": "0.42837",
+          "probability": "0.00565",
+          "modelVersion": "v2026.06.15"
+        },
+        "identifiers": {
+          "CVE": [
+            "CVE-2025-3194"
+          ],
+          "CWE": [
+            "CWE-120"
+          ]
+        },
+        "packageName": "bigint-buffer",
+        "proprietary": true,
+        "creationTime": "2023-03-20T12:22:41.448457Z",
+        "functions_new": [],
+        "alternativeIds": [],
+        "disclosureTime": "2023-03-20T12:07:38Z",
+        "exploitDetails": {
+          "sources": [
+            "Snyk"
+          ],
+          "maturityLevels": [
+            {
+              "type": "secondary",
+              "level": "Proof of Concept",
+              "format": "CVSSv3"
+            },
+            {
+              "type": "primary",
+              "level": "Proof of Concept",
+              "format": "CVSSv4"
+            }
+          ]
+        },
+        "packageManager": "npm",
+        "publicationTime": "2025-04-03T10:33:34.404923Z",
+        "severityBasedOn": "CVSS",
+        "modificationTime": "2026-07-18T15:25:28.337257Z",
+        "socialTrendAlert": false,
+        "packagePopularityRank": 98,
+        "from": [
+          "verdexis-server@0.1.0",
+          "@solana/spl-token@0.4.15",
+          "@solana/buffer-layout-utils@0.3.0",
+          "bigint-buffer@1.1.5"
+        ],
+        "upgradePath": [],
+        "isUpgradable": false,
+        "isPatchable": false,
+        "isPinnable": false,
+        "isRuntime": false,
+        "name": "bigint-buffer",
+        "version": "1.1.5",
+        "severityWithCritical": "high"
+      }
+    ],
+    "upgrade": {},
+    "patch": {},
+    "ignore": {},
+    "pin": {}
+  },
+  "filesystemPolicy": false,
+  "filtered": {
+    "ignore": [],
+    "patch": []
+  },
+  "uniqueCount": 1,
+  "projectName": "verdexis-server",
+  "displayTargetFile": "package-lock.json",
+  "hasUnknownVersions": false,
+  "path": "/Users/progressive/verdexis/server"
+}

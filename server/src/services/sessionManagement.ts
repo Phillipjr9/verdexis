@@ -224,8 +224,48 @@ export class SessionManagementService {
    * Get user's active sessions
    */
   async getUserSessions(_userId: string): Promise<SessionData[]> {
-    // Sessions are JWT-based, not stored in userSession table
-    return []
+    const events = await prisma.securityEvent.findMany({
+      where: {
+        userId: _userId,
+        eventType: { in: ['session_created', 'session_revoked', 'all_sessions_revoked'] }
+      },
+      orderBy: { createdAt: 'asc' }
+    })
+
+    const sessions = new Map<string, SessionData>()
+
+    for (const event of events) {
+      let metadata: any = {}
+      if (event.metadata) {
+        try { metadata = JSON.parse(event.metadata) } catch { metadata = {} }
+      }
+
+      if (event.eventType === 'session_created') {
+        const sessionId = typeof metadata.sessionId === 'string' ? metadata.sessionId : ''
+        if (!sessionId) continue
+
+        const expiresAt = metadata.expiresAt ? new Date(String(metadata.expiresAt)) : new Date(event.createdAt.getTime() + 24 * 60 * 60 * 1000)
+        sessions.set(sessionId, {
+          userId: _userId,
+          sessionId,
+          deviceHash: typeof metadata.deviceHash === 'string' ? metadata.deviceHash : '',
+          ipAddress: typeof metadata.ipAddress === 'string' ? metadata.ipAddress : null,
+          otpVerified: Boolean(metadata.otpVerified),
+          otpVerifiedAt: metadata.otpVerified && typeof metadata.otpVerifiedAt === 'string' ? new Date(metadata.otpVerifiedAt) : undefined,
+          stepUpLevel: typeof metadata.stepUpLevel === 'number' ? metadata.stepUpLevel : metadata.otpVerified ? 1 : 0,
+          expiresAt,
+          createdAt: event.createdAt,
+          lastActivityAt: event.createdAt,
+        })
+      } else if (event.eventType === 'session_revoked') {
+        const sessionId = typeof metadata.sessionId === 'string' ? metadata.sessionId : ''
+        if (sessionId) sessions.delete(sessionId)
+      } else if (event.eventType === 'all_sessions_revoked') {
+        sessions.clear()
+      }
+    }
+
+    return Array.from(sessions.values())
   }
 
   /**
@@ -253,11 +293,58 @@ export class SessionManagementService {
     expiredSessions: number
     averageSessionDuration: number
   }> {
+    const events = await prisma.securityEvent.findMany({
+      where: {
+        eventType: { in: ['session_created', 'session_revoked', 'all_sessions_revoked'] }
+      },
+      orderBy: { createdAt: 'asc' }
+    })
+
+    const sessions = new Map<string, { expiresAt: Date; createdAt: Date; otpVerified: boolean }>()
+
+    for (const event of events) {
+      let metadata: any = {}
+      if (event.metadata) {
+        try { metadata = JSON.parse(event.metadata) } catch { metadata = {} }
+      }
+
+      if (event.eventType === 'session_created') {
+        const sessionId = typeof metadata.sessionId === 'string' ? metadata.sessionId : ''
+        if (!sessionId) continue
+
+        const expiresAt = metadata.expiresAt ? new Date(String(metadata.expiresAt)) : new Date(event.createdAt.getTime() + 24 * 60 * 60 * 1000)
+        sessions.set(sessionId, {
+          createdAt: event.createdAt,
+          expiresAt,
+          otpVerified: Boolean(metadata.otpVerified),
+        })
+      } else if (event.eventType === 'session_revoked') {
+        const sessionId = typeof metadata.sessionId === 'string' ? metadata.sessionId : ''
+        if (sessionId) sessions.delete(sessionId)
+      } else if (event.eventType === 'all_sessions_revoked') {
+        sessions.clear()
+      }
+    }
+
+    const now = new Date()
+    let totalActiveSessions = 0
+    let otpVerifiedSessions = 0
+    let expiredSessions = 0
+    let totalDurationMs = 0
+
+    sessions.forEach((session) => {
+      const expired = session.expiresAt.getTime() <= now.getTime()
+      if (expired) expiredSessions++
+      else totalActiveSessions++
+      if (session.otpVerified) otpVerifiedSessions++
+      totalDurationMs += now.getTime() - session.createdAt.getTime()
+    })
+
     return {
-      totalActiveSessions: 0,
-      otpVerifiedSessions: 0,
-      expiredSessions: 0,
-      averageSessionDuration: 0
+      totalActiveSessions,
+      otpVerifiedSessions,
+      expiredSessions,
+      averageSessionDuration: sessions.size ? Math.round(totalDurationMs / sessions.size / 1000) : 0,
     }
   }
 }

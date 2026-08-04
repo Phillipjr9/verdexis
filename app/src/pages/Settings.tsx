@@ -11,6 +11,7 @@ import { fileToAvatarDataUrl, getAvatar, updateProfile } from '../lib/userProfil
 import { applyTheme } from '../lib/themeApplier'
 import { api, clearStoredAuth, getToken, setStoredUser, setToken } from '../lib/api'
 import { adminApi } from '../lib/adminApi'
+import { deletePasskey, listPasskeys, registerPasskey, type Passkey } from '../lib/passkeys'
 
 type Section = 'profile' | 'security' | 'trading' | 'connections' | 'notifications' | 'preferences' | 'privacy' | 'admin'
 
@@ -100,6 +101,10 @@ export default function Settings() {
   const [changingPassword, setChangingPassword] = useState(false)
   const [withdrawalFeeRate, setWithdrawalFeeRate] = useState(11.8)
   const [savingFee, setSavingFee] = useState(false)
+  const [passkeys, setPasskeys] = useState<Passkey[]>([])
+  const [passkeysLoading, setPasskeysLoading] = useState(false)
+  const [registeringPasskey, setRegisteringPasskey] = useState(false)
+  const [passkeyError, setPasskeyError] = useState<string | null>(null)
 
   useEffect(() => {
     const auth = localStorage.getItem('verdexis_auth')
@@ -117,6 +122,23 @@ export default function Settings() {
       }
     } catch {}
   }, [])
+
+  useEffect(() => {
+    if (!getToken()) return
+    const fetchPasskeys = async () => {
+      setPasskeyError(null)
+      setPasskeysLoading(true)
+      try {
+        const keys = await listPasskeys()
+        setPasskeys(keys)
+      } catch (err) {
+        setPasskeyError((err as any)?.error || (err as Error).message || 'Unable to load passkeys')
+      } finally {
+        setPasskeysLoading(false)
+      }
+    }
+    fetchPasskeys()
+  }, [isAuthed])
 
   const update = <K extends keyof UserPrefs>(key: K, value: UserPrefs[K]) => {
     const next = { ...prefs, [key]: value }
@@ -230,6 +252,46 @@ export default function Settings() {
     localStorage.clear()
     toast.success('Account deleted')
     setTimeout(() => { window.location.href = '/' }, 600)
+  }
+
+  const reloadPasskeys = async () => {
+    setPasskeyError(null)
+    setPasskeysLoading(true)
+    try {
+      const keys = await listPasskeys()
+      setPasskeys(keys)
+    } catch (err) {
+      setPasskeyError((err as any)?.error || (err as Error).message || 'Unable to load passkeys')
+    } finally {
+      setPasskeysLoading(false)
+    }
+  }
+
+  const handleRegisterPasskey = async () => {
+    const deviceName = window.prompt('Enter a name for this passkey/device', 'My device')?.trim()
+    if (!deviceName) return
+    setRegisteringPasskey(true)
+    try {
+      await registerPasskey(deviceName)
+      toast.success('Passkey registered successfully')
+      await reloadPasskeys()
+    } catch (err) {
+      toast.error((err as any)?.error || (err as Error).message || 'Passkey registration failed')
+    } finally {
+      setRegisteringPasskey(false)
+    }
+  }
+
+  const handleRemovePasskey = async (id: string) => {
+    if (!confirm('Remove this passkey? You will no longer be able to sign in with it.')) return
+    setPasskeyError(null)
+    try {
+      await deletePasskey(id)
+      toast.success('Passkey removed')
+      setPasskeys((current) => current.filter((pk) => pk.id !== id))
+    } catch (err) {
+      toast.error((err as any)?.error || (err as Error).message || 'Failed to remove passkey')
+    }
   }
 
   const handleChangePassword = async () => {
@@ -386,9 +448,42 @@ export default function Settings() {
                   <div className="border-t border-[#ffffff08] pt-6">
                     <h3 className="text-sm font-medium text-[#A0A0A0] mb-4">Passkeys</h3>
                     <p className="text-xs text-[#737373] mb-3">Use biometrics or a security key to sign in without a password.</p>
-                    <button type="button" onClick={() => setSection('security')} className="text-xs text-[#0C8B44] hover:underline flex items-center gap-1">
-                      <Fingerprint className="w-3.5 h-3.5" /> Manage passkeys in Security settings
-                    </button>
+                    <div className="space-y-3">
+                      {passkeyError && <p className="text-xs text-red-400">{passkeyError}</p>}
+                      <button
+                        type="button"
+                        onClick={handleRegisterPasskey}
+                        disabled={registeringPasskey || passkeysLoading}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#0C8B44] text-white text-sm font-medium rounded-lg hover:bg-[#0a7539] disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Fingerprint className="w-3.5 h-3.5" />
+                        {registeringPasskey ? 'Registering passkey…' : 'Register new passkey'}
+                      </button>
+                      {passkeysLoading ? (
+                        <p className="text-xs text-[#737373]">Loading passkeys…</p>
+                      ) : passkeys.length === 0 ? (
+                        <p className="text-xs text-[#737373]">No passkeys registered yet.</p>
+                      ) : (
+                        <div className="space-y-3">
+                          {passkeys.map((pk) => (
+                            <div key={pk.id} className="rounded-2xl bg-[#0a0e10] border border-[#ffffff10] p-4 flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-sm text-[#E5E5E5]">{pk.deviceName}</p>
+                                <p className="text-[11px] text-[#737373]">Added {new Date(pk.createdAt).toLocaleDateString()}</p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRemovePasskey(pk.id)}
+                                className="px-3 py-2 text-xs text-[#FF6B6B] bg-[#ff6b6b14] rounded-lg hover:bg-[#ff6b6b20] transition-colors"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <p className="text-xs text-[#FF9800]">Passkeys require HTTPS or a production domain to work reliably.</p>
+                    </div>
                   </div>
                   <Toggle icon={<Shield className="w-5 h-5 text-[#0C8B44]" />} title="Two-factor authentication"
                     description="Require a verification code on every login."

@@ -1,8 +1,10 @@
 import { Link } from 'react-router-dom'
 import { Shield, Lock, MapPin } from 'lucide-react'
 
+import { clearConsentValue } from '../lib/cookieConsent'
+
 const openCookiePrefs = () => {
-  try { localStorage.removeItem('verdexis_cookie_consent') } catch { /* ignore */ }
+  try { clearConsentValue() } catch { /* ignore */ }
   window.dispatchEvent(new Event('verdexis:open-cookie-prefs'))
 }
 

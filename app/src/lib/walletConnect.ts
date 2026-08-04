@@ -134,7 +134,7 @@ export function getWalletConnectProvider(): Promise<Eip1193Provider | null> {
       // so users on mobile can inspect (Safari → Settings → Advanced → Web
       // Inspector). Common causes: invalid project ID, origin not in Reown
       // project's allowlist, or network blocking the WC relay.
-      // eslint-disable-next-line no-console
+       
       console.error('[WalletConnect] init failed', err)
       cached = null
       throw err

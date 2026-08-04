@@ -49,7 +49,7 @@ export default function LinkedWalletsPanel({ activeAddress, refreshKey, onActive
       setLinks(links)
     } catch (err) {
       // Likely the user just isn't signed in yet \u2014 hide the panel.
-      // eslint-disable-next-line no-console
+       
       console.warn('[LinkedWalletsPanel] load failed', err)
       setLinks([])
     } finally {

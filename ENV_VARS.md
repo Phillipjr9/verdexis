@@ -32,6 +32,26 @@ Fill in the values (keep secrets out of source control). Use the Vercel dashboar
 - SES_FROM_EMAIL: noreply@yourdomain.com (if using AWS SES)
 - SENTRY_DSN: <optional_sentry_dsn>
 
+Email DNS requirements
+----------------------
+- Add a TXT record for your sending domain with SPF to authorize the service that sends email for `SMTP_FROM` / `SES_FROM_EMAIL`.
+- Example for AWS SES:
+
+  `v=spf1 include:amazonses.com -all`
+
+- Example for SendGrid:
+
+  `v=spf1 include:sendgrid.net -all`
+
+- If you use a custom SMTP provider, use its recommended SPF include value, e.g.:
+
+  `v=spf1 a mx include:_spf.yourprovider.com -all`
+
+- Also configure DKIM and DMARC if available to improve deliverability and prevent spoofing.
+- Add a DMARC TXT record for your sending domain to enforce policy and reporting, for example:
+
+  `v=DMARC1; p=quarantine; rua=mailto:dmarc@yourdomain.com; ruf=mailto:dmarc@yourdomain.com; pct=100; sp=none; aspf=s; adkim=s`
+
 4) Cloud / Provider keys
 - AWS_REGION: us-east-1
 - AWS_ACCESS_KEY_ID: <aws_key_id>

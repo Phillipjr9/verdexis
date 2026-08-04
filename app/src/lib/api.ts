@@ -451,6 +451,28 @@ export const api = {
     request<{ documents: Array<{ id: string; type: string; uploaded: boolean; fileName?: string; size?: number }> }>('/api/kyc/documents'),
 
   // Copy Trading
+  // User Security
+  getSecurityOverview: () =>
+    request<{ securityScore: { score: number; level: string; recommendations: string[] }; authentication: unknown; devices: { total: number; trusted: number; recent: unknown[] }; sessions: unknown; recentActivity: unknown[] }>('/api/user-security/overview'),
+  getLoginHistory: (days = 30) =>
+    request<{ events: Array<{ id: string; type: string; severity: string; description: string; timestamp: string; metadata: { ipAddress?: string; location?: string; device?: string } | null }> }>(`/api/user-security/events?days=${days}&type=login`),
+  getTrustedDevices: () =>
+    request<{ devices: Array<{ id: string; deviceName: string; lastSeenAt: string; isTrusted: boolean; location: unknown }> }>('/api/user-security/devices'),
+  revokeTrustedDevice: (deviceId: string) =>
+    request<{ success: boolean }>(`/api/user-security/devices/${encodeURIComponent(deviceId)}`, { method: 'DELETE' }),
+  generateRecoveryCodes: () =>
+    request<{ success: boolean; codes: string[]; message: string }>('/api/user-security/recovery-codes/generate', { method: 'POST' }),
+
+  // API Keys
+  getApiKeys: () =>
+    request<{ keys: Array<{ id: string; name: string; prefix: string; permissions: string[]; rateLimit: number; lastUsedAt: string | null; expiresAt: string | null; createdAt: string }> }>('/api/api-keys'),
+  createApiKey: (payload: { name: string; permissions?: string[]; rateLimit?: number; expiresAt?: string }) =>
+    request<{ id: string; key: string; prefix: string; message: string }>('/api/api-keys', { method: 'POST', body: JSON.stringify(payload) }),
+  revokeApiKey: (id: string) =>
+    request<{ revoked: boolean }>(`/api/api-keys/${encodeURIComponent(id)}/revoke`, { method: 'POST' }),
+  deleteApiKey: (id: string) =>
+    request<{ deleted: boolean }>(`/api/api-keys/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
   copyTrading: {
     getLeaderboard: (period: '30d' | '90d' | 'all' = '30d') =>
       request<{ traders: unknown[] }>(`/api/copy-trading/leaderboard?period=${period}`),

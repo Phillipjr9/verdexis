@@ -109,7 +109,6 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
       }
 
       if (false && isSupabaseConfigured) {
-        const trimmedName = `${form.firstName} ${form.lastName}`.trim()
         let sessionData
         if (mode === 'signup') {
           const signUpResult = await signUpWithEmail(form.email, form.password)

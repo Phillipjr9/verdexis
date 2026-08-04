@@ -185,12 +185,13 @@ const listSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(25),
   role: z.enum(['user', 'admin', 'all']).default('all'),
   suspended: z.enum(['true', 'false', 'all']).default('all'),
+  kycStatus: z.enum(['none', 'pending', 'approved', 'rejected', 'all']).default('all'),
 })
 
 router.get('/users', async (req: AuthedRequest, res) => {
   const parsed = listSchema.safeParse(req.query)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid query' }); return }
-  const { q, page, limit, role, suspended } = parsed.data
+  const { q, page, limit, role, suspended, kycStatus } = parsed.data
   
   const superAdmin = await isSuperAdmin(req.userId!)
   let where: Record<string, unknown> = {}
@@ -219,6 +220,7 @@ router.get('/users', async (req: AuthedRequest, res) => {
   }
   if (role !== 'all') where.role = role
   if (suspended !== 'all') where.suspended = suspended === 'true'
+  if (kycStatus !== 'all') where.kycStatus = kycStatus
   
   const [total, users] = await Promise.all([
     prisma.user.count({ where }),

@@ -1,0 +1,362 @@
+{
+  "vulnerabilities": [
+    {
+      "id": "SNYK-JS-REACTROUTER-18313151",
+      "title": "Cross-site Request Forgery (CSRF)",
+      "CVSSv3": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:H/A:N",
+      "credit": [
+        "raditya"
+      ],
+      "semver": {
+        "vulnerable": [
+          ">=7.12.0 <8.3.0"
+        ]
+      },
+      "exploit": "Not Defined",
+      "fixedIn": [
+        "8.3.0"
+      ],
+      "patches": [],
+      "insights": {
+        "triageAdvice": null
+      },
+      "language": "js",
+      "severity": "medium",
+      "cvssScore": 5.9,
+      "functions": [],
+      "malicious": false,
+      "isDisputed": false,
+      "moduleName": "react-router",
+      "references": [
+        {
+          "url": "https://github.com/remix-run/react-router/security/advisories/GHSA-qwww-vcr4-c8h2",
+          "title": "GitHub Advisory"
+        },
+        {
+          "url": "https://github.com/remix-run/react-router/blob/main/CHANGELOG.md%23v830",
+          "title": "GitHub ChangeLog"
+        },
+        {
+          "url": "https://github.com/remix-run/react-router/commit/7a71c728ad116bd78699a258b2014ce9585729f5",
+          "title": "GitHub Commit"
+        },
+        {
+          "url": "http://github.com/remix-run/react-router/pull/15311",
+          "title": "GitHub PR"
+        },
+        {
+          "url": "https://github.com/remix-run/react-router/releases/tag/react-router@8.3.0",
+          "title": "GitHub Release"
+        }
+      ],
+      "cvssDetails": [],
+      "cvssSources": [
+        {
+          "type": "primary",
+          "vector": "CVSS:4.0/AV:N/AC:L/AT:P/PR:N/UI:A/VC:L/VI:H/VA:N/SC:N/SI:N/SA:N",
+          "assigner": "Snyk",
+          "severity": "medium",
+          "baseScore": 5.9,
+          "cvssVersion": "4.0",
+          "modificationTime": "2026-07-26T11:29:21.779615Z"
+        },
+        {
+          "type": "secondary",
+          "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:H/A:N",
+          "assigner": "Snyk",
+          "severity": "medium",
+          "baseScore": 5.9,
+          "cvssVersion": "3.1",
+          "modificationTime": "2026-07-26T11:29:21.779615Z"
+        }
+      ],
+      "description": "## Overview\n\nAffected versions of this package are vulnerable to Cross-site Request Forgery (CSRF) via the unstable RSC APIs. An attacker can execute unauthorized actions by tricking a user into submitting crafted requests.\n\n**Note:** This is only exploitable if the unstable RSC APIs are enabled in the application.\n## Remediation\nUpgrade `react-router` to version 8.3.0 or higher.\n## References\n- [GitHub Advisory](https://github.com/remix-run/react-router/security/advisories/GHSA-qwww-vcr4-c8h2)\n- [GitHub ChangeLog](https://github.com/remix-run/react-router/blob/main/CHANGELOG.md#v830)\n- [GitHub Commit](https://github.com/remix-run/react-router/commit/7a71c728ad116bd78699a258b2014ce9585729f5)\n- [GitHub PR](http://github.com/remix-run/react-router/pull/15311)\n- [GitHub Release](https://github.com/remix-run/react-router/releases/tag/react-router@8.3.0)\n",
+      "epssDetails": null,
+      "identifiers": {
+        "CVE": [],
+        "CWE": [
+          "CWE-352"
+        ],
+        "GHSA": [
+          "GHSA-qwww-vcr4-c8h2"
+        ]
+      },
+      "packageName": "react-router",
+      "proprietary": false,
+      "creationTime": "2026-07-26T11:29:21.458846Z",
+      "functions_new": [],
+      "alternativeIds": [],
+      "disclosureTime": "2026-07-24T16:44:43Z",
+      "exploitDetails": {
+        "sources": [],
+        "maturityLevels": [
+          {
+            "type": "secondary",
+            "level": "Not Defined",
+            "format": "CVSSv3"
+          },
+          {
+            "type": "primary",
+            "level": "Not Defined",
+            "format": "CVSSv4"
+          }
+        ]
+      },
+      "packageManager": "npm",
+      "publicationTime": "2026-07-26T11:29:21.637585Z",
+      "severityBasedOn": "CVSS",
+      "modificationTime": "2026-07-26T11:29:21.779615Z",
+      "socialTrendAlert": false,
+      "severityWithCritical": "medium",
+      "from": [
+        "my-app@0.0.0",
+        "react-router-dom@7.18.2",
+        "react-router@7.18.2"
+      ],
+      "upgradePath": [],
+      "isUpgradable": false,
+      "isPatchable": false,
+      "name": "react-router",
+      "version": "7.18.2"
+    }
+  ],
+  "ok": false,
+  "dependencyCount": 583,
+  "org": "phillipjr9",
+  "policy": "# Snyk (https://snyk.io) policy file, patches or ignores known vulnerabilities.\nversion: v1.25.1\nignore: {}\npatch: {}\n",
+  "isPrivate": true,
+  "licensesPolicy": {
+    "severities": {},
+    "orgLicenseRules": {
+      "AGPL-1.0": {
+        "licenseType": "AGPL-1.0",
+        "severity": "high",
+        "instructions": ""
+      },
+      "AGPL-3.0": {
+        "licenseType": "AGPL-3.0",
+        "severity": "high",
+        "instructions": ""
+      },
+      "Artistic-1.0": {
+        "licenseType": "Artistic-1.0",
+        "severity": "medium",
+        "instructions": ""
+      },
+      "Artistic-2.0": {
+        "licenseType": "Artistic-2.0",
+        "severity": "medium",
+        "instructions": ""
+      },
+      "CDDL-1.0": {
+        "licenseType": "CDDL-1.0",
+        "severity": "medium",
+        "instructions": ""
+      },
+      "CPOL-1.02": {
+        "licenseType": "CPOL-1.02",
+        "severity": "high",
+        "instructions": ""
+      },
+      "EPL-1.0": {
+        "licenseType": "EPL-1.0",
+        "severity": "medium",
+        "instructions": ""
+      },
+      "GPL-2.0": {
+        "licenseType": "GPL-2.0",
+        "severity": "high",
+        "instructions": ""
+      },
+      "GPL-3.0": {
+        "licenseType": "GPL-3.0",
+        "severity": "high",
+        "instructions": ""
+      },
+      "LGPL-2.0": {
+        "licenseType": "LGPL-2.0",
+        "severity": "medium",
+        "instructions": ""
+      },
+      "LGPL-2.1": {
+        "licenseType": "LGPL-2.1",
+        "severity": "medium",
+        "instructions": ""
+      },
+      "LGPL-3.0": {
+        "licenseType": "LGPL-3.0",
+        "severity": "medium",
+        "instructions": ""
+      },
+      "MPL-1.1": {
+        "licenseType": "MPL-1.1",
+        "severity": "medium",
+        "instructions": ""
+      },
+      "MPL-2.0": {
+        "licenseType": "MPL-2.0",
+        "severity": "medium",
+        "instructions": ""
+      },
+      "MS-RL": {
+        "licenseType": "MS-RL",
+        "severity": "medium",
+        "instructions": ""
+      },
+      "SimPL-2.0": {
+        "licenseType": "SimPL-2.0",
+        "severity": "high",
+        "instructions": ""
+      }
+    }
+  },
+  "packageManager": "npm",
+  "ignoreSettings": {
+    "adminOnly": false,
+    "reasonRequired": false,
+    "disregardFilesystemIgnores": false,
+    "autoApproveIgnores": false,
+    "approvalWorkflowEnabled": false
+  },
+  "summary": "1 vulnerable dependency path",
+  "remediation": {
+    "unresolved": [
+      {
+        "id": "SNYK-JS-REACTROUTER-18313151",
+        "title": "Cross-site Request Forgery (CSRF)",
+        "CVSSv3": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:H/A:N",
+        "credit": [
+          "raditya"
+        ],
+        "semver": {
+          "vulnerable": [
+            ">=7.12.0 <8.3.0"
+          ]
+        },
+        "exploit": "Not Defined",
+        "fixedIn": [
+          "8.3.0"
+        ],
+        "patches": [],
+        "insights": {
+          "triageAdvice": null
+        },
+        "language": "js",
+        "severity": "medium",
+        "cvssScore": 5.9,
+        "functions": [],
+        "malicious": false,
+        "isDisputed": false,
+        "moduleName": "react-router",
+        "references": [
+          {
+            "url": "https://github.com/remix-run/react-router/security/advisories/GHSA-qwww-vcr4-c8h2",
+            "title": "GitHub Advisory"
+          },
+          {
+            "url": "https://github.com/remix-run/react-router/blob/main/CHANGELOG.md%23v830",
+            "title": "GitHub ChangeLog"
+          },
+          {
+            "url": "https://github.com/remix-run/react-router/commit/7a71c728ad116bd78699a258b2014ce9585729f5",
+            "title": "GitHub Commit"
+          },
+          {
+            "url": "http://github.com/remix-run/react-router/pull/15311",
+            "title": "GitHub PR"
+          },
+          {
+            "url": "https://github.com/remix-run/react-router/releases/tag/react-router@8.3.0",
+            "title": "GitHub Release"
+          }
+        ],
+        "cvssDetails": [],
+        "cvssSources": [
+          {
+            "type": "primary",
+            "vector": "CVSS:4.0/AV:N/AC:L/AT:P/PR:N/UI:A/VC:L/VI:H/VA:N/SC:N/SI:N/SA:N",
+            "assigner": "Snyk",
+            "severity": "medium",
+            "baseScore": 5.9,
+            "cvssVersion": "4.0",
+            "modificationTime": "2026-07-26T11:29:21.779615Z"
+          },
+          {
+            "type": "secondary",
+            "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:H/A:N",
+            "assigner": "Snyk",
+            "severity": "medium",
+            "baseScore": 5.9,
+            "cvssVersion": "3.1",
+            "modificationTime": "2026-07-26T11:29:21.779615Z"
+          }
+        ],
+        "description": "## Overview\n\nAffected versions of this package are vulnerable to Cross-site Request Forgery (CSRF) via the unstable RSC APIs. An attacker can execute unauthorized actions by tricking a user into submitting crafted requests.\n\n**Note:** This is only exploitable if the unstable RSC APIs are enabled in the application.\n## Remediation\nUpgrade `react-router` to version 8.3.0 or higher.\n## References\n- [GitHub Advisory](https://github.com/remix-run/react-router/security/advisories/GHSA-qwww-vcr4-c8h2)\n- [GitHub ChangeLog](https://github.com/remix-run/react-router/blob/main/CHANGELOG.md#v830)\n- [GitHub Commit](https://github.com/remix-run/react-router/commit/7a71c728ad116bd78699a258b2014ce9585729f5)\n- [GitHub PR](http://github.com/remix-run/react-router/pull/15311)\n- [GitHub Release](https://github.com/remix-run/react-router/releases/tag/react-router@8.3.0)\n",
+        "epssDetails": null,
+        "identifiers": {
+          "CVE": [],
+          "CWE": [
+            "CWE-352"
+          ],
+          "GHSA": [
+            "GHSA-qwww-vcr4-c8h2"
+          ]
+        },
+        "packageName": "react-router",
+        "proprietary": false,
+        "creationTime": "2026-07-26T11:29:21.458846Z",
+        "functions_new": [],
+        "alternativeIds": [],
+        "disclosureTime": "2026-07-24T16:44:43Z",
+        "exploitDetails": {
+          "sources": [],
+          "maturityLevels": [
+            {
+              "type": "secondary",
+              "level": "Not Defined",
+              "format": "CVSSv3"
+            },
+            {
+              "type": "primary",
+              "level": "Not Defined",
+              "format": "CVSSv4"
+            }
+          ]
+        },
+        "packageManager": "npm",
+        "publicationTime": "2026-07-26T11:29:21.637585Z",
+        "severityBasedOn": "CVSS",
+        "modificationTime": "2026-07-26T11:29:21.779615Z",
+        "socialTrendAlert": false,
+        "packagePopularityRank": 99,
+        "from": [
+          "my-app@0.0.0",
+          "react-router-dom@7.18.2",
+          "react-router@7.18.2"
+        ],
+        "upgradePath": [],
+        "isUpgradable": false,
+        "isPatchable": false,
+        "isPinnable": false,
+        "isRuntime": false,
+        "name": "react-router",
+        "version": "7.18.2",
+        "severityWithCritical": "medium"
+      }
+    ],
+    "upgrade": {},
+    "patch": {},
+    "ignore": {},
+    "pin": {}
+  },
+  "filesystemPolicy": false,
+  "filtered": {
+    "ignore": [],
+    "patch": []
+  },
+  "uniqueCount": 1,
+  "projectName": "my-app",
+  "displayTargetFile": "package-lock.json",
+  "hasUnknownVersions": false,
+  "path": "/Users/progressive/verdexis/app"
+}

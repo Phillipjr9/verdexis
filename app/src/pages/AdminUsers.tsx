@@ -16,6 +16,7 @@ export default function AdminUsers() {
   const [q, setQ] = useState('')
   const [role, setRole] = useState<'user' | 'admin' | 'all'>(() => (searchParams.get('role') as 'user' | 'admin') || 'all')
   const [suspended, setSuspended] = useState<'true' | 'false' | 'all'>(() => (searchParams.get('suspended') as 'true' | 'false') || 'all')
+  const [kycStatus, setKycStatus] = useState<'none' | 'pending' | 'approved' | 'rejected' | 'all'>(() => (searchParams.get('kycStatus') as 'none' | 'pending' | 'approved' | 'rejected') || 'all')
   const [loading, setLoading] = useState(true)
   const [createOpen, setCreateOpen] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -31,21 +32,22 @@ export default function AdminUsers() {
 
   function load() {
     setLoading(true)
-    adminApi.listUsers({ q, page, limit: PAGE_SIZE, role, suspended })
+    adminApi.listUsers({ q, page, limit: PAGE_SIZE, role, suspended, kycStatus: kycStatus !== 'all' ? kycStatus : undefined })
       .then((r) => { setUsers(r.users); setTotal(r.total) })
       .catch((e: { error?: string }) => toast.error(e.error || 'Failed to load users'))
       .finally(() => setLoading(false))
   }
 
-  useEffect(() => { load() /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [page, role, suspended])
+  useEffect(() => { load()   }, [page, role, suspended])
   useEffect(() => {
     // Persist filters in URL so dashboard click-throughs land on the right view.
     const sp = new URLSearchParams(searchParams)
     if (role !== 'all') sp.set('role', role); else sp.delete('role')
     if (suspended !== 'all') sp.set('suspended', suspended); else sp.delete('suspended')
+    if (kycStatus !== 'all') sp.set('kycStatus', kycStatus); else sp.delete('kycStatus')
     setSearchParams(sp, { replace: true })
     /* eslint-disable-next-line react-hooks/exhaustive-deps */
-  }, [role, suspended])
+  }, [role, suspended, kycStatus])
 
   function toggle(id: string) {
     setSelected((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next })
@@ -190,6 +192,13 @@ export default function AdminUsers() {
             <option value="all">All status</option>
             <option value="false">Active only</option>
             <option value="true">Suspended only</option>
+          </select>
+          <select aria-label="KYC filter" value={kycStatus} onChange={(e) => { setKycStatus(e.target.value as typeof kycStatus); setPage(1) }} className="px-3 py-2 bg-[#0f1619] border border-[#ffffff10] rounded-lg text-sm text-[#E5E5E5] focus:outline-none focus:border-[#0C8B44]">
+            <option value="all">All KYC</option>
+            <option value="none">Not started</option>
+            <option value="pending">KYC pending</option>
+            <option value="approved">KYC approved</option>
+            <option value="rejected">KYC rejected</option>
           </select>
           <button type="submit" className="px-4 py-2 bg-[#0C8B44] text-white text-sm rounded-lg hover:bg-[#0a7539] transition-colors">Search</button>
         </form>

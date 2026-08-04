@@ -19,15 +19,18 @@ import CurrencySelector from '../components/dashboard/CurrencySelector'
 import ExportMenu from '../components/dashboard/ExportMenu'
 import CustomizeWidgets from '../components/dashboard/CustomizeWidgets'
 import AdminQuickPanel from '../components/dashboard/AdminQuickPanel'
-import AdminConsoleEmbed from '../components/dashboard/AdminConsoleEmbed'
+import { AdminDashboardCharts } from '../components/dashboard/AdminDashboardCharts'
 import { AdminSettingsVerification } from '../components/dashboard/AdminSettingsVerificationNew'
 import TimeRangePicker, { type ChartRange, rangeLabel } from '../components/dashboard/TimeRangePicker'
 import NetWorthChart from '../components/NetWorthChart'
 import EmptyStateCta from '../components/dashboard/EmptyStateCta'
 import WatchlistPanel from '../components/WatchlistPanel'
 import DensityToggle from '../components/dashboard/DensityToggle'
+import ConnectedAccountsCard from '../components/dashboard/ConnectedAccountsCard'
+import NewsSnippetCard from '../components/dashboard/NewsSnippetCard'
 import { marketData, type CryptoQuote } from '../lib/marketData'
 import { liveTicker } from '../lib/liveTicker'
+import { realTimePrice } from '../lib/realTimePrice'
 import { aiService, type AIInsight } from '../lib/aiService'
 import { portfolioStore, type PortfolioHolding, type Trade, type WalletBalance, type WalletTransaction } from '../lib/portfolioStore'
 import { assetIconFor, cryptoIconErrorFallback } from '../lib/cryptoIcon'
@@ -175,6 +178,11 @@ export default function Dashboard() {
   // so the masked value visually conveys the same magnitude as the real one
   // (e.g. "$12,345.67" -> "$**,***.**").
   const maskMoney = (s: string) => s.replace(/\d/g, '*')
+  const formatCryptoAmount = (amount: number) => amount.toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 8,
+    useGrouping: true,
+  })
   const [hiddenWidgets, setHiddenWidgets] = useState(() => dashboardLayout.hidden())
   const isAuthenticated = !!localStorage.getItem('verdexis_token')
   const userName = (() => {
@@ -238,7 +246,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchData()
-    const marketInterval = setInterval(() => fetchData(true), 30000)
+    const marketInterval = setInterval(() => fetchData(true), 10000)
     const fastTick = setInterval(() => {
       setHoldings([...portfolioStore.getHoldings()])
       setWallet([...portfolioStore.getWallet()])
@@ -258,6 +266,17 @@ export default function Dashboard() {
       window.removeEventListener('verdexis:portfolio', refresh)
     }
   }, [fetchData])
+
+  useEffect(() => {
+    const unsubscribe = realTimePrice.onPortfolioValueChange(() => {
+      setHoldings([...portfolioStore.getHoldings()])
+      setTrades(portfolioStore.getTrades().slice(0, 5))
+      setWallet([...portfolioStore.getWallet()])
+      setTransactions(portfolioStore.getTransactions().slice(0, 5))
+      setLastUpdated(new Date())
+    })
+    return unsubscribe
+  }, [])
 
   // Live price ticker -> mark portfolio to market on every price change so
   // the displayed totals (value, P&L, allocation) update sub-second instead
@@ -634,7 +653,10 @@ export default function Dashboard() {
                 <p className="text-xs text-[#8EA39B]">All admin operations are consolidated here under Dashboard.</p>
               </div>
               <AdminQuickPanel />
-              <AdminConsoleEmbed />
+              <div className="mb-8 rounded-3xl border border-[#ffffff10] bg-[#0f1619]/50 p-6">
+                <h2 className="text-sm font-semibold text-[#E5E5E5] mb-4">Admin Overview</h2>
+                <AdminDashboardCharts />
+              </div>
               <div className="mb-8">
                 <AdminSettingsVerification />
               </div>
@@ -678,6 +700,68 @@ export default function Dashboard() {
 
               {isAuthenticated ? (
                 <>
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                    <TimeRangePicker value={chartRange} onChange={setChartRange} />
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setShowBenchmark((v) => !v)}
+                        className={`text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-full border transition-colors ${showBenchmark ? 'bg-[#FF9800]/15 text-[#FF9800] border-[#FF9800]/30' : 'text-[#737373] border-[#ffffff10] hover:text-[#E5E5E5]'}`}
+                        aria-label="Toggle Bitcoin benchmark comparison"
+                        aria-pressed={showBenchmark}
+                      >
+                        vs BTC
+                      </button>
+                      <button
+                        onClick={handleRefresh}
+                        disabled={isRefreshing || loading}
+                        className="p-1.5 rounded-full border border-[#ffffff10] text-[#737373] hover:text-[#0C8B44] hover:border-[#0C8B44]/30 transition-colors disabled:opacity-50"
+                        aria-label="Refresh data"
+                        title="Refresh market data"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="w-full mb-6" role="img" aria-label={`Net worth chart showing ${periodChangePercent >= 0 ? 'positive' : 'negative'} ${Math.abs(periodChangePercent).toFixed(2)}% change over ${rangeLabel(chartRange)}`}>
+                    {portfolioHistory.length >= 2 ? (
+                      <NetWorthChart
+                        series={portfolioHistory}
+                        benchmark={(() => {
+                          if (!showBenchmark) return null
+                          const btcSp = quoteById['bitcoin']?.sparkline_in_7d?.price
+                          if (!btcSp || btcSp.length < 2) return null
+                          const btcStart = btcSp[0]
+                          const points = portfolioHistory.length
+                          const anchorIdx = portfolioHistory.findIndex((v) => v > 0)
+                          const baseStart = anchorIdx >= 0 ? portfolioHistory[anchorIdx] : 0
+                          if (!btcStart || baseStart <= 0) return null
+                          const out: number[] = []
+                          for (let i = 0; i < points; i++) {
+                            const idx = Math.min(btcSp.length - 1, Math.round((i / (points - 1)) * (btcSp.length - 1)))
+                            out.push((btcSp[idx] / btcStart) * baseStart)
+                          }
+                          return out
+                        })()}
+                        range={chartRange}
+                        isUp={periodChangePercent >= 0}
+                        startMs={chartStartMs}
+                        height={260}
+                      />
+                    ) : (
+                      <div className="h-56 w-full flex items-center justify-center text-xs text-[#737373]" role="status" aria-live="polite">
+                        <div className="flex flex-col items-center gap-2">
+                          <div className="w-6 h-6 border-2 border-[#0C8B44] border-t-transparent rounded-full animate-spin" />
+                          <span>Loading market history…</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-[#737373] mt-2 mb-6">
+                    <span>{chartRange === '1D' ? '24h ago' : chartRange === '1W' ? '7 days ago' : chartRange === '1M' ? '30 days ago' : chartRange === '1Y' ? '1 year ago' : 'All time'}</span>
+                    <span>Now</span>
+                  </div>
+
                   <div className="grid gap-3 sm:grid-cols-3 mb-6">
                     {[
                       {
@@ -702,68 +786,6 @@ export default function Dashboard() {
                         <p className="text-[11px] text-[#8EA39B]">{item.detail}</p>
                       </div>
                     ))}
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                    <TimeRangePicker value={chartRange} onChange={setChartRange} />
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setShowBenchmark((v) => !v)}
-                        className={`text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-full border transition-colors ${showBenchmark ? 'bg-[#FF9800]/15 text-[#FF9800] border-[#FF9800]/30' : 'text-[#737373] border-[#ffffff10] hover:text-[#E5E5E5]'}`}
-                        aria-label="Toggle Bitcoin benchmark comparison"
-                        aria-pressed={showBenchmark}
-                      >
-                        vs BTC
-                      </button>
-                      <button
-                        onClick={handleRefresh}
-                        disabled={isRefreshing || loading}
-                        className="p-1.5 rounded-full border border-[#ffffff10] text-[#737373] hover:text-[#0C8B44] hover:border-[#0C8B44]/30 transition-colors disabled:opacity-50"
-                        aria-label="Refresh data"
-                        title="Refresh market data"
-                      >
-                        <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="w-full" role="img" aria-label={`Net worth chart showing ${periodChangePercent >= 0 ? 'positive' : 'negative'} ${Math.abs(periodChangePercent).toFixed(2)}% change over ${rangeLabel(chartRange)}`}>
-                    {portfolioHistory.length >= 2 ? (
-                      <NetWorthChart
-                        series={portfolioHistory}
-                        benchmark={(() => {
-                          if (!showBenchmark) return null
-                          const btcSp = quoteById['bitcoin']?.sparkline_in_7d?.price
-                          if (!btcSp || btcSp.length < 2) return null
-                          const btcStart = btcSp[0]
-                          const points = portfolioHistory.length
-                          const anchorIdx = portfolioHistory.findIndex((v) => v > 0)
-                          const baseStart = anchorIdx >= 0 ? portfolioHistory[anchorIdx] : 0
-                          if (!btcStart || baseStart <= 0) return null
-                          const out: number[] = []
-                          for (let i = 0; i < points; i++) {
-                            const idx = Math.min(btcSp.length - 1, Math.round((i / (points - 1)) * (btcSp.length - 1)))
-                            out.push((btcSp[idx] / btcStart) * baseStart)
-                          }
-                          return out
-                        })()}
-                        range={chartRange}
-                        isUp={periodChangePercent >= 0}
-                        startMs={chartStartMs}
-                        height={240}
-                      />
-                    ) : (
-                      <div className="h-48 w-full flex items-center justify-center text-xs text-[#737373]" role="status" aria-live="polite">
-                        <div className="flex flex-col items-center gap-2">
-                          <div className="w-6 h-6 border-2 border-[#0C8B44] border-t-transparent rounded-full animate-spin" />
-                          <span>Loading market history…</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-[#737373] mt-2">
-                    <span>{chartRange === '1D' ? '24h ago' : chartRange === '1W' ? '7 days ago' : chartRange === '1M' ? '30 days ago' : chartRange === '1Y' ? '1 year ago' : 'All time'}</span>
-                    <span>Now</span>
                   </div>
 
                   {transactions.length > 0 && (
@@ -1143,7 +1165,7 @@ export default function Dashboard() {
                           <div>
                             <p className="text-sm font-medium text-[#E5E5E5]">{h.name || h.symbol || h.id}</p>
                             <p className="text-xs text-[#737373]">
-                              {h.quantity.toLocaleString()} {h.symbol}
+                              {formatCryptoAmount(h.quantity)} {h.symbol}
                               {h.avgBuyPrice > 0 && (
                                 <span className="ml-1.5 text-[#555]">· avg ${h.avgBuyPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                               )}
@@ -1335,6 +1357,13 @@ export default function Dashboard() {
               {!isAdminRole && !hiddenWidgets.has('goalsProgress') && (
                 <GoalsProgressCard portfolioValue={totalValue} />
               )}
+            </div>
+          )}
+
+          {isAuthenticated && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+              {!hiddenWidgets.has('connectedAccounts') && <ConnectedAccountsCard />}
+              {!hiddenWidgets.has('newsSnippet') && <NewsSnippetCard />}
             </div>
           )}
 

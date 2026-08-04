@@ -1,5 +1,5 @@
-import { Request, Response, NextFunction } from 'express'
-import { type AuthedRequest } from '../auth.js'
+import { Request, Response, NextFunction, type RequestHandler } from 'express'
+import { type AuthedRequest, requireAuth, requireAdmin } from '../auth.js'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
 
@@ -147,6 +147,8 @@ export const validateApiKey = (req: Request, res: Response, next: NextFunction) 
   }
   next()
 }
+
+export const verifyAdminAuth: RequestHandler[] = [requireAuth, requireAdmin]
 
 export const sanitizeResponseHeaders = (_req: Request, res: Response, next: NextFunction) => {
   res.removeHeader('Server')

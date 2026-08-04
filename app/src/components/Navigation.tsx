@@ -196,15 +196,17 @@ export default function Navigation() {
 
           {/* Desktop Auth Buttons */}
           <div className="hidden lg:flex items-center gap-3 shrink-0">
-            <button
-              onClick={() => { if (!web3Connected) connectWeb3() }}
-              disabled={web3Connecting}
-              title={web3Error ?? (web3Connected ? `Wallet ${shortAddress}` : 'Choose a wallet to connect')}
-              className={`hidden xl:inline-flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-xs font-medium tracking-[0.04em] uppercase whitespace-nowrap transition-colors ${web3Connected ? 'bg-[#0C8B44]/15 text-[#0C8B44] border border-[#0C8B44]/40' : 'bg-[#1a1a1a] text-[#A0A0A0] border border-[#ffffff10] hover:text-[#0C8B44] hover:border-[#0C8B44]/40'} disabled:opacity-50`}
-            >
-              <WalletIcon className="w-3.5 h-3.5" />
-              {web3Connecting ? 'Connecting…' : web3Connected ? shortAddress : 'Connect Wallet'}
-            </button>
+            {isAuthenticated && (
+              <button
+                onClick={() => { if (!web3Connected) connectWeb3() }}
+                disabled={web3Connecting}
+                title={web3Error ?? (web3Connected ? `Wallet ${shortAddress}` : 'Choose a wallet to connect')}
+                className={`hidden xl:inline-flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-xs font-medium tracking-[0.04em] uppercase whitespace-nowrap transition-colors ${web3Connected ? 'bg-[#0C8B44]/15 text-[#0C8B44] border border-[#0C8B44]/40' : 'bg-[#1a1a1a] text-[#A0A0A0] border border-[#ffffff10] hover:text-[#0C8B44] hover:border-[#0C8B44]/40'} disabled:opacity-50`}
+              >
+                <WalletIcon className="w-3.5 h-3.5" />
+                {web3Connecting ? 'Connecting…' : web3Connected ? shortAddress : 'Connect Wallet'}
+              </button>
+            )}
             {!isAuthenticated ? (
               <>
                 <button onClick={openLogin} className="px-4 py-2.5 text-[#A0A0A0] text-sm font-light tracking-[0.04em] uppercase whitespace-nowrap hover:text-[#E5E5E5] transition-colors">Log In</button>

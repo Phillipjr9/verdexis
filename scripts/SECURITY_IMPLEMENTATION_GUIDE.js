@@ -373,6 +373,8 @@ async function sendTransactionNotification(email, transactionData) {
  * - Check AWS SES sandbox status
  * - Review CloudWatch logs
  * - Verify AWS_REGION setting
+ * - Verify your sending domain has a valid SPF TXT record and proper DKIM/DMARC configuration
+ * - Confirm a DMARC TXT record exists for your sending domain and is not set to `p=none` when you are in production
  * 
  * Issue: 2FA not working
  * Solution:

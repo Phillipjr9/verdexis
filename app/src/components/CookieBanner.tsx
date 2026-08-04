@@ -1,15 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Cookie } from 'lucide-react'
 import { onConsentAccepted } from '../lib/telemetry'
-
-const KEY = 'verdexis_cookie_consent'
+import { getConsentValue, setConsentValue } from '../lib/cookieConsent'
 
 export default function CookieBanner() {
   const [show, setShow] = useState(false)
 
   useEffect(() => {
     try {
-      if (!localStorage.getItem(KEY)) {
+      if (!getConsentValue()) {
         const t = setTimeout(() => setShow(true), 800)
         return () => clearTimeout(t)
       }
@@ -23,7 +22,7 @@ export default function CookieBanner() {
   }, [])
 
   const accept = (value: 'accept' | 'reject') => {
-    try { localStorage.setItem(KEY, value) } catch { /* ignore */ }
+    try { setConsentValue(value) } catch { /* ignore */ }
     if (value === 'accept') onConsentAccepted()
     setShow(false)
   }

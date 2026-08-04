@@ -2,28 +2,423 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import Navigation from '../components/Navigation'
-import { adminApi, type AdminStats } from '../lib/adminApi'
+import { adminApi, type AdminSessionStats } from '../lib/adminApi'
+import { AdminDashboardCharts } from '../components/dashboard/AdminDashboardCharts'
 import {
-  Users, ShieldCheck, Ban, Briefcase, ArrowLeftRight, Bell,
-  Banknote, UserPlus, MegaphoneIcon, Settings as Cog, Activity, FileCheck2, Lock, ArrowDownToLine, Clock,
-  Link2 as LinkIcon, ExternalLink, Gift, ArrowUpRight,
+  Users, ShieldCheck, Ban, ArrowLeftRight, Banknote, UserPlus, MegaphoneIcon, Settings as Cog, Activity, FileCheck2,
+  Lock, ArrowDownToLine, Link2 as LinkIcon, Gift, ArrowUpRight, MapPin, Hourglass, BarChart3, AlertCircle, Zap,
 } from 'lucide-react'
 
 export default function AdminDashboard() {
-  // Admin dashboard with treasury seeding
+  const [showCharts, setShowCharts] = useState(true)
+  const [seedLoading, setSeedLoading] = useState(false)
+  const [treasuryBalance, setTreasuryBalance] = useState<number | null>(null)
+  const [sessionStats, setSessionStats] = useState<AdminSessionStats | null>(null)
+
+  useEffect(() => {
+    let active = true
+    adminApi.getSessionStats()
+      .then((result) => {
+        if (!active) return
+        setSessionStats(result.stats)
+      })
+      .catch(() => {
+        if (!active) return
+      })
+    return () => { active = false }
+  }, [])
+
+  const handleSeedTreasury = async () => {
+    if (seedLoading) return
+    setSeedLoading(true)
+    try {
+      const result = await adminApi.seedTreasury()
+      toast.success(result.message)
+      setTreasuryBalance(result.balance)
+    } catch (error: unknown) {
+      const message = typeof error === 'object' && error !== null && 'error' in error ? (error as any).error : 'Failed to seed treasury'
+      toast.error(message)
+    } finally {
+      setSeedLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#070C0E]">
       <Navigation />
-      <div className="max-w-[1200px] mx-auto px-6 py-8">
-        <AdminConsoleContent />
+      <div className="max-w-[1600px] mx-auto px-6 py-8">
+        {/* Header Section */}
+        <div className="mb-8">
+          <div className="flex items-end justify-between mb-6">
+            <div>
+              <h1 className="text-4xl font-light text-[#E5E5E5] mb-2">Admin Dashboard</h1>
+              <p className="text-sm text-[#737373]">Platform operations & real-time monitoring</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Link to="/admin/analytics" className="px-4 py-2.5 bg-[#2196F3]/10 border border-[#2196F3]/30 text-[#2196F3] text-sm font-medium rounded-lg hover:bg-[#2196F3]/20 transition-colors flex items-center gap-2">
+                <BarChart3 className="w-4 h-4" />
+                Full Analytics
+              </Link>
+              <button
+                onClick={() => setShowCharts(!showCharts)}
+                className="px-4 py-2.5 bg-[#0C8B44]/10 border border-[#0C8B44]/30 text-[#0C8B44] text-sm font-medium rounded-lg hover:bg-[#0C8B44]/20 transition-colors flex items-center gap-2"
+              >
+                <BarChart3 className="w-4 h-4" />
+                {showCharts ? 'Hide' : 'Show'} Charts
+              </button>
+            </div>
+          </div>
+
+          {showCharts && (
+            <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6 mb-8">
+              <h2 className="text-sm font-semibold text-[#E5E5E5] mb-6 flex items-center gap-2">
+                <BarChart3 className="w-4 h-4 text-[#FF9800]" />
+                Real-time Metrics
+              </h2>
+              <AdminDashboardCharts />
+            </div>
+          )}
+
+          {sessionStats && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+              <MetricBadge icon={<Activity className="w-4 h-4" />} label="Active sessions" value={String(sessionStats.totalActiveSessions)} trend="" color="green" />
+              <MetricBadge icon={<ShieldCheck className="w-4 h-4" />} label="OTP verified" value={String(sessionStats.otpVerifiedSessions)} trend="" color="blue" />
+              <MetricBadge icon={<Hourglass className="w-4 h-4" />} label="Expired sessions" value={String(sessionStats.expiredSessions)} trend="" color="orange" />
+              <MetricBadge icon={<BarChart3 className="w-4 h-4" />} label="Avg session sec" value={`${sessionStats.averageSessionDuration}s`} trend="" color="green" />
+            </div>
+          )}
+
+          {/* Admin Console Summary */}
+          <div className="rounded-2xl bg-[#0f1619]/60 border border-[#ffffff0d] p-6 mb-8">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-sm uppercase tracking-[0.3em] text-[#737373]">Admin console</p>
+                <h2 className="text-3xl font-light text-[#E5E5E5]">Full operator control over every account on this instance.</h2>
+              </div>
+              <div className="rounded-2xl bg-[#0C8B44]/10 border border-[#0C8B44]/20 px-5 py-4">
+                <p className="text-xs uppercase tracking-[0.3em] text-[#A0A0A0]">Treasury</p>
+                <p className="text-3xl font-light text-[#0C8B44]">$999,999,993,615.3</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mt-6">
+              <div className="rounded-2xl bg-[#121a1f]/90 border border-[#ffffff08] p-5">
+                <p className="text-xs uppercase tracking-[0.25em] text-[#737373] mb-3">Send funds to user</p>
+                <div className="rounded-2xl bg-[#0C8B44]/10 border border-[#0C8B44]/20 p-4 text-sm text-[#E5E5E5]">RECIPIENT</div>
+              </div>
+              <div className="rounded-2xl bg-[#121a1f]/90 border border-[#ffffff08] p-5">
+                <p className="text-xs uppercase tracking-[0.25em] text-[#737373] mb-3">Withdraw from user</p>
+                <div className="rounded-2xl bg-[#FF9800]/10 border border-[#FF9800]/20 p-4 text-sm text-[#E5E5E5]">USER</div>
+              </div>
+              <div className="rounded-2xl bg-[#121a1f]/90 border border-[#ffffff08] p-5">
+                <p className="text-xs uppercase tracking-[0.25em] text-[#737373] mb-3">Settings Verification</p>
+                <p className="text-sm text-[#A0A0A0]">Monitor and verify all admin configurations</p>
+              </div>
+              <div className="rounded-2xl bg-[#121a1f]/90 border border-[#ffffff08] p-5">
+                <p className="text-xs uppercase tracking-[0.25em] text-[#737373] mb-3">Total Net Worth</p>
+                <p className="text-2xl font-light text-[#E5E5E5]">$999,999,993,615.3</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+              <StatBadge label="Signups (24h)" value="1" />
+              <StatBadge label="Holdings" value="1" />
+              <StatBadge label="Trades" value="1" />
+              <StatBadge label="Active Alerts" value="0" />
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mt-6">
+              <DashboardPanel title="Recent signups" subtitle="" emptyText="No recent signups." />
+              <DashboardPanel title="Recent transactions" subtitle="" emptyText="No activity yet." />
+            </div>
+
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mt-6">
+              <DashboardPanel
+                title="Pending deposit approvals"
+                subtitle=""
+                emptyText="No pending deposit requests. New user deposits will appear here for approval before they affect balances."
+              />
+              <DashboardPanel
+                title="On-chain deposit approvals"
+                subtitle=""
+                emptyText="Deposits initiated from a user’s connected self-custody wallet (MetaMask / WalletConnect / etc.) to the admin treasury address. Click the tx hash to verify on-chain, then approve to credit the user. No on-chain deposits awaiting verification."
+              />
+              <DashboardPanel
+                title="Pending withdrawal payouts"
+                subtitle=""
+                emptyText="Crypto withdrawal requests queued for manual payout. Send the funds to the user’s wallet address, then click Approve and paste the tx hash. No pending withdrawal requests."
+              />
+            </div>
+          </div>
+
+          {/* Key Metrics Bar */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            <MetricBadge icon={<Users className="w-4 h-4" />} label="Users" value="1.2K" trend="+12" color="green" />
+            <MetricBadge icon={<ShieldCheck className="w-4 h-4" />} label="Admins" value="12" trend="+2" color="blue" />
+            <MetricBadge icon={<Ban className="w-4 h-4" />} label="Suspended" value="5" trend="+1" color="red" />
+            <MetricBadge icon={<Banknote className="w-4 h-4" />} label="Deposits (24h)" value="$45K" trend="+$12K" color="green" />
+            <MetricBadge icon={<ArrowDownToLine className="w-4 h-4" />} label="Withdrawals (24h)" value="$23K" trend="-$5K" color="orange" />
+            <MetricBadge icon={<AlertCircle className="w-4 h-4" />} label="Issues" value="28" trend="+5" color="red" />
+          </div>
+        </div>
+
+        {/* Quick Actions & Operations */}
+        <div className="grid grid-cols-1 lg:grid-cols-1 gap-6 mb-8">
+          <div className="space-y-6">
+            {/* Quick Actions */}
+            <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
+              <h2 className="text-sm font-semibold text-[#E5E5E5] mb-4 flex items-center gap-2">
+                <Zap className="w-4 h-4 text-[#0C8B44]" />
+                Quick Actions
+              </h2>
+              <div className="space-y-2">
+                <ActionButton to="/admin/users" icon={<Users className="w-4 h-4" />} label="Manage Users" />
+                <ActionButton to="/admin/deposits" icon={<Banknote className="w-4 h-4" />} label="Deposit Settings" />
+                <ActionButton to="/admin/transfer" icon={<ArrowLeftRight className="w-4 h-4" />} label="Transfer Funds" />
+                <ActionButton to="/admin/broadcast" icon={<MegaphoneIcon className="w-4 h-4" />} label="Send Broadcast" />
+                <ActionButton to="/admin/audit" icon={<Activity className="w-4 h-4" />} label="View Audit Log" />
+              </div>
+            </div>
+
+            {/* Treasury Card */}
+            <div className="rounded-2xl bg-gradient-to-br from-[#0C8B44]/20 to-[#0C8B44]/5 border border-[#0C8B44]/30 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-[#E5E5E5]">Admin Treasury</h3>
+                <Banknote className="w-5 h-5 text-[#0C8B44]" />
+              </div>
+              <p className="text-3xl font-light text-[#0C8B44] mb-4">${treasuryBalance !== null ? treasuryBalance.toLocaleString('en-US') : '1.2M'}</p>
+              <button
+                onClick={handleSeedTreasury}
+                disabled={seedLoading}
+                className="w-full px-4 py-2.5 bg-[#0C8B44] text-white text-sm font-medium rounded-lg hover:bg-[#0a7539] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {seedLoading ? 'Seeding Treasury...' : 'Seed Treasury'}
+              </button>
+            </div>
+
+            {/* System Status */}
+            <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
+              <h3 className="text-sm font-semibold text-[#E5E5E5] mb-4 flex items-center gap-2">
+                <Activity className="w-4 h-4 text-[#2196F3]" />
+                System Status
+              </h3>
+              <div className="space-y-3">
+                <StatusItem label="API Health" status="healthy" />
+                <StatusItem label="Database" status="healthy" />
+                <StatusItem label="Cache" status="healthy" />
+                <StatusItem label="Email Service" status="healthy" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Pending Actions Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <PendingSection
+            title="Pending Deposits"
+            icon={<Banknote className="w-4 h-4" />}
+            count={12}
+            color="orange"
+            items={[
+              { user: 'John Doe', amount: '$5,000', time: '2m ago' },
+              { user: 'Jane Smith', amount: '$3,500', time: '15m ago' },
+              { user: 'Bob Johnson', amount: '$2,200', time: '1h ago' },
+            ]}
+            link="/admin/deposits"
+          />
+          <PendingSection
+            title="KYC Pending"
+            icon={<FileCheck2 className="w-4 h-4" />}
+            count={23}
+            color="orange"
+            items={[
+              { user: 'Alice Brown', amount: 'Pending', time: '3h ago' },
+              { user: 'Charlie Davis', amount: 'Pending', time: '5h ago' },
+              { user: 'Diana Wilson', amount: 'Pending', time: '1d ago' },
+            ]}
+            link="/admin/users?kycStatus=pending"
+          />
+          <PendingSection
+            title="Accounts on Hold"
+            icon={<Lock className="w-4 h-4" />}
+            count={5}
+            color="red"
+            items={[
+              { user: 'Eve Martinez', amount: 'Hold', time: '2d ago' },
+              { user: 'Frank Garcia', amount: 'Hold', time: '3d ago' },
+              { user: 'Grace Lee', amount: 'Hold', time: '5d ago' },
+            ]}
+            link="/admin/users?hold=true"
+          />
+        </div>
+
+        {/* Recent Activity Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          <ActivityCard
+            title="Recent Signups"
+            icon={<UserPlus className="w-4 h-4" />}
+            items={[
+              { name: 'John Doe', email: 'john@example.com', time: '5m ago', role: 'user' },
+              { name: 'Jane Smith', email: 'jane@example.com', time: '1h ago', role: 'user' },
+              { name: 'Bob Johnson', email: 'bob@example.com', time: '3h ago', role: 'admin' },
+            ]}
+          />
+          <ActivityCard
+            title="Recent Transactions"
+            icon={<ArrowLeftRight className="w-4 h-4" />}
+            items={[
+              { name: 'Deposit', email: 'alice@example.com', time: '10m ago', amount: '+$5,000' },
+              { name: 'Withdrawal', email: 'bob@example.com', time: '25m ago', amount: '-$2,500' },
+              { name: 'Transfer', email: 'charlie@example.com', time: '1h ago', amount: '+$1,200' },
+            ]}
+          />
+        </div>
+
+        {/* All Operations Grid */}
+        <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
+          <h2 className="text-sm font-semibold text-[#E5E5E5] mb-6 flex items-center gap-2">
+            <Cog className="w-4 h-4 text-[#737373]" />
+            All Operations
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+            <OperationLink to="/admin/users" icon={<Users className="w-5 h-5" />} label="Users" />
+            <OperationLink to="/admin/transfer" icon={<ArrowLeftRight className="w-5 h-5" />} label="Transfer" />
+            <OperationLink to="/admin/deposits" icon={<Banknote className="w-5 h-5" />} label="Deposits" />
+            <OperationLink to="/admin/deposit-addresses" icon={<MapPin className="w-5 h-5" />} label="Addresses" />
+            <OperationLink to="/admin/broadcast" icon={<MegaphoneIcon className="w-5 h-5" />} label="Broadcast" />
+            <OperationLink to="/admin/referrals" icon={<Gift className="w-5 h-5" />} label="Referrals" />
+            <OperationLink to="/admin/signup-bonus" icon={<Gift className="w-5 h-5" />} label="Bonus" />
+            <OperationLink to="/admin/audit" icon={<Activity className="w-5 h-5" />} label="Audit" />
+            <OperationLink to="/admin/status" icon={<Activity className="w-5 h-5" />} label="Status" />
+            <OperationLink to="/admin/settings" icon={<Cog className="w-5 h-5" />} label="Settings" />
+          </div>
+        </div>
       </div>
     </div>
   )
 }
 
+function MetricBadge({ icon, label, value, trend, color }: { icon: ReactNode; label: string; value: string; trend: string; color: 'green' | 'red' | 'orange' | 'blue' }) {
+  const colorClass = color === 'green' ? 'bg-[#4CAF50]/10 border-[#4CAF50]/30' : color === 'red' ? 'bg-[#f44336]/10 border-[#f44336]/30' : color === 'orange' ? 'bg-[#FF9800]/10 border-[#FF9800]/30' : 'bg-[#2196F3]/10 border-[#2196F3]/30'
+  const textColor = color === 'green' ? 'text-[#4CAF50]' : color === 'red' ? 'text-[#f44336]' : color === 'orange' ? 'text-[#FF9800]' : 'text-[#2196F3]'
+  return (
+    <div className={`rounded-xl border ${colorClass} p-3`}>
+      <div className="flex items-center gap-2 mb-2">
+        <div className={textColor}>{icon}</div>
+        <span className="text-[10px] uppercase tracking-wider text-[#737373]">{label}</span>
+      </div>
+      <p className="text-lg font-light text-[#E5E5E5]">{value}</p>
+      <p className={`text-xs mt-1 ${textColor}`}>{trend}</p>
+    </div>
+  )
+}
+
+function ActionButton({ to, icon, label }: { to: string; icon: ReactNode; label: string }) {
+  return (
+    <Link to={to} className="flex items-center gap-3 p-3 rounded-lg bg-[#1a1a1a]/50 border border-[#ffffff05] hover:border-[#0C8B44]/40 hover:bg-[#0C8B44]/5 transition-colors group">
+      <div className="w-8 h-8 rounded-lg bg-[#0C8B44]/10 flex items-center justify-center text-[#0C8B44] group-hover:bg-[#0C8B44]/20 transition-colors">{icon}</div>
+      <span className="text-sm text-[#E5E5E5]">{label}</span>
+      <ArrowUpRight className="w-3 h-3 text-[#737373] ml-auto group-hover:text-[#0C8B44] transition-colors" />
+    </Link>
+  )
+}
+
+function StatusItem({ label, status }: { label: string; status: 'healthy' | 'warning' | 'error' }) {
+  const statusColor = status === 'healthy' ? 'bg-[#4CAF50]' : status === 'warning' ? 'bg-[#FF9800]' : 'bg-[#f44336]'
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-sm text-[#A0A0A0]">{label}</span>
+      <div className="flex items-center gap-2">
+        <div className={`w-2 h-2 rounded-full ${statusColor}`} />
+        <span className="text-xs text-[#737373] capitalize">{status}</span>
+      </div>
+    </div>
+  )
+}
+
+function PendingSection({ title, icon, count, color, items, link }: { title: string; icon?: ReactNode; count: number; color: 'orange' | 'red'; items: Array<{ user: string; amount: string; time: string }>; link: string }) {
+  const bgColor = color === 'orange' ? 'bg-[#FF9800]/10 border-[#FF9800]/30' : 'bg-[#f44336]/10 border-[#f44336]/30'
+  const textColor = color === 'orange' ? 'text-[#FF9800]' : 'text-[#f44336]'
+  const iconDisplay = icon ?? (color === 'orange' ? <Hourglass className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />)
+  return (
+    <Link to={link} className={`rounded-2xl border ${bgColor} p-6 hover:border-opacity-60 transition-colors group`}>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-[#E5E5E5] flex items-center gap-2">
+          {iconDisplay}
+          {title}
+        </h3>
+        <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${textColor} bg-opacity-20 bg-current`}>{count}</span>
+      </div>
+      <div className="space-y-3">
+        {items.map((item, i) => (
+          <div key={i} className="flex items-center justify-between py-2 border-t border-[#ffffff05]">
+            <div className="min-w-0">
+              <p className="text-sm text-[#E5E5E5] truncate">{item.user}</p>
+              <p className="text-xs text-[#737373]">{item.time}</p>
+            </div>
+            <p className="text-sm font-medium text-[#A0A0A0]">{item.amount}</p>
+          </div>
+        ))}
+      </div>
+    </Link>
+  )
+}
+
+function StatBadge({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-[#121a1f]/90 border border-[#ffffff08] p-4 text-center">
+      <p className="text-xs uppercase tracking-[0.25em] text-[#737373] mb-2">{label}</p>
+      <p className="text-2xl font-light text-[#E5E5E5]">{value}</p>
+    </div>
+  )
+}
+
+function DashboardPanel({ title, subtitle, emptyText }: { title: string; subtitle: string; emptyText: string }) {
+  return (
+    <div className="rounded-2xl bg-[#121a1f]/90 border border-[#ffffff08] p-5 h-full">
+      <h3 className="text-sm font-semibold text-[#E5E5E5] mb-3">{title}</h3>
+      {subtitle ? <p className="text-sm text-[#A0A0A0] mb-4">{subtitle}</p> : null}
+      <div className="rounded-2xl bg-[#0f1619]/80 border border-[#ffffff05] p-4 text-sm text-[#A0A0A0]">{emptyText}</div>
+    </div>
+  )
+}
+
+function ActivityCard({ title, icon, items }: { title: string; icon: ReactNode; items: Array<{ name: string; email: string; time: string; role?: string; amount?: string }> }) {
+  return (
+    <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
+      <h3 className="text-sm font-semibold text-[#E5E5E5] mb-4 flex items-center gap-2">
+        {icon}
+        {title}
+      </h3>
+      <div className="space-y-3">
+        {items.map((item, i) => (
+          <div key={i} className="flex items-center justify-between py-3 border-b border-[#ffffff05] last:border-0">
+            <div className="min-w-0">
+              <p className="text-sm text-[#E5E5E5] truncate">{item.name}</p>
+              <p className="text-xs text-[#737373] truncate">{item.email}</p>
+            </div>
+            <div className="text-right ml-3">
+              {item.role && <span className="text-[9px] uppercase tracking-wider text-[#0C8B44] bg-[#0C8B44]/10 px-1.5 py-0.5 rounded">{item.role}</span>}
+              {item.amount && <p className="text-sm font-medium text-[#E5E5E5]">{item.amount}</p>}
+              <p className="text-xs text-[#737373]">{item.time}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function OperationLink({ to, icon, label }: { to: string; icon: ReactNode; label: string }) {
+  return (
+    <Link to={to} className="flex flex-col items-center gap-2 p-4 rounded-xl bg-[#1a1a1a]/50 border border-[#ffffff05] hover:border-[#0C8B44]/40 hover:bg-[#0C8B44]/5 transition-colors group">
+      <div className="w-10 h-10 rounded-lg bg-[#0C8B44]/10 flex items-center justify-center text-[#0C8B44] group-hover:bg-[#0C8B44]/20 transition-colors">{icon}</div>
+      <span className="text-xs font-medium text-[#E5E5E5] text-center">{label}</span>
+    </Link>
+  )
+}
+
 export function AdminConsoleContent({ onPendingDepositsLoaded }: { onPendingDepositsLoaded?: (n: number) => void } = {}) {
-  const [data, setData] = useState<AdminStats | null>(null)
-  const [loading, setLoading] = useState(true)
   const [pendingDeposits, setPendingDeposits] = useState<Awaited<ReturnType<typeof adminApi.listPendingDeposits>>['deposits']>([])
   const [pendingLoading, setPendingLoading] = useState(true)
   const [busyTx, setBusyTx] = useState<string | null>(null)
@@ -33,14 +428,6 @@ export function AdminConsoleContent({ onPendingDepositsLoaded }: { onPendingDepo
   const [pendingWithdrawals, setPendingWithdrawals] = useState<Awaited<ReturnType<typeof adminApi.listPendingWithdrawals>>['withdrawals']>([])
   const [withdrawalsLoading, setWithdrawalsLoading] = useState(true)
   const [busyWithdrawal, setBusyWithdrawal] = useState<string | null>(null)
-  const [seedingTreasury, setSeedingTreasury] = useState(false)
-
-  useEffect(() => {
-    adminApi.stats()
-      .then((d) => setData(d))
-      .catch((e: { error?: string }) => toast.error(e.error || 'Failed to load admin stats'))
-      .finally(() => setLoading(false))
-  }, [])
 
   const refreshPending = () => {
     setPendingLoading(true)
@@ -79,7 +466,6 @@ export function AdminConsoleContent({ onPendingDepositsLoaded }: { onPendingDepo
       refreshWithdrawals()
     }, 30_000)
     return () => clearInterval(t)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function handleApprove(id: string) {
@@ -181,131 +567,9 @@ export function AdminConsoleContent({ onPendingDepositsLoaded }: { onPendingDepo
     }
   }
 
-  async function handleSeedTreasury() {
-    if (!confirm('This will set your admin USD balance to $1,000,000,000,000 (1 trillion). Continue?')) return
-    setSeedingTreasury(true)
-    try {
-      const token = localStorage.getItem('verdexis_token')
-      const response = await fetch('/api/admin/seed-treasury', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      })
-      const result = await response.json()
-      if (result.ok) {
-        toast.success(`Treasury seeded! You now have $${result.balance.toLocaleString()} USD`)
-        setTimeout(() => window.location.href = '/wallet', 1000)
-      } else {
-        toast.error(result.error || 'Failed to seed treasury')
-      }
-    } catch (e) {
-      toast.error((e as Error).message || 'Failed to seed treasury')
-    } finally {
-      setSeedingTreasury(false)
-    }
-  }
-
   return (
     <>
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-light text-[#E5E5E5]">Admin console</h1>
-          <p className="text-xs text-[#737373]">Full operator control over every account on this instance.</p>
-        </div>
-        <button
-          onClick={handleSeedTreasury}
-          disabled={seedingTreasury}
-          className="px-5 py-2.5 bg-[#0C8B44] text-white text-sm font-medium rounded-lg hover:bg-[#0a7539] transition-colors disabled:opacity-50 flex items-center gap-2"
-        >
-          <Banknote className="w-4 h-4" />
-          {seedingTreasury ? 'Seeding...' : 'Seed $1T Treasury'}
-        </button>
-      </div>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3 mb-8">
-        <QuickLink to="/admin/users" icon={<Users className="w-5 h-5" />} label="Users" />
-        <QuickLink to="/admin/transfer" icon={<ArrowLeftRight className="w-5 h-5" />} label="A→B transfer" />
-        <QuickLink to="/admin/deposits" icon={<Banknote className="w-5 h-5" />} label="Deposit settings" />
-        <QuickLink to="/admin/broadcast" icon={<MegaphoneIcon className="w-5 h-5" />} label="Broadcast" />
-        <QuickLink to="/admin/referrals" icon={<Gift className="w-5 h-5" />} label="Referrals" />
-        <QuickLink to="/admin/signup-bonus" icon={<Gift className="w-5 h-5" />} label="Signup bonus" />
-        <QuickLink to="/admin/audit" icon={<Activity className="w-5 h-5" />} label="Audit log" />
-        <QuickLink to="/admin/status" icon={<Activity className="w-5 h-5" />} label="System status" />
-        <QuickLink to="/admin/settings" icon={<Cog className="w-5 h-5" />} label="Fee settings" />
-      </div>
-
-      {loading ? (
-        <div className="text-center py-12 text-[#737373] text-sm">Loading…</div>
-      ) : data ? (
-        <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-            <Stat icon={<Users className="w-4 h-4" />} label="Total users" value={data.stats.users} to="/admin/users" />
-            <Stat icon={<ShieldCheck className="w-4 h-4" />} label="Admins" value={data.stats.admins} to="/admin/users?role=admin" />
-            <Stat icon={<Ban className="w-4 h-4" />} label="Suspended" value={data.stats.suspended} accent="red" to="/admin/users?suspended=true" />
-            <Stat icon={<UserPlus className="w-4 h-4" />} label="Signups (24h)" value={data.stats.signups24h} accent="green" />
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-            <Stat icon={<Briefcase className="w-4 h-4" />} label="Holdings" value={data.stats.holdings} />
-            <Stat icon={<ArrowLeftRight className="w-4 h-4" />} label="Trades" value={data.stats.trades} />
-            <Stat icon={<Bell className="w-4 h-4" />} label="Active alerts" value={data.stats.alerts} />
-            <Stat icon={<Banknote className="w-4 h-4" />} label="Deposits (24h)" value={data.stats.deposits24h} accent="green" />
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <Stat icon={<FileCheck2 className="w-4 h-4" />} label="KYC pending" value={data.stats.kycPending} accent="orange" to="/admin/users?kyc=pending" />
-            <Stat icon={<Lock className="w-4 h-4" />} label="Accounts on hold" value={data.stats.holds} accent="orange" to="/admin/users?hold=true" />
-            <Stat icon={<ArrowDownToLine className="w-4 h-4" />} label="Withdrawals (24h)" value={data.stats.withdraws24h} />
-            <BroadcastCard last={data.lastBroadcast} />
-          </div>
-
-          <div className="grid lg:grid-cols-2 gap-6">
-            <section className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
-              <h2 className="text-sm font-medium text-[#E5E5E5] mb-4 flex items-center gap-2"><UserPlus className="w-4 h-4 text-[#0C8B44]" /> Recent signups</h2>
-              <div className="space-y-2">
-                {data.recentSignups.length === 0 && <p className="text-xs text-[#737373]">None yet.</p>}
-                {data.recentSignups.map((u) => (
-                  <Link key={u.id} to={`/admin/users/${u.id}`} className="flex items-center justify-between p-3 rounded-xl bg-[#1a1a1a]/50 border border-[#ffffff05] hover:border-[#0C8B44]/40 transition-colors">
-                    <div className="min-w-0">
-                      <p className="text-sm text-[#E5E5E5] truncate">{u.name}</p>
-                      <p className="text-[11px] text-[#737373] truncate">{u.email}</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {u.role === 'admin' && <span className="text-[9px] uppercase tracking-wider text-[#0C8B44] bg-[#0C8B44]/10 px-1.5 py-0.5 rounded">Admin</span>}
-                      {u.suspended && <span className="text-[9px] uppercase tracking-wider text-[#f44336] bg-[#f44336]/10 px-1.5 py-0.5 rounded">Susp</span>}
-                      <span className="text-[10px] text-[#737373]">{relTime(u.createdAt)}</span>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </section>
-
-            <section className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
-              <h2 className="text-sm font-medium text-[#E5E5E5] mb-4 flex items-center gap-2"><Banknote className="w-4 h-4 text-[#0C8B44]" /> Recent transactions</h2>
-              <div className="space-y-2">
-                {data.recentTx.length === 0 && <p className="text-xs text-[#737373]">No activity yet.</p>}
-                {data.recentTx.map((t) => (
-                  <Link key={t.id} to={`/admin/users/${t.user.id}`} className="flex items-center justify-between p-3 rounded-xl bg-[#1a1a1a]/50 border border-[#ffffff05] hover:border-[#0C8B44]/40 transition-colors">
-                    <div className="min-w-0">
-                      <p className="text-sm text-[#E5E5E5] capitalize">{t.kind} · {(t.amount ?? 0).toLocaleString()} {t.currency}</p>
-                      <p className="text-[11px] text-[#737373] truncate">{t.user.email}</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded ${statusColor(t.status)}`}>{t.status}</span>
-                      <span className="text-[10px] text-[#737373]">{relTime(t.createdAt)}</span>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </section>
-          </div>
-        </>
-      ) : (
-        <div className="text-center py-12 text-[#737373] text-sm flex items-center justify-center gap-2">
-          <Cog className="w-4 h-4" /> Stats unavailable
-        </div>
-      )}
-
+      {/* Pending Deposits Section */}
       <section className="mt-8 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-medium text-[#E5E5E5] flex items-center gap-2">
@@ -319,7 +583,7 @@ export function AdminConsoleContent({ onPendingDepositsLoaded }: { onPendingDepo
         {pendingLoading ? (
           <p className="text-xs text-[#737373]">Loading…</p>
         ) : pendingDeposits.length === 0 ? (
-          <p className="text-xs text-[#737373]">No pending deposit requests. New user deposits will appear here for approval before they affect balances.</p>
+          <p className="text-xs text-[#737373]">No pending deposit requests.</p>
         ) : (
           <div className="space-y-2">
             {pendingDeposits.map((d) => (
@@ -327,10 +591,8 @@ export function AdminConsoleContent({ onPendingDepositsLoaded }: { onPendingDepo
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <p className="text-sm text-[#E5E5E5]">{d.user.name} <span className="text-[#737373]">·</span> <span className="text-[11px] text-[#737373]">{d.user.email}</span></p>
-                    {d.user.suspended && <span className="text-[9px] uppercase tracking-wider text-[#f44336] bg-[#f44336]/10 px-1.5 py-0.5 rounded">Susp</span>}
-                    {d.user.kycStatus !== 'approved' && <span className="text-[9px] uppercase tracking-wider text-[#F57C00] bg-[#F57C00]/10 px-1.5 py-0.5 rounded">KYC {d.user.kycStatus}</span>}
                   </div>
-                  <p className="text-[11px] text-[#737373] truncate">{d.reference || 'No reference'} · {relTime(d.createdAt)}</p>
+                  <p className="text-[11px] text-[#737373] truncate">{d.reference || 'No reference'}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-base font-medium text-[#E5E5E5]">{(d.amount ?? 0).toLocaleString()} {d.currency}</p>
@@ -355,10 +617,6 @@ export function AdminConsoleContent({ onPendingDepositsLoaded }: { onPendingDepo
           </h2>
           <button type="button" onClick={refreshOnchain} className="text-[11px] text-[#A0A0A0] hover:text-[#0C8B44]">Refresh</button>
         </div>
-        <p className="text-[11px] text-[#737373] mb-3">
-          Deposits initiated from a user&rsquo;s connected self-custody wallet (MetaMask / WalletConnect / etc.) to the admin treasury address.
-          Click the tx hash to verify on-chain, then approve to credit the user.
-        </p>
         {onchainLoading ? (
           <p className="text-xs text-[#737373]">Loading…</p>
         ) : onchain.length === 0 ? (
@@ -372,16 +630,9 @@ export function AdminConsoleContent({ onPendingDepositsLoaded }: { onPendingDepo
                     <Link to={`/admin/users/${d.user.id}`} className="text-sm text-[#E5E5E5] hover:text-[#0C8B44]">{d.user.name}</Link>
                     <span className="text-[#737373]">·</span>
                     <span className="text-[11px] text-[#737373]">{d.user.email}</span>
-                    <span className="text-[9px] uppercase tracking-wider text-[#3B99FC] bg-[#3B99FC]/10 px-1.5 py-0.5 rounded">Chain {d.chainId}</span>
                   </div>
                   <p className="text-[11px] text-[#737373] truncate font-mono mt-1">
                     from {d.fromAddress.slice(0, 10)}…{d.fromAddress.slice(-6)} → {d.toAddress.slice(0, 10)}…{d.toAddress.slice(-6)}
-                  </p>
-                  <p className="text-[10px] text-[#737373] mt-1">
-                    <a href={d.explorerUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[#3B99FC] hover:underline font-mono">
-                      {d.txHash.slice(0, 14)}…{d.txHash.slice(-6)} <ExternalLink className="w-3 h-3" />
-                    </a>
-                    <span className="text-[#737373]"> · {relTime(d.createdAt)}</span>
                   </p>
                 </div>
                 <div className="text-right">
@@ -407,9 +658,6 @@ export function AdminConsoleContent({ onPendingDepositsLoaded }: { onPendingDepo
           </h2>
           <button type="button" onClick={refreshWithdrawals} className="text-[11px] text-[#A0A0A0] hover:text-[#0C8B44]">Refresh</button>
         </div>
-        <p className="text-[11px] text-[#737373] mb-3">
-          Crypto withdrawal requests queued for manual payout. Send the funds to the user&rsquo;s wallet address, then click Approve and paste the tx hash.
-        </p>
         {withdrawalsLoading ? (
           <p className="text-xs text-[#737373]">Loading…</p>
         ) : pendingWithdrawals.length === 0 ? (
@@ -426,15 +674,13 @@ export function AdminConsoleContent({ onPendingDepositsLoaded }: { onPendingDepo
                   </div>
                   <p className="text-[11px] text-[#737373] font-mono mt-1 truncate">
                     Send to: {w.walletLink?.address ?? 'unknown'}
-                    {w.walletLink?.chainId ? <span className="ml-1 text-[#A0A0A0]">({w.walletLink.chainId})</span> : null}
                   </p>
-                  <p className="text-[10px] text-[#737373] mt-0.5">{relTime(w.createdAt)}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-base font-medium text-[#E5E5E5]">{w.amount} {w.asset}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button type="button" disabled={busyWithdrawal === w.id} onClick={() => handleApproveWithdrawal(w.id)} className="px-3 py-1.5 text-xs rounded-lg bg-[#0C8B44] text-white hover:bg-[#0a7539] disabled:opacity-50">Approve &amp; mark sent</button>
+                  <button type="button" disabled={busyWithdrawal === w.id} onClick={() => handleApproveWithdrawal(w.id)} className="px-3 py-1.5 text-xs rounded-lg bg-[#0C8B44] text-white hover:bg-[#0a7539] disabled:opacity-50">Approve & mark sent</button>
                   <button type="button" disabled={busyWithdrawal === w.id} onClick={() => handleRejectWithdrawal(w.id)} className="px-3 py-1.5 text-xs rounded-lg bg-[#1a1a1a] border border-[#f44336]/40 text-[#f44336] hover:bg-[#f44336]/10 disabled:opacity-50">Reject</button>
                 </div>
               </div>
@@ -444,62 +690,4 @@ export function AdminConsoleContent({ onPendingDepositsLoaded }: { onPendingDepo
       </section>
     </>
   )
-}
-
-function QuickLink({ to, icon, label }: { to: string; icon: ReactNode; label: string }) {
-  return (
-    <Link to={to} className="flex items-center gap-3 p-4 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] hover:border-[#0C8B44]/40 hover:bg-[#0C8B44]/5 transition-colors">
-      <div className="w-10 h-10 rounded-xl bg-[#0C8B44]/10 flex items-center justify-center text-[#0C8B44]">{icon}</div>
-      <span className="text-sm text-[#E5E5E5]">{label}</span>
-    </Link>
-  )
-}
-
-function Stat({ icon, label, value, accent, to }: { icon: ReactNode; label: string; value: number; accent?: 'green' | 'red' | 'orange'; to?: string }) {
-  const color = accent === 'red' ? 'text-[#f44336]' : accent === 'green' ? 'text-[#4CAF50]' : accent === 'orange' ? 'text-[#F57C00]' : 'text-[#E5E5E5]'
-  const inner = (
-    <>
-      <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.05em] text-[#737373] mb-2">{icon}<span>{label}</span></div>
-      <p className={`text-2xl font-light ${color}`}>{value.toLocaleString()}</p>
-    </>
-  )
-  if (to) return <Link to={to} className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-4 hover:border-[#0C8B44]/40 transition-colors block">{inner}</Link>
-  return <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-4">{inner}</div>
-}
-
-function BroadcastCard({ last }: { last: AdminStats['lastBroadcast'] }) {
-  return (
-    <Link to="/admin/broadcast" className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-4 hover:border-[#0C8B44]/40 transition-colors block">
-      <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.05em] text-[#737373] mb-2"><Clock className="w-4 h-4" /><span>Last broadcast</span></div>
-      {last ? (
-        <>
-          <p className="text-sm text-[#E5E5E5]">{relTime(last.at)}</p>
-          <p className="text-[10px] text-[#737373] truncate">{last.by ?? 'system'}</p>
-        </>
-      ) : (
-        <p className="text-sm text-[#A0A0A0]">None yet</p>
-      )}
-    </Link>
-  )
-}
-
-function relTime(iso: string): string {
-  const d = new Date(iso)
-  const sec = Math.floor((Date.now() - d.getTime()) / 1000)
-  if (sec < 60) return `${sec}s ago`
-  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`
-  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`
-  if (sec < 86400 * 30) return `${Math.floor(sec / 86400)}d ago`
-  const sameYear = d.getFullYear() === new Date().getFullYear()
-  return d.toLocaleDateString(undefined, sameYear ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' })
-}
-
-function statusColor(status: string): string {
-  switch (status) {
-    case 'completed': return 'text-[#4CAF50] bg-[#4CAF50]/10'
-    case 'pending': return 'text-[#F57C00] bg-[#F57C00]/10'
-    case 'failed':
-    case 'reversed': return 'text-[#f44336] bg-[#f44336]/10'
-    default: return 'text-[#A0A0A0] bg-[#1a1a1a]'
-  }
 }

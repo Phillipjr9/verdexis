@@ -7,6 +7,7 @@ import {
   adminApi, type AdminUserDetailResponse, type AdminHolding,
   type AdminWalletBalance, type AdminTransaction, type AdminTrade, type AdminWalletLink,
   type AdminPriceAlert, type AdminWatchItem, type AdminNotification, type AdminAuditLog,
+  type AdminUserSession,
   DEPOSIT_REASONS, DEDUCT_REASONS, HOLD_REASONS, HOLD_TYPES,
   HOLDING_REASONS, FEE_TYPES, KYC_STATUSES, EMAIL_TEMPLATES,
 } from '../lib/adminApi'
@@ -59,7 +60,7 @@ function AdminActionProgress({ active, title, detail }: { active: boolean; title
   )
 }
 
-type Tab = 'profile' | 'wallet' | 'holdings' | 'transactions' | 'trades' | 'watchlist' | 'alerts' | 'notifications' | 'audit' | 'danger'
+type Tab = 'profile' | 'wallet' | 'holdings' | 'transactions' | 'trades' | 'watchlist' | 'alerts' | 'notifications' | 'sessions' | 'audit' | 'danger'
 
 // Curated description presets shown in the "Inject transaction" form on the
 // Transactions tab. Grouped by category so the dropdown is scannable. The
@@ -164,7 +165,7 @@ export default function AdminUserDetail() {
       .catch((e: { error?: string }) => toast.error(e.error || 'Failed to load user'))
       .finally(() => setLoading(false))
   }
-  useEffect(() => { reload() /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [id])
+  useEffect(() => { reload()   }, [id])
 
   if (loading || !data) {
     return (
@@ -261,6 +262,99 @@ export default function AdminUserDetail() {
         {tab === 'audit' && <AuditTab userId={u.id} />}
         {tab === 'danger' && <DangerTab userId={u.id} onDeleted={() => navigate('/admin/users')} />}
       </div>
+    </div>
+  )
+}
+
+function SessionsTab({ userId }: { userId: string }) {
+  const [sessions, setSessions] = useState<AdminUserSession[]>([])
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const loadSessions = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const result = await adminApi.getUserSessions(userId)
+      setSessions(result.sessions)
+    } catch (err) {
+      setError((err as { error?: string }).error || 'Failed to load sessions')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { loadSessions() }, [userId])
+
+  async function revoke(sessionId: string) {
+    if (!confirm('Revoke this session? The user will be signed out from that device.')) return
+    setBusy(sessionId)
+    try {
+      await adminApi.revokeSession(sessionId)
+      setSessions((prev) => prev.filter((s) => s.sessionId !== sessionId))
+      window.dispatchEvent(new Event('verdexis:user-session-changed'))
+    } catch (err) {
+      toast.error((err as { error?: string }).error || 'Failed to revoke session')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
+        <div>
+          <h2 className="text-sm font-medium text-[#E5E5E5]">Active sessions</h2>
+          <p className="text-xs text-[#A0A0A0]">View and revoke currently active user sessions for this account.</p>
+        </div>
+        <button onClick={loadSessions} className="px-3 py-2 text-xs text-[#0C8B44] border border-[#0C8B44]/30 rounded-lg hover:bg-[#0C8B44]/10 transition-colors">Refresh</button>
+      </div>
+      {loading ? (
+        <div className="text-sm text-[#A0A0A0]">Loading sessions…</div>
+      ) : error ? (
+        <div className="text-sm text-[#f44336]">{error}</div>
+      ) : sessions.length === 0 ? (
+        <div className="text-sm text-[#A0A0A0]">No active sessions found for this user.</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-[#1a1a1a]/40 text-[10px] uppercase tracking-[0.05em] text-[#737373]">
+              <tr>
+                <th className="text-left px-3 py-3 font-normal">Session</th>
+                <th className="text-left px-3 py-3 font-normal">Device hash</th>
+                <th className="text-left px-3 py-3 font-normal">IP</th>
+                <th className="text-left px-3 py-3 font-normal">OTP</th>
+                <th className="text-left px-3 py-3 font-normal">Created</th>
+                <th className="text-left px-3 py-3 font-normal">Expires</th>
+                <th className="text-right px-3 py-3 font-normal">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sessions.map((session) => (
+                <tr key={session.sessionId} className="border-t border-[#ffffff05] hover:bg-[#0C8B44]/5 transition-colors">
+                  <td className="px-3 py-3 font-mono text-xs text-[#A0A0A0] break-all max-w-[180px]">{session.sessionId}</td>
+                  <td className="px-3 py-3 text-[#E5E5E5] break-words max-w-[180px]">{session.deviceHash || 'Unknown'}</td>
+                  <td className="px-3 py-3 text-[#A0A0A0]">{session.ipAddress || 'Unknown'}</td>
+                  <td className="px-3 py-3 text-[#A0A0A0]">{session.otpVerified ? 'Verified' : 'No'}</td>
+                  <td className="px-3 py-3 text-[11px] text-[#737373]">{new Date(session.createdAt).toLocaleString()}</td>
+                  <td className="px-3 py-3 text-[11px] text-[#737373]">{new Date(session.expiresAt).toLocaleString()}</td>
+                  <td className="px-3 py-3 text-right">
+                    <button
+                      type="button"
+                      onClick={() => revoke(session.sessionId)}
+                      disabled={busy === session.sessionId}
+                      className="px-3 py-1.5 text-xs text-[#F57C00] border border-[#F57C00]/20 rounded-lg hover:bg-[#F57C00]/10 disabled:opacity-50"
+                    >
+                      {busy === session.sessionId ? 'Revoking…' : 'Revoke'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }

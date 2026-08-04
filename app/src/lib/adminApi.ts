@@ -248,6 +248,25 @@ export interface AdminAuditLog {
   target: { id: string; email: string; name: string } | null
 }
 
+export interface AdminUserSession {
+  sessionId: string
+  deviceHash: string
+  ipAddress: string | null
+  otpVerified: boolean
+  otpVerifiedAt?: string
+  stepUpLevel: number
+  expiresAt: string
+  createdAt: string
+  lastActivityAt: string
+}
+
+export interface AdminSessionStats {
+  totalActiveSessions: number
+  otpVerifiedSessions: number
+  expiredSessions: number
+  averageSessionDuration: number
+}
+
 // --- API ---------------------------------------------------------------
 
 export const adminApi = {
@@ -321,6 +340,8 @@ export const adminApi = {
   createUser: (input: { email: string; username?: string; name: string; password: string; role?: 'user' | 'admin'; initialUsdBalance?: number }) =>
     request<{ user: AdminUserFull }>(`/api/admin/users`, { method: 'POST', body: JSON.stringify(input) }),
 
+  seedTreasury: () => request<{ ok: true; message: string; balance: number; available: number; currency: string }>('/api/admin/seed-treasury', { method: 'POST' }),
+
   deposit: (
     userId: string,
     input: {
@@ -367,6 +388,15 @@ export const adminApi = {
 
   revokeSessions: (id: string) =>
     request<{ ok: boolean }>(`/api/admin/users/${id}/revoke`, { method: 'POST' }),
+
+  getUserSessions: (userId: string) =>
+    request<{ sessions: AdminUserSession[] }>(`/api/security/sessions?userId=${encodeURIComponent(userId)}`),
+
+  getSessionStats: () =>
+    request<{ stats: AdminSessionStats }>(`/api/security/sessions`),
+
+  revokeSession: (sessionId: string) =>
+    request<{ success: boolean }>(`/api/security/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' }),
 
   deleteUser: (id: string) =>
     request<{ ok: boolean }>(`/api/admin/users/${id}`, { method: 'DELETE' }),

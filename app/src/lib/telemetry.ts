@@ -11,15 +11,7 @@
  *   Falls back to console-only when not configured.
  */
 
-const CONSENT_KEY = 'verdexis_cookie_consent'
-
-function consented(): boolean {
-  try {
-    return localStorage.getItem(CONSENT_KEY) === 'accept'
-  } catch {
-    return false
-  }
-}
+import { consented } from './cookieConsent'
 
 let analyticsLoaded = false
 
@@ -66,7 +58,7 @@ export function initErrorReporting() {
     const stack = err instanceof Error ? err.stack : undefined
 
     // Always log locally
-    // eslint-disable-next-line no-console
+     
     console.error('[verdexis]', isRejection ? 'unhandled rejection' : 'uncaught error', err)
 
     // Only send remotely if user consented AND a DSN is configured

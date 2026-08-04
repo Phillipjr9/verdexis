@@ -25,6 +25,7 @@ self.addEventListener('activate', (event) => {
           if (key !== CACHE_VERSION && key !== API_CACHE) {
             return caches.delete(key)
           }
+          return Promise.resolve()
         })
       )
     )
@@ -56,6 +57,27 @@ self.addEventListener('fetch', (event) => {
           status: 503,
           headers: { 'Content-Type': 'application/json' }
         })))
+    )
+    return
+  }
+
+  const isJavaScriptAsset = url.pathname.endsWith('.js')
+
+  if (isJavaScriptAsset) {
+    // Use network-first for JS bundles so stale cached chunks do not block
+    // dynamic imports after a new deploy.
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone()
+            caches.open(CACHE_VERSION).then((cache) => {
+              cache.put(request, clone)
+            })
+          }
+          return response
+        })
+        .catch(() => caches.match(request))
     )
     return
   }

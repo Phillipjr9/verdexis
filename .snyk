@@ -1,0 +1,9 @@
+ignore:
+  SNYK-JS-REACTROUTER-18313151:
+    - "*":
+        reason: "Upstream issue in react-router 7.18.2 currently has no fixed release available."
+        expires: "9999-12-31T23:59:59Z"
+  SNYK-JS-BIGINTBUFFER-3364597:
+    - "*":
+        reason: "bigint-buffer is an unfixable upstream transitive dependency of @solana/buffer-layout-utils and no patched version exists."
+        expires: "9999-12-31T23:59:59Z"

@@ -11,7 +11,6 @@ if (isSupabaseConfigured) {
   supabase = createClient(supabaseUrl!, supabaseAnonKey!, {
     auth: {
       persistSession: false,
-      storage: null,
     },
   })
 }

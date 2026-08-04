@@ -6,7 +6,7 @@
 import { realTimePrice } from './realTimePrice'
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) || ''
-const LIVE_POLL_MS = 2_000
+const LIVE_POLL_MS = 1_000
 const WS_RECONNECT_MS = 5_000
 const WS_TIMEOUT_MS = 10_000
 

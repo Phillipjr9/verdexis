@@ -59,6 +59,9 @@ import advancedComplianceRoutes from './routes/advanced-compliance.js'
 import advancedNotificationsRoutes from './routes/advanced-notifications.js'
 import securityRoutes from './routes/security.js'
 import adminWithdrawalConfigRoutes from './routes/admin-withdrawal-config.js'
+import userSecurityRoutes from './routes/userSecurity.js'
+import apiKeysRoutes from './routes/apiKeys.js'
+import adminSettingsRoutes from './routes/admin-settings.js'
 import { requestContextMiddleware } from './logging.js'
 import { createErrorResponse } from './errorHandler.js'
 import { isDbUnavailableError } from './dbError.js'
@@ -87,6 +90,7 @@ app.set('trust proxy', 1)
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginResourcePolicy: { policy: 'cross-origin' },
+  frameguard: { action: 'deny' },
 }))
 app.use(compression())
 app.use(
@@ -94,7 +98,6 @@ app.use(
     origin: (origin, cb) => {
       if (!origin) return cb(null, true)
       if (ALLOWED_ORIGINS.has(origin)) return cb(null, true)
-      if (/^https:\/\/[a-z0-9-]+\.onrender\.com$/i.test(origin)) return cb(null, true)
       if (!IS_PROD && LAN_ORIGIN_RE.test(origin)) return cb(null, true)
       cb(new Error(`CORS blocked: ${origin}`))
     },
@@ -217,6 +220,9 @@ app.use('/api/compliance', advancedComplianceRoutes)
 app.use('/api/notifications/advanced', advancedNotificationsRoutes)
 app.use('/api/security', securityRoutes)
 app.use('/api/admin/withdrawal-config', adminWithdrawalConfigRoutes)
+app.use('/api/user-security', userSecurityRoutes)
+app.use('/api/api-keys', apiKeysRoutes)
+app.use('/api/admin/settings', adminSettingsRoutes)
 
 app.post('/api/admin/cache/clear', async (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '')

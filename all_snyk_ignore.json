@@ -1,0 +1,1654 @@
+[
+  {
+    "vulnerabilities": [],
+    "ok": true,
+    "dependencyCount": 140,
+    "org": "phillipjr9",
+    "policy": "# Snyk (https://snyk.io) policy file, patches or ignores known vulnerabilities.\n# ignores vulnerabilities until expiry date; change duration by modifying expiry date\nignore:\n  SNYK-JS-REACTROUTER-18313151:\n    - '*':\n        reason: >-\n          Upstream issue in react-router 7.18.2 currently has no fixed release\n          available.\n        expires: '9999-12-31T23:59:59Z'\n        source: cli\n  SNYK-JS-BIGINTBUFFER-3364597:\n    - '*':\n        reason: >-\n          bigint-buffer is an unfixable upstream transitive dependency of\n          @solana/buffer-layout-utils and no patched version exists.\n        expires: '9999-12-31T23:59:59Z'\n        source: cli\nversion: v1.25.1\npatch: {}\n",
+    "isPrivate": true,
+    "licensesPolicy": {
+      "severities": {},
+      "orgLicenseRules": {
+        "AGPL-1.0": {
+          "licenseType": "AGPL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "AGPL-3.0": {
+          "licenseType": "AGPL-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "Artistic-1.0": {
+          "licenseType": "Artistic-1.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "Artistic-2.0": {
+          "licenseType": "Artistic-2.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "CDDL-1.0": {
+          "licenseType": "CDDL-1.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "CPOL-1.02": {
+          "licenseType": "CPOL-1.02",
+          "severity": "high",
+          "instructions": ""
+        },
+        "EPL-1.0": {
+          "licenseType": "EPL-1.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "GPL-2.0": {
+          "licenseType": "GPL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "GPL-3.0": {
+          "licenseType": "GPL-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "LGPL-2.0": {
+          "licenseType": "LGPL-2.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "LGPL-2.1": {
+          "licenseType": "LGPL-2.1",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "LGPL-3.0": {
+          "licenseType": "LGPL-3.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "MPL-1.1": {
+          "licenseType": "MPL-1.1",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "MPL-2.0": {
+          "licenseType": "MPL-2.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "MS-RL": {
+          "licenseType": "MS-RL",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "SimPL-2.0": {
+          "licenseType": "SimPL-2.0",
+          "severity": "high",
+          "instructions": ""
+        }
+      }
+    },
+    "packageManager": "npm",
+    "ignoreSettings": {
+      "adminOnly": false,
+      "reasonRequired": false,
+      "disregardFilesystemIgnores": false,
+      "autoApproveIgnores": false,
+      "approvalWorkflowEnabled": false
+    },
+    "summary": "No known vulnerabilities",
+    "filesystemPolicy": true,
+    "uniqueCount": 0,
+    "projectName": "package.json",
+    "foundProjectCount": 4,
+    "displayTargetFile": "package-lock.json",
+    "hasUnknownVersions": false,
+    "path": "/Users/progressive/verdexis"
+  },
+  {
+    "vulnerabilities": [
+      {
+        "id": "SNYK-JS-REACTROUTER-18313151",
+        "title": "Cross-site Request Forgery (CSRF)",
+        "CVSSv3": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:H/A:N",
+        "credit": [
+          "raditya"
+        ],
+        "semver": {
+          "vulnerable": [
+            ">=7.12.0 <8.3.0"
+          ]
+        },
+        "exploit": "Not Defined",
+        "fixedIn": [
+          "8.3.0"
+        ],
+        "patches": [],
+        "insights": {
+          "triageAdvice": null
+        },
+        "language": "js",
+        "severity": "medium",
+        "cvssScore": 5.9,
+        "functions": [],
+        "malicious": false,
+        "isDisputed": false,
+        "moduleName": "react-router",
+        "references": [
+          {
+            "url": "https://github.com/remix-run/react-router/security/advisories/GHSA-qwww-vcr4-c8h2",
+            "title": "GitHub Advisory"
+          },
+          {
+            "url": "https://github.com/remix-run/react-router/blob/main/CHANGELOG.md%23v830",
+            "title": "GitHub ChangeLog"
+          },
+          {
+            "url": "https://github.com/remix-run/react-router/commit/7a71c728ad116bd78699a258b2014ce9585729f5",
+            "title": "GitHub Commit"
+          },
+          {
+            "url": "http://github.com/remix-run/react-router/pull/15311",
+            "title": "GitHub PR"
+          },
+          {
+            "url": "https://github.com/remix-run/react-router/releases/tag/react-router@8.3.0",
+            "title": "GitHub Release"
+          }
+        ],
+        "cvssDetails": [],
+        "cvssSources": [
+          {
+            "type": "primary",
+            "vector": "CVSS:4.0/AV:N/AC:L/AT:P/PR:N/UI:A/VC:L/VI:H/VA:N/SC:N/SI:N/SA:N",
+            "assigner": "Snyk",
+            "severity": "medium",
+            "baseScore": 5.9,
+            "cvssVersion": "4.0",
+            "modificationTime": "2026-07-26T11:29:21.779615Z"
+          },
+          {
+            "type": "secondary",
+            "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:H/A:N",
+            "assigner": "Snyk",
+            "severity": "medium",
+            "baseScore": 5.9,
+            "cvssVersion": "3.1",
+            "modificationTime": "2026-07-26T11:29:21.779615Z"
+          }
+        ],
+        "description": "## Overview\n\nAffected versions of this package are vulnerable to Cross-site Request Forgery (CSRF) via the unstable RSC APIs. An attacker can execute unauthorized actions by tricking a user into submitting crafted requests.\n\n**Note:** This is only exploitable if the unstable RSC APIs are enabled in the application.\n## Remediation\nUpgrade `react-router` to version 8.3.0 or higher.\n## References\n- [GitHub Advisory](https://github.com/remix-run/react-router/security/advisories/GHSA-qwww-vcr4-c8h2)\n- [GitHub ChangeLog](https://github.com/remix-run/react-router/blob/main/CHANGELOG.md#v830)\n- [GitHub Commit](https://github.com/remix-run/react-router/commit/7a71c728ad116bd78699a258b2014ce9585729f5)\n- [GitHub PR](http://github.com/remix-run/react-router/pull/15311)\n- [GitHub Release](https://github.com/remix-run/react-router/releases/tag/react-router@8.3.0)\n",
+        "epssDetails": null,
+        "identifiers": {
+          "CVE": [],
+          "CWE": [
+            "CWE-352"
+          ],
+          "GHSA": [
+            "GHSA-qwww-vcr4-c8h2"
+          ]
+        },
+        "packageName": "react-router",
+        "proprietary": false,
+        "creationTime": "2026-07-26T11:29:21.458846Z",
+        "functions_new": [],
+        "alternativeIds": [],
+        "disclosureTime": "2026-07-24T16:44:43Z",
+        "exploitDetails": {
+          "sources": [],
+          "maturityLevels": [
+            {
+              "type": "secondary",
+              "level": "Not Defined",
+              "format": "CVSSv3"
+            },
+            {
+              "type": "primary",
+              "level": "Not Defined",
+              "format": "CVSSv4"
+            }
+          ]
+        },
+        "packageManager": "npm",
+        "publicationTime": "2026-07-26T11:29:21.637585Z",
+        "severityBasedOn": "CVSS",
+        "modificationTime": "2026-07-26T11:29:21.779615Z",
+        "socialTrendAlert": false,
+        "severityWithCritical": "medium",
+        "from": [
+          "my-app@0.0.0",
+          "react-router-dom@7.18.2",
+          "react-router@7.18.2"
+        ],
+        "upgradePath": [],
+        "isUpgradable": false,
+        "isPatchable": false,
+        "name": "react-router",
+        "version": "7.18.2"
+      }
+    ],
+    "ok": false,
+    "dependencyCount": 583,
+    "org": "phillipjr9",
+    "policy": "# Snyk (https://snyk.io) policy file, patches or ignores known vulnerabilities.\nversion: v1.25.1\nignore: {}\npatch: {}\n",
+    "isPrivate": true,
+    "licensesPolicy": {
+      "severities": {},
+      "orgLicenseRules": {
+        "AGPL-1.0": {
+          "licenseType": "AGPL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "AGPL-3.0": {
+          "licenseType": "AGPL-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "Artistic-1.0": {
+          "licenseType": "Artistic-1.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "Artistic-2.0": {
+          "licenseType": "Artistic-2.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "CDDL-1.0": {
+          "licenseType": "CDDL-1.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "CPOL-1.02": {
+          "licenseType": "CPOL-1.02",
+          "severity": "high",
+          "instructions": ""
+        },
+        "EPL-1.0": {
+          "licenseType": "EPL-1.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "GPL-2.0": {
+          "licenseType": "GPL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "GPL-3.0": {
+          "licenseType": "GPL-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "LGPL-2.0": {
+          "licenseType": "LGPL-2.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "LGPL-2.1": {
+          "licenseType": "LGPL-2.1",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "LGPL-3.0": {
+          "licenseType": "LGPL-3.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "MPL-1.1": {
+          "licenseType": "MPL-1.1",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "MPL-2.0": {
+          "licenseType": "MPL-2.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "MS-RL": {
+          "licenseType": "MS-RL",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "SimPL-2.0": {
+          "licenseType": "SimPL-2.0",
+          "severity": "high",
+          "instructions": ""
+        }
+      }
+    },
+    "packageManager": "npm",
+    "ignoreSettings": {
+      "adminOnly": false,
+      "reasonRequired": false,
+      "disregardFilesystemIgnores": false,
+      "autoApproveIgnores": false,
+      "approvalWorkflowEnabled": false
+    },
+    "summary": "1 vulnerable dependency path",
+    "remediation": {
+      "unresolved": [
+        {
+          "id": "SNYK-JS-REACTROUTER-18313151",
+          "title": "Cross-site Request Forgery (CSRF)",
+          "CVSSv3": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:H/A:N",
+          "credit": [
+            "raditya"
+          ],
+          "semver": {
+            "vulnerable": [
+              ">=7.12.0 <8.3.0"
+            ]
+          },
+          "exploit": "Not Defined",
+          "fixedIn": [
+            "8.3.0"
+          ],
+          "patches": [],
+          "insights": {
+            "triageAdvice": null
+          },
+          "language": "js",
+          "severity": "medium",
+          "cvssScore": 5.9,
+          "functions": [],
+          "malicious": false,
+          "isDisputed": false,
+          "moduleName": "react-router",
+          "references": [
+            {
+              "url": "https://github.com/remix-run/react-router/security/advisories/GHSA-qwww-vcr4-c8h2",
+              "title": "GitHub Advisory"
+            },
+            {
+              "url": "https://github.com/remix-run/react-router/blob/main/CHANGELOG.md%23v830",
+              "title": "GitHub ChangeLog"
+            },
+            {
+              "url": "https://github.com/remix-run/react-router/commit/7a71c728ad116bd78699a258b2014ce9585729f5",
+              "title": "GitHub Commit"
+            },
+            {
+              "url": "http://github.com/remix-run/react-router/pull/15311",
+              "title": "GitHub PR"
+            },
+            {
+              "url": "https://github.com/remix-run/react-router/releases/tag/react-router@8.3.0",
+              "title": "GitHub Release"
+            }
+          ],
+          "cvssDetails": [],
+          "cvssSources": [
+            {
+              "type": "primary",
+              "vector": "CVSS:4.0/AV:N/AC:L/AT:P/PR:N/UI:A/VC:L/VI:H/VA:N/SC:N/SI:N/SA:N",
+              "assigner": "Snyk",
+              "severity": "medium",
+              "baseScore": 5.9,
+              "cvssVersion": "4.0",
+              "modificationTime": "2026-07-26T11:29:21.779615Z"
+            },
+            {
+              "type": "secondary",
+              "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:L/I:H/A:N",
+              "assigner": "Snyk",
+              "severity": "medium",
+              "baseScore": 5.9,
+              "cvssVersion": "3.1",
+              "modificationTime": "2026-07-26T11:29:21.779615Z"
+            }
+          ],
+          "description": "## Overview\n\nAffected versions of this package are vulnerable to Cross-site Request Forgery (CSRF) via the unstable RSC APIs. An attacker can execute unauthorized actions by tricking a user into submitting crafted requests.\n\n**Note:** This is only exploitable if the unstable RSC APIs are enabled in the application.\n## Remediation\nUpgrade `react-router` to version 8.3.0 or higher.\n## References\n- [GitHub Advisory](https://github.com/remix-run/react-router/security/advisories/GHSA-qwww-vcr4-c8h2)\n- [GitHub ChangeLog](https://github.com/remix-run/react-router/blob/main/CHANGELOG.md#v830)\n- [GitHub Commit](https://github.com/remix-run/react-router/commit/7a71c728ad116bd78699a258b2014ce9585729f5)\n- [GitHub PR](http://github.com/remix-run/react-router/pull/15311)\n- [GitHub Release](https://github.com/remix-run/react-router/releases/tag/react-router@8.3.0)\n",
+          "epssDetails": null,
+          "identifiers": {
+            "CVE": [],
+            "CWE": [
+              "CWE-352"
+            ],
+            "GHSA": [
+              "GHSA-qwww-vcr4-c8h2"
+            ]
+          },
+          "packageName": "react-router",
+          "proprietary": false,
+          "creationTime": "2026-07-26T11:29:21.458846Z",
+          "functions_new": [],
+          "alternativeIds": [],
+          "disclosureTime": "2026-07-24T16:44:43Z",
+          "exploitDetails": {
+            "sources": [],
+            "maturityLevels": [
+              {
+                "type": "secondary",
+                "level": "Not Defined",
+                "format": "CVSSv3"
+              },
+              {
+                "type": "primary",
+                "level": "Not Defined",
+                "format": "CVSSv4"
+              }
+            ]
+          },
+          "packageManager": "npm",
+          "publicationTime": "2026-07-26T11:29:21.637585Z",
+          "severityBasedOn": "CVSS",
+          "modificationTime": "2026-07-26T11:29:21.779615Z",
+          "socialTrendAlert": false,
+          "packagePopularityRank": 99,
+          "from": [
+            "my-app@0.0.0",
+            "react-router-dom@7.18.2",
+            "react-router@7.18.2"
+          ],
+          "upgradePath": [],
+          "isUpgradable": false,
+          "isPatchable": false,
+          "isPinnable": false,
+          "isRuntime": false,
+          "name": "react-router",
+          "version": "7.18.2",
+          "severityWithCritical": "medium"
+        }
+      ],
+      "upgrade": {},
+      "patch": {},
+      "ignore": {},
+      "pin": {}
+    },
+    "filesystemPolicy": false,
+    "filtered": {
+      "ignore": [],
+      "patch": []
+    },
+    "uniqueCount": 1,
+    "projectName": "my-app",
+    "foundProjectCount": 4,
+    "displayTargetFile": "app/package-lock.json",
+    "hasUnknownVersions": false,
+    "path": "/Users/progressive/verdexis"
+  },
+  {
+    "vulnerabilities": [],
+    "ok": true,
+    "dependencyCount": 0,
+    "org": "phillipjr9",
+    "policy": "# Snyk (https://snyk.io) policy file, patches or ignores known vulnerabilities.\nversion: v1.25.1\nignore: {}\npatch: {}\n",
+    "isPrivate": true,
+    "licensesPolicy": {
+      "severities": {},
+      "orgLicenseRules": {
+        "AGPL-1.0": {
+          "licenseType": "AGPL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "AGPL-3.0": {
+          "licenseType": "AGPL-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "Artistic-1.0": {
+          "licenseType": "Artistic-1.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "Artistic-2.0": {
+          "licenseType": "Artistic-2.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "CDDL-1.0": {
+          "licenseType": "CDDL-1.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "CPOL-1.02": {
+          "licenseType": "CPOL-1.02",
+          "severity": "high",
+          "instructions": ""
+        },
+        "EPL-1.0": {
+          "licenseType": "EPL-1.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "GPL-2.0": {
+          "licenseType": "GPL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "GPL-3.0": {
+          "licenseType": "GPL-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "LGPL-2.0": {
+          "licenseType": "LGPL-2.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "LGPL-2.1": {
+          "licenseType": "LGPL-2.1",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "LGPL-3.0": {
+          "licenseType": "LGPL-3.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "MPL-1.1": {
+          "licenseType": "MPL-1.1",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "MPL-2.0": {
+          "licenseType": "MPL-2.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "MS-RL": {
+          "licenseType": "MS-RL",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "SimPL-2.0": {
+          "licenseType": "SimPL-2.0",
+          "severity": "high",
+          "instructions": ""
+        }
+      }
+    },
+    "packageManager": "npm",
+    "ignoreSettings": {
+      "adminOnly": false,
+      "reasonRequired": false,
+      "disregardFilesystemIgnores": false,
+      "autoApproveIgnores": false,
+      "approvalWorkflowEnabled": false
+    },
+    "summary": "No known vulnerabilities",
+    "filesystemPolicy": false,
+    "uniqueCount": 0,
+    "projectName": "hardhat-example",
+    "foundProjectCount": 4,
+    "displayTargetFile": "hardhat-example/package-lock.json",
+    "hasUnknownVersions": false,
+    "path": "/Users/progressive/verdexis"
+  },
+  {
+    "vulnerabilities": [
+      {
+        "id": "SNYK-JS-BODYPARSER-17906397",
+        "title": "Allocation of Resources Without Limits or Throttling",
+        "CVSSv3": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:L",
+        "credit": [
+          "Phillip9587"
+        ],
+        "semver": {
+          "vulnerable": [
+            "<1.20.6",
+            ">=2.0.0-beta.1 <2.3.0"
+          ]
+        },
+        "exploit": "Not Defined",
+        "fixedIn": [
+          "1.20.6",
+          "2.3.0"
+        ],
+        "patches": [],
+        "insights": {
+          "triageAdvice": null
+        },
+        "language": "js",
+        "severity": "medium",
+        "cvssScore": 6.3,
+        "functions": [],
+        "malicious": false,
+        "isDisputed": false,
+        "moduleName": "body-parser",
+        "references": [
+          {
+            "url": "https://github.com/expressjs/body-parser/commit/2322e111cc321413ec2b7b76d01be533d3de9d7d",
+            "title": "GitHub Commit"
+          },
+          {
+            "url": "https://github.com/expressjs/body-parser/commit/3492672eee593d5c158f239b6e9115498a5dbeac",
+            "title": "GitHub Commit"
+          },
+          {
+            "url": "https://github.com/expressjs/body-parser/pull/698",
+            "title": "GitHub PR"
+          },
+          {
+            "url": "https://github.com/expressjs/body-parser/security/advisories/GHSA-v422-hmwv-36x6",
+            "title": "Maintainer's Advisory"
+          }
+        ],
+        "cvssDetails": [
+          {
+            "assigner": "Red Hat",
+            "severity": "medium",
+            "cvssV3Vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H",
+            "cvssV3BaseScore": 5.9,
+            "modificationTime": "2026-07-10T07:09:08.984756Z"
+          }
+        ],
+        "cvssSources": [
+          {
+            "type": "primary",
+            "vector": "CVSS:4.0/AV:N/AC:L/AT:P/PR:N/UI:N/VC:N/VI:N/VA:L/SC:N/SI:N/SA:N",
+            "assigner": "Snyk",
+            "severity": "medium",
+            "baseScore": 6.3,
+            "cvssVersion": "4.0",
+            "modificationTime": "2026-07-24T14:04:16.820612Z"
+          },
+          {
+            "type": "secondary",
+            "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:L",
+            "assigner": "Snyk",
+            "severity": "low",
+            "baseScore": 3.7,
+            "cvssVersion": "3.1",
+            "modificationTime": "2026-07-24T14:04:16.820612Z"
+          },
+          {
+            "type": "secondary",
+            "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H",
+            "assigner": "Red Hat",
+            "severity": "medium",
+            "baseScore": 5.9,
+            "cvssVersion": "3.1",
+            "modificationTime": "2026-07-10T07:09:08.984756Z"
+          }
+        ],
+        "description": "## Overview\n\nAffected versions of this package are vulnerable to Allocation of Resources Without Limits or Throttling due to invalid `limit` option handling in `normalizeOptions` in `lib/utils.js`. An attacker can force oversized request bodies through by supplying an application configuration value for `limit` that parses to `null`, such as an unparseable string or `NaN`. When an app relies on `limit` to cap body size, the parser skips enforcement and accepts arbitrarily large payloads, driving excessive memory and CPU usage and degrading or crashing the service.\n## Remediation\nUpgrade `body-parser` to version 1.20.6, 2.3.0 or higher.\n## References\n- [GitHub Commit](https://github.com/expressjs/body-parser/commit/2322e111cc321413ec2b7b76d01be533d3de9d7d)\n- [GitHub Commit](https://github.com/expressjs/body-parser/commit/3492672eee593d5c158f239b6e9115498a5dbeac)\n- [GitHub PR](https://github.com/expressjs/body-parser/pull/698)\n- [Maintainer's Advisory](https://github.com/expressjs/body-parser/security/advisories/GHSA-v422-hmwv-36x6)\n",
+        "epssDetails": {
+          "percentile": "0.18993",
+          "probability": "0.00270",
+          "modelVersion": "v2026.06.15"
+        },
+        "identifiers": {
+          "CVE": [
+            "CVE-2026-12590"
+          ],
+          "CWE": [
+            "CWE-770"
+          ],
+          "GHSA": [
+            "GHSA-v422-hmwv-36x6"
+          ]
+        },
+        "packageName": "body-parser",
+        "proprietary": false,
+        "creationTime": "2026-07-09T13:21:16.025124Z",
+        "functions_new": [],
+        "alternativeIds": [],
+        "disclosureTime": "2026-07-09T12:42:43.621000Z",
+        "exploitDetails": {
+          "sources": [],
+          "maturityLevels": [
+            {
+              "type": "secondary",
+              "level": "Not Defined",
+              "format": "CVSSv3"
+            },
+            {
+              "type": "primary",
+              "level": "Not Defined",
+              "format": "CVSSv4"
+            }
+          ]
+        },
+        "packageManager": "npm",
+        "publicationTime": "2026-07-09T13:21:16.231820Z",
+        "severityBasedOn": "CVSS",
+        "modificationTime": "2026-07-24T14:04:16.820612Z",
+        "socialTrendAlert": false,
+        "severityWithCritical": "medium",
+        "from": [
+          "verdexis-cognito-otp@1.0.0",
+          "express@4.22.2",
+          "body-parser@1.20.5"
+        ],
+        "upgradePath": [
+          false,
+          "express@4.22.2",
+          "body-parser@1.20.6"
+        ],
+        "isUpgradable": true,
+        "isPatchable": false,
+        "name": "body-parser",
+        "version": "1.20.5"
+      },
+      {
+        "id": "SNYK-JS-UUID-16133035",
+        "title": "Improper Validation of Specified Index, Position, or Offset in Input",
+        "CVSSv3": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:L/A:N/E:P",
+        "credit": [
+          "0xStraw-Hat"
+        ],
+        "semver": {
+          "vulnerable": [
+            "<11.1.1",
+            ">=12.0.0 <14.0.0"
+          ]
+        },
+        "exploit": "Proof of Concept",
+        "fixedIn": [
+          "11.1.1",
+          "14.0.0"
+        ],
+        "patches": [],
+        "insights": {
+          "triageAdvice": null
+        },
+        "language": "js",
+        "severity": "medium",
+        "cvssScore": 6.3,
+        "functions": [],
+        "malicious": false,
+        "isDisputed": false,
+        "moduleName": "uuid",
+        "references": [
+          {
+            "url": "https://github.com/uuidjs/uuid/commit/32389c887c9e75f90442ee4cc95bbab0c4e8346e",
+            "title": "GitHub Commit"
+          },
+          {
+            "url": "https://github.com/uuidjs/uuid/commit/3d2c5b0342f0fcb52a5ac681c3d47c13e7444b34",
+            "title": "GitHub Commit"
+          },
+          {
+            "url": "https://github.com/uuidjs/uuid/releases/tag/v14.0.0",
+            "title": "GitHub Release"
+          }
+        ],
+        "cvssDetails": [
+          {
+            "assigner": "NVD",
+            "severity": "high",
+            "cvssV3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N",
+            "cvssV3BaseScore": 7.5,
+            "modificationTime": "2026-05-12T01:14:02.230690Z"
+          },
+          {
+            "assigner": "Red Hat",
+            "severity": "medium",
+            "cvssV3Vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:L/A:L",
+            "cvssV3BaseScore": 4.8,
+            "modificationTime": "2026-05-08T12:59:51.566928Z"
+          }
+        ],
+        "cvssSources": [
+          {
+            "type": "primary",
+            "vector": "CVSS:4.0/AV:N/AC:L/AT:P/PR:N/UI:N/VC:N/VI:L/VA:N/SC:N/SI:N/SA:N/E:P",
+            "assigner": "Snyk",
+            "severity": "medium",
+            "baseScore": 6.3,
+            "cvssVersion": "4.0",
+            "modificationTime": "2026-07-26T15:25:19.112556Z"
+          },
+          {
+            "type": "secondary",
+            "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:L/A:N/E:P",
+            "assigner": "Snyk",
+            "severity": "low",
+            "baseScore": 3.7,
+            "cvssVersion": "3.1",
+            "modificationTime": "2026-07-26T15:25:19.112556Z"
+          },
+          {
+            "type": "secondary",
+            "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N",
+            "assigner": "NVD",
+            "severity": "high",
+            "baseScore": 7.5,
+            "cvssVersion": "3.1",
+            "modificationTime": "2026-05-12T01:14:02.230690Z"
+          },
+          {
+            "type": "secondary",
+            "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:L/A:L",
+            "assigner": "Red Hat",
+            "severity": "medium",
+            "baseScore": 4.8,
+            "cvssVersion": "3.1",
+            "modificationTime": "2026-05-08T12:59:51.566928Z"
+          }
+        ],
+        "description": "## Overview\n[uuid](https://github.com/kelektiv/node-uuid) is a RFC4122 (v1, v4, and v5) compliant UUID library.\n\nAffected versions of this package are vulnerable to Improper Validation of Specified Index, Position, or Offset in Input due to accepting external output buffers but not rejecting out-of-range writes (small `buf` or large `offset`). This inconsistency allows silent partial writes into caller-provided buffers.\n## PoC\n```\r\ncd /home/StrawHat/uuid\r\nnpm ci\r\nnpm run build\r\n\r\nnode --input-type=module -e \"\r\nimport {v4,v5,v6} from './dist-node/index.js';\r\nconst ns='6ba7b810-9dad-11d1-80b4-00c04fd430c8';\r\nfor (const [name,fn] of [\r\n  ['v4',()=>v4({},new Uint8Array(8),4)],\r\n  ['v5',()=>v5('x',ns,new Uint8Array(8),4)],\r\n  ['v6',()=>v6({},new Uint8Array(8),4)],\r\n]) {\r\n  try { fn(); console.log(name,'NO_THROW'); }\r\n  catch(e){ console.log(name,'THREW',e.name); }\r\n}\"\r\n```\n## Remediation\nUpgrade `uuid` to version 11.1.1, 14.0.0 or higher.\n## References\n- [GitHub Commit](https://github.com/uuidjs/uuid/commit/32389c887c9e75f90442ee4cc95bbab0c4e8346e)\n- [GitHub Commit](https://github.com/uuidjs/uuid/commit/3d2c5b0342f0fcb52a5ac681c3d47c13e7444b34)\n- [GitHub Release](https://github.com/uuidjs/uuid/releases/tag/v14.0.0)\n",
+        "epssDetails": {
+          "percentile": "0.25372",
+          "probability": "0.00337",
+          "modelVersion": "v2026.06.15"
+        },
+        "identifiers": {
+          "CVE": [
+            "CVE-2026-41907"
+          ],
+          "CWE": [
+            "CWE-1285"
+          ],
+          "GHSA": [
+            "GHSA-w5hq-g745-h8pq"
+          ]
+        },
+        "packageName": "uuid",
+        "proprietary": false,
+        "creationTime": "2026-04-23T08:34:15.552273Z",
+        "functions_new": [],
+        "alternativeIds": [],
+        "disclosureTime": "2026-04-18T21:00:00Z",
+        "exploitDetails": {
+          "sources": [
+            "Snyk"
+          ],
+          "maturityLevels": [
+            {
+              "type": "secondary",
+              "level": "Proof of Concept",
+              "format": "CVSSv3"
+            },
+            {
+              "type": "primary",
+              "level": "Proof of Concept",
+              "format": "CVSSv4"
+            }
+          ]
+        },
+        "packageManager": "npm",
+        "publicationTime": "2026-04-23T08:34:16.017476Z",
+        "severityBasedOn": "CVSS",
+        "modificationTime": "2026-07-26T15:25:19.112556Z",
+        "socialTrendAlert": false,
+        "severityWithCritical": "medium",
+        "from": [
+          "verdexis-cognito-otp@1.0.0",
+          "aws-sdk@2.1693.0",
+          "uuid@8.0.0"
+        ],
+        "upgradePath": [],
+        "isUpgradable": false,
+        "isPatchable": false,
+        "name": "uuid",
+        "version": "8.0.0"
+      }
+    ],
+    "ok": false,
+    "dependencyCount": 104,
+    "org": "phillipjr9",
+    "policy": "# Snyk (https://snyk.io) policy file, patches or ignores known vulnerabilities.\nversion: v1.25.1\nignore: {}\npatch: {}\n",
+    "isPrivate": true,
+    "licensesPolicy": {
+      "severities": {},
+      "orgLicenseRules": {
+        "AGPL-1.0": {
+          "licenseType": "AGPL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "AGPL-3.0": {
+          "licenseType": "AGPL-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "Artistic-1.0": {
+          "licenseType": "Artistic-1.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "Artistic-2.0": {
+          "licenseType": "Artistic-2.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "CDDL-1.0": {
+          "licenseType": "CDDL-1.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "CPOL-1.02": {
+          "licenseType": "CPOL-1.02",
+          "severity": "high",
+          "instructions": ""
+        },
+        "EPL-1.0": {
+          "licenseType": "EPL-1.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "GPL-2.0": {
+          "licenseType": "GPL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "GPL-3.0": {
+          "licenseType": "GPL-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "LGPL-2.0": {
+          "licenseType": "LGPL-2.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "LGPL-2.1": {
+          "licenseType": "LGPL-2.1",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "LGPL-3.0": {
+          "licenseType": "LGPL-3.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "MPL-1.1": {
+          "licenseType": "MPL-1.1",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "MPL-2.0": {
+          "licenseType": "MPL-2.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "MS-RL": {
+          "licenseType": "MS-RL",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "SimPL-2.0": {
+          "licenseType": "SimPL-2.0",
+          "severity": "high",
+          "instructions": ""
+        }
+      }
+    },
+    "packageManager": "npm",
+    "ignoreSettings": {
+      "adminOnly": false,
+      "reasonRequired": false,
+      "disregardFilesystemIgnores": false,
+      "autoApproveIgnores": false,
+      "approvalWorkflowEnabled": false
+    },
+    "summary": "2 vulnerable dependency paths",
+    "remediation": {
+      "unresolved": [
+        {
+          "id": "SNYK-JS-BODYPARSER-17906397",
+          "title": "Allocation of Resources Without Limits or Throttling",
+          "CVSSv3": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:L",
+          "credit": [
+            "Phillip9587"
+          ],
+          "semver": {
+            "vulnerable": [
+              "<1.20.6",
+              ">=2.0.0-beta.1 <2.3.0"
+            ]
+          },
+          "exploit": "Not Defined",
+          "fixedIn": [
+            "1.20.6",
+            "2.3.0"
+          ],
+          "patches": [],
+          "insights": {
+            "triageAdvice": null
+          },
+          "language": "js",
+          "severity": "medium",
+          "cvssScore": 6.3,
+          "functions": [],
+          "malicious": false,
+          "isDisputed": false,
+          "moduleName": "body-parser",
+          "references": [
+            {
+              "url": "https://github.com/expressjs/body-parser/commit/2322e111cc321413ec2b7b76d01be533d3de9d7d",
+              "title": "GitHub Commit"
+            },
+            {
+              "url": "https://github.com/expressjs/body-parser/commit/3492672eee593d5c158f239b6e9115498a5dbeac",
+              "title": "GitHub Commit"
+            },
+            {
+              "url": "https://github.com/expressjs/body-parser/pull/698",
+              "title": "GitHub PR"
+            },
+            {
+              "url": "https://github.com/expressjs/body-parser/security/advisories/GHSA-v422-hmwv-36x6",
+              "title": "Maintainer's Advisory"
+            }
+          ],
+          "cvssDetails": [
+            {
+              "assigner": "Red Hat",
+              "severity": "medium",
+              "cvssV3Vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "cvssV3BaseScore": 5.9,
+              "modificationTime": "2026-07-10T07:09:08.984756Z"
+            }
+          ],
+          "cvssSources": [
+            {
+              "type": "primary",
+              "vector": "CVSS:4.0/AV:N/AC:L/AT:P/PR:N/UI:N/VC:N/VI:N/VA:L/SC:N/SI:N/SA:N",
+              "assigner": "Snyk",
+              "severity": "medium",
+              "baseScore": 6.3,
+              "cvssVersion": "4.0",
+              "modificationTime": "2026-07-24T14:04:16.820612Z"
+            },
+            {
+              "type": "secondary",
+              "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:L",
+              "assigner": "Snyk",
+              "severity": "low",
+              "baseScore": 3.7,
+              "cvssVersion": "3.1",
+              "modificationTime": "2026-07-24T14:04:16.820612Z"
+            },
+            {
+              "type": "secondary",
+              "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H",
+              "assigner": "Red Hat",
+              "severity": "medium",
+              "baseScore": 5.9,
+              "cvssVersion": "3.1",
+              "modificationTime": "2026-07-10T07:09:08.984756Z"
+            }
+          ],
+          "description": "## Overview\n\nAffected versions of this package are vulnerable to Allocation of Resources Without Limits or Throttling due to invalid `limit` option handling in `normalizeOptions` in `lib/utils.js`. An attacker can force oversized request bodies through by supplying an application configuration value for `limit` that parses to `null`, such as an unparseable string or `NaN`. When an app relies on `limit` to cap body size, the parser skips enforcement and accepts arbitrarily large payloads, driving excessive memory and CPU usage and degrading or crashing the service.\n## Remediation\nUpgrade `body-parser` to version 1.20.6, 2.3.0 or higher.\n## References\n- [GitHub Commit](https://github.com/expressjs/body-parser/commit/2322e111cc321413ec2b7b76d01be533d3de9d7d)\n- [GitHub Commit](https://github.com/expressjs/body-parser/commit/3492672eee593d5c158f239b6e9115498a5dbeac)\n- [GitHub PR](https://github.com/expressjs/body-parser/pull/698)\n- [Maintainer's Advisory](https://github.com/expressjs/body-parser/security/advisories/GHSA-v422-hmwv-36x6)\n",
+          "epssDetails": {
+            "percentile": "0.18993",
+            "probability": "0.00270",
+            "modelVersion": "v2026.06.15"
+          },
+          "identifiers": {
+            "CVE": [
+              "CVE-2026-12590"
+            ],
+            "CWE": [
+              "CWE-770"
+            ],
+            "GHSA": [
+              "GHSA-v422-hmwv-36x6"
+            ]
+          },
+          "packageName": "body-parser",
+          "proprietary": false,
+          "creationTime": "2026-07-09T13:21:16.025124Z",
+          "functions_new": [],
+          "alternativeIds": [],
+          "disclosureTime": "2026-07-09T12:42:43.621000Z",
+          "exploitDetails": {
+            "sources": [],
+            "maturityLevels": [
+              {
+                "type": "secondary",
+                "level": "Not Defined",
+                "format": "CVSSv3"
+              },
+              {
+                "type": "primary",
+                "level": "Not Defined",
+                "format": "CVSSv4"
+              }
+            ]
+          },
+          "packageManager": "npm",
+          "publicationTime": "2026-07-09T13:21:16.231820Z",
+          "severityBasedOn": "CVSS",
+          "modificationTime": "2026-07-24T14:04:16.820612Z",
+          "socialTrendAlert": false,
+          "packagePopularityRank": 99,
+          "from": [
+            "verdexis-cognito-otp@1.0.0",
+            "express@4.22.2",
+            "body-parser@1.20.5"
+          ],
+          "upgradePath": [
+            false,
+            "express@4.22.2",
+            "body-parser@1.20.6"
+          ],
+          "isUpgradable": true,
+          "isPatchable": false,
+          "isPinnable": false,
+          "isRuntime": false,
+          "name": "body-parser",
+          "version": "1.20.5",
+          "severityWithCritical": "medium"
+        },
+        {
+          "id": "SNYK-JS-UUID-16133035",
+          "title": "Improper Validation of Specified Index, Position, or Offset in Input",
+          "CVSSv3": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:L/A:N/E:P",
+          "credit": [
+            "0xStraw-Hat"
+          ],
+          "semver": {
+            "vulnerable": [
+              "<11.1.1",
+              ">=12.0.0 <14.0.0"
+            ]
+          },
+          "exploit": "Proof of Concept",
+          "fixedIn": [
+            "11.1.1",
+            "14.0.0"
+          ],
+          "patches": [],
+          "insights": {
+            "triageAdvice": null
+          },
+          "language": "js",
+          "severity": "medium",
+          "cvssScore": 6.3,
+          "functions": [],
+          "malicious": false,
+          "isDisputed": false,
+          "moduleName": "uuid",
+          "references": [
+            {
+              "url": "https://github.com/uuidjs/uuid/commit/32389c887c9e75f90442ee4cc95bbab0c4e8346e",
+              "title": "GitHub Commit"
+            },
+            {
+              "url": "https://github.com/uuidjs/uuid/commit/3d2c5b0342f0fcb52a5ac681c3d47c13e7444b34",
+              "title": "GitHub Commit"
+            },
+            {
+              "url": "https://github.com/uuidjs/uuid/releases/tag/v14.0.0",
+              "title": "GitHub Release"
+            }
+          ],
+          "cvssDetails": [
+            {
+              "assigner": "NVD",
+              "severity": "high",
+              "cvssV3Vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N",
+              "cvssV3BaseScore": 7.5,
+              "modificationTime": "2026-05-12T01:14:02.230690Z"
+            },
+            {
+              "assigner": "Red Hat",
+              "severity": "medium",
+              "cvssV3Vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:L/A:L",
+              "cvssV3BaseScore": 4.8,
+              "modificationTime": "2026-05-08T12:59:51.566928Z"
+            }
+          ],
+          "cvssSources": [
+            {
+              "type": "primary",
+              "vector": "CVSS:4.0/AV:N/AC:L/AT:P/PR:N/UI:N/VC:N/VI:L/VA:N/SC:N/SI:N/SA:N/E:P",
+              "assigner": "Snyk",
+              "severity": "medium",
+              "baseScore": 6.3,
+              "cvssVersion": "4.0",
+              "modificationTime": "2026-07-26T15:25:19.112556Z"
+            },
+            {
+              "type": "secondary",
+              "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:L/A:N/E:P",
+              "assigner": "Snyk",
+              "severity": "low",
+              "baseScore": 3.7,
+              "cvssVersion": "3.1",
+              "modificationTime": "2026-07-26T15:25:19.112556Z"
+            },
+            {
+              "type": "secondary",
+              "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:H/A:N",
+              "assigner": "NVD",
+              "severity": "high",
+              "baseScore": 7.5,
+              "cvssVersion": "3.1",
+              "modificationTime": "2026-05-12T01:14:02.230690Z"
+            },
+            {
+              "type": "secondary",
+              "vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:L/A:L",
+              "assigner": "Red Hat",
+              "severity": "medium",
+              "baseScore": 4.8,
+              "cvssVersion": "3.1",
+              "modificationTime": "2026-05-08T12:59:51.566928Z"
+            }
+          ],
+          "description": "## Overview\n[uuid](https://github.com/kelektiv/node-uuid) is a RFC4122 (v1, v4, and v5) compliant UUID library.\n\nAffected versions of this package are vulnerable to Improper Validation of Specified Index, Position, or Offset in Input due to accepting external output buffers but not rejecting out-of-range writes (small `buf` or large `offset`). This inconsistency allows silent partial writes into caller-provided buffers.\n## PoC\n```\r\ncd /home/StrawHat/uuid\r\nnpm ci\r\nnpm run build\r\n\r\nnode --input-type=module -e \"\r\nimport {v4,v5,v6} from './dist-node/index.js';\r\nconst ns='6ba7b810-9dad-11d1-80b4-00c04fd430c8';\r\nfor (const [name,fn] of [\r\n  ['v4',()=>v4({},new Uint8Array(8),4)],\r\n  ['v5',()=>v5('x',ns,new Uint8Array(8),4)],\r\n  ['v6',()=>v6({},new Uint8Array(8),4)],\r\n]) {\r\n  try { fn(); console.log(name,'NO_THROW'); }\r\n  catch(e){ console.log(name,'THREW',e.name); }\r\n}\"\r\n```\n## Remediation\nUpgrade `uuid` to version 11.1.1, 14.0.0 or higher.\n## References\n- [GitHub Commit](https://github.com/uuidjs/uuid/commit/32389c887c9e75f90442ee4cc95bbab0c4e8346e)\n- [GitHub Commit](https://github.com/uuidjs/uuid/commit/3d2c5b0342f0fcb52a5ac681c3d47c13e7444b34)\n- [GitHub Release](https://github.com/uuidjs/uuid/releases/tag/v14.0.0)\n",
+          "epssDetails": {
+            "percentile": "0.25372",
+            "probability": "0.00337",
+            "modelVersion": "v2026.06.15"
+          },
+          "identifiers": {
+            "CVE": [
+              "CVE-2026-41907"
+            ],
+            "CWE": [
+              "CWE-1285"
+            ],
+            "GHSA": [
+              "GHSA-w5hq-g745-h8pq"
+            ]
+          },
+          "packageName": "uuid",
+          "proprietary": false,
+          "creationTime": "2026-04-23T08:34:15.552273Z",
+          "functions_new": [],
+          "alternativeIds": [],
+          "disclosureTime": "2026-04-18T21:00:00Z",
+          "exploitDetails": {
+            "sources": [
+              "Snyk"
+            ],
+            "maturityLevels": [
+              {
+                "type": "secondary",
+                "level": "Proof of Concept",
+                "format": "CVSSv3"
+              },
+              {
+                "type": "primary",
+                "level": "Proof of Concept",
+                "format": "CVSSv4"
+              }
+            ]
+          },
+          "packageManager": "npm",
+          "publicationTime": "2026-04-23T08:34:16.017476Z",
+          "severityBasedOn": "CVSS",
+          "modificationTime": "2026-07-26T15:25:19.112556Z",
+          "socialTrendAlert": false,
+          "packagePopularityRank": 99,
+          "from": [
+            "verdexis-cognito-otp@1.0.0",
+            "aws-sdk@2.1693.0",
+            "uuid@8.0.0"
+          ],
+          "upgradePath": [],
+          "isUpgradable": false,
+          "isPatchable": false,
+          "isPinnable": false,
+          "isRuntime": false,
+          "name": "uuid",
+          "version": "8.0.0",
+          "severityWithCritical": "medium"
+        }
+      ],
+      "upgrade": {},
+      "patch": {},
+      "ignore": {},
+      "pin": {}
+    },
+    "filesystemPolicy": false,
+    "filtered": {
+      "ignore": [],
+      "patch": []
+    },
+    "uniqueCount": 2,
+    "projectName": "verdexis-cognito-otp",
+    "foundProjectCount": 4,
+    "displayTargetFile": "scripts/package-lock.json",
+    "hasUnknownVersions": false,
+    "path": "/Users/progressive/verdexis"
+  },
+  {
+    "vulnerabilities": [
+      {
+        "id": "SNYK-JS-BIGINTBUFFER-3364597",
+        "title": "Buffer Overflow",
+        "CVSSv3": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H/E:P",
+        "credit": [
+          "Cris Staicu"
+        ],
+        "semver": {
+          "vulnerable": [
+            ">=0.0.0"
+          ]
+        },
+        "exploit": "Proof of Concept",
+        "fixedIn": [],
+        "patches": [],
+        "insights": {
+          "triageAdvice": null
+        },
+        "language": "js",
+        "severity": "high",
+        "cvssScore": 8.7,
+        "functions": [],
+        "malicious": false,
+        "isDisputed": false,
+        "moduleName": "bigint-buffer",
+        "references": [
+          {
+            "url": "https://www.usenix.org/system/files/sec23fall-prepub-262_staicu.pdf",
+            "title": "Native Node Extension Risks"
+          },
+          {
+            "url": "https://github.com/no2chem/bigint-buffer/blob/master/src/index.ts%23L25",
+            "title": "Vulnerable Code"
+          }
+        ],
+        "cvssDetails": [],
+        "cvssSources": [
+          {
+            "type": "primary",
+            "vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N/E:P",
+            "assigner": "Snyk",
+            "severity": "high",
+            "baseScore": 8.7,
+            "cvssVersion": "4.0",
+            "modificationTime": "2026-07-18T15:25:28.337257Z"
+          },
+          {
+            "type": "secondary",
+            "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H/E:P",
+            "assigner": "Snyk",
+            "severity": "high",
+            "baseScore": 7.5,
+            "cvssVersion": "3.1",
+            "modificationTime": "2026-07-18T15:25:28.337257Z"
+          }
+        ],
+        "description": "## Overview\n[bigint-buffer](https://www.npmjs.com/package/bigint-buffer) is a Node utility that converts TC39 Proposed BigInts to and from buffers\n\nAffected versions of this package are vulnerable to Buffer Overflow in the `toBigIntLE()` function. Attackers can exploit this to crash the application.\n## PoC\n```js\r\nlet be = require('bigint-buffer');\r\nconsole.log(be.toBigIntLE(null));\r\n```\n## Remediation\nThere is no fixed version for `bigint-buffer`.\n## References\n- [Native Node Extension Risks](https://www.usenix.org/system/files/sec23fall-prepub-262_staicu.pdf)\n- [Vulnerable Code](https://github.com/no2chem/bigint-buffer/blob/master/src/index.ts#L25)\n",
+        "epssDetails": {
+          "percentile": "0.42837",
+          "probability": "0.00565",
+          "modelVersion": "v2026.06.15"
+        },
+        "identifiers": {
+          "CVE": [
+            "CVE-2025-3194"
+          ],
+          "CWE": [
+            "CWE-120"
+          ]
+        },
+        "packageName": "bigint-buffer",
+        "proprietary": true,
+        "creationTime": "2023-03-20T12:22:41.448457Z",
+        "functions_new": [],
+        "alternativeIds": [],
+        "disclosureTime": "2023-03-20T12:07:38Z",
+        "exploitDetails": {
+          "sources": [
+            "Snyk"
+          ],
+          "maturityLevels": [
+            {
+              "type": "secondary",
+              "level": "Proof of Concept",
+              "format": "CVSSv3"
+            },
+            {
+              "type": "primary",
+              "level": "Proof of Concept",
+              "format": "CVSSv4"
+            }
+          ]
+        },
+        "packageManager": "npm",
+        "publicationTime": "2025-04-03T10:33:34.404923Z",
+        "severityBasedOn": "CVSS",
+        "modificationTime": "2026-07-18T15:25:28.337257Z",
+        "socialTrendAlert": false,
+        "severityWithCritical": "high",
+        "from": [
+          "verdexis-server@0.1.0",
+          "@solana/spl-token@0.4.15",
+          "@solana/buffer-layout-utils@0.3.0",
+          "bigint-buffer@1.1.5"
+        ],
+        "upgradePath": [],
+        "isUpgradable": false,
+        "isPatchable": false,
+        "name": "bigint-buffer",
+        "version": "1.1.5"
+      }
+    ],
+    "ok": false,
+    "dependencyCount": 503,
+    "org": "phillipjr9",
+    "policy": "# Snyk (https://snyk.io) policy file, patches or ignores known vulnerabilities.\nversion: v1.25.1\nignore: {}\npatch: {}\n",
+    "isPrivate": true,
+    "licensesPolicy": {
+      "severities": {},
+      "orgLicenseRules": {
+        "AGPL-1.0": {
+          "licenseType": "AGPL-1.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "AGPL-3.0": {
+          "licenseType": "AGPL-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "Artistic-1.0": {
+          "licenseType": "Artistic-1.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "Artistic-2.0": {
+          "licenseType": "Artistic-2.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "CDDL-1.0": {
+          "licenseType": "CDDL-1.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "CPOL-1.02": {
+          "licenseType": "CPOL-1.02",
+          "severity": "high",
+          "instructions": ""
+        },
+        "EPL-1.0": {
+          "licenseType": "EPL-1.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "GPL-2.0": {
+          "licenseType": "GPL-2.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "GPL-3.0": {
+          "licenseType": "GPL-3.0",
+          "severity": "high",
+          "instructions": ""
+        },
+        "LGPL-2.0": {
+          "licenseType": "LGPL-2.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "LGPL-2.1": {
+          "licenseType": "LGPL-2.1",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "LGPL-3.0": {
+          "licenseType": "LGPL-3.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "MPL-1.1": {
+          "licenseType": "MPL-1.1",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "MPL-2.0": {
+          "licenseType": "MPL-2.0",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "MS-RL": {
+          "licenseType": "MS-RL",
+          "severity": "medium",
+          "instructions": ""
+        },
+        "SimPL-2.0": {
+          "licenseType": "SimPL-2.0",
+          "severity": "high",
+          "instructions": ""
+        }
+      }
+    },
+    "packageManager": "npm",
+    "ignoreSettings": {
+      "adminOnly": false,
+      "reasonRequired": false,
+      "disregardFilesystemIgnores": false,
+      "autoApproveIgnores": false,
+      "approvalWorkflowEnabled": false
+    },
+    "summary": "1 vulnerable dependency path",
+    "remediation": {
+      "unresolved": [
+        {
+          "id": "SNYK-JS-BIGINTBUFFER-3364597",
+          "title": "Buffer Overflow",
+          "CVSSv3": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H/E:P",
+          "credit": [
+            "Cris Staicu"
+          ],
+          "semver": {
+            "vulnerable": [
+              ">=0.0.0"
+            ]
+          },
+          "exploit": "Proof of Concept",
+          "fixedIn": [],
+          "patches": [],
+          "insights": {
+            "triageAdvice": null
+          },
+          "language": "js",
+          "severity": "high",
+          "cvssScore": 8.7,
+          "functions": [],
+          "malicious": false,
+          "isDisputed": false,
+          "moduleName": "bigint-buffer",
+          "references": [
+            {
+              "url": "https://www.usenix.org/system/files/sec23fall-prepub-262_staicu.pdf",
+              "title": "Native Node Extension Risks"
+            },
+            {
+              "url": "https://github.com/no2chem/bigint-buffer/blob/master/src/index.ts%23L25",
+              "title": "Vulnerable Code"
+            }
+          ],
+          "cvssDetails": [],
+          "cvssSources": [
+            {
+              "type": "primary",
+              "vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N/E:P",
+              "assigner": "Snyk",
+              "severity": "high",
+              "baseScore": 8.7,
+              "cvssVersion": "4.0",
+              "modificationTime": "2026-07-18T15:25:28.337257Z"
+            },
+            {
+              "type": "secondary",
+              "vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H/E:P",
+              "assigner": "Snyk",
+              "severity": "high",
+              "baseScore": 7.5,
+              "cvssVersion": "3.1",
+              "modificationTime": "2026-07-18T15:25:28.337257Z"
+            }
+          ],
+          "description": "## Overview\n[bigint-buffer](https://www.npmjs.com/package/bigint-buffer) is a Node utility that converts TC39 Proposed BigInts to and from buffers\n\nAffected versions of this package are vulnerable to Buffer Overflow in the `toBigIntLE()` function. Attackers can exploit this to crash the application.\n## PoC\n```js\r\nlet be = require('bigint-buffer');\r\nconsole.log(be.toBigIntLE(null));\r\n```\n## Remediation\nThere is no fixed version for `bigint-buffer`.\n## References\n- [Native Node Extension Risks](https://www.usenix.org/system/files/sec23fall-prepub-262_staicu.pdf)\n- [Vulnerable Code](https://github.com/no2chem/bigint-buffer/blob/master/src/index.ts#L25)\n",
+          "epssDetails": {
+            "percentile": "0.42837",
+            "probability": "0.00565",
+            "modelVersion": "v2026.06.15"
+          },
+          "identifiers": {
+            "CVE": [
+              "CVE-2025-3194"
+            ],
+            "CWE": [
+              "CWE-120"
+            ]
+          },
+          "packageName": "bigint-buffer",
+          "proprietary": true,
+          "creationTime": "2023-03-20T12:22:41.448457Z",
+          "functions_new": [],
+          "alternativeIds": [],
+          "disclosureTime": "2023-03-20T12:07:38Z",
+          "exploitDetails": {
+            "sources": [
+              "Snyk"
+            ],
+            "maturityLevels": [
+              {
+                "type": "secondary",
+                "level": "Proof of Concept",
+                "format": "CVSSv3"
+              },
+              {
+                "type": "primary",
+                "level": "Proof of Concept",
+                "format": "CVSSv4"
+              }
+            ]
+          },
+          "packageManager": "npm",
+          "publicationTime": "2025-04-03T10:33:34.404923Z",
+          "severityBasedOn": "CVSS",
+          "modificationTime": "2026-07-18T15:25:28.337257Z",
+          "socialTrendAlert": false,
+          "packagePopularityRank": 98,
+          "from": [
+            "verdexis-server@0.1.0",
+            "@solana/spl-token@0.4.15",
+            "@solana/buffer-layout-utils@0.3.0",
+            "bigint-buffer@1.1.5"
+          ],
+          "upgradePath": [],
+          "isUpgradable": false,
+          "isPatchable": false,
+          "isPinnable": false,
+          "isRuntime": false,
+          "name": "bigint-buffer",
+          "version": "1.1.5",
+          "severityWithCritical": "high"
+        }
+      ],
+      "upgrade": {},
+      "patch": {},
+      "ignore": {},
+      "pin": {}
+    },
+    "filesystemPolicy": false,
+    "filtered": {
+      "ignore": [],
+      "patch": []
+    },
+    "uniqueCount": 1,
+    "projectName": "verdexis-server",
+    "foundProjectCount": 4,
+    "displayTargetFile": "server/package-lock.json",
+    "hasUnknownVersions": false,
+    "path": "/Users/progressive/verdexis"
+  }
+]

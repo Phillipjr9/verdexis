@@ -1,14 +1,9 @@
 User-agent: *
 Allow: /
-Disallow: /dashboard
-Disallow: /wallet
-Disallow: /ai
-Disallow: /settings
-Disallow: /alerts
-Disallow: /goals
-Disallow: /activity
-Disallow: /admin
+Disallow: /api/
 Disallow: /admin/
+Disallow: /auth/
 Disallow: /reset
+# Do not enumerate internal authenticated route names here.
 
 Sitemap: https://verdexis.app/sitemap.xml

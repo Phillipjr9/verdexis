@@ -246,7 +246,7 @@ export function useWeb3() {
         setPickerOpen(false)
         // Fire-and-forget with a timeout to prevent hanging indefinitely
         const linkTimeout = setTimeout(() => {
-          // eslint-disable-next-line no-console
+           
           console.warn('[persistLink] request exceeded 10s, abandoning')
         }, 10000)
         persistLinkToBackend(addr, chainId, target.info.name).finally(() => clearTimeout(linkTimeout))
@@ -315,7 +315,7 @@ export function useWeb3() {
         setPickerOpen(false)
         // Fire-and-forget with a timeout to prevent hanging indefinitely
         const linkTimeout = setTimeout(() => {
-          // eslint-disable-next-line no-console
+           
           console.warn('[persistLink] request exceeded 10s, abandoning')
         }, 10000)
         persistLinkToBackend(addr, chainId, 'WalletConnect').finally(() => clearTimeout(linkTimeout))
@@ -323,7 +323,7 @@ export function useWeb3() {
         setState((s) => ({ ...s, isConnecting: false, error: 'No account approved' }))
       }
     } catch (err) {
-      // eslint-disable-next-line no-console
+       
       console.error('[WalletConnect] connect failed', err)
       const raw = err instanceof Error ? err.message : String(err ?? '')
       let msg = raw || 'Connection rejected'
@@ -343,7 +343,7 @@ export function useWeb3() {
       if (expired) resetWalletConnect()
       setState((s) => ({ ...s, isConnecting: false, error: msg }))
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   }, [attachListeners])
 
 

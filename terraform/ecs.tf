@@ -4,9 +4,9 @@ resource "aws_ecs_cluster" "cluster" {
 
 resource "aws_lb" "alb" {
   name               = "verdexis-alb"
-  internal           = false
+  internal           = true
   load_balancer_type = "application"
-  subnets            = aws_subnet.public[*].id
+  subnets            = aws_subnet.private[*].id
   security_groups    = [aws_security_group.alb.id]
 }
 

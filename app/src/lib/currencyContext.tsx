@@ -6,7 +6,7 @@
 // We export constants + hook + provider from this single file. Splitting
 // would touch ~10 import sites for no runtime gain, so disable the
 // fast-refresh "only export components" rule for this file specifically.
-/* eslint-disable react-refresh/only-export-components */
+ 
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 

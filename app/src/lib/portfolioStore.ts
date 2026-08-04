@@ -147,98 +147,118 @@ class PortfolioStoreImpl {
     if (!getToken()) return
     if (this.hydrated && !force) return
     try {
-      const [hRes, wRes, tRes] = await Promise.all([
+      const [hResult, wResult, tResult] = await Promise.allSettled([
         api.listHoldings(),
         api.getWallet(),
         api.listTrades(),
       ])
 
-      const apiHoldings = (hRes.holdings as ApiHolding[])
-        .filter((h) => h && (typeof h.symbol === 'string' || typeof h.id === 'string'))
-        .map<PortfolioHolding>((h) => {
-          const symbol = (typeof h.symbol === 'string' && h.symbol) || (typeof h.id === 'string' ? h.id : 'UNKNOWN')
-          const name = (typeof h.name === 'string' && h.name) || symbol
-          const amount = typeof h.amount === 'number' && isFinite(h.amount) ? h.amount : 0
-          const avgPrice = typeof h.avgPrice === 'number' && isFinite(h.avgPrice) ? h.avgPrice : 0
-          const value = amount * avgPrice
-          return {
-            id: symbol.toLowerCase(),
-            symbol,
-            name,
-            quantity: amount,
-            avgBuyPrice: avgPrice,
-            currentPrice: avgPrice,
-            value,
-            pnl: 0,
-            pnlPercent: 0,
-            allocation: 0,
-          }
-        })
-      const totalValue = apiHoldings.reduce((s, h) => s + h.value, 0)
-      apiHoldings.forEach((h) => { h.allocation = totalValue > 0 ? Math.round((h.value / totalValue) * 100) : 0 })
+      let hadSuccess = false
 
-      const apiBalances = (wRes.balances as ApiBalance[])
-        .filter((b) => b && typeof b.currency === 'string' && b.currency)
-        .map<WalletBalance>((b) => ({
-          currency: b.currency,
-          symbol: (typeof b.symbol === 'string' && b.symbol) || symbolFor(b.currency),
-          balance: typeof b.balance === 'number' && isFinite(b.balance) ? b.balance : 0,
-          available: typeof b.available === 'number' && isFinite(b.available) ? b.available : 0,
-        }))
+      if (hResult.status === 'fulfilled') {
+        const apiHoldings = (hResult.value.holdings as ApiHolding[])
+          .filter((h) => h && (typeof h.symbol === 'string' || typeof h.id === 'string'))
+          .map<PortfolioHolding>((h) => {
+            const symbol = (typeof h.symbol === 'string' && h.symbol) || (typeof h.id === 'string' ? h.id : 'UNKNOWN')
+            const name = (typeof h.name === 'string' && h.name) || symbol
+            const amount = typeof h.amount === 'number' && isFinite(h.amount) ? h.amount : 0
+            const avgPrice = typeof h.avgPrice === 'number' && isFinite(h.avgPrice) ? h.avgPrice : 0
+            const value = amount * avgPrice
+            return {
+              id: symbol.toLowerCase(),
+              symbol,
+              name,
+              quantity: amount,
+              avgBuyPrice: avgPrice,
+              currentPrice: avgPrice,
+              value,
+              pnl: 0,
+              pnlPercent: 0,
+              allocation: 0,
+            }
+          })
+        const totalValue = apiHoldings.reduce((s, h) => s + h.value, 0)
+        apiHoldings.forEach((h) => { h.allocation = totalValue > 0 ? Math.round((h.value / totalValue) * 100) : 0 })
+        this.holdings = apiHoldings
+        this.save(STORAGE_KEYS.holdings, this.holdings)
+        hadSuccess = true
+      } else {
+        console.warn('portfolioStore.hydrate: listHoldings failed', hResult.reason)
+      }
 
-      const apiTransactions = (wRes.transactions as ApiTransaction[])
-        .filter((tx) => tx && typeof tx.kind === 'string')
-        .map<WalletTransaction>((tx) => {
-          const kind = tx.kind
-          const currency = (typeof tx.currency === 'string' && tx.currency) || 'USD'
-          const amount = typeof tx.amount === 'number' && isFinite(tx.amount) ? tx.amount : 0
-          const signedAmount =
-            (kind === 'withdraw' || kind === 'fee')
-              ? -Math.abs(amount)
-              : kind === 'transfer'
-                ? amount
-                : Math.abs(amount)
-          const description = tx.reference
-            ? sanitizeActivityDescription(tx.reference)
-            : `${(kind[0] || '?').toUpperCase()}${kind.slice(1)} ${currency}`
-          return {
-            id: tx.id,
-            type: kind,
-            amount: signedAmount,
-            currency,
-            description,
-            timestamp: new Date(tx.createdAt),
-            status: tx.status === 'completed' ? 'completed' : 'pending',
-          }
-        })
+      if (wResult.status === 'fulfilled') {
+        const wRes = wResult.value
+        const apiBalances = (wRes.balances as ApiBalance[])
+          .filter((b) => b && typeof b.currency === 'string' && b.currency)
+          .map<WalletBalance>((b) => ({
+            currency: b.currency,
+            symbol: (typeof b.symbol === 'string' && b.symbol) || symbolFor(b.currency),
+            balance: typeof b.balance === 'number' && isFinite(b.balance) ? b.balance : 0,
+            available: typeof b.available === 'number' && isFinite(b.available) ? b.available : 0,
+          }))
 
-      const apiTrades = (tRes.trades as ApiTrade[])
-        .filter((t) => t && typeof t.symbol === 'string')
-        .map<Trade>((t) => ({
-          id: t.id,
-          symbol: t.symbol || 'UNKNOWN',
-          name: t.symbol || 'UNKNOWN',
-          side: t.side,
-          type: 'market',
-          price: typeof t.price === 'number' && isFinite(t.price) ? t.price : 0,
-          quantity: typeof t.amount === 'number' && isFinite(t.amount) ? t.amount : 0,
-          total: typeof t.total === 'number' && isFinite(t.total) ? t.total : 0,
-          timestamp: new Date(t.createdAt),
-        }))
+        const apiTransactions = (wRes.transactions as ApiTransaction[])
+          .filter((tx) => tx && typeof tx.kind === 'string')
+          .map<WalletTransaction>((tx) => {
+            const kind = tx.kind
+            const currency = (typeof tx.currency === 'string' && tx.currency) || 'USD'
+            const amount = typeof tx.amount === 'number' && isFinite(tx.amount) ? tx.amount : 0
+            const signedAmount =
+              (kind === 'withdraw' || kind === 'fee')
+                ? -Math.abs(amount)
+                : kind === 'transfer'
+                  ? amount
+                  : Math.abs(amount)
+            const description = tx.reference
+              ? sanitizeActivityDescription(tx.reference)
+              : `${(kind[0] || '?').toUpperCase()}${kind.slice(1)} ${currency}`
+            return {
+              id: tx.id,
+              type: kind,
+              amount: signedAmount,
+              currency,
+              description,
+              timestamp: new Date(tx.createdAt),
+              status: tx.status === 'completed' ? 'completed' : 'pending',
+            }
+          })
 
-      this.holdings = apiHoldings
-      this.wallet = apiBalances
-      this.transactions = apiTransactions
-      this.trades = apiTrades
+        this.wallet = apiBalances
+        this.transactions = apiTransactions
+        this.save(STORAGE_KEYS.wallet, this.wallet)
+        this.save(STORAGE_KEYS.transactions, this.transactions)
+        hadSuccess = true
+      } else {
+        console.warn('portfolioStore.hydrate: getWallet failed', wResult.reason)
+      }
 
-      this.save(STORAGE_KEYS.holdings, this.holdings)
-      this.save(STORAGE_KEYS.wallet, this.wallet)
-      this.save(STORAGE_KEYS.transactions, this.transactions)
-      this.save(STORAGE_KEYS.trades, this.trades)
-      this.hydrated = true
-      emit()
-    } catch {
-      // API offline or auth expired; keep local cache
+      if (tResult.status === 'fulfilled') {
+        const apiTrades = (tResult.value.trades as ApiTrade[])
+          .filter((t) => t && typeof t.symbol === 'string')
+          .map<Trade>((t) => ({
+            id: t.id,
+            symbol: t.symbol || 'UNKNOWN',
+            name: t.symbol || 'UNKNOWN',
+            side: t.side,
+            type: 'market',
+            price: typeof t.price === 'number' && isFinite(t.price) ? t.price : 0,
+            quantity: typeof t.amount === 'number' && isFinite(t.amount) ? t.amount : 0,
+            total: typeof t.total === 'number' && isFinite(t.total) ? t.total : 0,
+            timestamp: new Date(t.createdAt),
+          }))
+        this.trades = apiTrades
+        this.save(STORAGE_KEYS.trades, this.trades)
+        hadSuccess = true
+      } else {
+        console.warn('portfolioStore.hydrate: listTrades failed', tResult.reason)
+      }
+
+      if (hadSuccess) {
+        this.hydrated = true
+        emit()
+      }
+    } catch (err) {
+      console.warn('portfolioStore.hydrate: unexpected error', err)
     }
   }
 

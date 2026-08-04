@@ -54,7 +54,7 @@
     "json2csv": "^6.0.0-alpha.2",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
-    "multer": "^1.4.5-lts.1",
+    "multer": "^2.1.0",
     "nodemailer": "^9.0.1",
     "prisma": "^5.22.0",
     "twilio": "^6.0.2",
@@ -66,5 +66,9 @@
     "@sentry/integrations": "^7.84.0",
     "@types/ws": "^8.5.8",
     "ioredis": "^5.3.2"
+  },
+  "overrides": {
+    "cookie": "0.7.2",
+    "uuid": "14.0.1"
   }
 }
