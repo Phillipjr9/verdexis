@@ -88,13 +88,14 @@ router.post('/links/:id/verify', requireAuth, async (req: AuthedRequest, res) =>
       },
     })
 
-    // Create notification
-    await prisma.notification.create({
+    // Record as a security event audit (do not surface as dashboard notification)
+    await prisma.securityEvent.create({
       data: {
         userId: req.userId!,
-        kind: 'security',
-        title: 'Wallet verified',
-        body: `Wallet ${walletLink.address.slice(0, 10)}… has been verified`,
+        eventType: 'wallet_verification',
+        severity: 'info',
+        description: `Wallet ${walletLink.address} verified`,
+        metadata: JSON.stringify({ walletLinkId: walletLink.id, address: walletLink.address }),
       },
     })
 
