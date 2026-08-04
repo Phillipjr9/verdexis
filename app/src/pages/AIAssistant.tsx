@@ -482,7 +482,7 @@ export default function AIAssistant() {
               </div>
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto scrollbar-hide p-3 sm:p-4 space-y-4 min-h-0">
+              <div className="flex-1 overflow-y-auto scrollbar-hide p-3 sm:p-4 space-y-4 min-h-0 pb-28">
                 {messages.map((msg, i) => (
                   <div
                     key={i}
@@ -617,7 +617,7 @@ export default function AIAssistant() {
               })()}
 
               {/* Input Area */}
-              <div className="p-3 sm:p-4 border-t border-[#ffffff08]">
+              <div className="p-3 sm:p-4 border-t border-[#ffffff08] bg-[#070C0E] fixed inset-x-0 bottom-0 z-20 mx-auto max-w-[1440px] sm:relative sm:bg-transparent sm:border-none sm:mx-0 sm:inset-auto sm:bottom-auto">
                 <div className="flex items-center gap-2 sm:gap-3">
                   <input
                     type="text"
