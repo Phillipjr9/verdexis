@@ -144,18 +144,26 @@ async function handleFirebaseAuth(req: Request, res: Response) {
     })
   }
 
-  if (user.suspended) {
-    res.status(403).json({ error: 'Account suspended' })
+  if (user && !user.emailVerified && !isVerified) {
+    res.status(403).json({
+      error: 'Email verification required',
+      message: 'Please verify your email address before signing in.',
+    })
     return
   }
 
-  if ('emailVerified' in user && !user.emailVerified && isVerified) {
+  if (user && !user.emailVerified && isVerified) {
     try {
       user = await updateUser(user.id, { emailVerified: true, emailVerifiedAt: new Date() })
       user.emailVerified = true
     } catch {
       // Best-effort only
     }
+  }
+
+  if (user.suspended) {
+    res.status(403).json({ error: 'Account suspended' })
+    return
   }
 
   let role = user.role
@@ -213,6 +221,8 @@ async function handleSupabaseAuth(req: Request, res: Response) {
     return
   }
 
+  const isVerified = Boolean(userData.email_confirmed_at)
+
   if (!user) {
     const randomPassword = crypto.randomBytes(32).toString('hex')
     const passwordHash = await bcrypt.hash(randomPassword, 12)
@@ -221,13 +231,30 @@ async function handleSupabaseAuth(req: Request, res: Response) {
       name: (userData.user_metadata?.name || userData.user_metadata?.full_name || email.split('@')[0]).toString(),
       passwordHash,
       role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user',
-      emailVerified: Boolean(userData.email_confirmed_at),
+      emailVerified: isVerified,
       emailVerifiedAt: userData.email_confirmed_at ? new Date(userData.email_confirmed_at) : null,
       prefs: JSON.stringify({ supabaseId: userData.id }),
       walletBalances: {
         create: [{ currency: 'USD', symbol: '$', balance: 0, available: 0 }],
       },
     })
+  }
+
+  if (user && !user.emailVerified && !isVerified) {
+    res.status(403).json({
+      error: 'Email verification required',
+      message: 'Please verify your email address before signing in.',
+    })
+    return
+  }
+
+  if (user && !user.emailVerified && isVerified) {
+    try {
+      user = await updateUser(user.id, { emailVerified: true, emailVerifiedAt: new Date(userData.email_confirmed_at) })
+      user.emailVerified = true
+    } catch {
+      // Best-effort only
+    }
   }
 
   if (user.suspended) {
@@ -603,17 +630,21 @@ router.post('/signup', ensureDbReady, authLimiter, async (req, res) => {
       // best-effort only
     }
   }
-  if (pendingVerificationPayload) {
-    const isDev = (env.NODE_ENV || 'development') !== 'production'
-    res.status(201).json({
-      ...pendingVerificationPayload,
-      ...(isDev ? { devCode: signupOtpCode } : {}),
+  if (!pendingVerificationPayload) {
+    console.error('[auth] Signup verification OTP could not be created for', user.email)
+    res.status(500).json({
+      error: 'Verification email failed',
+      message: 'Unable to send verification code. Please try again or contact support.',
     })
     return
   }
 
-  const token = signToken({ sub: user.id, email: user.email, v: (user as { tokenVersion?: number }).tokenVersion ?? 0 })
-  res.status(201).json({ token, user: publicUser({ ...user, role: user.role }) })
+  const isDev = (env.NODE_ENV || 'development') !== 'production'
+  res.status(201).json({
+    ...pendingVerificationPayload,
+    ...(isDev ? { devCode: signupOtpCode } : {}),
+  })
+  return
 })
 
 const resendSignupOtpSchema = z.object({
@@ -698,6 +729,13 @@ router.post('/login', ensureDbReady, authLimiter, async (req, res) => {
     }
     if (user.suspended) {
       res.status(403).json({ error: 'Account suspended' })
+      return
+    }
+    if (!user.emailVerified) {
+      res.status(403).json({
+        error: 'Email verification required',
+        message: 'Please verify your email address before signing in.',
+      })
       return
     }
     let role = user.role

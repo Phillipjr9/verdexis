@@ -1,133 +1,57 @@
-<!-- WELCOME EMAIL -->
-<!-- Use: New user registration/onboarding -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
-    body {
-      margin: 0;
-      padding: 0;
-      background: #f4f6f8;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      color: #333;
-    }
-    .email-container {
-      width: 100%;
-      max-width: 680px;
-      margin: 0 auto;
-      background: #ffffff;
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 0 20px rgba(0,0,0,0.08);
-    }
-    .header {
-      padding: 24px;
-      background: linear-gradient(135deg, #0f4c81 0%, #0077d9 100%);
-      color: #ffffff;
-      text-align: center;
-    }
-    .header h1 {
-      margin: 0;
-      font-size: 24px;
-    }
-    .content {
-      padding: 28px 32px;
-    }
-    .content h2 {
-      margin-top: 0;
-      color: #0f4c81;
-      font-size: 22px;
-    }
-    .content p {
-      line-height: 1.65;
-      margin: 16px 0;
-      color: #555;
-      font-size: 16px;
-    }
-    .button {
-      display: inline-block;
-      margin: 20px 0;
-      padding: 14px 28px;
-      background: #0077d9;
-      color: #fff;
-      text-decoration: none;
-      border-radius: 8px;
-      font-weight: bold;
-    }
-    .features-list {
-      list-style: none;
-      padding: 0;
-      margin: 16px 0;
-    }
-    .features-list li {
-      padding: 10px 0;
-      padding-left: 30px;
-      position: relative;
-      color: #555;
-    }
-    .features-list li:before {
-      content: "✓";
-      position: absolute;
-      left: 0;
-      color: #4caf50;
-      font-weight: bold;
-    }
-    .footer {
-      padding: 24px 32px;
-      background: #f4f6f8;
-      color: #777;
-      font-size: 13px;
-      border-top: 1px solid #e0e6ed;
-    }
+    body { margin: 0; padding: 0; background: #f4f6f8; font-family: Arial, sans-serif; color: #1e293b; }
+    table { border-collapse: collapse; width: 100%; }
+    .wrapper { width: 100%; padding: 20px; background: #f4f6f8; }
+    .container { width: 100%; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; }
+    .header { background: #0f4c81; padding: 22px; text-align: center; }
+    .header h1 { margin: 0; color: #ffffff; font-size: 24px; }
+    .content { padding: 24px; }
+    .content h2 { margin-top: 0; color: #0f4c81; font-size: 22px; }
+    .content p { margin: 16px 0; line-height: 1.6; font-size: 15px; }
+    .feature-list { padding: 0; margin: 16px 0; }
+    .feature-list li { list-style: none; margin: 10px 0; padding-left: 24px; position: relative; }
+    .feature-list li:before { content: "✓"; position: absolute; left: 0; color: #16a34a; font-weight: bold; }
+    .button { display: inline-block; margin: 20px 0; padding: 12px 24px; background: #0f4c81; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: bold; }
+    .footer { padding: 20px; background: #f8fafc; color: #64748b; font-size: 13px; text-align: center; }
+    .footer a { color: #0f4c81; text-decoration: none; }
   </style>
 </head>
 <body>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+  <table class="wrapper" role="presentation" cellpadding="0" cellspacing="0">
     <tr>
-      <td align="center" style="padding: 24px 0; background: #eef2f7;">
-        <div class="email-container">
-          <div class="header">
-            <h1>Welcome to Verdexis! 🚀</h1>
-          </div>
-
-          <div class="content">
-            <h2>Welcome, {{USER_NAME}}!</h2>
-            <p>
-              We're thrilled to have you on board. Your account is now active and ready to explore intelligent portfolio management and real-time trading analytics.
-            </p>
-
-            <h3 style="color: #0f4c81; font-size: 18px;">Get Started in 3 Steps:</h3>
-            <ul class="features-list">
-              <li>Connect your wallet or exchange account</li>
-              <li>Set up your portfolio preferences and risk profile</li>
-              <li>Start exploring AI-powered insights and recommendations</li>
-            </ul>
-
-            <a href="{{ONBOARDING_URL}}" class="button">Complete Your Setup</a>
-
-            <h3 style="color: #0f4c81; font-size: 18px;">What You Can Do:</h3>
-            <ul class="features-list">
-              <li>Monitor real-time portfolio performance</li>
-              <li>Receive personalized market insights</li>
-              <li>Trade securely with advanced analytics</li>
-              <li>Access comprehensive reporting tools</li>
-            </ul>
-
-            <p>
-              <strong>Questions?</strong> Check out our <a href="{{HELP_CENTER_URL}}" style="color: #0077d9;">Help Center</a> or contact our support team at {{SUPPORT_EMAIL}}.
-            </p>
-          </div>
-
-          <div class="footer">
-            <strong>Verdexis</strong><br/>
-            {{COMPANY_ADDRESS}}<br/>
-            <a href="{{TERMS_LINK}}" style="color: #0077d9;">Terms</a> | 
-            <a href="{{PRIVACY_LINK}}" style="color: #0077d9;">Privacy</a><br/>
-            © {{YEAR}} Verdexis. All rights reserved.
-          </div>
-        </div>
+      <td>
+        <table class="container" role="presentation" cellpadding="0" cellspacing="0">
+          <tr>
+            <td class="header">
+              <h1>Welcome to Verdexis</h1>
+            </td>
+          </tr>
+          <tr>
+            <td class="content">
+              <h2>Hello {{USER_NAME}},</h2>
+              <p>We’re glad you’re here. Verdexis gives you smart portfolio monitoring and trading insights, all in one place.</p>
+              <p>Get started with these steps:</p>
+              <ul class="feature-list">
+                <li>Connect your wallet or portfolio</li>
+                <li>Customize your preferences</li>
+                <li>Explore AI-powered market insights</li>
+              </ul>
+              <p><a href="{{ONBOARDING_URL}}" class="button">Complete your setup</a></p>
+              <p>If you have questions, visit <a href="{{HELP_CENTER_URL}}" style="color:#0f4c81; text-decoration:none;">our help center</a> or email {{SUPPORT_EMAIL}}.</p>
+            </td>
+          </tr>
+          <tr>
+            <td class="footer">
+              Verdexis · {{COMPANY_ADDRESS}}<br />
+              <a href="{{TERMS_LINK}}">Terms</a> | <a href="{{PRIVACY_LINK}}">Privacy</a>
+            </td>
+          </tr>
+        </table>
       </td>
     </tr>
   </table>

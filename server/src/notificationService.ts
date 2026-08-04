@@ -29,6 +29,7 @@ export interface EmailTransportConfig {
     pass: string
   }
   from: string
+  fromAddress: string
   fromName?: string
   replyTo?: string
   unsubscribeUrl?: string
@@ -63,6 +64,7 @@ export function resolveEmailTransportConfig(
     secure,
     auth: { user, pass },
     from: formatFromAddress(fromAddress, fromName),
+    fromAddress,
     fromName,
     replyTo: replyTo || undefined,
     unsubscribeUrl: unsubscribeUrl || undefined,
@@ -213,19 +215,17 @@ export async function sendEmailNotification(
     }
 
     // Prefer the authenticated SMTP user as the envelope/sender to avoid SPF/DMARC alignment issues
-    const envelopeFrom = config.auth?.user || config.from
-    headers['Sender'] = envelopeFrom
+    const envelopeFrom = config.auth.user || config.fromAddress
+    headers['Sender'] = formatFromAddress(envelopeFrom, config.fromName)
 
     await transporter.sendMail({
-      // Use the authenticated SMTP user as the visible From address (with brand name)
-      from: `${config.fromName || 'Verdexis'} <${envelopeFrom}>`,
+      from: config.from,
       to: email,
       replyTo: config.replyTo,
       subject,
       text: `${body}\n\nView in Verdexis: ${trackingUrl}`,
       html,
       headers,
-      // Ensure the SMTP envelope (MAIL FROM) matches the authenticated user
       envelope: { from: envelopeFrom, to: email },
     })
 

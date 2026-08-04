@@ -49,7 +49,7 @@ class EmailService {
   }
 
   private loadTemplates() {
-    const templateDir = path.join(__dirname, '../../../')
+    const templateDir = path.join(__dirname, '../../templates')
     const templateFiles = [
       'email_otp_verification.html',
       'email_welcome.html',
@@ -141,7 +141,7 @@ class EmailService {
       userId,
       kind: 'otp',
       title: 'Verification Code',
-      createWebNotification: true,
+      createWebNotification: false,
     })
   }
 

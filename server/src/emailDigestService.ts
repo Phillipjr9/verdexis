@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer'
 import { env } from './env.js'
 import { prisma } from './db.js'
 import { PortfolioService } from './portfolioService.js'
+import { resolveEmailTransportConfig } from './notificationService.js'
 
 interface DigestConfig {
   frequency: 'daily' | 'weekly' | 'monthly' | 'never'
@@ -15,14 +16,12 @@ export class EmailDigestService {
   private transporter: nodemailer.Transporter
 
   constructor() {
+    const config = resolveEmailTransportConfig()
     this.transporter = nodemailer.createTransport({
-      host: env.SMTP_HOST || 'smtp.gmail.com',
-      port: parseInt(env.SMTP_PORT || '587', 10),
-      secure: env.SMTP_SECURE === 'true',
-      auth: {
-        user: env.SMTP_USER,
-        pass: env.SMTP_PASS,
-      },
+      host: config.host,
+      port: config.port,
+      secure: config.secure,
+      auth: config.auth,
     })
   }
 
@@ -44,20 +43,24 @@ export class EmailDigestService {
 
     const html = this.generateDigestHTML(user.name, metrics, holdings, trades, alerts)
 
-    const from = env.SMTP_FROM_NAME ? `${env.SMTP_FROM_NAME} <${env.SMTP_FROM || 'noreply@verdexis.com'}>` : (env.SMTP_FROM || 'noreply@verdexis.com')
+    const config = resolveEmailTransportConfig()
+    const envelopeFrom = config.auth.user || config.fromAddress
+    const from = config.from
 
     await this.transporter.sendMail({
       from,
-      replyTo: env.SMTP_REPLY_TO || undefined,
+      replyTo: config.replyTo,
       to: user.email,
       subject: `Your VERDEXIS Daily Summary - ${new Date().toLocaleDateString()}`,
       html,
       headers: {
         'X-Mailer': 'Verdexis',
         'Auto-Submitted': 'auto-generated',
-        ...(env.SMTP_REPLY_TO ? { 'Reply-To': env.SMTP_REPLY_TO } : {}),
-        ...(env.SMTP_UNSUBSCRIBE_URL ? { 'List-Unsubscribe': `<${env.SMTP_UNSUBSCRIBE_URL}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } : {}),
+        ...(config.replyTo ? { 'Reply-To': config.replyTo } : {}),
+        ...(config.unsubscribeUrl ? { 'List-Unsubscribe': `<${config.unsubscribeUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } : {}),
+        ...(envelopeFrom ? { 'Sender': config.fromName ? `${config.fromName} <${envelopeFrom}>` : envelopeFrom } : {}),
       },
+      envelope: { from: envelopeFrom, to: user.email },
     })
 
     console.log(`[email-digest] sent to ${user.email}`)
