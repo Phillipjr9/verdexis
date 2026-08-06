@@ -67,13 +67,13 @@ if (IS_PROD && !process.env.JWT_SECRET) {
   console.error('[verdexis-api] JWT_SECRET is required in production')
   process.exit(1)
 }
-const CORS_ORIGIN = env.CORS_ORIGIN.split(',').map((s) => s.trim())
 const normalizeOrigin = (value: string): string => value.trim().replace(/\/+$|\s+/g, '')
+const CORS_ORIGIN = env.CORS_ORIGIN.split(',').map((s) => normalizeOrigin(s)).filter(Boolean)
 const SELF_ORIGINS = [process.env.RENDER_EXTERNAL_URL, process.env.PUBLIC_URL, process.env.PRODUCTION_ORIGIN, env.APP_BASE_URL]
   .filter((s): s is string => !!s)
   .map(normalizeOrigin)
 const LAN_ORIGIN_RE = /^http:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|localhost|127\.0\.0\.1)(:\d+)?$/
-const ALLOWED_ORIGINS = new Set([...CORS_ORIGIN, ...SELF_ORIGINS])
+const ALLOWED_ORIGINS = new Set([...CORS_ORIGIN, ...SELF_ORIGINS, 'https://verdexis.pages.dev'])
 
 app.set('trust proxy', 1)
 
@@ -90,8 +90,10 @@ const corsOptions = {
       return callback(null, true)
     }
 
+    const normalizedOrigin = normalizeOrigin(origin)
+
     // Check against allowed origins
-    if (ALLOWED_ORIGINS.has(origin)) {
+    if (ALLOWED_ORIGINS.has(normalizedOrigin)) {
       return callback(null, true)
     }
 
@@ -103,12 +105,12 @@ const corsOptions = {
 
     // In development, allow localhost and LAN addresses
     if (!IS_PROD) {
-      if (LAN_ORIGIN_RE.test(origin)) {
+      if (LAN_ORIGIN_RE.test(normalizedOrigin)) {
         return callback(null, true)
       }
       
       // Allow common development ports
-      if (/^http:\/\/localhost:\d+$/.test(origin)) {
+      if (/^http:\/\/localhost:\d+$/.test(normalizedOrigin)) {
         return callback(null, true)
       }
     }
@@ -135,6 +137,7 @@ const corsOptions = {
 }
 
 app.use(cors(corsOptions))
+app.options('*', cors(corsOptions))
 app.use(express.json({ limit: '512kb' }))
 app.use(cookieParser())
 app.use(morgan(IS_PROD ? 'combined' : 'dev'))

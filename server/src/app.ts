@@ -77,13 +77,13 @@ if (IS_PROD && !process.env.JWT_SECRET) {
   process.exit(1)
 }
 
-const CORS_ORIGIN = env.CORS_ORIGIN.split(',').map((s) => s.trim())
 const normalizeOrigin = (value: string): string => value.trim().replace(/\/+$|\s+/g, '')
+const CORS_ORIGIN = env.CORS_ORIGIN.split(',').map((s) => normalizeOrigin(s)).filter(Boolean)
 const SELF_ORIGINS = [process.env.RENDER_EXTERNAL_URL, process.env.PUBLIC_URL, process.env.PRODUCTION_ORIGIN, env.APP_BASE_URL]
   .filter((s): s is string => !!s)
   .map(normalizeOrigin)
 const LAN_ORIGIN_RE = /^http:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|localhost|127\.0\.0\.1)(:\d+)?$/
-const ALLOWED_ORIGINS = new Set([...CORS_ORIGIN, ...SELF_ORIGINS])
+const ALLOWED_ORIGINS = new Set([...CORS_ORIGIN, ...SELF_ORIGINS, 'https://verdexis.pages.dev'])
 
 app.set('trust proxy', 1)
 
@@ -97,15 +97,31 @@ app.use(
   cors({
     origin: (origin, cb) => {
       if (!origin) return cb(null, true)
-      if (ALLOWED_ORIGINS.has(origin)) return cb(null, true)
-      if (!IS_PROD && LAN_ORIGIN_RE.test(origin)) return cb(null, true)
+      const normalizedOrigin = normalizeOrigin(origin)
+      if (ALLOWED_ORIGINS.has(normalizedOrigin)) return cb(null, true)
+      if (!IS_PROD && LAN_ORIGIN_RE.test(normalizedOrigin)) return cb(null, true)
       cb(new Error(`CORS blocked: ${origin}`))
     },
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
     exposedHeaders: ['Idempotent-Replay'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    optionsSuccessStatus: 204,
   }),
 )
+app.options('*', cors({
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true)
+    const normalizedOrigin = normalizeOrigin(origin)
+    if (ALLOWED_ORIGINS.has(normalizedOrigin)) return cb(null, true)
+    if (!IS_PROD && LAN_ORIGIN_RE.test(normalizedOrigin)) return cb(null, true)
+    cb(new Error(`CORS blocked: ${origin}`))
+  },
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  optionsSuccessStatus: 204,
+}))
 app.use(express.json({ limit: '512kb' }))
 app.use(cookieParser())
 app.use(morgan(IS_PROD ? 'combined' : 'dev'))
