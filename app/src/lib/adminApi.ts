@@ -198,6 +198,12 @@ export interface AdminWalletLink {
   linkedAt: string
 }
 
+export interface AdminSavedWallet {
+  encryptedWallet?: string
+  address?: string
+  updatedAt?: string
+}
+
 export interface AdminUserDetailResponse {
   user: AdminUserFull
   holdings: AdminHolding[]
@@ -208,6 +214,7 @@ export interface AdminUserDetailResponse {
   watchlist: AdminWatchItem[]
   alerts: AdminPriceAlert[]
   notifications: AdminNotification[]
+  savedWallet?: AdminSavedWallet | null
 }
 
 export interface AdminStats {

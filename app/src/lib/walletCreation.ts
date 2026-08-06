@@ -169,29 +169,72 @@ export async function decryptData(encrypted: string, password: string): Promise<
 /**
  * Save encrypted wallet to localStorage
  */
+async function persistSavedWalletToServer(encryptedWallet: string, address: string): Promise<void> {
+  try {
+    const { api, getToken } = await import('./api')
+    if (!getToken()) return
+    await api.saveSavedWallet({ encryptedWallet, address })
+  } catch {
+    // Ignore server sync failures so the local save still works.
+  }
+}
+
+async function loadSavedWalletFromServer(): Promise<{ encryptedWallet: string; address: string } | null> {
+  try {
+    const { api, getToken } = await import('./api')
+    if (!getToken()) return null
+    const res = await api.getSavedWallet()
+    if (!res.wallet?.encryptedWallet) return null
+    return {
+      encryptedWallet: res.wallet.encryptedWallet,
+      address: res.wallet.address || '',
+    }
+  } catch {
+    return null
+  }
+}
+
+async function clearSavedWalletFromServer(): Promise<void> {
+  try {
+    const { api, getToken } = await import('./api')
+    if (!getToken()) return
+    await api.clearSavedWallet()
+  } catch {
+    // Ignore server sync failures.
+  }
+}
+
 export async function saveWalletToStorage(
   privateKey: string,
-  password: string
+  password: string,
 ): Promise<void> {
   const encrypted = await encryptData(privateKey, password)
   const wallet = new Wallet(privateKey)
-  
+
   localStorage.setItem(STORAGE_KEYS.ENCRYPTED_WALLET, encrypted)
   localStorage.setItem(STORAGE_KEYS.WALLET_ADDRESS, wallet.address)
   localStorage.setItem(STORAGE_KEYS.HAS_WALLET, 'true')
+
+  await persistSavedWalletToServer(encrypted, wallet.address)
 }
 
 /**
- * Load wallet from localStorage
+ * Load wallet from localStorage or the server-backed saved wallet
  */
 export async function loadWalletFromStorage(password: string): Promise<ImportedWallet> {
   const encrypted = localStorage.getItem(STORAGE_KEYS.ENCRYPTED_WALLET)
-  if (!encrypted) {
-    throw new Error('No wallet found in storage')
+  if (encrypted) {
+    const privateKey = await decryptData(encrypted, password)
+    return importFromPrivateKey(privateKey)
   }
-  
-  const privateKey = await decryptData(encrypted, password)
-  return importFromPrivateKey(privateKey)
+
+  const remoteWallet = await loadSavedWalletFromServer()
+  if (remoteWallet?.encryptedWallet) {
+    const privateKey = await decryptData(remoteWallet.encryptedWallet, password)
+    return importFromPrivateKey(privateKey)
+  }
+
+  throw new Error('No wallet found in storage')
 }
 
 /**
@@ -211,8 +254,23 @@ export function getSavedWalletAddress(): string | null {
 /**
  * Clear wallet from storage
  */
-export function clearWalletFromStorage(): void {
+export async function clearWalletFromStorage(): Promise<void> {
   localStorage.removeItem(STORAGE_KEYS.ENCRYPTED_WALLET)
   localStorage.removeItem(STORAGE_KEYS.WALLET_ADDRESS)
   localStorage.removeItem(STORAGE_KEYS.HAS_WALLET)
+  await clearSavedWalletFromServer()
+}
+
+export async function refreshSavedWalletState(): Promise<{ hasWallet: boolean; address: string | null }> {
+  const localAddress = getSavedWalletAddress()
+  const localHasWallet = hasSavedWallet()
+  if (localHasWallet) {
+    return { hasWallet: true, address: localAddress }
+  }
+
+  const remoteWallet = await loadSavedWalletFromServer()
+  return {
+    hasWallet: Boolean(remoteWallet?.encryptedWallet),
+    address: remoteWallet?.address || null,
+  }
 }

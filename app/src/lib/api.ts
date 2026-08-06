@@ -244,6 +244,10 @@ export const api = {
 
   // Wallet
   getWallet: () => request<{ balances: unknown[]; transactions: unknown[] }>('/api/wallet'),
+  getSavedWallet: () => request<{ wallet: { hasWallet: boolean; address: string | null; encryptedWallet?: string | null; updatedAt: string | null } | null }>('/api/wallet/saved-wallet'),
+  saveSavedWallet: (payload: { encryptedWallet: string; address: string }) =>
+    request<{ wallet: { hasWallet: boolean; address: string | null; updatedAt: string | null } }>('/api/wallet/saved-wallet', { method: 'POST', body: JSON.stringify(payload) }),
+  clearSavedWallet: () => request<{ ok: boolean }>('/api/wallet/saved-wallet', { method: 'DELETE' }),
   postTransaction: (
     tx: { kind: 'deposit' | 'withdraw' | 'transfer' | 'dividend' | 'interest' | 'fee'; currency: string; symbol?: string; amount: number; reference?: string },
     idempotencyKey?: string,

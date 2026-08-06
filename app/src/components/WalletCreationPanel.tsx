@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Copy, Eye, EyeOff, Wallet, Download, AlertTriangle, CheckCircle2, Lock, Unlock } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from './ui/button'
@@ -15,8 +15,7 @@ import {
   saveWalletToStorage,
   loadWalletFromStorage,
   clearWalletFromStorage,
-  hasSavedWallet,
-  getSavedWalletAddress,
+  refreshSavedWalletState,
   type WalletCreationResult,
   type ImportedWallet,
 } from '../lib/walletCreation'
@@ -36,8 +35,20 @@ export function WalletCreationPanel() {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [unlockPassword, setUnlockPassword] = useState('')
-  const [savedWalletExists, setSavedWalletExists] = useState(hasSavedWallet())
-  const [savedAddress, setSavedAddress] = useState(getSavedWalletAddress())
+  const [savedWalletExists, setSavedWalletExists] = useState(false)
+  const [savedAddress, setSavedAddress] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    void refreshSavedWalletState().then((state) => {
+      if (!active) return
+      setSavedWalletExists(state.hasWallet)
+      setSavedAddress(state.address)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
 
   const handleGenerateWallet = async () => {
     try {
@@ -123,13 +134,20 @@ export function WalletCreationPanel() {
     }
   }
 
-  const handleClearWallet = () => {
+  const handleClearWallet = async () => {
     if (confirm('Are you sure you want to delete your saved wallet? This cannot be undone unless you have backed up your recovery phrase.')) {
-      clearWalletFromStorage()
-      setSavedWalletExists(false)
-      setSavedAddress(null)
-      setWallet(null)
-      toast.success('Wallet cleared from storage')
+      try {
+        setLoading(true)
+        await clearWalletFromStorage()
+        setSavedWalletExists(false)
+        setSavedAddress(null)
+        setWallet(null)
+        toast.success('Wallet cleared from storage')
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Failed to clear wallet')
+      } finally {
+        setLoading(false)
+      }
     }
   }
 
@@ -304,7 +322,7 @@ export function WalletCreationPanel() {
                     Save Wallet (Optional)
                   </Label>
                   <p className="text-xs text-[#737373] mb-4">
-                    Encrypt and save your wallet locally. You'll need a password to unlock it.
+                    Encrypt and save your wallet to this device and your account so it stays available across sessions. You'll need the same password to unlock it.
                   </p>
                   <div className="space-y-3">
                     <div>
@@ -342,7 +360,7 @@ export function WalletCreationPanel() {
                     <span className="text-sm font-medium text-[#E5E5E5]">Wallet Saved</span>
                   </div>
                   <p className="text-xs text-[#737373] mb-3">
-                    Your wallet is encrypted and saved to your browser's local storage.
+                    Your wallet is encrypted and saved to this device and to your Verdexis account.
                   </p>
                   <Button
                     variant="destructive"

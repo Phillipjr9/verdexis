@@ -8,8 +8,13 @@ const envs = { ...process.env }
 const schemaBase = path.resolve('prisma', 'schema.prisma')
 let schemaFile = schemaBase
 
+// Prisma requires DIRECT_URL for some datasource setups. If it is not set,
+// fall back to DATABASE_URL so builds still work when only DATABASE_URL is provided.
+envs.DIRECT_URL = envs.DIRECT_URL || envs.DATABASE_URL
+
 if (provider === 'sqlite') {
   envs.DATABASE_URL = envs.DATABASE_URL || 'file:./dev.db'
+  envs.DIRECT_URL = envs.DIRECT_URL || envs.DATABASE_URL
   const source = await readFile(schemaBase, 'utf8')
   let sqliteSchema = source.replace(/datasource\s+db\s*{[\s\S]*?provider\s*=\s*"[^"]+"/, (block) => block.replace(/provider\s*=\s*"[^"]+"/, 'provider = "sqlite"'))
   sqliteSchema = sqliteSchema.replace(/(\s+\w+\s+)String\[\](\s+@default\(([^)]*)\))?/g, (match, prefix, defaultAttr, defaultValue) => {

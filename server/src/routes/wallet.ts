@@ -68,6 +68,77 @@ router.get('/me/deposit-addresses', requireAuth, async (req: AuthedRequest, res)
   res.json({ addresses })
 })
 
+router.get('/saved-wallet', requireAuth, async (req: AuthedRequest, res) => {
+  const user = await prisma.user.findUnique({ where: { id: req.userId! }, select: { prefs: true } })
+  let prefs: Record<string, unknown> = {}
+  try { if (user?.prefs) prefs = JSON.parse(user.prefs) } catch { prefs = {} }
+
+  const savedWallet = prefs.savedWallet as { encryptedWallet?: string; address?: string; updatedAt?: string } | undefined
+  if (!savedWallet?.encryptedWallet) {
+    res.json({ wallet: null })
+    return
+  }
+
+  res.json({
+    wallet: {
+      hasWallet: true,
+      address: savedWallet.address ?? null,
+      encryptedWallet: savedWallet.encryptedWallet,
+      updatedAt: savedWallet.updatedAt ?? null,
+    },
+  })
+})
+
+router.post('/saved-wallet', requireAuth, async (req: AuthedRequest, res) => {
+  const parsed = z.object({
+    encryptedWallet: z.string().min(1).max(20000),
+    address: z.string().min(1).max(128),
+  }).safeParse(req.body)
+
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid input' })
+    return
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: req.userId! }, select: { prefs: true } })
+  let prefs: Record<string, unknown> = {}
+  try { if (user?.prefs) prefs = JSON.parse(user.prefs) } catch { prefs = {} }
+
+  prefs.savedWallet = {
+    encryptedWallet: parsed.data.encryptedWallet,
+    address: parsed.data.address,
+    updatedAt: new Date().toISOString(),
+  }
+
+  await prisma.user.update({
+    where: { id: req.userId! },
+    data: { prefs: JSON.stringify(prefs) },
+  })
+
+  res.json({
+    wallet: {
+      hasWallet: true,
+      address: parsed.data.address,
+      updatedAt: new Date().toISOString(),
+    },
+  })
+})
+
+router.delete('/saved-wallet', requireAuth, async (req: AuthedRequest, res) => {
+  const user = await prisma.user.findUnique({ where: { id: req.userId! }, select: { prefs: true } })
+  let prefs: Record<string, unknown> = {}
+  try { if (user?.prefs) prefs = JSON.parse(user.prefs) } catch { prefs = {} }
+
+  delete prefs.savedWallet
+
+  await prisma.user.update({
+    where: { id: req.userId! },
+    data: { prefs: JSON.stringify(prefs) },
+  })
+
+  res.json({ ok: true })
+})
+
 const txSchema = z.object({
   kind: z.enum(['deposit', 'withdraw', 'transfer', 'dividend', 'interest']),
   currency: z.string().min(1).max(VALIDATION_LIMITS.CURRENCY_LENGTH),

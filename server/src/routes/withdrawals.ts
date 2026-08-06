@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { prisma } from '../db.js'
 import { requireAuth, requireAdmin, type AuthedRequest } from '../auth.js'
 import { executeCryptoWithdrawal, resolveWithdrawalChain } from '../services/cryptoWithdrawal.js'
+import { env } from '../env.js'
 
 const router = Router()
 
@@ -15,11 +16,11 @@ const SUPPORTED_WITHDRAWAL_CHAINS: Record<string, Array<'ethereum' | 'solana' | 
   USDC: ['ethereum', 'solana', 'bsc'],
   USDT: ['ethereum', 'solana', 'bsc'],
   // Custom platform token — chains depend on which contract address is set
-  ...(process.env['ETHEREUM_TOKEN_ADDRESS'] || process.env['BSC_TOKEN_ADDRESS']
+  ...(env.ETHEREUM_TOKEN_ADDRESS || env.BSC_TOKEN_ADDRESS
     ? {
-        [(process.env['ETHEREUM_TOKEN_SYMBOL'] ?? 'VDX').toUpperCase()]: [
-          ...(process.env['ETHEREUM_TOKEN_ADDRESS'] ? ['ethereum' as const] : []),
-          ...(process.env['BSC_TOKEN_ADDRESS']      ? ['bsc'      as const] : []),
+        [(env.ETHEREUM_TOKEN_SYMBOL ?? 'VDX').toUpperCase()]: [
+          ...(env.ETHEREUM_TOKEN_ADDRESS ? ['ethereum' as const] : []),
+          ...(env.BSC_TOKEN_ADDRESS      ? ['bsc'      as const] : []),
         ],
       }
     : {}),
@@ -27,17 +28,17 @@ const SUPPORTED_WITHDRAWAL_CHAINS: Record<string, Array<'ethereum' | 'solana' | 
 
 const getSupportedWithdrawalChains = (asset: string) => SUPPORTED_WITHDRAWAL_CHAINS[asset.toUpperCase()] ?? []
 const getEnabledWithdrawalChains = () => [
-  { chain: 'ethereum', enabled: Boolean(process.env['ETHEREUM_WITHDRAWAL_PRIVATE_KEY'] && process.env['ETHEREUM_RPC_ENDPOINT']) },
-  { chain: 'solana', enabled: Boolean(process.env['SOLANA_WITHDRAWAL_PRIVATE_KEY'] && process.env['SOLANA_RPC_ENDPOINT']) },
-  { chain: 'bsc', enabled: Boolean(process.env['BSC_WITHDRAWAL_PRIVATE_KEY'] && process.env['BSC_RPC_ENDPOINT']) },
-  { chain: 'bitcoin', enabled: process.env['BTC_WITHDRAWAL_ENABLED'] === 'true' },
+  { chain: 'ethereum', enabled: Boolean(env.ETHEREUM_WITHDRAWAL_PRIVATE_KEY && env.ETHEREUM_RPC_ENDPOINT) },
+  { chain: 'solana', enabled: Boolean(env.SOLANA_WITHDRAWAL_PRIVATE_KEY && env.SOLANA_RPC_ENDPOINT) },
+  { chain: 'bsc', enabled: Boolean(env.BSC_WITHDRAWAL_PRIVATE_KEY && env.BSC_RPC_ENDPOINT) },
+  { chain: 'bitcoin', enabled: env.BTC_WITHDRAWAL_ENABLED },
 ]
 
 router.get('/config', requireAuth, async (_req, res) => {
-  const hasEthereum = Boolean(process.env['ETHEREUM_WITHDRAWAL_PRIVATE_KEY'] && process.env['ETHEREUM_RPC_ENDPOINT'])
-  const hasSolana = Boolean(process.env['SOLANA_WITHDRAWAL_PRIVATE_KEY'] && process.env['SOLANA_RPC_ENDPOINT'])
-  const hasBsc = Boolean(process.env['BSC_WITHDRAWAL_PRIVATE_KEY'] && process.env['BSC_RPC_ENDPOINT'])
-  const hasBitcoin = process.env['BTC_WITHDRAWAL_ENABLED'] === 'true'
+  const hasEthereum = Boolean(env.ETHEREUM_WITHDRAWAL_PRIVATE_KEY && env.ETHEREUM_RPC_ENDPOINT)
+  const hasSolana = Boolean(env.SOLANA_WITHDRAWAL_PRIVATE_KEY && env.SOLANA_RPC_ENDPOINT)
+  const hasBsc = Boolean(env.BSC_WITHDRAWAL_PRIVATE_KEY && env.BSC_RPC_ENDPOINT)
+  const hasBitcoin = env.BTC_WITHDRAWAL_ENABLED
   const enabled = hasEthereum || hasSolana || hasBsc || hasBitcoin
 
   res.json({

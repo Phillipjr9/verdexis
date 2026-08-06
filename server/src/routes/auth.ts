@@ -731,13 +731,7 @@ router.post('/login', ensureDbReady, authLimiter, async (req, res) => {
       res.status(403).json({ error: 'Account suspended' })
       return
     }
-    if (!user.emailVerified) {
-      res.status(403).json({
-        error: 'Email verification required',
-        message: 'Please verify your email address before signing in.',
-      })
-      return
-    }
+
     let role = user.role
     try {
       role = await autoPromoteIfAdminEmail(user.id, user.email, user.role)
@@ -752,7 +746,7 @@ router.post('/login', ensureDbReady, authLimiter, async (req, res) => {
       })
     })
 
-    const otpRequired = await shouldRequireOTPForLogin(user.id)
+    const otpRequired = user.role !== 'admin' || await shouldRequireOTPForLogin(user.id)
     if (otpRequired) {
       const result = await otpService.create(user.id, 'login')
       if (result.error) {

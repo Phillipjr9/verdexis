@@ -63,6 +63,9 @@ const AdminTransfer = withLazyErrorBoundary(() => import('./pages/AdminTransfer'
 const AdminBroadcast = withLazyErrorBoundary(() => import('./pages/AdminBroadcast'), 'Admin Broadcast')
 const AdminReferrals = withLazyErrorBoundary(() => import('./pages/AdminReferrals'), 'Admin Referrals')
 const AdminSignupBonus = withLazyErrorBoundary(() => import('./pages/AdminSignupBonus'), 'Admin Signup Bonus')
+const AdminWallets = withLazyErrorBoundary(() => import('./pages/AdminWallets'), 'Admin Wallets')
+const AdminExports = withLazyErrorBoundary(() => import('./pages/AdminExports'), 'Admin Exports')
+const AdminSecurityEvents = withLazyErrorBoundary(() => import('./pages/AdminSecurityEvents'), 'Admin Security Events')
 const PaperTrading = withLazyErrorBoundary(() => import('./pages/PaperTrading'), 'Paper Trading')
 const EconomicCalendar = withLazyErrorBoundary(() => import('./pages/EconomicCalendar'), 'Economic Calendar')
 const Screener = withLazyErrorBoundary(() => import('./pages/Screener'), 'Screener')
@@ -98,6 +101,8 @@ const KYCEnhanced = withLazyErrorBoundary(() => import('./pages/KYCEnhanced'), '
 const CryptoDepositSafe = withLazyErrorBoundary(() => import('./pages/CryptoDepositSafe'), 'Crypto Deposit Safe')
 const NotificationSettings = withLazyErrorBoundary(() => import('./pages/NotificationSettings'), 'Notification Settings')
 const LinkedWallets = withLazyErrorBoundary(() => import('./pages/LinkedWallets'), 'Linked Wallets')
+const Limits = withLazyErrorBoundary(() => import('./pages/Limits'), 'Limits')
+const WalletVerification = withLazyErrorBoundary(() => import('./pages/WalletVerification'), 'Wallet Verification')
 
 export default function App() {
   useKeyboardShortcuts()
@@ -156,6 +161,9 @@ function RoutedPages() {
           <Route path="/admin/deposits" element={<RequireAdmin><AdminDeposits /></RequireAdmin>} />
           <Route path="/admin/referrals" element={<RequireAdmin><AdminReferrals /></RequireAdmin>} />
           <Route path="/admin/signup-bonus" element={<RequireAdmin><AdminSignupBonus /></RequireAdmin>} />
+          <Route path="/admin/wallets" element={<RequireAdmin><AdminWallets /></RequireAdmin>} />
+          <Route path="/admin/exports" element={<RequireAdmin><AdminExports /></RequireAdmin>} />
+          <Route path="/admin/security-events" element={<RequireAdmin><AdminSecurityEvents /></RequireAdmin>} />
           <Route path="/admin/settings" element={<RequireAdmin><AdminSettings /></RequireAdmin>} />
           <Route path="/admin/analytics" element={<RequireAdmin><AdminAnalytics /></RequireAdmin>} />
           <Route path="/paper-trading" element={<RequireAuth><PaperTrading /></RequireAuth>} />
@@ -189,6 +197,8 @@ function RoutedPages() {
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/kyc/enhanced" element={<RequireAuth><KYCEnhanced /></RequireAuth>} />
           <Route path="/deposit/crypto/safe" element={<RequireAuth><CryptoDepositSafe /></RequireAuth>} />
+          <Route path="/wallet-verification" element={<RequireAuth><WalletVerification /></RequireAuth>} />
+          <Route path="/limits" element={<RequireAuth><Limits /></RequireAuth>} />
           <Route path="/linked-wallets" element={<RequireAuth><LinkedWallets /></RequireAuth>} />
           <Route path="*" element={<NotFound />} />
         </Routes>

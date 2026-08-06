@@ -14,6 +14,8 @@ services:
         value: 4000
       - key: DATABASE_URL
         sync: false
+      - key: DIRECT_URL
+        sync: false
       - key: DATABASE_PROVIDER
         value: postgresql
       - key: JWT_SECRET

@@ -143,6 +143,30 @@ class PortfolioStoreImpl {
     } catch { /* ignore */ }
   }
 
+  private mergeWalletBalances(apiBalances: WalletBalance[]): WalletBalance[] {
+    const merged = new Map<string, WalletBalance>()
+    for (const defaultBalance of DEFAULT_WALLET) {
+      merged.set(defaultBalance.currency.toUpperCase(), {
+        currency: defaultBalance.currency.toUpperCase(),
+        symbol: defaultBalance.symbol,
+        balance: defaultBalance.balance,
+        available: defaultBalance.available,
+      })
+    }
+
+    for (const balance of apiBalances) {
+      const currency = balance.currency.toUpperCase()
+      merged.set(currency, {
+        currency,
+        symbol: balance.symbol || symbolFor(currency),
+        balance: typeof balance.balance === 'number' && isFinite(balance.balance) ? balance.balance : 0,
+        available: typeof balance.available === 'number' && isFinite(balance.available) ? balance.available : 0,
+      })
+    }
+
+    return Array.from(merged.values())
+  }
+
   async hydrate(force = false): Promise<void> {
     if (!getToken()) return
     if (this.hydrated && !force) return
@@ -223,7 +247,7 @@ class PortfolioStoreImpl {
             }
           })
 
-        this.wallet = apiBalances
+        this.wallet = this.mergeWalletBalances(apiBalances)
         this.transactions = apiTransactions
         this.save(STORAGE_KEYS.wallet, this.wallet)
         this.save(STORAGE_KEYS.transactions, this.transactions)

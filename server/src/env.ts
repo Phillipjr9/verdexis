@@ -37,6 +37,19 @@ const schema = z.object({
   COINGECKO_API_TIER: z.enum(['demo', 'pro']).default('demo'),
   // Optional Coinbase proxy for restricted networks (e.g., Render free tier)
   COINBASE_PROXY_URL: z.string().optional(),
+  // Optional blockchain RPC endpoints for custodial withdrawals.
+  ETHEREUM_RPC_ENDPOINT: z.string().url().optional(),
+  ETHEREUM_WITHDRAWAL_PRIVATE_KEY: z.string().min(1).optional(),
+  SOLANA_RPC_ENDPOINT: z.string().url().optional(),
+  SOLANA_WITHDRAWAL_PRIVATE_KEY: z.string().min(1).optional(),
+  BSC_RPC_ENDPOINT: z.string().url().optional(),
+  BSC_WITHDRAWAL_PRIVATE_KEY: z.string().min(1).optional(),
+  ALCHEMY_PAYMASTER_POLICY_ID: z.string().min(1).optional(),
+  BTC_WITHDRAWAL_ENABLED: z.coerce.boolean().default(false),
+  BNB_TOKEN_ADDRESS: z.string().optional(),
+  ETHEREUM_TOKEN_ADDRESS: z.string().optional(),
+  BSC_TOKEN_ADDRESS: z.string().optional(),
+  ETHEREUM_TOKEN_SYMBOL: z.string().optional(),
   // Optional Finnhub key (60 req/min free) for stock/forex/crypto news.
   FINNHUB_API_KEY: z.string().optional(),
   // Optional Twelve Data key (800 req/day free) — used as a higher-volume
@@ -147,6 +160,14 @@ const envSummary = {
   FIREBASE_DB_LISTEN_PATH: parsed.data.FIREBASE_DB_LISTEN_PATH,
   GOOGLE_GENAI_API_KEY_SET: !!parsed.data.GOOGLE_GENAI_API_KEY,
   REDIS_URL_SET: !!process.env.REDIS_URL,
+  ETHEREUM_RPC_ENDPOINT_SET: !!parsed.data.ETHEREUM_RPC_ENDPOINT,
+  SOLANA_RPC_ENDPOINT_SET: !!parsed.data.SOLANA_RPC_ENDPOINT,
+  BSC_RPC_ENDPOINT_SET: !!parsed.data.BSC_RPC_ENDPOINT,
+  ALCHEMY_PAYMASTER_POLICY_ID_SET: !!parsed.data.ALCHEMY_PAYMASTER_POLICY_ID,
+  BTC_WITHDRAWAL_ENABLED: parsed.data.BTC_WITHDRAWAL_ENABLED,
+  ETHEREUM_TOKEN_ADDRESS_SET: !!parsed.data.ETHEREUM_TOKEN_ADDRESS,
+  BSC_TOKEN_ADDRESS_SET: !!parsed.data.BSC_TOKEN_ADDRESS,
+  BNB_TOKEN_ADDRESS_SET: !!parsed.data.BNB_TOKEN_ADDRESS,
   AWS_COGNITO_USER_POOL_ID_SET: !!parsed.data.AWS_COGNITO_USER_POOL_ID,
 }
 console.log('[verdexis-api] Environment summary:', JSON.stringify(envSummary, null, 2))

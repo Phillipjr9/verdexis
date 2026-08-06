@@ -317,9 +317,22 @@ router.get('/users/:id', async (req, res) => {
     prisma.priceAlert.findMany({ where: { userId: id }, orderBy: { createdAt: 'desc' } }),
     prisma.notification.findMany({ where: { userId: id }, orderBy: { createdAt: 'desc' }, take: 100 }),
   ])
+
+  let savedWallet: { encryptedWallet?: string; address?: string; updatedAt?: string } | null = null
+  try {
+    const prefs = user.prefs ? JSON.parse(user.prefs) : {}
+    const candidate = (prefs as { savedWallet?: { encryptedWallet?: string; address?: string; updatedAt?: string } }).savedWallet
+    if (candidate?.encryptedWallet) {
+      savedWallet = candidate
+    }
+  } catch {
+    savedWallet = null
+  }
+
   res.json({
     user: publicUser(user),
     holdings, walletBalances, walletLinks, transactions, trades, watchlist, alerts, notifications,
+    savedWallet,
   })
 })
 

@@ -513,7 +513,7 @@ export default function WalletPage() {
     }
   }, [detectedWalletType, hasExplicitChainSelection, selectedWithdrawAsset, withdrawChainOptions])
 
-  const withdrawalAvailable = wallet.find((w) => w.currency === selectedWithdrawAsset)?.available ?? 0
+  const withdrawalAvailable = wallet.find((w) => w.currency.toUpperCase() === selectedWithdrawAsset.toUpperCase())?.available ?? 0
 
   const wireInstructions = useMemo(
     () => depositInstructions.getWire(selectedCurrency),
@@ -549,21 +549,41 @@ export default function WalletPage() {
     // address exists. The crypto branch already shows a friendly empty
     // state when no address is configured for the picked asset.
     const set = new Set<string>(['USD', 'BTC', 'ETH', 'USDT', 'USDC', 'SOL'])
-    for (const w of wallet) set.add(w.currency)
+    for (const w of wallet) set.add(w.currency.toUpperCase())
     try {
       const all = depositInstructions.all()
-      for (const cur of Object.keys(all.cryptos || {})) set.add(cur)
+      for (const cur of Object.keys(all.cryptos || {})) set.add(cur.toUpperCase())
     } catch { /* ignore */ }
     const profile = getProfile()
     if (profile?.email) {
       const personal = userWallets.get(profile.email)
-      if (personal?.cryptos) for (const cur of Object.keys(personal.cryptos)) set.add(cur)
+      if (personal?.cryptos) for (const cur of Object.keys(personal.cryptos)) set.add(cur.toUpperCase())
     }
     // Stable ordering: USD first, then alphabetical crypto.
     const arr = Array.from(set)
     return arr.sort((a, b) => (a === 'USD' ? -1 : b === 'USD' ? 1 : a.localeCompare(b)))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wallet, instructionsTick, userWalletTick])
+
+  const symbolLookup = (currency: string) => {
+    const upper = currency.toUpperCase()
+    return upper === 'USD' ? '$' : upper === 'BTC' ? 'B' : upper === 'ETH' ? 'E' : upper === 'SOL' ? 'S' : upper === 'USDT' || upper === 'USDC' ? '$' : currency
+  }
+
+  const withdrawAssets = useMemo(() => {
+    const seen = new Map<string, { currency: string; symbol: string; balance: number; available: number; fromWallet: boolean }>()
+    for (const w of wallet) {
+      const cur = w.currency.toUpperCase()
+      seen.set(cur, { currency: cur, symbol: w.symbol, balance: w.balance, available: w.available, fromWallet: true })
+    }
+    for (const cur of depositCurrencies) {
+      const upper = cur.toUpperCase()
+      if (!seen.has(upper)) {
+        seen.set(upper, { currency: upper, symbol: symbolLookup(upper), balance: 0, available: 0, fromWallet: false })
+      }
+    }
+    return Array.from(seen.values())
+  }, [wallet, depositCurrencies])
 
   // True when the address shown above is a per-user override rather than
   // the global default — used to render a small "assigned to you" badge.
@@ -1852,8 +1872,8 @@ export default function WalletPage() {
                   </div>
                   {w.currency !== 'USD' && <span className="text-xs text-[#737373] shrink-0">${(w.balance * getUsdRate(w.currency)).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>}
                 </div>
-                <p className="text-2xl font-light text-[#E5E5E5] truncate">{(() => { const v = `${w.symbol}${w.balance.toLocaleString(undefined, { minimumFractionDigits: w.currency === 'USD' ? 2 : 0, maximumFractionDigits: w.currency === 'USD' ? 2 : 4 })}`; return showBalance ? v : v.replace(/\d/g, '*') })()}</p>
-                <p className="text-xs text-[#737373] mt-1 truncate">Available: {w.symbol}{w.available.toLocaleString(undefined, { minimumFractionDigits: w.currency === 'USD' ? 2 : 0, maximumFractionDigits: w.currency === 'USD' ? 2 : 4 })}</p>
+                <p className="text-2xl font-light text-[#E5E5E5] truncate">{(() => { const v = `${w.symbol}${w.balance.toLocaleString(undefined, { minimumFractionDigits: w.currency === 'USD' ? 2 : 0, maximumFractionDigits: w.currency === 'USD' ? 2 : 8 })}`; return showBalance ? v : v.replace(/\d/g, '*') })()}</p>
+                <p className="text-xs text-[#737373] mt-1 truncate">Available: {w.symbol}{w.available.toLocaleString(undefined, { minimumFractionDigits: w.currency === 'USD' ? 2 : 0, maximumFractionDigits: w.currency === 'USD' ? 2 : 8 })}</p>
               </div>
             ))}
             {holdings.map((h) => (
@@ -2457,7 +2477,7 @@ export default function WalletPage() {
               <div className="mb-6">
                 <label className="text-sm text-[#A0A0A0] mb-2 block">Select Asset</label>
                 <div className="grid grid-cols-2 gap-3">
-                  {wallet.map((w) => {
+                  {withdrawAssets.map((w) => {
                     const chain = getChainForCurrency(w.currency)
                     const supported = isCurrencyWithdrawalSupported(w.currency)
                     return (
@@ -2472,10 +2492,13 @@ export default function WalletPage() {
                         <div>
                           <span className="text-sm text-[#E5E5E5]">{w.currency}</span>
                           <p className="text-xs text-[#737373]">
-                            Avail: {w.symbol}{w.available.toLocaleString(undefined, { minimumFractionDigits: w.currency === 'USD' ? 2 : 0, maximumFractionDigits: w.currency === 'USD' ? 2 : 4 })}
+                            Avail: {w.symbol}{w.available.toLocaleString(undefined, { minimumFractionDigits: w.currency === 'USD' ? 2 : 0, maximumFractionDigits: w.currency === 'USD' ? 2 : 8 })}
                           </p>
                           {!supported && chain && (
                             <p className="text-[10px] text-[#F57C00] mt-1">{chain.charAt(0).toUpperCase() + chain.slice(1)} withdrawals unavailable</p>
+                          )}
+                          {!w.fromWallet && w.available === 0 && (
+                            <p className="text-[10px] text-[#737373] mt-1">No wallet row found yet — showing supported asset.</p>
                           )}
                         </div>
                       </button>

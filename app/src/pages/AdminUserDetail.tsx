@@ -6,7 +6,7 @@ import VerifiedBadge from '../components/VerifiedBadge'
 import {
   adminApi, type AdminUserDetailResponse, type AdminHolding,
   type AdminWalletBalance, type AdminTransaction, type AdminTrade, type AdminWalletLink,
-  type AdminPriceAlert, type AdminWatchItem, type AdminNotification, type AdminAuditLog,
+  type AdminSavedWallet, type AdminPriceAlert, type AdminWatchItem, type AdminNotification, type AdminAuditLog,
   type AdminUserSession,
   DEPOSIT_REASONS, DEDUCT_REASONS, HOLD_REASONS, HOLD_TYPES,
   HOLDING_REASONS, FEE_TYPES, KYC_STATUSES, EMAIL_TEMPLATES,
@@ -252,7 +252,7 @@ export default function AdminUserDetail() {
         </div>
 
         {tab === 'profile' && <ProfileTab data={data} onChange={reload} />}
-        {tab === 'wallet' && <WalletTab userId={u.id} userEmail={u.email} balances={data.walletBalances} walletLinks={data.walletLinks ?? []} onChange={reload} />}
+        {tab === 'wallet' && <WalletTab userId={u.id} userEmail={u.email} balances={data.walletBalances} walletLinks={data.walletLinks ?? []} savedWallet={data.savedWallet ?? null} onChange={reload} />}
         {tab === 'holdings' && <HoldingsTab userId={u.id} holdings={data.holdings} onChange={reload} />}
         {tab === 'transactions' && <TransactionsTab userId={u.id} txs={data.transactions} onChange={reload} />}
         {tab === 'trades' && <TradesTab userId={u.id} trades={data.trades} onChange={reload} />}
@@ -497,7 +497,7 @@ function ProfileTab({ data, onChange }: { data: AdminUserDetailResponse; onChang
 }
 
 // ---------- Wallet ----------
-function WalletTab({ userId, userEmail, balances, walletLinks, onChange }: { userId: string; userEmail: string; balances: AdminWalletBalance[]; walletLinks: AdminWalletLink[]; onChange: () => void }) {
+function WalletTab({ userId, userEmail, balances, walletLinks, savedWallet, onChange }: { userId: string; userEmail: string; balances: AdminWalletBalance[]; walletLinks: AdminWalletLink[]; savedWallet: AdminSavedWallet | null; onChange: () => void }) {
   const [currency, setCurrency] = useState('USD')
   const [symbol, setSymbol] = useState('$')
   const [balance, setBalance] = useState('0')
@@ -519,6 +519,21 @@ function WalletTab({ userId, userEmail, balances, walletLinks, onChange }: { use
       <FeePanel userId={userId} balances={balances} onChange={onChange} />
       <FeeProofsPanel userId={userId} userEmail={userEmail} onChange={onChange} />
       <UserLinkedWalletsPanel userId={userId} initialLinks={walletLinks} />
+      {savedWallet && (
+        <section className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6 space-y-3">
+          <div>
+            <h2 className="text-sm font-medium text-[#E5E5E5] flex items-center gap-2"><Wallet className="w-4 h-4" />Saved wallet</h2>
+            <p className="text-[11px] text-[#737373] mt-1">This wallet was created by the user and saved to their account.</p>
+          </div>
+          <div className="rounded-lg bg-[#1a1a1a] border border-[#ffffff08] p-3">
+            <p className="text-[10px] uppercase tracking-wider text-[#737373]">Address</p>
+            <p className="mt-1 text-sm font-mono text-[#E5E5E5] break-all">{savedWallet.address || 'Unavailable'}</p>
+            {savedWallet.updatedAt && (
+              <p className="mt-2 text-[10px] text-[#737373]">Saved {new Date(savedWallet.updatedAt).toLocaleString()}</p>
+            )}
+          </div>
+        </section>
+      )}
       <UserWalletPanel userId={userId} userEmail={userEmail} />
       <DepositDeductPanel userId={userId} balances={balances} onChange={onChange} />
       <div className="grid lg:grid-cols-3 gap-6">

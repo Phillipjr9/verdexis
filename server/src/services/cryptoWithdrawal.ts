@@ -1,6 +1,30 @@
 import { Connection, Keypair, PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL, sendAndConfirmTransaction, clusterApiUrl } from '@solana/web3.js'
 import { createAssociatedTokenAccountInstruction, createTransferCheckedInstruction, getAssociatedTokenAddress, getMint } from '@solana/spl-token'
-import { Contract, JsonRpcProvider, Wallet, parseUnits } from 'ethers'
+import { Contract, JsonRpcProvider, Wallet, getBytes, parseUnits } from 'ethers'
+import { env } from '../env.js'
+
+async function fetchJsonRpc(url: string, method: string, params: unknown[]) {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+  })
+
+  const text = await response.text()
+  let json: any
+  try {
+    json = JSON.parse(text)
+  } catch (error) {
+    throw new Error(`Non-JSON response from Alchemy: ${text}`)
+  }
+
+  if (!response.ok || json.error) {
+    const errorMessage = json.error?.message || response.statusText || 'unknown error'
+    throw new Error(`Alchemy RPC ${method} failed: ${errorMessage}`)
+  }
+
+  return json.result
+}
 
 export type WithdrawalTransferPlan = {
   chain: 'solana' | 'ethereum' | 'bitcoin' | 'bsc'
@@ -112,14 +136,14 @@ const BSC_USDC_CONTRACT = '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d'
 const SOLANA_USDT_MINT = 'Es9vMFrzaCERp2c2ZrK4kG4k6JWpFJ2XfcSv7ki7a9'
 const ETHEREUM_USDT_CONTRACT = '0xdAC17F958D2ee523a2206206994597C13D831ec7'
 const BSC_USDT_CONTRACT = '0x55d398326f99059ff775485246999027b3197955'
-const BNB_TOKEN_CONTRACT = (process.env['BNB_TOKEN_ADDRESS'] ?? '0x4734Fe024B9Cb0BBFcd26Ed467a1e0F891aC8888').trim()
+const BNB_TOKEN_CONTRACT = (env.BNB_TOKEN_ADDRESS ?? '0x4734Fe024B9Cb0BBFcd26Ed467a1e0F891aC8888').trim()
 
 // Custom platform token — set ETHEREUM_TOKEN_ADDRESS / BSC_TOKEN_ADDRESS
 // in server/.env after deploying contracts/MyToken.sol.
 // The symbol is read from ETHEREUM_TOKEN_SYMBOL (default "VDX").
-const ETHEREUM_CUSTOM_TOKEN = process.env['ETHEREUM_TOKEN_ADDRESS'] ?? ''
-const BSC_CUSTOM_TOKEN      = process.env['BSC_TOKEN_ADDRESS'] ?? ''
-const CUSTOM_TOKEN_SYMBOL   = (process.env['ETHEREUM_TOKEN_SYMBOL'] ?? 'VDX').toUpperCase()
+const ETHEREUM_CUSTOM_TOKEN = env.ETHEREUM_TOKEN_ADDRESS ?? ''
+const BSC_CUSTOM_TOKEN      = env.BSC_TOKEN_ADDRESS ?? ''
+const CUSTOM_TOKEN_SYMBOL   = (env.ETHEREUM_TOKEN_SYMBOL ?? 'VDX').toUpperCase()
 
 export function buildWithdrawalTransferPlan(input: {
   asset: string
@@ -203,13 +227,13 @@ export async function executeCryptoWithdrawal(input: {
 }
 
 async function executeSolanaWithdrawal(plan: WithdrawalTransferPlan): Promise<WithdrawalTransferResult> {
-  const privateKey = process.env['SOLANA_WITHDRAWAL_PRIVATE_KEY']
+  const privateKey = env.SOLANA_WITHDRAWAL_PRIVATE_KEY
   if (!privateKey) {
     return buildTemporaryFundingTransferResult(plan)
   }
 
   try {
-    const connection = new Connection(process.env['SOLANA_RPC_ENDPOINT'] || clusterApiUrl('mainnet-beta'), 'confirmed')
+    const connection = new Connection(env.SOLANA_RPC_ENDPOINT || clusterApiUrl('mainnet-beta'), 'confirmed')
     const signer = parseSolanaSecretKey(privateKey)
     const destination = new PublicKey(plan.destinationAddress)
 
@@ -285,7 +309,7 @@ async function executeSolanaWithdrawal(plan: WithdrawalTransferPlan): Promise<Wi
 }
 
 async function executeBitcoinWithdrawal(plan: WithdrawalTransferPlan): Promise<WithdrawalTransferResult> {
-  const enabled = process.env['BTC_WITHDRAWAL_ENABLED'] === 'true'
+  const enabled = env.BTC_WITHDRAWAL_ENABLED
   if (!enabled) {
     return {
       status: 'pending',
@@ -301,21 +325,89 @@ async function executeBitcoinWithdrawal(plan: WithdrawalTransferPlan): Promise<W
 
 async function executeEthereumWithdrawal(plan: WithdrawalTransferPlan): Promise<WithdrawalTransferResult> {
   const chainKey = plan.chain === 'bsc' ? 'BSC' : 'ETHEREUM'
-  const privateKey = process.env[`${chainKey}_WITHDRAWAL_PRIVATE_KEY`]
+  const privateKey = env[`${chainKey}_WITHDRAWAL_PRIVATE_KEY` as keyof typeof env] as string | undefined
   if (!privateKey) {
     return buildTemporaryFundingTransferResult(plan)
   }
 
-  try {
-    const rpcUrl = process.env[`${chainKey}_RPC_ENDPOINT`] || (chainKey === 'ETHEREUM' ? 'https://ethereum.publicnode.com' : undefined)
-    if (!rpcUrl) {
+  const paymasterPolicyId = env.ALCHEMY_PAYMASTER_POLICY_ID
+  const rpcUrl = env[`${chainKey}_RPC_ENDPOINT` as keyof typeof env] as string | undefined || (chainKey === 'ETHEREUM' ? 'https://ethereum.publicnode.com' : undefined)
+  if (!rpcUrl) {
+    return {
+      status: 'pending',
+      message: `No RPC endpoint configured for ${plan.chain}.`,
+    }
+  }
+
+  const provider = new JsonRpcProvider(rpcUrl)
+  const wallet = new Wallet(privateKey, provider)
+
+  if (paymasterPolicyId) {
+    try {
+      const from = await wallet.getAddress()
+      const chainId = await provider.getNetwork().then((n) => `0x${n.chainId.toString(16)}`)
+      const valueHex = `0x${BigInt(Math.round(plan.amount * 1_000_000_000_000_000_000)).toString(16)}`
+      const call = plan.isNative
+        ? { to: plan.destinationAddress, data: '0x', value: valueHex }
+        : {
+            to: plan.tokenAddress as string,
+            value: '0x0',
+            data: new Contract(plan.tokenAddress as string, ['function transfer(address,uint256) returns (bool)'], wallet).interface.encodeFunctionData('transfer', [plan.destinationAddress, parseUnits(plan.amount.toString(), plan.decimals ?? 18)]),
+          }
+
+      const preparePayload = {
+        from,
+        chainId,
+        calls: [call],
+        capabilities: {
+          paymasterService: {
+            policyId: paymasterPolicyId,
+          },
+        },
+      }
+
+      const prepared = await fetchJsonRpc(rpcUrl, 'wallet_prepareCalls', [preparePayload])
+      const signatureRequest = prepared?.data?.signatureRequest ?? prepared?.signatureRequest
+      if (!signatureRequest) {
+        throw new Error('Missing signatureRequest from wallet_prepareCalls response')
+      }
+
+      if (signatureRequest.type !== 'personal_sign') {
+        throw new Error(`Unsupported signatureRequest type: ${signatureRequest.type}`)
+      }
+
+      const raw = signatureRequest.data?.raw || signatureRequest.rawPayload
+      if (!raw) {
+        throw new Error('Missing raw payload in signatureRequest')
+      }
+
+      const signature = await wallet.signMessage(getBytes(raw))
+      const signedPreparedOperation = {
+        type: prepared.type,
+        data: {
+          ...prepared.data,
+          signature: {
+            type: 'secp256k1',
+            data: signature,
+          },
+        },
+      }
+
+      const result = await fetchJsonRpc(rpcUrl, 'wallet_sendPreparedCalls', [signedPreparedOperation])
+      return {
+        status: 'completed',
+        txHash: result.transactionHash ?? result.hash ?? result.txHash ?? undefined,
+        message: `${plan.chain === 'bsc' ? 'BSC' : 'Ethereum'} withdrawal submitted via Alchemy Wallet API`,
+      }
+    } catch (error) {
       return {
         status: 'pending',
-        message: `No RPC endpoint configured for ${plan.chain}.`,
+        message: error instanceof Error ? error.message : `${plan.chain === 'bsc' ? 'BSC' : 'Ethereum'} withdrawal failed via Alchemy Wallet API`,
       }
     }
+  }
 
-    const provider = new JsonRpcProvider(rpcUrl)
+  try {
     const wallet = new Wallet(privateKey, provider)
 
     if (plan.isNative) {
