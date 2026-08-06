@@ -31,7 +31,19 @@ COPY server/entrypoint.sh ./server/
 RUN chmod +x ./server/entrypoint.sh
 
 # Build
-RUN cd server && npm run build && cd ..
+RUN echo "=== Build sanity checks ===" && \
+    cd server && \
+    echo "=== Prisma schema file list ===" && \
+    find prisma -maxdepth 1 -type f | sort && \
+    echo "=== Prisma schema preview ===" && \
+    sed -n '1,80p' prisma/schema.prisma && \
+    echo "=== Installed server dependencies ===" && \
+    npm ls --depth=0 && \
+    echo "=== Prisma CLI version ===" && \
+    npx prisma --version && \
+    echo "=== Starting server build ===" && \
+    npm run build && \
+    cd ..
 
 EXPOSE 4000
 
