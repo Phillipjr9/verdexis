@@ -67,13 +67,19 @@ if (IS_PROD && !process.env.JWT_SECRET) {
   console.error('[verdexis-api] JWT_SECRET is required in production')
   process.exit(1)
 }
-const normalizeOrigin = (value: string): string => value.trim().replace(/\/+$|\s+/g, '')
+const normalizeOrigin = (value: string): string => value.trim().toLowerCase()
+  .replace(/\/+$/g, '')
+  .replace(/\s+/g, '')
+  .replace(/:443$/, '')
+  .replace(/:80$/, '')
 const CORS_ORIGIN = env.CORS_ORIGIN.split(',').map((s) => normalizeOrigin(s)).filter(Boolean)
 const SELF_ORIGINS = [process.env.RENDER_EXTERNAL_URL, process.env.PUBLIC_URL, process.env.PRODUCTION_ORIGIN, env.APP_BASE_URL]
   .filter((s): s is string => !!s)
   .map(normalizeOrigin)
 const LAN_ORIGIN_RE = /^http:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|localhost|127\.0\.0\.1)(:\d+)?$/
+const PAGES_DEV_ORIGIN_RE = /^https:\/\/(?:www\.)?verdexis\.pages\.dev(?:\:443)?$/
 const ALLOWED_ORIGINS = new Set([...CORS_ORIGIN, ...SELF_ORIGINS, 'https://verdexis.pages.dev'])
+console.log('[verdexis-api] CORS allowed origins:', JSON.stringify(Array.from(ALLOWED_ORIGINS).sort()))
 
 app.set('trust proxy', 1)
 
@@ -93,7 +99,7 @@ const corsOptions = {
     const normalizedOrigin = normalizeOrigin(origin)
 
     // Check against allowed origins
-    if (ALLOWED_ORIGINS.has(normalizedOrigin)) {
+    if (ALLOWED_ORIGINS.has(normalizedOrigin) || PAGES_DEV_ORIGIN_RE.test(normalizedOrigin)) {
       return callback(null, true)
     }
 
