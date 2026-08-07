@@ -81,13 +81,17 @@ const prismaClientOptions: any = {
   },
 }
 
-if (provider !== 'sqlite' && databaseUrl.includes('rds.amazonaws.com')) {
+if (provider !== 'sqlite') {
   const poolSize = Math.min(parseInt(process.env.DATABASE_POOL_SIZE || '20'), 30)
   const connectionTimeout = parseInt(process.env.DATABASE_CONNECTION_TIMEOUT || '10000')
-  prismaClientOptions.datasources.db.url = `${databaseUrl}${databaseUrl.includes('?') ? '&' : '?'}sslmode=require&connection_limit=${poolSize}&connect_timeout=${connectionTimeout}`
-} else if (provider !== 'sqlite') {
-  const poolSize = Math.min(parseInt(process.env.DATABASE_POOL_SIZE || '20'), 30)
-  prismaClientOptions.datasources.db.url = `${databaseUrl}${databaseUrl.includes('?') ? '&' : '?'}connection_limit=${poolSize}`
+
+  if (databaseUrl.includes('rds.amazonaws.com')) {
+    prismaClientOptions.datasources.db.url = `${databaseUrl}${databaseUrl.includes('?') ? '&' : '?'}sslmode=require&connection_limit=${poolSize}&connect_timeout=${connectionTimeout}`
+  } else if (databaseUrl.includes('supabase.co') && !/sslmode=/i.test(databaseUrl)) {
+    prismaClientOptions.datasources.db.url = `${databaseUrl}${databaseUrl.includes('?') ? '&' : '?'}sslmode=require&connection_limit=${poolSize}`
+  } else {
+    prismaClientOptions.datasources.db.url = `${databaseUrl}${databaseUrl.includes('?') ? '&' : '?'}connection_limit=${poolSize}`
+  }
 }
 
 function createDbUnavailableError(message: string): Error {
