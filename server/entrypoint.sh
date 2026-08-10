@@ -82,6 +82,15 @@ run_migrations() {
   fi
 }
 
+# If running with SQLite at runtime (fallback), ensure the runtime SQLite file has the schema.
+if [ "$DATABASE_PROVIDER" = "sqlite" ]; then
+  echo "Applying Prisma schema to runtime SQLite database at $DATABASE_URL"
+  # Use the sqlite schema file generated at build time (schema.sqlite.prisma exists in image)
+  timeout 120 npx prisma db push --schema prisma/schema.sqlite.prisma || {
+    echo "⚠ prisma db push failed - continuing startup"
+  }
+fi
+
 # Kick off migrations in the background so the web process can bind the port promptly.
 echo "Starting server and running migrations in the background..."
 run_migrations &
