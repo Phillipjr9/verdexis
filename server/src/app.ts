@@ -91,9 +91,12 @@ const EXTRA_ORIGINS = [
   'https://www.verdexisgroup.com',
   'https://verdexisgroup.com/',
   'https://www.verdexisgroup.com/',
+  'https://verdexis.vercel.app',
+  'https://verdexis-bice.vercel.app',
 ]
 const LAN_ORIGIN_RE = /^http:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|localhost|127\.0\.0\.1)(:\d+)?$/
-const PAGES_DEV_ORIGIN_RE = /^https:\/\/(?:www\.)?verdexis\.pages\.dev(?:\:443)?$/
+const PAGES_DEV_ORIGIN_RE = /^https:\/\/(?:[a-z0-9-]+\.)*pages\.dev(?:\:443)?$/i
+const VERCEL_APP_ORIGIN_RE = /^https:\/\/(?:[a-z0-9-]+\.)*vercel\.app(?:\:443)?$/i
 const PAGES_DEV_ORIGINS = new Set(['https://verdexis.pages.dev', 'https://www.verdexis.pages.dev'])
 const ALLOWED_ORIGINS = new Set([...CORS_ORIGIN, ...SELF_ORIGINS, ...EXTRA_ORIGINS, ...PAGES_DEV_ORIGINS])
 console.log('[verdexis-api] CORS allowed origins:', JSON.stringify(Array.from(ALLOWED_ORIGINS).sort()))
@@ -111,7 +114,11 @@ app.use(
     origin: (origin, cb) => {
       if (!origin) return cb(null, true)
       const normalizedOrigin = normalizeOrigin(origin)
-      if (ALLOWED_ORIGINS.has(normalizedOrigin) || PAGES_DEV_ORIGIN_RE.test(normalizedOrigin)) return cb(null, true)
+      if (
+        ALLOWED_ORIGINS.has(normalizedOrigin) ||
+        PAGES_DEV_ORIGIN_RE.test(normalizedOrigin) ||
+        VERCEL_APP_ORIGIN_RE.test(normalizedOrigin)
+      ) return cb(null, true)
       if (!IS_PROD && LAN_ORIGIN_RE.test(normalizedOrigin)) return cb(null, true)
       console.warn(`[CORS] Blocked origin: ${origin} normalized: ${normalizedOrigin}`)
       cb(new Error(`CORS blocked: ${origin}`))
@@ -127,7 +134,11 @@ app.options('*', cors({
   origin: (origin, cb) => {
     if (!origin) return cb(null, true)
     const normalizedOrigin = normalizeOrigin(origin)
-    if (ALLOWED_ORIGINS.has(normalizedOrigin) || PAGES_DEV_ORIGIN_RE.test(normalizedOrigin) || PAGES_DEV_ORIGIN_RE.test(normalizedOrigin)) return cb(null, true)
+    if (
+      ALLOWED_ORIGINS.has(normalizedOrigin) ||
+      PAGES_DEV_ORIGIN_RE.test(normalizedOrigin) ||
+      VERCEL_APP_ORIGIN_RE.test(normalizedOrigin)
+    ) return cb(null, true)
     if (!IS_PROD && LAN_ORIGIN_RE.test(normalizedOrigin)) return cb(null, true)
     cb(new Error(`CORS blocked: ${origin}`))
   },
