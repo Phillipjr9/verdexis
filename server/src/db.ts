@@ -18,6 +18,13 @@ const DEFAULT_DATABASE_URL = rawDatabaseProvider === 'sqlite'
   : 'postgresql://postgres:postgres@127.0.0.1:5432/verdexis'
 const isPostgresUrl = (value: string): boolean => /^postgres(?:ql)?:\/\//i.test(value)
 const isSqliteUrl = (value: string): boolean => /^(file:|sqlite:)/i.test(value)
+const normalizeSqliteUrl = (value: string): string => {
+  const trimmed = value.trim()
+  if (!trimmed) return DEFAULT_SQLITE_URL
+  if (isSqliteUrl(trimmed)) return trimmed
+  if (trimmed.startsWith('./') || trimmed.startsWith('../') || trimmed.startsWith('/')) return `file:${trimmed}`
+  return `file:${trimmed}`
+}
 const shouldFallbackToSqlite = (value: string | undefined, provider: string): boolean => {
   if (!value) return true
   if (provider === 'sqlite') return !isSqliteUrl(value)
@@ -41,6 +48,10 @@ const maskDatabaseUrl = (url: string): string => {
 
 if (databaseUrl && isSqliteUrl(databaseUrl)) {
   provider = 'sqlite'
+}
+
+if (provider === 'sqlite') {
+  databaseUrl = normalizeSqliteUrl(databaseUrl)
 }
 
 if (!databaseUrl) {
@@ -254,7 +265,7 @@ async function ensureConnection() {
       if (provider !== 'sqlite' && process.env.NODE_ENV === 'production') {
         console.warn(`[verdexis-api] Falling back to SQLite because the configured database could not be reached: ${databaseUrl}`)
         provider = 'sqlite'
-        databaseUrl = `file:${FALLBACK_SQLITE_FILE}`
+        databaseUrl = normalizeSqliteUrl(FALLBACK_SQLITE_FILE)
         process.env.DATABASE_URL = databaseUrl
         process.env.DATABASE_PROVIDER = 'sqlite'
         process.env.DIRECT_URL = databaseUrl
