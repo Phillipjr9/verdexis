@@ -27,9 +27,6 @@ COPY server/prisma ./server/prisma
 COPY server/scripts ./server/scripts
 COPY server/entrypoint.sh ./server/
 
-# Use PostgreSQL Prisma schema for Render deployments
-RUN cp ./server/prisma/schema.prisma ./server/prisma/schema.prisma
-
 # Make entrypoint executable
 RUN chmod +x ./server/entrypoint.sh
 
