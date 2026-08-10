@@ -1,0 +1,12 @@
+{
+  "name": "verdexis-passkey-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "e2e:passkeys": "node test-passkey.mjs"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2",
+    "playwright": "^1.62.1"
+  }
+}

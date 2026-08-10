@@ -1,0 +1,29 @@
+name: E2E — Passkeys
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  passkeys:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        working-directory: tests/e2e/passkeys
+        run: |
+          npm ci
+          npx playwright install --with-deps
+      - name: Run passkey E2E
+        working-directory: tests/e2e/passkeys
+        env:
+          PASSKEY_TARGET: ${{ secrets.PASSKEY_TARGET }}
+          PASSKEY_ADMIN_EMAIL: ${{ secrets.PASSKEY_ADMIN_EMAIL }}
+          PASSKEY_ADMIN_PASSWORD: ${{ secrets.PASSKEY_ADMIN_PASSWORD }}
+        run: |
+          node test-passkey.mjs
