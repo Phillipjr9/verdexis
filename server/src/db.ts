@@ -1,3 +1,5 @@
+import os from 'node:os'
+import path from 'node:path'
 import { PrismaClient } from '@prisma/client'
 
 declare global {
@@ -6,11 +8,18 @@ declare global {
 }
 
 const rawDatabaseProvider = (process.env.DATABASE_PROVIDER || 'postgresql').toLowerCase()
+const DEFAULT_SQLITE_URL = 'file:./dev.db'
+const DEFAULT_PROD_SQLITE_URL = `file:${path.join(os.tmpdir(), 'verdexis.db')}`
 const DEFAULT_DATABASE_URL = rawDatabaseProvider === 'sqlite'
-  ? 'file:./dev.db'
+  ? DEFAULT_SQLITE_URL
   : 'postgresql://postgres:postgres@127.0.0.1:5432/verdexis'
 const isPostgresUrl = (value: string): boolean => /^postgres(?:ql)?:\/\//i.test(value)
 const isSqliteUrl = (value: string): boolean => /^(file:|sqlite:)/i.test(value)
+const shouldFallbackToSqlite = (value: string | undefined, provider: string): boolean => {
+  if (!value) return true
+  if (provider === 'sqlite') return !isSqliteUrl(value)
+  return !isPostgresUrl(value)
+}
 
 let databaseUrl = (process.env.DATABASE_URL || '').trim()
 let provider = rawDatabaseProvider
@@ -36,18 +45,27 @@ if (!databaseUrl) {
   if (provider === 'sqlite') {
     console.warn('[verdexis-api] DATABASE_URL not set; using local SQLite fallback file: ./dev.db')
     databaseUrl = DEFAULT_DATABASE_URL
+  } else if (process.env.NODE_ENV === 'production') {
+    console.warn('[verdexis-api] DATABASE_URL not set in production; falling back to transient SQLite database in /tmp')
+    provider = 'sqlite'
+    databaseUrl = DEFAULT_PROD_SQLITE_URL
   } else {
     console.warn('[verdexis-api] DATABASE_URL not set; using default Postgres fallback')
     databaseUrl = DEFAULT_DATABASE_URL
   }
-} else if (provider === 'sqlite' && !isSqliteUrl(databaseUrl)) {
+} else if (shouldFallbackToSqlite(databaseUrl, provider)) {
   databaseUrlSource = 'fallback'
-  console.warn(`[verdexis-api] DATABASE_PROVIDER=sqlite but DATABASE_URL '${databaseUrl}' is not a valid SQLite URL; using default SQLite file: ./dev.db`)
-  databaseUrl = 'file:./dev.db'
-} else if (provider !== 'sqlite' && !isPostgresUrl(databaseUrl)) {
-  databaseUrlSource = 'fallback'
-  console.warn(`[verdexis-api] DATABASE_URL '${databaseUrl}' is not a valid Postgres URL; using default Postgres fallback`)
-  databaseUrl = DEFAULT_DATABASE_URL
+  if (provider === 'sqlite') {
+    console.warn(`[verdexis-api] DATABASE_PROVIDER=sqlite but DATABASE_URL '${databaseUrl}' is not a valid SQLite URL; using default SQLite file: ./dev.db`)
+    databaseUrl = DEFAULT_SQLITE_URL
+  } else if (process.env.NODE_ENV === 'production') {
+    console.warn(`[verdexis-api] DATABASE_URL '${databaseUrl}' is not a valid Postgres URL in production; falling back to transient SQLite database in /tmp`)
+    provider = 'sqlite'
+    databaseUrl = DEFAULT_PROD_SQLITE_URL
+  } else {
+    console.warn(`[verdexis-api] DATABASE_URL '${databaseUrl}' is not a valid Postgres URL; using default Postgres fallback`)
+    databaseUrl = DEFAULT_DATABASE_URL
+  }
 }
 
 if (provider === 'sqlite' && databaseUrl.includes('%')) {

@@ -7,13 +7,22 @@ const provider = (process.env.DATABASE_PROVIDER || 'postgresql').toLowerCase()
 const envs = { ...process.env }
 const schemaBase = path.resolve('prisma', 'schema.prisma')
 let schemaFile = schemaBase
+const isPostgresUrl = (value) => typeof value === 'string' && /^postgres(?:ql)?:\/\//i.test(value)
+const isSqliteUrl = (value) => typeof value === 'string' && /^(file:|sqlite:)/i.test(value)
 
-// Prisma requires DIRECT_URL for some datasource setups. If it is not set,
-// fall back to DATABASE_URL so builds still work when only DATABASE_URL is provided.
-envs.DIRECT_URL = envs.DIRECT_URL || envs.DATABASE_URL
+const normalizeEnvValue = (value) => {
+  if (typeof value !== 'string') return value
+  return value.trim().replace(/^['"]|['"]$/g, '')
+}
+
+envs.DATABASE_URL = normalizeEnvValue(envs.DATABASE_URL)
+envs.DIRECT_URL = normalizeEnvValue(envs.DIRECT_URL) || envs.DATABASE_URL
 
 if (provider === 'sqlite') {
-  envs.DATABASE_URL = envs.DATABASE_URL || 'file:./dev.db'
+  if (!isSqliteUrl(envs.DATABASE_URL)) {
+    console.warn('[generate-prisma-client] DATABASE_URL is not a valid SQLite URL; defaulting to file:./dev.db')
+    envs.DATABASE_URL = 'file:./dev.db'
+  }
   envs.DIRECT_URL = envs.DIRECT_URL || envs.DATABASE_URL
   const source = await readFile(schemaBase, 'utf8')
   let sqliteSchema = source.replace(/datasource\s+db\s*{[\s\S]*?provider\s*=\s*"[^"]+"/, (block) => block.replace(/provider\s*=\s*"[^"]+"/, 'provider = "sqlite"'))
@@ -27,7 +36,14 @@ if (provider === 'sqlite') {
   schemaFile = path.resolve('prisma', 'schema.sqlite.prisma')
   await writeFile(schemaFile, sqliteSchema, 'utf8')
 } else {
-  envs.DATABASE_URL = envs.DATABASE_URL || 'postgresql://postgres:postgres@127.0.0.1:5432/verdexis'
+  const normalizedDatabaseUrl = normalizeEnvValue(envs.DATABASE_URL)
+  if (!normalizedDatabaseUrl || !isPostgresUrl(normalizedDatabaseUrl)) {
+    console.warn('[generate-prisma-client] DATABASE_URL is not set or invalid for Postgres; defaulting to local SQLite for build')
+    envs.DATABASE_URL = 'file:./dev.db'
+    envs.DATABASE_PROVIDER = 'sqlite'
+  } else {
+    envs.DATABASE_URL = normalizedDatabaseUrl
+  }
 }
 
 const spawnPrisma = (args) => {
