@@ -713,11 +713,11 @@ router.post('/login', ensureDbReady, authLimiter, async (req, res) => {
       if (!isDbUnavailableError(dbError)) {
         res.status(503).json({
           error: 'Service temporarily unavailable',
-          detail: 'Database connection issue. Please try again in a moment.',
+          detail: errorMessage || 'Database connection issue. Please try again in a moment.',
         })
         return
       }
-      res.status(503).json({ error: 'Database unavailable' })
+      res.status(503).json({ error: 'Database unavailable', detail: errorMessage })
       return
     }
     if (!user) {
