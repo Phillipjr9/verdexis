@@ -13,6 +13,7 @@ const rawDatabaseProvider = (process.env.DATABASE_PROVIDER || 'postgresql').toLo
 const DEFAULT_SQLITE_URL = 'file:./dev.db'
 const DEFAULT_PROD_SQLITE_URL = `file:${path.join(os.tmpdir(), 'verdexis.db')}`
 const FALLBACK_SQLITE_FILE = path.join(os.tmpdir(), 'verdexis.db')
+const RENDER_SQLITE_FILE = path.join(os.tmpdir(), 'verdexis-render.db')
 const DEFAULT_DATABASE_URL = rawDatabaseProvider === 'sqlite'
   ? DEFAULT_SQLITE_URL
   : 'postgresql://postgres:postgres@127.0.0.1:5432/verdexis'
@@ -62,7 +63,7 @@ if (!databaseUrl) {
   } else if (process.env.NODE_ENV === 'production') {
     console.warn('[verdexis-api] DATABASE_URL not set in production; falling back to transient SQLite database in /tmp')
     provider = 'sqlite'
-    databaseUrl = `file:${FALLBACK_SQLITE_FILE}`
+    databaseUrl = normalizeSqliteUrl(process.env.RENDER ? RENDER_SQLITE_FILE : FALLBACK_SQLITE_FILE)
   } else {
     console.warn('[verdexis-api] DATABASE_URL not set; using default Postgres fallback')
     databaseUrl = DEFAULT_DATABASE_URL
@@ -75,7 +76,7 @@ if (!databaseUrl) {
   } else if (process.env.NODE_ENV === 'production') {
     console.warn(`[verdexis-api] DATABASE_URL '${databaseUrl}' is not a valid Postgres URL in production; falling back to transient SQLite database in /tmp`)
     provider = 'sqlite'
-    databaseUrl = `file:${FALLBACK_SQLITE_FILE}`
+    databaseUrl = normalizeSqliteUrl(process.env.RENDER ? RENDER_SQLITE_FILE : FALLBACK_SQLITE_FILE)
   } else {
     console.warn(`[verdexis-api] DATABASE_URL '${databaseUrl}' is not a valid Postgres URL; using default Postgres fallback`)
     databaseUrl = DEFAULT_DATABASE_URL
@@ -152,6 +153,21 @@ function createFallbackValue(message: string): any {
       throw createDbUnavailableError(message)
     },
   })
+}
+
+// If we're running with the SQLite fallback at runtime, attempt to apply the
+// Prisma schema to the runtime SQLite file before instantiating the client so
+// tables exist (useful for Render ephemeral files). This uses top-level await
+// which is supported in ESM Node runtimes (Node >= 14.8 with `type: module`).
+if (provider === 'sqlite') {
+  try {
+    console.log('[verdexis-api] Applying Prisma schema to runtime SQLite database before client init')
+    const { execSync } = await import('node:child_process')
+    execSync('npx prisma db push --schema prisma/schema.sqlite.prisma', { env: process.env, stdio: 'inherit' })
+    console.log('[verdexis-api] Runtime prisma db push completed')
+  } catch (err) {
+    console.warn('[verdexis-api] runtime prisma db push failed:', err instanceof Error ? err.message : String(err))
+  }
 }
 
 let currentPrismaClient = global.__prisma || new PrismaClient(prismaClientOptions)
@@ -265,7 +281,7 @@ async function ensureConnection() {
       if (provider !== 'sqlite' && process.env.NODE_ENV === 'production') {
         console.warn(`[verdexis-api] Falling back to SQLite because the configured database could not be reached: ${databaseUrl}`)
         provider = 'sqlite'
-        databaseUrl = normalizeSqliteUrl(FALLBACK_SQLITE_FILE)
+        databaseUrl = normalizeSqliteUrl(process.env.RENDER ? RENDER_SQLITE_FILE : FALLBACK_SQLITE_FILE)
         process.env.DATABASE_URL = databaseUrl
         process.env.DATABASE_PROVIDER = 'sqlite'
         process.env.DIRECT_URL = databaseUrl
