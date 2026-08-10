@@ -51,3 +51,7 @@ WORKDIR /app/server
 
 # Run entrypoint script
 ENTRYPOINT ["sh", "./entrypoint.sh"]
+
+# If a SQLite dev.db was generated during build, copy it into /tmp so the
+# runtime fallback database on Render has the schema and seed available.
+RUN if [ -f server/prisma/dev.db ]; then cp server/prisma/dev.db /tmp/verdexis-render.db || true; fi
