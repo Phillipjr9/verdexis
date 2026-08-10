@@ -1,6 +1,8 @@
 import os from 'node:os'
 import path from 'node:path'
+import crypto from 'node:crypto'
 import { PrismaClient } from '@prisma/client'
+import bcrypt from 'bcryptjs'
 
 declare global {
   // eslint-disable-next-line no-var
@@ -10,6 +12,7 @@ declare global {
 const rawDatabaseProvider = (process.env.DATABASE_PROVIDER || 'postgresql').toLowerCase()
 const DEFAULT_SQLITE_URL = 'file:./dev.db'
 const DEFAULT_PROD_SQLITE_URL = `file:${path.join(os.tmpdir(), 'verdexis.db')}`
+const FALLBACK_SQLITE_FILE = path.join(os.tmpdir(), 'verdexis.db')
 const DEFAULT_DATABASE_URL = rawDatabaseProvider === 'sqlite'
   ? DEFAULT_SQLITE_URL
   : 'postgresql://postgres:postgres@127.0.0.1:5432/verdexis'
@@ -48,7 +51,7 @@ if (!databaseUrl) {
   } else if (process.env.NODE_ENV === 'production') {
     console.warn('[verdexis-api] DATABASE_URL not set in production; falling back to transient SQLite database in /tmp')
     provider = 'sqlite'
-    databaseUrl = DEFAULT_PROD_SQLITE_URL
+    databaseUrl = `file:${FALLBACK_SQLITE_FILE}`
   } else {
     console.warn('[verdexis-api] DATABASE_URL not set; using default Postgres fallback')
     databaseUrl = DEFAULT_DATABASE_URL
@@ -61,7 +64,7 @@ if (!databaseUrl) {
   } else if (process.env.NODE_ENV === 'production') {
     console.warn(`[verdexis-api] DATABASE_URL '${databaseUrl}' is not a valid Postgres URL in production; falling back to transient SQLite database in /tmp`)
     provider = 'sqlite'
-    databaseUrl = DEFAULT_PROD_SQLITE_URL
+    databaseUrl = `file:${FALLBACK_SQLITE_FILE}`
   } else {
     console.warn(`[verdexis-api] DATABASE_URL '${databaseUrl}' is not a valid Postgres URL; using default Postgres fallback`)
     databaseUrl = DEFAULT_DATABASE_URL
@@ -189,6 +192,42 @@ export const prisma = new Proxy({} as PrismaClient, {
 export const databaseProvider = provider
 export const isSqliteDatabase = provider === 'sqlite'
 
+async function ensureFallbackDatabaseSeed() {
+  if (provider !== 'sqlite') return
+
+  try {
+    const fallbackClient = new PrismaClient({
+      datasources: {
+        db: {
+          url: databaseUrl,
+        },
+      },
+    })
+    await fallbackClient.$connect()
+    const adminEmail = (process.env.ADMIN_EMAILS || 'admin@verdexisgroup.com').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)[0]
+    if (adminEmail) {
+      const existing = await fallbackClient.user.findUnique({ where: { email: adminEmail } })
+      if (!existing) {
+        const seedPassword = process.env.ADMIN_SEED_PASSWORD || 'Admin@Verdexis2024'
+        const passwordHash = await bcrypt.hash(seedPassword, 12)
+        await fallbackClient.user.create({
+          data: {
+            email: adminEmail,
+            name: 'Admin',
+            passwordHash,
+            investmentId: `VDX-${crypto.randomBytes(4).toString('hex').toUpperCase()}`,
+            role: 'admin',
+          },
+        })
+        console.log(`[verdexis-api] Seeded fallback admin user ${adminEmail}`)
+      }
+    }
+    await fallbackClient.$disconnect()
+  } catch (error) {
+    console.warn('[verdexis-api] Failed to seed fallback SQLite admin user:', error instanceof Error ? error.message : String(error))
+  }
+}
+
 async function ensureConnection() {
   const dbHost = databaseUrl.match(/@([^:/?]+)/) ? databaseUrl.match(/@([^:/?]+)/)![1] : 'unknown'
   console.log('[verdexis-api] Attempting to connect to database...')
@@ -198,6 +237,9 @@ async function ensureConnection() {
     try {
       await currentPrismaClient.$connect()
       await currentPrismaClient.$queryRaw`SELECT 1`
+      if (provider === 'sqlite') {
+        await ensureFallbackDatabaseSeed()
+      }
       console.log('[verdexis-api] ✅ Database connected successfully')
       return
     } catch (err) {
@@ -208,7 +250,7 @@ async function ensureConnection() {
       if (provider !== 'sqlite' && process.env.NODE_ENV === 'production') {
         console.warn(`[verdexis-api] Falling back to SQLite because the configured database could not be reached: ${databaseUrl}`)
         provider = 'sqlite'
-        databaseUrl = DEFAULT_PROD_SQLITE_URL
+        databaseUrl = `file:${FALLBACK_SQLITE_FILE}`
         process.env.DATABASE_URL = databaseUrl
         process.env.DATABASE_PROVIDER = 'sqlite'
         process.env.DIRECT_URL = databaseUrl
