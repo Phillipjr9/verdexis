@@ -84,6 +84,10 @@ if (provider === 'sqlite' && databaseUrl.includes('%')) {
   }
 }
 
+process.env.DATABASE_URL = databaseUrl
+process.env.DATABASE_PROVIDER = provider
+process.env.DIRECT_URL = databaseUrl
+
 console.log('[verdexis-api] Prisma raw DATABASE_PROVIDER env:', rawDatabaseProvider)
 console.log('[verdexis-api] Prisma provider:', provider)
 console.log('[verdexis-api] Prisma database URL:', maskDatabaseUrl(databaseUrl))
@@ -205,6 +209,9 @@ async function ensureConnection() {
         console.warn(`[verdexis-api] Falling back to SQLite because the configured database could not be reached: ${databaseUrl}`)
         provider = 'sqlite'
         databaseUrl = DEFAULT_PROD_SQLITE_URL
+        process.env.DATABASE_URL = databaseUrl
+        process.env.DATABASE_PROVIDER = 'sqlite'
+        process.env.DIRECT_URL = databaseUrl
         prismaClientOptions.datasources.db.url = databaseUrl
         currentPrismaClient = new PrismaClient(prismaClientOptions)
         if (process.env.NODE_ENV !== 'production') {
