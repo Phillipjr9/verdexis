@@ -149,6 +149,25 @@ if (process.env.NODE_ENV !== 'production') {
   global.__prisma = currentPrismaClient
 }
 
+function createPrismaOperationProxy<T extends object>(target: T): T {
+  return new Proxy(target, {
+    get(innerTarget, innerProp, innerReceiver) {
+      const value = Reflect.get(innerTarget, innerProp, innerReceiver)
+      if (typeof value === 'function') {
+        const fn = value as (...args: unknown[]) => unknown
+        return async (...args: unknown[]) => {
+          await waitForDatabaseInitialization()
+          return fn(...args)
+        }
+      }
+      if (value && typeof value === 'object') {
+        return createPrismaOperationProxy(value)
+      }
+      return value
+    },
+  }) as T
+}
+
 // Ensure connection on startup with retries, but do not crash the whole server if
 // the database is unavailable. The app can continue in a degraded local-auth mode.
 let connectionAttempts = 0
@@ -158,34 +177,18 @@ let databaseInitializationPromise: Promise<void> | null = null
 
 export const prisma = new Proxy({} as PrismaClient, {
   get(_target, prop, receiver) {
-    if (dbUnavailable) {
-      if (prop === '$connect') {
-        return async () => {
-          throw createDbUnavailableError('[verdexis-api] Database unavailable; Prisma access is disabled in degraded startup mode')
-        }
+    const value = Reflect.get(currentPrismaClient, prop, receiver)
+    if (typeof value === 'function') {
+      const fn = value as (...args: unknown[]) => unknown
+      return async (...args: unknown[]) => {
+        await waitForDatabaseInitialization()
+        return fn(...args)
       }
-      if (prop === '$disconnect') {
-        return async () => undefined
-      }
-      if (prop === '$queryRaw') {
-        return async () => {
-          throw createDbUnavailableError('[verdexis-api] Database unavailable; Prisma access is disabled in degraded startup mode')
-        }
-      }
-      if (prop === '$transaction') {
-        return async () => {
-          throw createDbUnavailableError('[verdexis-api] Database unavailable; Prisma access is disabled in degraded startup mode')
-        }
-      }
-      if (typeof prop === 'string' && prop.startsWith('$')) {
-        return async () => {
-          throw createDbUnavailableError('[verdexis-api] Database unavailable; Prisma access is disabled in degraded startup mode')
-        }
-      }
-      return createFallbackValue('[verdexis-api] Database unavailable; request skipped until the database is reachable')
     }
-
-    return Reflect.get(currentPrismaClient, prop, receiver)
+    if (value && typeof value === 'object') {
+      return createPrismaOperationProxy(value)
+    }
+    return value
   },
 }) as PrismaClient
 
@@ -229,6 +232,7 @@ async function ensureFallbackDatabaseSeed() {
 }
 
 async function ensureConnection() {
+  dbUnavailable = false
   const dbHost = databaseUrl.match(/@([^:/?]+)/) ? databaseUrl.match(/@([^:/?]+)/)![1] : 'unknown'
   console.log('[verdexis-api] Attempting to connect to database...')
   console.log('[verdexis-api] Database host:', dbHost)
@@ -281,11 +285,15 @@ export function waitForDatabaseInitialization(): Promise<void> {
     return databaseInitializationPromise
   }
 
-  databaseInitializationPromise = ensureConnection().catch(err => {
-    dbUnavailable = true
-    console.warn('[verdexis-api] ⚠️ Database initialization skipped:', err instanceof Error ? err.message : String(err))
-    throw err
-  })
+  databaseInitializationPromise = ensureConnection()
+    .catch(err => {
+      dbUnavailable = true
+      console.warn('[verdexis-api] ⚠️ Database initialization skipped:', err instanceof Error ? err.message : String(err))
+      throw err
+    })
+    .finally(() => {
+      databaseInitializationPromise = null
+    })
 
   return databaseInitializationPromise
 }
