@@ -2,7 +2,7 @@ import 'dotenv/config'
 import dns from 'node:dns'
 dns.setDefaultResultOrder('ipv4first')
 import { env } from './env.js'
-import { prisma } from './db.js'
+import { prisma, waitForDatabaseInitialization } from './db.js'
 import express from 'express'
 import cors from 'cors'
 import cookieParser from 'cookie-parser'
@@ -223,7 +223,7 @@ let ADMIN_BOOTSTRAP_STATUS: 'pending' | 'ready' | 'failed' = 'pending'
 
 async function initializeDatabase(): Promise<void> {
   try {
-    await prisma.$connect()
+    await waitForDatabaseInitialization()
     DB_READY = true
     console.log('[verdexis-api] Database initialized and schema synced')
     await promoteAllAdminEmails()
@@ -240,8 +240,9 @@ app.get('/api/health', async (_req, res) => {
   let dbStatus = DB_READY ? 'Ready' : 'Unavailable'
   if (!DB_READY) {
     try {
-      await prisma.$queryRaw`SELECT 1`
-      dbStatus = 'Connected'
+      await waitForDatabaseInitialization()
+      dbStatus = 'Ready'
+      DB_READY = true
     } catch {
       dbStatus = 'Failed'
     }

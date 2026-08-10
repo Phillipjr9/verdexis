@@ -147,6 +147,7 @@ if (process.env.NODE_ENV !== 'production') {
 let connectionAttempts = 0
 const MAX_RETRIES = 3
 export let dbUnavailable = false
+let databaseInitializationPromise: Promise<void> | null = null
 
 export const prisma = new Proxy({} as PrismaClient, {
   get(_target, prop, receiver) {
@@ -226,11 +227,22 @@ async function ensureConnection() {
   }
 }
 
+export function waitForDatabaseInitialization(): Promise<void> {
+  if (databaseInitializationPromise) {
+    return databaseInitializationPromise
+  }
+
+  databaseInitializationPromise = ensureConnection().catch(err => {
+    dbUnavailable = true
+    console.warn('[verdexis-api] ⚠️ Database initialization skipped:', err instanceof Error ? err.message : String(err))
+    throw err
+  })
+
+  return databaseInitializationPromise
+}
+
 // Start connection attempts without crashing the process.
-ensureConnection().catch(err => {
-  dbUnavailable = true
-  console.warn('[verdexis-api] ⚠️ Database initialization skipped:', err instanceof Error ? err.message : String(err))
-})
+waitForDatabaseInitialization()
 
 // Graceful shutdown handler
 if (typeof process !== 'undefined') {
