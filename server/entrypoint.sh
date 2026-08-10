@@ -27,6 +27,11 @@ run_migrations() {
     fi
   }
 
+  if [ "$DATABASE_PROVIDER" = "sqlite" ] || [ "$DATABASE_URL" = "" ]; then
+    echo "Using SQLite fallback; skipping Prisma migrate deploy"
+    return 0
+  fi
+
   echo "Running Prisma migrations..."
   MAX_RETRIES=3
   RETRY=0
