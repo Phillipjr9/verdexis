@@ -707,8 +707,10 @@ router.post('/login', ensureDbReady, authLimiter, async (req, res) => {
     try {
       user = await findUserByEmailOrUsername(id)
     } catch (dbError) {
+      const errorMessage = dbError instanceof Error ? dbError.message : String(dbError)
+      const errorCode = dbError && typeof dbError === 'object' && 'code' in dbError ? String((dbError as { code?: unknown }).code ?? '') : ''
+      console.error('[verdexis-api] Login lookup failed:', { errorCode, errorMessage, dbError })
       if (!isDbUnavailableError(dbError)) {
-        console.error('[verdexis-api] Database error during login:', dbError)
         res.status(503).json({
           error: 'Service temporarily unavailable',
           detail: 'Database connection issue. Please try again in a moment.',
