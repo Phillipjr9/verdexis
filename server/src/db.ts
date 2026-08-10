@@ -136,10 +136,10 @@ function createFallbackValue(message: string): any {
   })
 }
 
-const actualPrismaClient = global.__prisma || new PrismaClient(prismaClientOptions)
+let currentPrismaClient = global.__prisma || new PrismaClient(prismaClientOptions)
 
 if (process.env.NODE_ENV !== 'production') {
-  global.__prisma = actualPrismaClient
+  global.__prisma = currentPrismaClient
 }
 
 // Ensure connection on startup with retries, but do not crash the whole server if
@@ -148,8 +148,8 @@ let connectionAttempts = 0
 const MAX_RETRIES = 3
 export let dbUnavailable = false
 
-export const prisma = new Proxy(actualPrismaClient, {
-  get(target, prop, receiver) {
+export const prisma = new Proxy({} as PrismaClient, {
+  get(_target, prop, receiver) {
     if (dbUnavailable) {
       if (prop === '$connect') {
         return async () => {
@@ -177,7 +177,7 @@ export const prisma = new Proxy(actualPrismaClient, {
       return createFallbackValue('[verdexis-api] Database unavailable; request skipped until the database is reachable')
     }
 
-    return Reflect.get(target, prop, receiver)
+    return Reflect.get(currentPrismaClient, prop, receiver)
   },
 }) as PrismaClient
 
@@ -191,14 +191,27 @@ async function ensureConnection() {
 
   while (connectionAttempts < MAX_RETRIES) {
     try {
-      await prisma.$connect()
-      await prisma.$queryRaw`SELECT 1`
+      await currentPrismaClient.$connect()
+      await currentPrismaClient.$queryRaw`SELECT 1`
       console.log('[verdexis-api] ✅ Database connected successfully')
       return
     } catch (err) {
       connectionAttempts++
       const errorMsg = err instanceof Error ? err.message : String(err)
       console.warn(`[verdexis-api] ⚠️ Connection attempt ${connectionAttempts}/${MAX_RETRIES} failed: ${errorMsg}`)
+
+      if (provider !== 'sqlite' && process.env.NODE_ENV === 'production') {
+        console.warn(`[verdexis-api] Falling back to SQLite because the configured database could not be reached: ${databaseUrl}`)
+        provider = 'sqlite'
+        databaseUrl = DEFAULT_PROD_SQLITE_URL
+        prismaClientOptions.datasources.db.url = databaseUrl
+        currentPrismaClient = new PrismaClient(prismaClientOptions)
+        if (process.env.NODE_ENV !== 'production') {
+          global.__prisma = currentPrismaClient
+        }
+        console.log('[verdexis-api] Retrying connection with SQLite fallback database at /tmp/verdexis.db')
+        continue
+      }
 
       if (connectionAttempts < MAX_RETRIES) {
         const delay = Math.min(1000 * Math.pow(2, connectionAttempts), 10000)
