@@ -20,11 +20,11 @@ services:
       - key: JWT_EXPIRES_IN
         value: 7d
       - key: CORS_ORIGIN
-        sync: false
+        value: "https://verdexisgroup.com,https://verdexis.pages.dev,https://www.verdexis.pages.dev,https://verdexis-bice.vercel.app,https://verdexis-h97f6m9cl-dianas-projects-32e424a3.vercel.app,https://verdexis-ckgz.onrender.com,http://localhost:5173,http://localhost:3000"
       - key: APP_BASE_URL
-        sync: false
+        value: "https://verdexisgroup.com"
       - key: PRODUCTION_ORIGIN
-        sync: false
+        value: "https://verdexisgroup.com"
       - key: ALERT_POLL_ENABLED
         value: "true"
       - key: ALERT_POLL_INTERVAL_MS
