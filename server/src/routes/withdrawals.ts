@@ -4,7 +4,9 @@ import { z } from 'zod'
 import { prisma } from '../db.js'
 import { requireAuth, requireAdmin, type AuthedRequest } from '../auth.js'
 import { executeCryptoWithdrawal, resolveWithdrawalChain } from '../services/cryptoWithdrawal.js'
+import { recordLedgerTransaction } from '../services/ledger.js'
 import { env } from '../env.js'
+import { idempotency } from '../idempotency.js'
 
 const router = Router()
 
@@ -100,7 +102,13 @@ function validateWithdrawalMethod(method: string): boolean {
   return ['crypto', 'wire', 'check'].includes(method)
 }
 
-router.post('/', requireAuth, moneyLimiter, async (req: AuthedRequest, res) => {
+function getIdempotencyKey(req: AuthedRequest): string | undefined {
+  const raw = req.headers?.['idempotency-key'] ?? req.headers?.['Idempotency-Key']
+  if (!raw) return undefined
+  return Array.isArray(raw) ? raw[0] : String(raw)
+}
+
+router.post('/', requireAuth, moneyLimiter, idempotency(), async (req: AuthedRequest, res) => {
   const parsed = withdrawalSchema.safeParse(req.body)
   if (!parsed.success) {
     res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() })
@@ -232,9 +240,24 @@ router.post('/', requireAuth, moneyLimiter, async (req: AuthedRequest, res) => {
           // Try to consume from walletBalance as a fallback for the demo user.
           const wb = await tx.walletBalance.findUnique({ where: { userId_currency: { userId: req.userId!, currency: normalizedAsset } } })
           if (wb && wb.available >= totalDebit) {
-            // Decrement the wallet balance and ensure a lightweight holding exists so later
-            // refund logic that updates holdings still works.
-            await tx.walletBalance.update({ where: { id: wb.id }, data: { balance: { decrement: totalDebit }, available: { decrement: totalDebit } } })
+            // Reserve funds via the ledger so the wallet balance remains the source
+            // of truth and pending withdrawals are reflected in the available amount.
+            await recordLedgerTransaction({
+              tx,
+              userId: req.userId!,
+              asset: normalizedAsset,
+              amount: totalDebit,
+              entryType: 'credit',
+              kind: 'withdrawal',
+              eventType: 'withdrawal_request',
+              sourceType: 'withdrawal_request',
+              sourceId: `withdrawal_request:${req.userId!}:${normalizedAsset}:${targetAddress}:${totalDebit}`,
+              externalRef: `withdrawal_request:${req.userId!}:${normalizedAsset}:${targetAddress}:${totalDebit}`,
+              idempotencyKey: getIdempotencyKey(req),
+              description: `Withdrawal request ${normalizedAsset}`,
+              reference: `Withdrawal request ${normalizedAsset}`,
+              pending: true,
+            })
 
             const existingHolding = await tx.holding.findUnique({
               where: { userId_symbol: { userId: req.userId!, symbol: normalizedAsset } },
@@ -499,25 +522,22 @@ router.put('/admin/:id/approve', requireAuth, requireAdmin, async (req: AuthedRe
 
       // Credit processing fee back to user in the same asset it was charged
       if (withdrawal.fee && withdrawal.fee > 0) {
-        const feeBalance = await tx.walletBalance.findUnique({
-          where: { userId_currency: { userId: withdrawal.userId, currency: withdrawal.asset } },
+        await recordLedgerTransaction({
+          tx,
+          userId: withdrawal.userId,
+          asset: withdrawal.asset,
+          amount: withdrawal.fee,
+          entryType: 'debit',
+          kind: 'deposit',
+          eventType: 'withdrawal_fee_refund',
+          sourceType: 'withdrawal_fee_refund',
+          sourceId: `withdrawal_fee_refund:${withdrawal.id}`,
+          externalRef: `withdrawal_fee_refund:${withdrawal.id}`,
+          description: `Withdrawal fee refund for ${withdrawal.asset}`,
+          reference: `Withdrawal fee refund for ${withdrawal.asset}`,
+          subType: 'fee_refund',
+          recordTransaction: true,
         })
-        if (feeBalance) {
-          await tx.walletBalance.update({
-            where: { id: feeBalance.id },
-            data: { available: { increment: withdrawal.fee } },
-          })
-        } else {
-          await tx.walletBalance.create({
-            data: {
-              userId: withdrawal.userId,
-              currency: withdrawal.asset,
-              symbol: withdrawal.asset,
-              balance: withdrawal.fee,
-              available: withdrawal.fee,
-            },
-          })
-        }
       }
 
       // Notify user
@@ -575,15 +595,22 @@ router.put('/admin/:id/reject', requireAuth, requireAdmin, async (req: AuthedReq
       })
 
       // Refund balance and fee
-      const balance = await tx.walletBalance.findUnique({
-        where: { userId_currency: { userId: withdrawal.userId, currency: withdrawal.asset } },
+      await recordLedgerTransaction({
+        tx,
+        userId: withdrawal.userId,
+        asset: withdrawal.asset,
+        amount: withdrawal.amount + (withdrawal.fee ?? 0),
+        entryType: 'debit',
+        kind: 'deposit',
+        eventType: 'withdrawal_reject',
+        sourceType: 'withdrawal_reject',
+        sourceId: `withdrawal_reject:${withdrawal.id}`,
+        externalRef: `withdrawal_reject:${withdrawal.id}`,
+        description: `Withdrawal rejected refund for ${withdrawal.asset}`,
+        reference: `Withdrawal rejected refund for ${withdrawal.asset}`,
+        subType: 'withdrawal_reject',
+        recordTransaction: true,
       })
-      if (balance) {
-        await tx.walletBalance.update({
-          where: { id: balance.id },
-          data: { available: balance.available + withdrawal.amount + (withdrawal.fee ?? 0) },
-        })
-      }
 
       // Notify user
       await tx.notification.create({

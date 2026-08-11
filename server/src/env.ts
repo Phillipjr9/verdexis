@@ -15,11 +15,13 @@ const schema = z.object({
   JWT_EXPIRES_IN: z.string().default('7d'),
   CORS_ORIGIN: z.string().default('http://localhost:5173,http://localhost:3000'),
   APP_BASE_URL: z.string().default('http://localhost:5173'),
+  APP_URL: z.string().default('https://www.verdexisgroup.com'),
   PRODUCTION_ORIGIN: z.string().optional(),
   ALERT_POLL_ENABLED: z.coerce.boolean().default(true),
   ALERT_POLL_INTERVAL_MS: z.coerce.number().int().min(15_000).default(60_000),
   // Comma-separated list of emails that auto-promote to admin on next login.
-  ADMIN_EMAILS: z.string().default('admin@verdexis.com'),
+  ADMIN_EMAILS: z.string().default('admin@verdexisgroup.com'),
+  ADMIN_EMAIL: z.string().email().default('admin@verdexisgroup.com'),
   // Optional seed password for the initial super-admin bootstrap.
   ADMIN_SEED_PASSWORD: z.string().optional(),
   // Optional admin API secret for machine-to-machine admin calls (set in prod)
@@ -57,6 +59,8 @@ const schema = z.object({
   TWELVE_DATA_API_KEY: z.string().optional(),
   // Optional NewsAPI.org key — server-side aggregator used by the News page.
   NEWS_API_KEY: z.string().optional(),
+  OPENAI_API_KEY: z.string().optional(),
+  VERCEL_AI_KEY: z.string().optional(),
   // Self-ping keep-alive (defeats Render/Railway free-tier sleep).
   // KEEP_ALIVE_URL overrides the auto-detected public URL. Set
   // KEEP_ALIVE_ENABLED=false to disable. Interval defaults to 10 min
@@ -74,6 +78,12 @@ const schema = z.object({
   SMTP_FROM_NAME: z.string().optional(),
   SMTP_REPLY_TO: z.string().optional(),
   SMTP_UNSUBSCRIBE_URL: z.string().optional(),
+  EMAIL_PROVIDER: z.string().optional(),
+  EMAIL_API_KEY: z.string().optional(),
+  EMAIL_FROM_NAME: z.string().default('Verdexis'),
+  EMAIL_FROM_ADDRESS: z.string().email().default('no-reply@verdexisgroup.com'),
+  ADMIN_EMAIL_ADDRESS: z.string().email().default('admin@verdexisgroup.com'),
+  EMAIL_REPLY_TO: z.string().optional(),
   // SMS configuration for OTP delivery
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),
@@ -160,6 +170,8 @@ const envSummary = {
   FIREBASE_DB_LISTEN_PATH: parsed.data.FIREBASE_DB_LISTEN_PATH,
   GOOGLE_GENAI_API_KEY_SET: !!parsed.data.GOOGLE_GENAI_API_KEY,
   REDIS_URL_SET: !!process.env.REDIS_URL,
+  OPENAI_API_KEY_SET: !!process.env.OPENAI_API_KEY,
+  VERCEL_AI_KEY_SET: !!process.env.VERCEL_AI_KEY,
   ETHEREUM_RPC_ENDPOINT_SET: !!parsed.data.ETHEREUM_RPC_ENDPOINT,
   SOLANA_RPC_ENDPOINT_SET: !!parsed.data.SOLANA_RPC_ENDPOINT,
   BSC_RPC_ENDPOINT_SET: !!parsed.data.BSC_RPC_ENDPOINT,

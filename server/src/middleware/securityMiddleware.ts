@@ -75,16 +75,18 @@ export const preventClickjacking = (_req: Request, res: Response, next: NextFunc
   next()
 }
 
+import { header as getHeader } from '../utils/headers.js'
+
 export const enforceHttps = (req: Request, res: Response, next: NextFunction) => {
-  if (process.env.NODE_ENV === 'production' && req.header('x-forwarded-proto') !== 'https') {
-    return res.redirect(301, 'https://' + req.header('host') + req.url)
+  if (process.env.NODE_ENV === 'production' && getHeader(req, 'x-forwarded-proto') !== 'https') {
+    return res.redirect(301, 'https://' + getHeader(req, 'host') + req.url)
   }
   next()
 }
 
 export const validateRequestSize = (req: Request, res: Response, next: NextFunction) => {
   const maxSize = 10 * 1024 * 1024
-  const contentLength = parseInt(req.header('content-length') || '0', 10)
+  const contentLength = parseInt(getHeader(req, 'content-length') || '0', 10)
   if (contentLength > maxSize) {
     return res.status(413).json({ error: 'Payload too large' })
   }
@@ -93,7 +95,7 @@ export const validateRequestSize = (req: Request, res: Response, next: NextFunct
 
 export const validateContentType = (req: Request, res: Response, next: NextFunction) => {
   if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
-    const contentType = req.header('content-type') || ''
+    const contentType = getHeader(req, 'content-type') || ''
     const isJson = contentType.includes('application/json')
     const isMultipart = contentType.includes('multipart/form-data')
     const isFormEncoded = contentType.includes('application/x-www-form-urlencoded')
@@ -140,7 +142,7 @@ export const trackSuspiciousActivity = (req: Request, res: Response, next: NextF
 }
 
 export const validateApiKey = (req: Request, res: Response, next: NextFunction) => {
-  const apiKey = req.header('x-api-key')
+  const apiKey = getHeader(req, 'x-api-key')
   if (!apiKey) return next()
   if (!/^[a-zA-Z0-9]{32,}$/.test(apiKey)) {
     return res.status(401).json({ error: 'Invalid API key format' })

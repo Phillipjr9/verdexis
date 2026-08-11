@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../db.js'
 import { requireAuth, type AuthedRequest } from '../auth.js'
+import { recordLedgerBalanceReservation, recordLedgerTransaction } from '../services/ledger.js'
 
 const router = Router()
 
@@ -42,10 +43,22 @@ router.post('/positions', requireAuth, async (req: AuthedRequest, res) => {
         },
       })
 
-      // Lock balance
-      await tx.walletBalance.update({
-        where: { id: balance.id },
-        data: { available: balance.available - amount },
+      // Lock balance via ledger reservation
+      await recordLedgerBalanceReservation({
+        tx,
+        userId: req.userId!,
+        asset,
+        amount,
+        action: 'lock',
+        kind: 'staking',
+        eventType: 'staking_lock',
+        sourceType: 'staking_position',
+        sourceId: position.id,
+        externalRef: `staking_lock:${position.id}`,
+        idempotencyKey: `staking_lock:${position.id}`,
+        description: `Lock funds for staking position ${position.id}`,
+        reference: `Staking lock ${position.id}`,
+        createdBy: req.userId!,
       })
 
       // Create transaction record
@@ -141,16 +154,23 @@ router.post('/positions/:id/unstake', requireAuth, async (req: AuthedRequest, re
         data: { unstakedAt: new Date() },
       })
 
-      // Unlock balance
-      const balance = await tx.walletBalance.findUnique({
-        where: { userId_currency: { userId: req.userId!, currency: position.asset } },
+      // Unlock balance via ledger reservation
+      await recordLedgerBalanceReservation({
+        tx,
+        userId: req.userId!,
+        asset: position.asset,
+        amount: position.amount,
+        action: 'unlock',
+        kind: 'unstaking',
+        eventType: 'staking_unlock',
+        sourceType: 'staking_position',
+        sourceId: position.id,
+        externalRef: `staking_unlock:${position.id}`,
+        idempotencyKey: `staking_unlock:${position.id}`,
+        description: `Unlock funds for staking position ${position.id}`,
+        reference: `Staking unlock ${position.id}`,
+        createdBy: req.userId!,
       })
-      if (balance) {
-        await tx.walletBalance.update({
-          where: { id: balance.id },
-          data: { available: balance.available + position.amount },
-        })
-      }
 
       // Create transaction record
       await tx.transaction.create({
@@ -237,41 +257,28 @@ router.post('/rewards/:id/claim', requireAuth, async (req: AuthedRequest, res) =
         data: { claimedAt: new Date() },
       })
 
-      // Add to balance
-      const balance = await tx.walletBalance.findUnique({
-        where: { userId_currency: { userId: req.userId!, currency: reward.asset } },
+      const ledgerResult = await recordLedgerTransaction({
+        tx,
+        userId: req.userId!,
+        asset: reward.asset,
+        amount: reward.amount,
+        entryType: 'debit',
+        kind: 'yield_claim',
+        eventType: 'yield_claim',
+        sourceType: 'yield_reward',
+        sourceId: reward.id,
+        externalRef: `yield_claim:${reward.id}`,
+        idempotencyKey: `yield_claim:${reward.id}`,
+        description: `Claim yield reward ${reward.id}`,
+        reference: `Yield claim ${reward.id}`,
+        subType: 'yield_claim',
+        recordTransaction: true,
+        createdBy: req.userId!,
       })
-      if (balance) {
-        await tx.walletBalance.update({
-          where: { id: balance.id },
-          data: {
-            balance: balance.balance + reward.amount,
-            available: balance.available + reward.amount,
-          },
-        })
-      } else {
-        await tx.walletBalance.create({
-          data: {
-            userId: req.userId!,
-            currency: reward.asset,
-            symbol: reward.asset,
-            balance: reward.amount,
-            available: reward.amount,
-          },
-        })
-      }
 
-      // Create transaction record
-      await tx.transaction.create({
-        data: {
-          userId: req.userId!,
-          kind: 'yield_claim',
-          currency: reward.asset,
-          amount: reward.amount,
-          status: 'completed',
-          reference: reward.id,
-        },
-      })
+      // Create transaction record is handled by ledger helper, but preserve
+      // the same response shape via ledgerResult.transaction.
+      void ledgerResult.transaction
 
       // Notify user
       await tx.notification.create({

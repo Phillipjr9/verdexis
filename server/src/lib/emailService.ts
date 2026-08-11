@@ -2,6 +2,8 @@ import nodemailer from 'nodemailer'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { customerEmailAddress, customerEmailFooter, customerEmailName, emailLinks, emailReplyTo, formatEmailAddress } from '../config/email.js'
+import { sendEmailNotification } from '../notificationService.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -28,9 +30,9 @@ const DEFAULT_CONFIG: EmailConfig = {
     user: process.env.SMTP_USER || '',
     pass: process.env.SMTP_PASS || '',
   },
-  from: process.env.SMTP_FROM || 'noreply@verdexis.com',
-  fromName: process.env.SMTP_FROM_NAME || 'Verdexis',
-  replyTo: process.env.SMTP_REPLY_TO || '',
+  from: customerEmailAddress,
+  fromName: customerEmailName,
+  replyTo: emailReplyTo || '',
   unsubscribeUrl: process.env.SMTP_UNSUBSCRIBE_URL || '',
 }
 
@@ -138,53 +140,29 @@ export class EmailService {
       USER_EMAIL: to,
       COMPANY_NAME: 'Verdexis',
       COMPANY_ADDRESS: '123 Finance Way, New York, NY 10001',
-      SECURITY_LINK: 'https://verdexis.com/security',
-      PRIVACY_LINK: 'https://verdexis.com/privacy',
-      TERMS_LINK: 'https://verdexis.com/terms',
-      CONTACT_LINK: 'https://verdexis.com/contact',
-      SECURITY_ALERT_URL: 'https://verdexis.com/security/alert',
-      HELP_VERIFICATION_URL: 'https://verdexis.com/help/verification',
-      CONTACT_SUPPORT_URL: 'https://verdexis.com/support',
+      SECURITY_LINK: emailLinks.security,
+      PRIVACY_LINK: emailLinks.privacy,
+      TERMS_LINK: emailLinks.terms,
+      CONTACT_LINK: emailLinks.support,
+      SECURITY_ALERT_URL: `${emailLinks.security}/alert`,
+      HELP_VERIFICATION_URL: `${emailLinks.support}/verification`,
+      CONTACT_SUPPORT_URL: emailLinks.support,
       ...Object.entries(metadata).reduce((acc, [key, value]) => {
         acc[key.toUpperCase()] = String(value)
         return acc
       }, {} as Record<string, string>),
     }
 
-    const html = this.replaceVariables(template, variables)
+    const renderedHtml = this.replaceVariables(template, variables)
+    const html = renderedHtml.replace(/<\/body>/i, `${customerEmailFooter()}</body>`)
 
     try {
-      const headers: Record<string, string> = {
-        'X-Mailer': 'Verdexis',
-        // Mark as not an auto-reply to improve filtering
-        'Auto-Submitted': 'no',
-      }
-
-      if (this.config.replyTo) {
-        headers['Reply-To'] = this.config.replyTo
-      }
-
-      if (this.config.unsubscribeUrl) {
-        headers['List-Unsubscribe'] = `<${this.config.unsubscribeUrl}>`
-        headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click'
-      }
-
-      // Use the authenticated SMTP user as envelope/from to avoid alignment issues when a custom domain
-      // is not available (e.g. Mailgun sandbox or provider-owned domains).
-      const envelopeFrom = this.config.auth?.user || this.config.from
-      headers['Sender'] = envelopeFrom
-
-      await this.transporter.sendMail({
-        from: this.config.fromName ? `${this.config.fromName} <${envelopeFrom}>` : envelopeFrom,
+      return await sendEmailNotification(
         to,
-        replyTo: this.config.replyTo,
-        subject: `🔐 ${title} - Verdexis`,
+        `🔐 ${title} - Verdexis`,
+        `${message}\n\nYour verification code: ${otp}\n\nThis code expires in ${expirationMinutes} minutes.\n\n© ${new Date().getFullYear()} Verdexis`,
         html,
-        text: `${message}\n\nYour verification code: ${otp}\n\nThis code expires in ${expirationMinutes} minutes.\n\n© ${new Date().getFullYear()} Verdexis`,
-        headers,
-        envelope: { from: envelopeFrom, to },
-      })
-      return true
+      )
     } catch (error) {
       console.error('[EmailService] Failed to send email:', error)
       return false

@@ -8,6 +8,14 @@ import { requireAuth, requireAdmin, type AuthedRequest } from '../auth.js'
 import { idempotency } from '../idempotency.js'
 import { sendError, VALIDATION_LIMITS, isValidSymbol, isValidAmount, isValidCurrency } from '../errorHandler.js'
 import { buildTemporaryFundingTransferResult } from '../services/cryptoWithdrawal.js'
+import { recordLedgerTransaction } from '../services/ledger.js'
+import { alertAdminsOfDeposit } from '../services/depositAlerts.js'
+
+function getIdempotencyKey(req: AuthedRequest): string | undefined {
+  const raw = req.headers?.['idempotency-key'] ?? req.headers?.['Idempotency-Key']
+  if (!raw) return undefined
+  return Array.isArray(raw) ? raw[0] : String(raw)
+}
 
 const router = Router()
 
@@ -145,6 +153,22 @@ const txSchema = z.object({
   symbol: z.string().min(1).max(8).default('$'),
   amount: z.number().positive().min(VALIDATION_LIMITS.MIN_AMOUNT).max(VALIDATION_LIMITS.MAX_AMOUNT),
   reference: z.string().max(VALIDATION_LIMITS.REFERENCE_MAX).optional(),
+})
+
+const convertSchema = z.object({
+  fromCurrency: z.string().min(1).max(VALIDATION_LIMITS.CURRENCY_LENGTH),
+  fromAmount: z.number().positive().min(VALIDATION_LIMITS.MIN_AMOUNT).max(VALIDATION_LIMITS.MAX_AMOUNT),
+  fromSymbol: z.string().min(1).max(VALIDATION_LIMITS.SYMBOL_LENGTH),
+  toCurrency: z.string().min(1).max(VALIDATION_LIMITS.CURRENCY_LENGTH),
+  toAmount: z.number().positive().min(VALIDATION_LIMITS.MIN_AMOUNT).max(VALIDATION_LIMITS.MAX_AMOUNT),
+  toSymbol: z.string().min(1).max(VALIDATION_LIMITS.SYMBOL_LENGTH),
+})
+
+const swapSchema = z.object({
+  fromCurrency: z.string().min(1).max(VALIDATION_LIMITS.CURRENCY_LENGTH),
+  toCurrency: z.string().min(1).max(VALIDATION_LIMITS.CURRENCY_LENGTH),
+  amount: z.number().positive().min(VALIDATION_LIMITS.MIN_AMOUNT).max(VALIDATION_LIMITS.MAX_AMOUNT),
+  slippage: z.number().min(0).max(50).optional().default(1),
 })
 
 // Transaction kinds that *credit* the wallet. Only admins can post these
@@ -301,49 +325,26 @@ router.post('/transactions', requireAuth, moneyLimiter, idempotency(), async (re
       return { transaction, pendingApproval: true as const }
     }
 
-    const existing = await tx.walletBalance.findUnique({
-      where: { userId_currency: { userId: req.userId!, currency } },
-    })
-    const current = existing?.available ?? 0
-    let nextBalance = existing?.balance ?? 0
-    let nextAvailable = current
-
-    if (kind === 'deposit' || kind === 'dividend' || kind === 'interest') {
-      nextBalance += amount
-      nextAvailable += amount
-    } else {
-      // withdraw or transfer both decrement
-      if (current < amount) {
-        throw Object.assign(new Error('Insufficient funds'), { status: 400 })
-      }
-      nextBalance -= amount
-      nextAvailable -= amount
-    }
-
-    const balance = await tx.walletBalance.upsert({
-      where: { userId_currency: { userId: req.userId!, currency } },
-      create: {
-        userId: req.userId!,
-        currency,
-        symbol,
-        balance: nextBalance,
-        available: nextAvailable,
-      },
-      update: { balance: nextBalance, available: nextAvailable, symbol },
+    const entryType = kind === 'withdraw' || kind === 'transfer' ? 'credit' : 'debit'
+    const result = await recordLedgerTransaction({
+      tx,
+      userId: req.userId!,
+      asset: currency,
+      amount,
+      entryType,
+      kind,
+      eventType: `wallet_${kind}`,
+      sourceType: 'wallet_transaction',
+      sourceId: `wallet:${req.userId}:${kind}:${currency}:${amount}:${reference ?? 'no-ref'}`,
+      externalRef: `wallet-transaction:${req.userId}:${kind}:${currency}:${amount}:${reference ?? 'no-ref'}`,
+      idempotencyKey: getIdempotencyKey(req),
+      description: reference ? `${kind} ${reference}` : `${kind} ${currency}`,
+      reference: reference ?? undefined,
+      subType: kind,
+      recordTransaction: true,
     })
 
-    const transaction = await tx.transaction.create({
-      data: {
-        userId: req.userId!,
-        kind,
-        currency,
-        amount,
-        reference: reference ?? null,
-        status: 'completed',
-      },
-    })
-
-    return { balance, transaction }
+    return { balance: result.walletBalance, transaction: result.transaction }
   }).catch((err: Error & { status?: number }) => {
     return { error: err.message, status: err.status || 500 }
   })
@@ -352,29 +353,14 @@ router.post('/transactions', requireAuth, moneyLimiter, idempotency(), async (re
     res.status(result.status || 500).json({ error: result.error })
     return
   }
+  if ('pendingApproval' in result && result.pendingApproval) {
+    // Regular transaction deposits use the existing admin deposit queue. The
+    // email action route is reserved for pending on-chain deposit records.
+  }
   res.status(201).json(result)
 })
 
 // --- Internal USD <-> Crypto conversion --------------------------------
-// Atomically swap one currency for another inside a user's own wallet.
-// Both legs are recorded as `transfer` (completed) so neither side sits in
-// the deposit-approval queue. Funds never leave the platform.
-const convertSchema = z.object({
-  fromCurrency: z.string().min(1).max(VALIDATION_LIMITS.CURRENCY_LENGTH),
-  fromAmount: z.number().positive().min(VALIDATION_LIMITS.MIN_AMOUNT).max(VALIDATION_LIMITS.MAX_AMOUNT),
-  fromSymbol: z.string().min(1).max(8).default('$'),
-  toCurrency: z.string().min(1).max(VALIDATION_LIMITS.CURRENCY_LENGTH),
-  toAmount: z.number().positive().min(VALIDATION_LIMITS.MIN_AMOUNT).max(VALIDATION_LIMITS.MAX_AMOUNT),
-  toSymbol: z.string().min(1).max(8).default('$'),
-})
-
-const swapSchema = z.object({
-  fromCurrency: z.string().min(1).max(VALIDATION_LIMITS.CURRENCY_LENGTH),
-  toCurrency: z.string().min(1).max(VALIDATION_LIMITS.CURRENCY_LENGTH),
-  amount: z.number().positive().min(VALIDATION_LIMITS.MIN_AMOUNT).max(VALIDATION_LIMITS.MAX_AMOUNT),
-  slippage: z.number().min(0).max(50).optional().default(1),
-})
-
 router.post('/convert', requireAuth, moneyLimiter, idempotency(), async (req: AuthedRequest, res) => {
   const parsed = convertSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input' }); return }
@@ -418,43 +404,47 @@ router.post('/convert', requireAuth, moneyLimiter, idempotency(), async (req: Au
     if (!src || src.available < fromAmount) {
       throw Object.assign(new Error(`Insufficient ${fromCurrency} balance`), { status: 400 })
     }
-    await tx.walletBalance.update({
-      where: { userId_currency: { userId: req.userId!, currency: fromCurrency } },
-      data: { balance: src.balance - fromAmount, available: src.available - fromAmount },
+
+    const debit = await recordLedgerTransaction({
+      tx,
+      userId: req.userId!,
+      asset: fromCurrency,
+      amount: fromAmount,
+      entryType: 'credit',
+      kind: 'transfer',
+      eventType: 'wallet_convert',
+      sourceType: 'wallet_convert',
+      sourceId: `convert:${req.userId}:${fromCurrency}:${toCurrency}:${fromAmount}:out`,
+      externalRef: `convert:${req.userId}:${fromCurrency}:${toCurrency}:${fromAmount}:out`,
+      idempotencyKey: getIdempotencyKey(req),
+      description: `Convert ${fromCurrency} → ${toCurrency}`,
+      reference: `Convert ${fromCurrency} → ${toCurrency}`,
+      subType: 'convert',
+      recordTransaction: true,
     })
-    await tx.walletBalance.upsert({
-      where: { userId_currency: { userId: req.userId!, currency: toCurrency } },
-      create: { userId: req.userId!, currency: toCurrency, symbol: toSymbol, balance: toAmount, available: toAmount },
-      update: { balance: { increment: toAmount }, available: { increment: toAmount }, symbol: toSymbol },
+
+    const credit = await recordLedgerTransaction({
+      tx,
+      userId: req.userId!,
+      asset: toCurrency,
+      amount: toAmount,
+      entryType: 'debit',
+      kind: 'transfer',
+      eventType: 'wallet_convert',
+      sourceType: 'wallet_convert',
+      sourceId: `convert:${req.userId}:${fromCurrency}:${toCurrency}:${toAmount}:in`,
+      externalRef: `convert:${req.userId}:${fromCurrency}:${toCurrency}:${toAmount}:in`,
+      idempotencyKey: getIdempotencyKey(req),
+      description: `Convert ${fromCurrency} → ${toCurrency}`,
+      reference: `Convert ${fromCurrency} → ${toCurrency}`,
+      subType: 'convert',
+      recordTransaction: true,
     })
-    const debit = await tx.transaction.create({
-      data: {
-        userId: req.userId!,
-        kind: 'transfer',
-        currency: fromCurrency,
-        // Outgoing leg recorded as a negative amount so Recent Activity
-        // and history views render it as a debit (red, with "-" prefix).
-        amount: -Math.abs(fromAmount),
-        reference: `Convert ${fromCurrency} → ${toCurrency}`,
-        status: 'completed',
-        subType: 'convert',
-      },
-    })
-    const credit = await tx.transaction.create({
-      data: {
-        userId: req.userId!,
-        kind: 'transfer',
-        currency: toCurrency,
-        amount: toAmount,
-        reference: `Convert ${fromCurrency} → ${toCurrency}`,
-        status: 'completed',
-        subType: 'convert',
-      },
-    })
-    return { debit, credit }
+
     // fromSymbol kept on the request for future use / symmetry; not stored
     // separately because the existing source balance row already has it.
     void fromSymbol
+    return { debit: debit.transaction, credit: credit.transaction }
   }).catch((err: Error & { status?: number }) => ({ error: err.message, status: err.status || 500 }))
 
   if ('error' in result) {
@@ -509,22 +499,44 @@ router.post('/swap', requireAuth, moneyLimiter, idempotency(), async (req: Authe
     const usdValue = amount * fromRate
     const toAmount = usdValue / toRate
     const slippageAdjusted = toAmount * (1 - slippage / 100)
-    await tx.walletBalance.update({
-      where: { userId_currency: { userId: req.userId!, currency: fromCurrency } },
-      data: { balance: src.balance - amount, available: src.available - amount },
+
+    const debit = await recordLedgerTransaction({
+      tx,
+      userId: req.userId!,
+      asset: fromCurrency,
+      amount,
+      entryType: 'credit',
+      kind: 'transfer',
+      eventType: 'wallet_swap',
+      sourceType: 'wallet_swap',
+      sourceId: `swap:${req.userId}:${fromCurrency}:${toCurrency}:${amount}:out`,
+      externalRef: `swap:${req.userId}:${fromCurrency}:${toCurrency}:${amount}:out`,
+      idempotencyKey: getIdempotencyKey(req),
+      description: `Swap ${fromCurrency}→${toCurrency}`,
+      reference: `Swap ${fromCurrency}→${toCurrency}`,
+      subType: 'swap',
+      recordTransaction: true,
     })
-    await tx.walletBalance.upsert({
-      where: { userId_currency: { userId: req.userId!, currency: toCurrency } },
-      create: { userId: req.userId!, currency: toCurrency, symbol: toCurrency, balance: slippageAdjusted, available: slippageAdjusted },
-      update: { balance: { increment: slippageAdjusted }, available: { increment: slippageAdjusted } },
+
+    const credit = await recordLedgerTransaction({
+      tx,
+      userId: req.userId!,
+      asset: toCurrency,
+      amount: slippageAdjusted,
+      entryType: 'debit',
+      kind: 'transfer',
+      eventType: 'wallet_swap',
+      sourceType: 'wallet_swap',
+      sourceId: `swap:${req.userId}:${fromCurrency}:${toCurrency}:${slippageAdjusted}:in`,
+      externalRef: `swap:${req.userId}:${fromCurrency}:${toCurrency}:${slippageAdjusted}:in`,
+      idempotencyKey: getIdempotencyKey(req),
+      description: `Swap ${fromCurrency}→${toCurrency}`,
+      reference: `Swap ${fromCurrency}→${toCurrency}`,
+      subType: 'swap',
+      recordTransaction: true,
     })
-    const debit = await tx.transaction.create({
-      data: { userId: req.userId!, kind: 'transfer', currency: fromCurrency, amount: -amount, reference: `Swap ${fromCurrency}→${toCurrency}`, status: 'completed', subType: 'swap' },
-    })
-    const credit = await tx.transaction.create({
-      data: { userId: req.userId!, kind: 'transfer', currency: toCurrency, amount: slippageAdjusted, reference: `Swap ${fromCurrency}→${toCurrency}`, status: 'completed', subType: 'swap' },
-    })
-    return { debit, credit, rate: fromRate / toRate, received: slippageAdjusted }
+
+    return { debit: debit.transaction, credit: credit.transaction, rate: fromRate / toRate, received: slippageAdjusted }
   }).catch((err: Error & { status?: number }) => ({ error: err.message, status: err.status || 500 }))
 
   if ('error' in result) {
@@ -648,26 +660,47 @@ router.post('/transfer', requireAuth, moneyLimiter, idempotency(), async (req: A
     }
     const symbol = senderBal.symbol
 
-    await tx.walletBalance.update({
-      where: { userId_currency: { userId: req.userId!, currency } },
-      data: { balance: senderBal.balance - amount, available: senderBal.available - amount },
-    })
-    await tx.walletBalance.upsert({
-      where: { userId_currency: { userId: recipient.id, currency } },
-      create: { userId: recipient.id, currency, symbol, balance: amount, available: amount },
-      update: { balance: { increment: amount }, available: { increment: amount } },
-    })
-
     const recipientLabel = recipient.name?.trim() || recipient.email
     const senderLabel = sender?.name?.trim() || sender?.email || 'a Verdexis user'
     const ref = `Transfer to ${recipientLabel}${note ? ' — ' + note : ''}`
     const incomingRef = `Transfer from ${senderLabel}${note ? ' — ' + note : ''}`
-    const out = await tx.transaction.create({
-      data: { userId: req.userId!, kind: 'transfer', currency, amount: -Math.abs(amount), reference: ref, status: 'completed' },
+
+    const out = await recordLedgerTransaction({
+      tx,
+      userId: req.userId!,
+      asset: currency,
+      amount,
+      entryType: 'credit',
+      kind: 'transfer',
+      eventType: 'user_transfer',
+      sourceType: 'user_transfer',
+      sourceId: `transfer:${req.userId}:${recipient.id}:${currency}:${amount}:out`,
+      externalRef: `user-transfer:${req.userId}:${recipient.id}:${currency}:${amount}:out`,
+      idempotencyKey: getIdempotencyKey(req),
+      description: ref,
+      reference: ref,
+      subType: 'user_transfer',
+      recordTransaction: true,
     })
-    const incoming = await tx.transaction.create({
-      data: { userId: recipient.id, kind: 'deposit', currency, amount, reference: incomingRef, status: 'completed', subType: 'user_transfer' },
+
+    const incoming = await recordLedgerTransaction({
+      tx,
+      userId: recipient.id,
+      asset: currency,
+      amount,
+      entryType: 'debit',
+      kind: 'deposit',
+      eventType: 'user_transfer',
+      sourceType: 'user_transfer',
+      sourceId: `transfer:${req.userId}:${recipient.id}:${currency}:${amount}:in`,
+      externalRef: `user-transfer:${req.userId}:${recipient.id}:${currency}:${amount}:in`,
+      idempotencyKey: getIdempotencyKey(req),
+      description: incomingRef,
+      reference: incomingRef,
+      subType: 'user_transfer',
+      recordTransaction: true,
     })
+
     await tx.notification.create({
       data: {
         userId: recipient.id,
@@ -676,7 +709,7 @@ router.post('/transfer', requireAuth, moneyLimiter, idempotency(), async (req: A
         body: `${senderLabel} sent you ${amount} ${currency}${note ? ' — ' + note : ''}.`,
       },
     })
-    return { out, incoming, recipient: { email: recipient.email, name: recipient.name } }
+    return { out: out.transaction, incoming: incoming.transaction, recipient: { email: recipient.email, name: recipient.name } }
   }).catch((err: Error & { status?: number }) => ({ error: err.message, status: err.status || 500 }))
 
   if ('error' in result) {
@@ -923,13 +956,14 @@ const pendingDepositSchema = z.object({
   amount: z.number().positive().max(1_000_000),
 })
 
-router.post('/pending-deposits', requireAuth, moneyLimiter, async (req: AuthedRequest, res) => {
+router.post('/pending-deposits', requireAuth, moneyLimiter, idempotency(), async (req: AuthedRequest, res) => {
   const parsed = pendingDepositSchema.safeParse(req.body)
   if (!parsed.success) {
     res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() })
     return
   }
-  const txHash = parsed.data.txHash?.trim() || `0x${crypto.randomBytes(32).toString('hex')}`
+  const submittedTxHash = parsed.data.txHash?.trim()
+  const txHash = submittedTxHash || `0x${crypto.randomBytes(32).toString('hex')}`
   const data = {
     userId: req.userId!,
     txHash: txHash.toLowerCase(),
@@ -938,7 +972,7 @@ router.post('/pending-deposits', requireAuth, moneyLimiter, async (req: AuthedRe
     fromAddress: (parsed.data.fromAddress || 'external-wallet').toLowerCase(),
     asset: parsed.data.asset.toUpperCase(),
     amount: parsed.data.amount,
-    status: 'completed',
+    status: 'pending',
   }
   try {
     const row = await prisma.pendingDeposit.create({ data })
@@ -948,15 +982,16 @@ router.post('/pending-deposits', requireAuth, moneyLimiter, async (req: AuthedRe
       destinationAddress: data.toAddress,
       chain: data.chainId,
     })
-    // Fire a notification so the user sees the completed external-wallet funding state in the bell.
+    // Notify the user that the deposit is queued; funds are not credited yet.
     await prisma.notification.create({
       data: {
         userId: req.userId!,
         kind: 'deposit',
-        title: `Funding submitted: ${data.amount} ${data.asset}`,
-        body: transfer.message,
+        title: `Deposit pending approval: ${data.amount} ${data.asset}`,
+        body: `${transfer.message} Funds will be credited after admin confirmation.`,
       },
     })
+    await alertAdminsOfDeposit(req.userId!, data.amount, data.asset, row.id, `Pending deposit ${row.id}; transaction ${data.txHash}.`)
     res.status(201).json({ pendingDeposit: row, transfer })
   } catch (err) {
     // Most likely the unique tx-hash collision (user retried).

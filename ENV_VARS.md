@@ -28,7 +28,9 @@ Fill in the values (keep secrets out of source control). Use the Vercel dashboar
 - SMTP_USER: <smtp_user>
 - SMTP_PASS: <smtp_pass>
 - SMTP_SECURE: 'true' or 'false'
-- SMTP_FROM: noreply@yourdomain.com
+- EMAIL_FROM_ADDRESS: no-reply@verdexisgroup.com
+- EMAIL_FROM_NAME: Verdexis
+- EMAIL_REPLY_TO: (optional; leave empty to direct users to the support page)
 - SES_FROM_EMAIL: noreply@yourdomain.com (if using AWS SES)
 - SENTRY_DSN: <optional_sentry_dsn>
 
@@ -61,7 +63,7 @@ Email DNS requirements
 - AWS_COGNITO_CLIENT_SECRET
 
 5) Third-party / API keys
-- OPENAI_API_KEY
+- OPENAI_API_KEY or VERCEL_AI_KEY (OpenAI-compatible key)
 - GOOGLE_GENAI_API_KEY
 - GOOGLE_GENAI_PROJECT_ID
 - GOOGLE_GENAI_LOCATION (default: us-central1)
@@ -114,7 +116,8 @@ Render will run your backend service and needs the full set of server env vars. 
 - DATABASE_PROVIDER: postgresql | sqlite | mysql
 - JWT_SECRET
 - REDIS_URL (if using background jobs/queues)
-- SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_SECURE, SMTP_FROM
+- SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_SECURE
+- EMAIL_FROM_ADDRESS, EMAIL_FROM_NAME, EMAIL_REPLY_TO
 - SES_FROM_EMAIL (if using AWS SES)
 - AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
 - AWS_COGNITO_USER_POOL_ID, AWS_COGNITO_CLIENT_ID, AWS_COGNITO_CLIENT_SECRET

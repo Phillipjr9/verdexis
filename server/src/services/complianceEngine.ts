@@ -1,5 +1,6 @@
 import { prisma } from '../db.js'
 import type { User, Transaction } from '@prisma/client'
+import { screenUser as screenWithProvider } from './sanctionsScreening.js'
 
 export interface ComplianceCheckResult {
   passed: boolean
@@ -30,9 +31,13 @@ export class ComplianceEngine {
     const flags: string[] = []
     let riskScore = 0
 
+    const providerResult = await screenWithProvider(user)
+    flags.push(...providerResult.flags)
+    riskScore = providerResult.riskScore
+
     // Check for high-risk countries
     const highRiskCountries = ['KP', 'IR', 'SY', 'CU'] // North Korea, Iran, Syria, Cuba
-    if (user.kycCountry && highRiskCountries.includes(user.kycCountry)) {
+    if (user.kycCountry && highRiskCountries.includes(user.kycCountry) && !flags.some((flag) => flag.includes('High-risk country'))) {
       flags.push(`High-risk country: ${user.kycCountry}`)
       riskScore += 40
     }
@@ -40,9 +45,7 @@ export class ComplianceEngine {
     // Check for suspicious name patterns (basic check)
     if (user.kycFirstName && user.kycLastName) {
       const fullName = `${user.kycFirstName} ${user.kycLastName}`.toLowerCase()
-      // This would integrate with real PEP/sanctions databases in production
-      // For now, we'll do basic pattern matching
-      if (this.matchesSanctionsList(fullName)) {
+      if (this.matchesSanctionsList(fullName) && !flags.some((flag) => flag.includes('sanctions'))) {
         flags.push('Potential PEP/sanctions match')
         riskScore += 50
       }
@@ -82,8 +85,8 @@ export class ComplianceEngine {
 
     return {
       sanctioned: riskScore >= 50,
-      pepMatch: flags.some(f => f.includes('PEP')),
-      adverseMedia: flags.some(f => f.includes('adverse')),
+      pepMatch: providerResult.pepMatch || flags.some(f => f.includes('PEP')),
+      adverseMedia: providerResult.adverseMedia || flags.some(f => f.includes('adverse')),
       riskScore: Math.min(100, riskScore),
       flags
     }

@@ -18,3 +18,4 @@ server/prisma/dev.db-journal
 Thumbs.db
 .vercel
 .env*.local
+.env*

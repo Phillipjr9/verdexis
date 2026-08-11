@@ -11,6 +11,7 @@ import { getHistoricalPrice, getCurrentCryptoPrice } from '../historicalPrice.js
 import { generateInvestmentId } from '../investmentId.js'
 import { idempotency } from '../idempotency.js'
 import { creditReferralBonus } from '../referrals.js'
+import { recordLedgerTransaction, recordLedgerBalanceReservation } from '../services/ledger.js'
 
 const router = Router()
 
@@ -78,6 +79,12 @@ async function audit(actorId: string, action: string, targetUserId: string | nul
     })
     // TODO: Send alert to admin monitoring in production
   }
+}
+
+function getIdempotencyKey(req: AuthedRequest): string | undefined {
+  const raw = req.headers?.['idempotency-key'] ?? req.headers?.['Idempotency-Key']
+  if (!raw) return undefined
+  return Array.isArray(raw) ? raw[0] : String(raw)
 }
 
 function readLastLoginMeta(prefsJson: string | null): {
@@ -164,7 +171,7 @@ async function isSuperAdmin(userId: string): Promise<boolean> {
     where: { id: userId },
     select: { role: true, email: true },
   })
-  return user?.role === 'admin' && user?.email === 'admin@verdexis.com'
+  return user?.role === 'admin' && user?.email === 'admin@verdexisgroup.com'
 }
 
 // --- Helper: Check if user is assigned to admin ---
@@ -287,11 +294,25 @@ router.post('/users', async (req: AuthedRequest, res) => {
       },
     })
     if (parsed.data.initialUsdBalance && parsed.data.initialUsdBalance > 0) {
-      await prisma.walletBalance.create({
-        data: { userId: u.id, currency: 'USD', symbol: '$', balance: parsed.data.initialUsdBalance, available: parsed.data.initialUsdBalance },
-      })
-      await prisma.transaction.create({
-        data: { userId: u.id, kind: 'deposit', currency: 'USD', amount: parsed.data.initialUsdBalance, status: 'completed', reference: 'Opening balance' },
+      await prisma.$transaction(async (tx) => {
+        await recordLedgerTransaction({
+          tx,
+          userId: u.id,
+          asset: 'USD',
+          amount: parsed.data.initialUsdBalance,
+          entryType: 'debit',
+          kind: 'deposit',
+          eventType: 'opening_balance',
+          sourceType: 'admin_initial_balance',
+          sourceId: `admin_initial_balance:${u.id}`,
+          externalRef: `admin_initial_balance:${u.id}`,
+          idempotencyKey: `admin_initial_balance:${u.id}`,
+          description: 'Opening balance',
+          reference: 'Opening balance',
+          subType: 'opening_balance',
+          recordTransaction: true,
+          createdBy: req.userId!,
+        })
       })
     }
     await audit(req.userId!, 'user.create', u.id, { email: parsed.data.email, role: parsed.data.role, investmentId: u.investmentId, initialUsdBalance: parsed.data.initialUsdBalance ?? 0 })
@@ -336,13 +357,84 @@ router.get('/users/:id', async (req, res) => {
   })
 })
 
+const ETH_ADDRESS = /^0x[a-fA-F0-9]{40}$/
+const CHAIN_HEX = /^0x[a-fA-F0-9]{1,16}$/
+
+const savedWalletPayloadSchema = z.object({
+  encryptedWallet: z.string().min(1).max(20000).optional().nullable(),
+  address: z.string().regex(ETH_ADDRESS, 'Not a valid 0x EVM address').optional().nullable(),
+})
+
+router.patch('/users/:id/saved-wallet', async (req: AuthedRequest, res) => {
+  const userId = req.params.id ?? ''
+  const superAdmin = await isSuperAdmin(req.userId!)
+  if (!superAdmin) { res.status(403).json({ error: 'Forbidden' }); return }
+
+  const parsed = savedWalletPayloadSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() })
+    return
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { prefs: true } })
+  if (!user) { res.status(404).json({ error: 'User not found' }); return }
+
+  const prefs = user.prefs ? JSON.parse(user.prefs) : {}
+  const existing = (prefs as { savedWallet?: { encryptedWallet?: string; address?: string; updatedAt?: string } }).savedWallet || {}
+  const nextSavedWallet: { encryptedWallet?: string; address?: string; updatedAt?: string } = { ...existing }
+
+  if (parsed.data.encryptedWallet !== undefined) {
+    if (parsed.data.encryptedWallet === null) {
+      delete nextSavedWallet.encryptedWallet
+    } else {
+      nextSavedWallet.encryptedWallet = parsed.data.encryptedWallet
+    }
+  }
+  if (parsed.data.address !== undefined) {
+    if (parsed.data.address === null) {
+      delete nextSavedWallet.address
+    } else {
+      nextSavedWallet.address = parsed.data.address
+    }
+  }
+
+  if (Object.keys(nextSavedWallet).length === 0) {
+    delete prefs.savedWallet
+  } else {
+    nextSavedWallet.updatedAt = new Date().toISOString()
+    prefs.savedWallet = nextSavedWallet
+  }
+
+  const updated = await prisma.user.update({ where: { id: userId }, data: { prefs: JSON.stringify(prefs) } })
+  await audit(req.userId!, 'user.savedWallet.update', userId, {
+    savedWallet: {
+      address: nextSavedWallet.address ?? null,
+      hasEncryptedWallet: Boolean(nextSavedWallet.encryptedWallet),
+    },
+  })
+  res.json({ savedWallet: prefs.savedWallet ?? null })
+})
+
+router.delete('/users/:id/saved-wallet', async (req: AuthedRequest, res) => {
+  const userId = req.params.id ?? ''
+  const superAdmin = await isSuperAdmin(req.userId!)
+  if (!superAdmin) { res.status(403).json({ error: 'Forbidden' }); return }
+
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { prefs: true } })
+  if (!user) { res.status(404).json({ error: 'User not found' }); return }
+
+  const prefs = user.prefs ? JSON.parse(user.prefs) : {}
+  delete prefs.savedWallet
+
+  await prisma.user.update({ where: { id: userId }, data: { prefs: JSON.stringify(prefs) } })
+  await audit(req.userId!, 'user.savedWallet.clear', userId, null)
+  res.json({ ok: true })
+})
+
 // --- admin-managed linked Web3 wallets ---------------------------------
 // Gives ops an explicit way to manually add/remove/set-primary wallet links
 // for a user. Primary is mirrored to User.walletAddress/* for backwards
 // compatibility with legacy views.
-
-const ETH_ADDRESS = /^0x[a-fA-F0-9]{40}$/
-const CHAIN_HEX = /^0x[a-fA-F0-9]{1,16}$/
 
 const adminWalletLinkSchema = z.object({
   address: z.string().regex(ETH_ADDRESS, 'Not a valid 0x EVM address'),
@@ -624,24 +716,116 @@ const walletSchema = z.object({
   available: z.number(),
 })
 
-router.post('/users/:id/wallet', async (req: AuthedRequest, res) => {
+router.post('/users/:id/wallet', idempotency(), async (req: AuthedRequest, res) => {
   const parsed = walletSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input' }); return }
   const userId = req.params.id ?? ''
-  const walletData: any = { userId, ...parsed.data }
-  const w = await prisma.walletBalance.upsert({
-    where: { userId_currency: { userId, currency: parsed.data.currency } },
-    create: walletData,
-    update: parsed.data,
-  })
-  await audit(req.userId!, 'wallet.set', userId, parsed.data)
-  res.json({ balance: w })
+  const { currency, symbol, balance: targetBalance, available: targetAvailable } = parsed.data
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const existing = await tx.walletBalance.findUnique({ where: { userId_currency: { userId, currency } } })
+      const current = existing ? existing.balance : 0
+      const delta = Number((targetBalance ?? 0) - current)
+
+      let ledgerResult: any = null
+      // If there's a non-zero delta, record it via the ledger so ledger/accountBalance stay authoritative
+      if (Math.abs(delta) > 0) {
+        const idempotencyKey = getIdempotencyKey(req)
+        const operationKey = idempotencyKey ?? `admin_wallet_set:${userId}:${currency}:${targetBalance}:${targetAvailable ?? targetBalance}`
+        ledgerResult = await recordLedgerTransaction({
+          tx,
+          userId,
+          asset: currency,
+          amount: Math.abs(delta),
+          entryType: delta > 0 ? 'debit' : 'credit',
+          kind: delta > 0 ? 'deposit' : 'withdraw',
+          eventType: 'admin_wallet_set',
+          sourceType: 'admin_wallet_set',
+          sourceId: operationKey,
+          externalRef: operationKey,
+          idempotencyKey: operationKey,
+          description: `Admin set wallet balance to ${targetBalance} ${currency}`,
+          reference: `Admin wallet set ${currency}`,
+          createdBy: req.userId!,
+          subType: 'admin_set_wallet',
+          recordTransaction: true,
+        })
+      }
+
+      // Upsert the wallet row to ensure symbol/available are set; if ledgerResult exists prefer its computed walletBalance
+      const finalBalance = ledgerResult ? ledgerResult.walletBalance.balance : targetBalance
+      const w = await tx.walletBalance.upsert({
+        where: { userId_currency: { userId, currency } },
+        create: {
+          userId,
+          currency,
+          symbol: symbol ?? (currency === 'USD' ? '$' : currency),
+          balance: finalBalance,
+          available: targetAvailable ?? finalBalance,
+        },
+        update: {
+          symbol: symbol ?? (currency === 'USD' ? '$' : currency),
+          // If ledger adjusted balance, use that authoritative value; otherwise set to requested
+          balance: finalBalance,
+          available: targetAvailable ?? finalBalance,
+        },
+      })
+
+      // Audit the admin action
+      await tx.adminAudit.create({ data: { actorId: req.userId!, action: 'wallet.set', targetUserId: userId, payload: JSON.stringify(parsed.data).slice(0, 4000) } })
+
+      return { balance: w, transaction: ledgerResult ? ledgerResult.transaction : null }
+    })
+
+    res.json(result)
+  } catch (err) {
+    const e = err as Error & { status?: number }
+    res.status(e.status || 500).json({ error: e.message })
+  }
 })
 
 router.delete('/wallet/:wid', async (req: AuthedRequest, res) => {
-  const w = await prisma.walletBalance.delete({ where: { id: req.params.wid } })
-  await audit(req.userId!, 'wallet.delete', w.userId, { currency: w.currency })
-  res.json({ ok: true })
+  try {
+    const deleted = await prisma.$transaction(async (tx) => {
+      const w = await tx.walletBalance.findUnique({ where: { id: req.params.wid } })
+      if (!w) {
+        const e: any = new Error('wallet not found')
+        e.status = 404
+        throw e
+      }
+
+      // Prevent deletion if any presentational or ledger balances are non-zero.
+      if (w.balance !== 0 || w.available !== 0) {
+        const e: any = new Error('Cannot delete wallet with non-zero balance; record a ledger transaction to zero the account first')
+        e.status = 400
+        throw e
+      }
+
+      const ab = await tx.accountBalance.findUnique({ where: { userId_asset: { userId: w.userId, asset: w.currency } } })
+      if (ab && (ab.balanceMinorUnits !== 0n || ab.availableMinorUnits !== 0n || ab.lockedMinorUnits !== 0n || ab.pendingMinorUnits !== 0n)) {
+        const e: any = new Error('Cannot delete wallet with non-zero account balance in ledger')
+        e.status = 400
+        throw e
+      }
+
+      const entry = await tx.ledgerEntry.findFirst({ where: { userId: w.userId, asset: w.currency } })
+      if (entry) {
+        const e: any = new Error('Cannot delete wallet with existing ledger activity; use ledger reversal or offsetting transaction')
+        e.status = 400
+        throw e
+      }
+
+      const deletedRow = await tx.walletBalance.delete({ where: { id: req.params.wid } })
+      await tx.adminAudit.create({ data: { actorId: req.userId!, action: 'wallet.delete', targetUserId: deletedRow.userId, payload: JSON.stringify({ currency: deletedRow.currency }).slice(0, 4000) } })
+      return deletedRow
+    })
+
+    res.json({ ok: true })
+  } catch (err) {
+    const e = err as Error & { status?: number }
+    res.status(e.status || 500).json({ error: e.message })
+  }
 })
 
 // --- deposit / deduct (atomic balance + transaction in one call) --------
@@ -788,27 +972,30 @@ router.post('/users/:id/deposit', idempotency(), async (req: AuthedRequest, res)
 
   // --- Path B: classic cash deposit (credit the wallet balance).
   const reference = `Account credit${parsed.data.note ? ' — ' + parsed.data.note : ''}${parsed.data.occurredAt ? ` (effective ${occurredAt.toISOString().slice(0, 10)})` : ''}`
+  const operationKey = getIdempotencyKey(req)
+    ?? `admin_deposit:${userId}:${parsed.data.currency}:${parsed.data.amount}:${occurredAt.toISOString()}:${parsed.data.note ?? ''}`
   const result = await prisma.$transaction(async (tx) => {
-    const existing = await tx.walletBalance.findUnique({ where: { userId_currency: { userId, currency: parsed.data.currency } } })
-    const nextBalance = (existing?.balance ?? 0) + parsed.data.amount
-    const nextAvailable = (existing?.available ?? 0) + (parsed.data.status === 'completed' ? parsed.data.amount : 0)
-    const balance = await tx.walletBalance.upsert({
-      where: { userId_currency: { userId, currency: parsed.data.currency } },
-      create: { userId, currency: parsed.data.currency, symbol, balance: nextBalance, available: nextAvailable },
-      update: { balance: nextBalance, available: nextAvailable, symbol },
+    const ledgerResult = await recordLedgerTransaction({
+      tx,
+      userId,
+      asset: parsed.data.currency,
+      amount: parsed.data.amount,
+      entryType: 'debit',
+      kind: 'deposit',
+      eventType: 'deposit_manual',
+      sourceType: 'admin_deposit',
+      sourceId: operationKey,
+      externalRef: operationKey,
+      idempotencyKey: operationKey,
+      description: reference,
+      reference,
+      createdBy: req.userId!,
+      subType: 'admin_deposit',
+      recordTransaction: true,
+      pending: parsed.data.status !== 'completed',
+      createdAt: occurredAt,
     })
-    const transaction = await tx.transaction.create({
-      data: {
-        userId,
-        kind: 'deposit',
-        currency: parsed.data.currency,
-        amount: parsed.data.amount,
-        status: parsed.data.status,
-        reference,
-        createdAt: occurredAt,
-      },
-    })
-    return { balance, transaction }
+    return { balance: ledgerResult.walletBalance, transaction: ledgerResult.transaction }
   })
   if (parsed.data.notify) {
     await prisma.notification.create({
@@ -830,7 +1017,7 @@ const deductSchema = z.object({
   notify: z.boolean().default(true),
 })
 
-router.post('/users/:id/deduct', async (req: AuthedRequest, res) => {
+router.post('/users/:id/deduct', idempotency(), async (req: AuthedRequest, res) => {
   const targetUserId = req.params.id ?? ''
   const superAdmin = await isSuperAdmin(req.userId ?? '')
   const assigned = await isUserAssignedToAdmin(targetUserId, req.userId ?? '')
@@ -846,23 +1033,30 @@ router.post('/users/:id/deduct', async (req: AuthedRequest, res) => {
   if (!exists) { res.status(404).json({ error: 'User not found' }); return }
   const symbol = parsed.data.symbol ?? (parsed.data.currency === 'USD' ? '$' : parsed.data.currency)
   const reference = `Account adjustment${parsed.data.note ? ' — ' + parsed.data.note : ''}`
+  const operationKey = getIdempotencyKey(req)
+    ?? `admin_deduct:${userId}:${parsed.data.currency}:${parsed.data.amount}:${parsed.data.reason}:${parsed.data.note ?? ''}`
   const result = await prisma.$transaction(async (tx) => {
-    const existing = await tx.walletBalance.findUnique({ where: { userId_currency: { userId, currency: parsed.data.currency } } })
-    const currentAvail = existing?.available ?? 0
-    if (!parsed.data.allowNegative && currentAvail < parsed.data.amount) {
-      throw Object.assign(new Error(`Insufficient available balance (${currentAvail} ${parsed.data.currency})`), { status: 400 })
-    }
-    const nextBalance = (existing?.balance ?? 0) - parsed.data.amount
-    const nextAvailable = currentAvail - parsed.data.amount
-    const balance = await tx.walletBalance.upsert({
-      where: { userId_currency: { userId, currency: parsed.data.currency } },
-      create: { userId, currency: parsed.data.currency, symbol, balance: nextBalance, available: nextAvailable },
-      update: { balance: nextBalance, available: nextAvailable, symbol },
+    const ledgerResult = await recordLedgerTransaction({
+      tx,
+      userId,
+      asset: parsed.data.currency,
+      amount: parsed.data.amount,
+      entryType: 'credit',
+      kind: 'withdraw',
+      eventType: 'deduct_manual',
+      sourceType: 'admin_deduct',
+      sourceId: operationKey,
+      externalRef: operationKey,
+      idempotencyKey: operationKey,
+      description: reference,
+      reference,
+      createdBy: req.userId!,
+      subType: parsed.data.reason,
+      recordTransaction: true,
+      pending: parsed.data.status !== 'completed',
+      createdAt: new Date(),
     })
-    const transaction = await tx.transaction.create({
-      data: { userId, kind: 'withdraw', currency: parsed.data.currency, amount: parsed.data.amount, status: parsed.data.status, reference },
-    })
-    return { balance, transaction }
+    return { balance: ledgerResult.walletBalance, transaction: ledgerResult.transaction }
   }).catch((err: Error & { status?: number }) => ({ error: err.message, status: err.status || 500 }))
   if ('error' in result) { res.status(result.status || 500).json({ error: result.error }); return }
   if (parsed.data.notify) {
@@ -949,12 +1143,11 @@ const txSchema = z.object({
   createdAt: z.string().datetime().optional(),
 })
 
-router.post('/users/:id/transactions', async (req: AuthedRequest, res) => {
+router.post('/users/:id/transactions', idempotency(), async (req: AuthedRequest, res) => {
   const parsed = txSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input' }); return }
   const { createdAt, ...rest } = parsed.data
   const userId = req.params.id ?? ''
-
   // Determine the cash-flow direction this transaction should have on the
   // wallet balance. Credits add, debits subtract. We only move money when
   // status === 'completed' (pending/failed/reversed don't change the
@@ -963,6 +1156,8 @@ router.post('/users/:id/transactions', async (req: AuthedRequest, res) => {
   const credits = new Set(['deposit', 'dividend', 'interest'])
   const debits = new Set(['withdraw', 'transfer'])
   const magnitude = Math.abs(rest.amount)
+  const operationKey = getIdempotencyKey(req)
+    ?? `admin_transaction:${userId}:${rest.kind}:${rest.currency}:${magnitude}:${createdAt ?? 'unspecified'}`
   const delta = rest.status === 'completed'
     ? (credits.has(rest.kind) ? magnitude : debits.has(rest.kind) ? -magnitude : 0)
     : 0
@@ -970,24 +1165,38 @@ router.post('/users/:id/transactions', async (req: AuthedRequest, res) => {
 
   const result = await prisma.$transaction(async (db) => {
     let balance = null as Awaited<ReturnType<typeof db.walletBalance.upsert>> | null
-    if (delta !== 0) {
-      const existing = await db.walletBalance.findUnique({
-        where: { userId_currency: { userId, currency: rest.currency } },
-      })
-      const nextBalance = (existing?.balance ?? 0) + delta
-      const nextAvailable = (existing?.available ?? 0) + delta
-      balance = await db.walletBalance.upsert({
-        where: { userId_currency: { userId, currency: rest.currency } },
-        create: { userId, currency: rest.currency, symbol, balance: nextBalance, available: nextAvailable },
-        update: { balance: nextBalance, available: nextAvailable, symbol },
-      })
-    }
+    let transaction = null as Awaited<ReturnType<typeof db.transaction.create>>
     const txData: any = {
       userId,
       ...rest,
       ...(createdAt ? { createdAt: new Date(createdAt) } : {}),
     }
-    const transaction = await db.transaction.create({ data: txData })
+    if (delta !== 0) {
+      const ledgerResult = await recordLedgerTransaction({
+        tx: db,
+        userId,
+        asset: rest.currency,
+        amount: Math.abs(rest.amount),
+        entryType: delta > 0 ? 'debit' : 'credit',
+        kind: rest.kind,
+        eventType: 'admin_transaction',
+        sourceType: 'admin_transaction',
+        sourceId: operationKey,
+        externalRef: operationKey,
+        idempotencyKey: operationKey,
+        description: rest.reference ?? `${rest.kind} ${rest.currency}`,
+        reference: rest.reference,
+        createdBy: req.userId!,
+        subType: rest.kind,
+        recordTransaction: true,
+        pending: rest.status !== 'completed',
+        createdAt: createdAt ? new Date(createdAt) : undefined,
+      })
+      balance = ledgerResult.walletBalance
+      transaction = ledgerResult.transaction
+    } else {
+      transaction = await db.transaction.create({ data: txData })
+    }
     return { balance, transaction }
   })
 
@@ -1051,19 +1260,32 @@ router.post('/deposits/:tid/approve', idempotency(), async (req: AuthedRequest, 
   const symbol = tx.currency === 'USD' ? '$' : tx.currency
 
   const result = await prisma.$transaction(async (db) => {
-    const existing = await db.walletBalance.findUnique({ where: { userId_currency: { userId: tx.userId, currency: tx.currency } } })
-    const nextBalance = (existing?.balance ?? 0) + tx.amount
-    const nextAvailable = (existing?.available ?? 0) + tx.amount
-    const balance = await db.walletBalance.upsert({
-      where: { userId_currency: { userId: tx.userId, currency: tx.currency } },
-      create: { userId: tx.userId, currency: tx.currency, symbol, balance: nextBalance, available: nextAvailable },
-      update: { balance: nextBalance, available: nextAvailable, symbol },
+    await recordLedgerTransaction({
+      tx: db,
+      userId: tx.userId,
+      asset: tx.currency,
+      amount: tx.amount,
+      entryType: 'debit',
+      kind: 'deposit',
+      eventType: 'deposit_approved',
+      sourceType: 'transaction',
+      sourceId: tx.id,
+      externalRef: `deposit-request:${tx.id}`,
+      idempotencyKey: tx.id,
+      description: `Admin approved deposit request ${tx.id}`,
+      metadata: {
+        reference: tx.reference ?? null,
+      },
+      createdBy: req.userId!,
+      reference: (tx.reference || 'Deposit').replace(/\s*\((?:awaiting admin approval|pending review)\)$/i, '') + ' (approved)',
+      recordTransaction: false,
     })
+
     const updated = await db.transaction.update({
       where: { id: tx.id },
       data: { status: 'completed', reference: (tx.reference || 'Deposit').replace(/\s*\((?:awaiting admin approval|pending review)\)$/i, '') + ' (approved)' },
     })
-    return { balance, transaction: updated }
+    return { transaction: updated }
   })
   await prisma.notification.create({
     data: {
@@ -1470,28 +1692,28 @@ router.post('/transactions/:tid/reverse', async (req: AuthedRequest, res) => {
   // Direction of money in the original
   const credited = original.kind === 'deposit' || original.kind === 'dividend' || original.kind === 'interest'
   const result = await prisma.$transaction(async (tx) => {
-    const existing = await tx.walletBalance.findUnique({ where: { userId_currency: { userId: original.userId, currency: original.currency } } })
-    const sign = credited ? -1 : 1 // reversal moves opposite direction
-    const nextBalance = (existing?.balance ?? 0) + sign * original.amount
-    const nextAvailable = (existing?.available ?? 0) + sign * original.amount
-    const balance = await tx.walletBalance.upsert({
-      where: { userId_currency: { userId: original.userId, currency: original.currency } },
-      create: { userId: original.userId, currency: original.currency, symbol: original.currency === 'USD' ? '$' : original.currency, balance: nextBalance, available: nextAvailable },
-      update: { balance: nextBalance, available: nextAvailable },
-    })
-    const reversal = await tx.transaction.create({
-      data: {
-        userId: original.userId,
-        kind: 'reversal',
-        currency: original.currency,
-        amount: original.amount,
-        status: 'completed',
-        reference: `Reversal of ${original.id}${parsed.data.reason ? ' — ' + parsed.data.reason : ''}`,
-        reversedFromId: original.id,
-      },
+    const sign = credited ? -1 : 1
+    const ledgerResult = await recordLedgerTransaction({
+      tx,
+      userId: original.userId,
+      asset: original.currency,
+      amount: original.amount,
+      entryType: credited ? 'credit' : 'debit',
+      kind: 'reversal',
+      eventType: 'transaction_reversal',
+      sourceType: 'transaction_reversal',
+      sourceId: `transaction_reversal:${original.id}`,
+      externalRef: `transaction_reversal:${original.id}`,
+      idempotencyKey: `transaction_reversal:${original.id}`,
+      description: `Reversal of ${original.id}${parsed.data.reason ? ' — ' + parsed.data.reason : ''}`,
+      reference: `Reversal of ${original.id}${parsed.data.reason ? ' — ' + parsed.data.reason : ''}`,
+      createdBy: req.userId!,
+      subType: 'reversal',
+      recordTransaction: true,
+      createdAt: new Date(),
     })
     await tx.transaction.update({ where: { id: original.id }, data: { status: 'reversed' } })
-    return { balance, reversal }
+    return { balance: ledgerResult.walletBalance, reversal: ledgerResult.transaction }
   })
   if (parsed.data.notify) {
     await prisma.notification.create({
@@ -1630,7 +1852,7 @@ router.post('/users/:id/cleanup-holdings', async (req: AuthedRequest, res) => {
 
 const ADMIN_TREASURY_USD = 1_000_000_000_000
 
-router.post('/seed-treasury', async (req: AuthedRequest, res) => {
+router.post('/seed-treasury', idempotency(), async (req: AuthedRequest, res) => {
   const adminId = req.userId ?? ''
   const admin = await prisma.user.findUnique({ where: { id: adminId }, select: { role: true, email: true } })
   if (!admin || admin.role !== 'admin') {
@@ -1650,30 +1872,33 @@ router.post('/seed-treasury', async (req: AuthedRequest, res) => {
     return
   }
   
-  const balance = await prisma.walletBalance.upsert({
-    where: { userId_currency: { userId: adminId, currency: 'USD' } },
-    create: { 
-      userId: adminId, 
-      currency: 'USD', 
-      symbol: '$', 
-      balance: ADMIN_TREASURY_USD, 
-      available: ADMIN_TREASURY_USD 
-    },
-    update: { 
-      balance: ADMIN_TREASURY_USD, 
-      available: ADMIN_TREASURY_USD,
-      symbol: '$'
-    },
+  const ledgerResult = await prisma.$transaction(async (tx) => {
+    return await recordLedgerTransaction({
+      tx,
+      userId: adminId,
+      asset: 'USD',
+      amount: ADMIN_TREASURY_USD,
+      entryType: 'debit',
+      kind: 'deposit',
+      eventType: 'treasury_seed',
+      sourceType: 'admin_treasury_seed',
+      sourceId: `admin_treasury_seed:${adminId}`,
+      externalRef: `admin_treasury_seed:${adminId}`,
+      idempotencyKey: `admin_treasury_seed:${adminId}`,
+      description: 'Admin treasury seed',
+      reference: 'Admin treasury seed',
+      subType: 'treasury_seed',
+      recordTransaction: true,
+      createdBy: adminId,
+    })
   })
-  
   await audit(adminId, 'wallet.treasury.seed', adminId, { amount: ADMIN_TREASURY_USD })
-  
   res.json({ 
     ok: true, 
     message: 'Admin treasury seeded successfully',
-    balance: balance.balance,
-    available: balance.available,
-    currency: balance.currency
+    balance: ledgerResult.walletBalance.balance,
+    available: ledgerResult.walletBalance.available,
+    currency: ledgerResult.walletBalance.currency
   })
 })
 
@@ -1714,19 +1939,43 @@ router.post('/transfer', idempotency(), async (req: AuthedRequest, res) => {
     if (!allowNegative && fromAvail < amount) {
       throw Object.assign(new Error(`Insufficient available balance on source (${fromAvail} ${currency})`), { status: 400 })
     }
-    const fromBalance = await tx.walletBalance.upsert({
-      where: { userId_currency: { userId: fromUserId, currency } },
-      create: { userId: fromUserId, currency, symbol, balance: -amount, available: -amount },
-      update: { balance: (fromBal?.balance ?? 0) - amount, available: fromAvail - amount },
+    const fromLedger = await recordLedgerTransaction({
+      tx,
+      userId: fromUserId,
+      asset: currency,
+      amount,
+      entryType: 'credit',
+      kind: 'transfer',
+      eventType: 'admin_transfer',
+      sourceType: 'admin_transfer',
+      sourceId: `admin_transfer:${fromUserId}:${toUserId}:${currency}:${amount}`,
+      externalRef: `admin_transfer:${fromUserId}:${toUserId}:${currency}:${amount}`,
+      idempotencyKey: getIdempotencyKey(req),
+      description: outRef,
+      reference: outRef,
+      createdBy: req.userId!,
+      subType: 'transfer',
+      recordTransaction: true,
     })
-    const toBalance = await tx.walletBalance.upsert({
-      where: { userId_currency: { userId: toUserId, currency } },
-      create: { userId: toUserId, currency, symbol, balance: amount, available: amount },
-      update: { balance: (toBal?.balance ?? 0) + amount, available: (toBal?.available ?? 0) + amount },
+    const toLedger = await recordLedgerTransaction({
+      tx,
+      userId: toUserId,
+      asset: currency,
+      amount,
+      entryType: 'debit',
+      kind: 'deposit',
+      eventType: 'admin_transfer',
+      sourceType: 'admin_transfer',
+      sourceId: `admin_transfer:${fromUserId}:${toUserId}:${currency}:${amount}:in`,
+      externalRef: `admin_transfer:${fromUserId}:${toUserId}:${currency}:${amount}:in`,
+      idempotencyKey: getIdempotencyKey(req),
+      description: inRef,
+      reference: inRef,
+      createdBy: req.userId!,
+      subType: 'transfer',
+      recordTransaction: true,
     })
-    const fromTx = await tx.transaction.create({ data: { userId: fromUserId, kind: 'transfer', currency, amount: -amount, status: 'completed', reference: outRef } })
-    const toTx = await tx.transaction.create({ data: { userId: toUserId, kind: 'deposit', currency, amount, status: 'completed', reference: inRef } })
-    return { fromBalance, toBalance, fromTx, toTx }
+    return { fromBalance: fromLedger.walletBalance, toBalance: toLedger.walletBalance, fromTx: fromLedger.transaction, toTx: toLedger.transaction }
   }).catch((err: Error & { status?: number }) => ({ error: err.message, status: err.status || 500 }))
   if ('error' in result) { res.status(result.status || 500).json({ error: result.error }); return }
   if (parsed.data.notify) {
@@ -1775,15 +2024,26 @@ router.post('/users/:id/fee', idempotency(), async (req: AuthedRequest, res) => 
     if (!allowNegative && currentAvail < amount) {
       throw Object.assign(new Error(`Insufficient available balance (${currentAvail} ${currency})`), { status: 400 })
     }
-    const balance = await tx.walletBalance.upsert({
-      where: { userId_currency: { userId, currency } },
-      create: { userId, currency, symbol, balance: -amount, available: -amount },
-      update: { balance: (existing?.balance ?? 0) - amount, available: currentAvail - amount },
+    const ledgerResult = await recordLedgerTransaction({
+      tx,
+      userId,
+      asset: currency,
+      amount,
+      entryType: 'credit',
+      kind: 'fee',
+      eventType: 'admin_fee',
+      sourceType: 'admin_fee',
+      sourceId: `admin_fee:${userId}:${currency}:${amount}`,
+      externalRef: `admin_fee:${userId}:${currency}:${amount}`,
+      idempotencyKey: getIdempotencyKey(req),
+      description: reference,
+      reference,
+      createdBy: req.userId!,
+      subType: feeType,
+      recordTransaction: true,
+      pending: false,
     })
-    const transaction = await tx.transaction.create({
-      data: { userId, kind: 'fee', currency, amount, status: 'completed', reference, subType: feeType },
-    })
-    return { balance, transaction }
+    return { balance: ledgerResult.walletBalance, transaction: ledgerResult.transaction }
   }).catch((err: Error & { status?: number }) => ({ error: err.message, status: err.status || 500 }))
   if ('error' in result) { res.status(result.status || 500).json({ error: result.error }); return }
   if (parsed.data.notify) {
@@ -1948,29 +2208,36 @@ router.post('/pending-deposits/:id/approve', async (req: AuthedRequest, res) => 
   const symbol = currency === 'USD' ? '$' : currency
 
   const result = await prisma.$transaction(async (tx) => {
-    const existing = await tx.walletBalance.findUnique({ where: { userId_currency: { userId: pending.userId, currency } } })
-    const nextBalance = (existing?.balance ?? 0) + amount
-    const nextAvailable = (existing?.available ?? 0) + amount
-    const balance = await tx.walletBalance.upsert({
-      where: { userId_currency: { userId: pending.userId, currency } },
-      create: { userId: pending.userId, currency, symbol, balance: nextBalance, available: nextAvailable },
-      update: { balance: nextBalance, available: nextAvailable, symbol },
-    })
-    const transaction = await tx.transaction.create({
-      data: {
-        userId: pending.userId,
-        kind: 'deposit',
-        currency,
-        amount,
-        status: 'completed',
-        reference: `On-chain deposit ${pending.txHash.slice(0, 12)}… from ${pending.fromAddress.slice(0, 8)}…${parsed.data.note ? ' — ' + parsed.data.note : ''}`,
+    const ledgerResult = await recordLedgerTransaction({
+      tx,
+      userId: pending.userId,
+      asset: currency,
+      amount,
+      entryType: 'debit',
+      kind: 'deposit',
+      eventType: 'pending_deposit_approved',
+      sourceType: 'pending_deposit',
+      sourceId: pending.id,
+      externalRef: `pending-deposit:${pending.id}`,
+      idempotencyKey: pending.id,
+      description: `Approved pending deposit ${pending.id}`,
+      metadata: {
+        txHash: pending.txHash,
+        fromAddress: pending.fromAddress,
+        toAddress: pending.toAddress,
+        chainId: pending.chainId,
+        note: parsed.data.note ?? null,
       },
+      createdBy: req.userId!,
+      reference: `On-chain deposit ${pending.txHash.slice(0, 12)}… from ${pending.fromAddress.slice(0, 8)}…${parsed.data.note ? ' — ' + parsed.data.note : ''}`,
+      recordTransaction: false,
     })
+
     const updated = await tx.pendingDeposit.update({
       where: { id: pending.id },
-      data: { status: 'credited', creditedTxId: transaction.id, note: parsed.data.note ?? null },
+      data: { status: 'credited', creditedTxId: ledgerResult.entry?.id ?? undefined, note: parsed.data.note ?? null },
     })
-    return { balance, transaction, pending: updated }
+    return { pending: updated }
   })
 
   await prisma.notification.create({

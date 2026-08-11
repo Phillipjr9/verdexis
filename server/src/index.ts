@@ -29,6 +29,7 @@ import marketRoutes from './routes/market.js'
 import reviewsRoutes from './routes/reviews.js'
 import adminRoutes from './routes/admin.js'
 import adminBonusRoutes from './routes/adminBonus.js'
+import adminSettingsRoutes from './routes/admin-settings.js'
 import swapRoutes from './routes/swap.js'
 import referralRoutes from './routes/referral.js'
 import dcaRoutes from './routes/dca.js'
@@ -269,6 +270,7 @@ app.use('/api/market', marketRoutes)
 app.use('/api/reviews', reviewsRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/admin', adminBonusRoutes)
+app.use('/api/admin/settings', adminSettingsRoutes)
 app.use('/api/swap', swapRoutes)
 app.use('/api/admin/token-registry', tokenRegistryRoutes)
 app.use('/api/referrals', referralRoutes)

@@ -1,5 +1,6 @@
 import https from 'node:https'
 import { prisma } from './db.js'
+import { recordLedgerTransaction } from './services/ledger.js'
 
 interface BlockchainNode {
   network: string
@@ -133,7 +134,7 @@ class DepositMonitor {
 
     if (confirmed_balance > 0) {
       const btcAmount = confirmed_balance / Math.pow(10, node.decimals)
-      await this.creditDeposit(depositId, userId, currency, btcAmount)
+      await this.creditDeposit(address, depositId, userId, currency, btcAmount)
     }
   }
 
@@ -154,7 +155,7 @@ class DepositMonitor {
     const balanceWei = BigInt(response.result || '0')
     if (balanceWei > 0n) {
       const ethAmount = Number(balanceWei) / Math.pow(10, node.decimals)
-      await this.creditDeposit(depositId, userId, currency, ethAmount)
+      await this.creditDeposit(address, depositId, userId, currency, ethAmount)
     }
   }
 
@@ -177,11 +178,11 @@ class DepositMonitor {
     const lamports = response.result.value || 0
     if (lamports > 0) {
       const solAmount = lamports / Math.pow(10, node.decimals)
-      await this.creditDeposit(depositId, userId, currency, solAmount)
+      await this.creditDeposit(address, depositId, userId, currency, solAmount)
     }
   }
 
-  private async creditDeposit(depositId: string, userId: string, currency: string, amount: number): Promise<void> {
+  private async creditDeposit(address: string, depositId: string, userId: string, currency: string, amount: number): Promise<void> {
     // Check if we already recorded this deposit recently (prevent duplicates)
     const recentDeposit = await prisma.transaction.findFirst({
       where: {
@@ -198,51 +199,43 @@ class DepositMonitor {
       return
     }
 
-    // Credit user's wallet atomically
+    // User-submitted pending deposits require explicit admin approval. The
+    // monitor may observe the chain, but it must never credit the account.
+    if (depositId) {
+      console.log(`[deposit-monitor] deposit ${depositId} observed; awaiting admin approval`)
+      return
+    }
+
+    // Credit user's wallet atomically using ledger accounting
     await prisma.$transaction(async (tx) => {
-      const walletBalance = await tx.walletBalance.findUnique({
-        where: {
-          userId_currency: {
-            userId,
-            currency,
-          },
-        },
-      })
-
-      const newBalance = (walletBalance?.balance || 0) + amount
-      const newAvailable = (walletBalance?.available || 0) + amount
-      const symbol = currency === 'USD' ? '$' : currency
-
-      await tx.walletBalance.upsert({
-        where: {
-          userId_currency: {
-            userId,
-            currency,
-          },
-        },
-        create: {
-          userId,
+      const externalRef = depositId ? `pending-deposit:${depositId}` : `deposit-monitor:${address}:${userId}:${amount}`
+      const sourceId = depositId ?? `${address}:${amount}`
+      const ledgerResult = await recordLedgerTransaction({
+        tx,
+        userId,
+        asset: currency,
+        amount,
+        entryType: 'debit',
+        kind: 'deposit',
+        eventType: depositId ? 'pending_deposit_confirmed' : 'deposit_auto_credit',
+        sourceType: depositId ? 'pending_deposit' : 'deposit_monitor',
+        sourceId,
+        externalRef,
+        idempotencyKey: externalRef,
+        description: depositId
+          ? `Auto-credit pending deposit ${depositId}`
+          : `Auto-credit monitored address ${address}`,
+        metadata: {
+          address,
+          depositId,
           currency,
-          symbol,
-          balance: newBalance,
-          available: newAvailable,
+          source: 'depositMonitor',
         },
-        update: {
-          balance: newBalance,
-          available: newAvailable,
-        },
-      })
-
-      // Record transaction for history
-      await tx.transaction.create({
-        data: {
-          userId,
-          kind: 'deposit',
-          currency,
-          amount,
-          status: 'completed',
-          reference: `Crypto deposit - ${amount} ${currency} (auto-credited)`,
-        },
+        createdBy: 'system',
+        reference: depositId
+          ? `Auto-credit pending deposit ${depositId}`
+          : `Auto-credit from monitored address ${address}`,
+        recordTransaction: true,
       })
 
       if (depositId) {
@@ -253,12 +246,11 @@ class DepositMonitor {
           },
           data: {
             status: 'completed',
-            creditedTxId: `auto-${Date.now()}`,
+            creditedTxId: ledgerResult.transaction?.id ?? `auto-${Date.now()}`,
           },
         })
       }
 
-      // Create notification
       await tx.notification.create({
         data: {
           userId,

@@ -94,10 +94,12 @@ export function setupSecurityHeaders(app: Express) {
 /**
  * Validate HTTPS in production
  */
+import { header as getHeader } from '../utils/headers.js'
+
 export function enforceHttps(req: Request, res: Response, next: NextFunction) {
   if (process.env.NODE_ENV === 'production') {
-    if (req.header('x-forwarded-proto') !== 'https') {
-      return res.redirect(301, `https://${req.header('host')}${req.url}`)
+    if (getHeader(req, 'x-forwarded-proto') !== 'https') {
+      return res.redirect(301, `https://${getHeader(req, 'host')}${req.url}`)
     }
   }
   next()
@@ -107,8 +109,8 @@ export function enforceHttps(req: Request, res: Response, next: NextFunction) {
  * Validate same-site requests
  */
 export function validateSamesite(req: Request, res: Response, next: NextFunction) {
-  const origin = req.header('origin')
-  const host = req.header('host')
+  const origin = getHeader(req, 'origin')
+  const host = getHeader(req, 'host')
 
   if (origin && !origin.includes(host || '')) {
     // Log potential CSRF attempt

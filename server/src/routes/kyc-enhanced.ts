@@ -1,11 +1,11 @@
 import { Router } from 'express'
 import { z } from 'zod'
-import multer from 'multer'
 import rateLimit from 'express-rate-limit'
 import csrf from 'csurf'
 import { requireAuth, type AuthedRequest } from '../auth.js'
 import { encryptSsn, validateSsn } from '../kycServiceEnhanced.js'
-import { storeDocument } from '../documentService.js'
+import { deleteDocument, storeDocument } from '../documentService.js'
+import { documentUpload } from '../middleware/documentUpload.js'
 
 let prisma: any = null
 
@@ -47,12 +47,6 @@ const documentUploadLimiter = rateLimit({
   message: 'Too many document uploads. Try again later.',
   standardHeaders: true,
   legacyHeaders: false,
-})
-
-// File upload: 8MB max (reduced from 10MB for DoS prevention)
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 8 * 1024 * 1024 },
 })
 
 const submitKycSchema = z.object({
@@ -132,7 +126,7 @@ router.post(
   requireAuth,
   csrfProtection as any,
   documentUploadLimiter,
-  upload.single('document'),
+  documentUpload,
   async (req: AuthedRequest, res) => {
     const documentType = (req.params.documentType || '').toLowerCase()
     if (!['identity', 'address', 'selfie'].includes(documentType)) {
@@ -167,7 +161,7 @@ router.post(
         return
       }
 
-      let docs: Array<{ type: string; id: string; uploaded: boolean; hash?: string; size?: number; name?: string }> = []
+      let docs: Array<{ type: string; id: string; uploaded: boolean; hash?: string; size?: number; name?: string; storagePath?: string }> = []
       try {
         if (user.kycDocumentsJson) {
           docs = JSON.parse(user.kycDocumentsJson)
@@ -176,6 +170,10 @@ router.post(
         docs = []
       }
 
+      const previous = docs.find(d => d.type === documentType)
+      if (previous?.storagePath) {
+        await deleteDocument(req.userId!, previous.storagePath)
+      }
       docs = docs.filter(d => d.type !== documentType)
       docs.push({
         type: documentType,
@@ -184,6 +182,7 @@ router.post(
         hash: stored.hash,
         size: stored.fileSize,
         name: stored.fileName,
+        storagePath: stored.storagePath,
       })
 
       await prisma.user.update({
@@ -258,7 +257,7 @@ router.delete(
         return
       }
 
-      let docs: Array<{ type: string; id: string; uploaded: boolean }> = []
+      let docs: Array<{ type: string; id: string; uploaded: boolean; storagePath?: string }> = []
       try {
         docs = JSON.parse(user.kycDocumentsJson)
       } catch (e) {
@@ -269,6 +268,10 @@ router.delete(
       if (!doc) {
         res.status(404).json({ error: 'Document not found' })
         return
+      }
+
+      if (doc.storagePath) {
+        await deleteDocument(req.userId!, doc.storagePath)
       }
 
       docs = docs.filter(d => d.id !== req.params.id)

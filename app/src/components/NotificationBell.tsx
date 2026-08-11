@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Bell, X, Check } from 'lucide-react'
 import { api, getToken } from '../lib/api'
 
@@ -75,6 +76,23 @@ export default function NotificationBell() {
     try { await api.markAllRead(); await load() } catch { /* ignore */ }
   }
 
+  const navigate = useNavigate()
+
+  const openNotification = async (notification: Notification) => {
+    if (!getToken()) return
+    try {
+      if (!notification.read) {
+        await api.markNotificationRead(notification.id)
+        setItems((prev) => prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n)))
+        setUnread((prev) => Math.max(prev - 1, 0))
+      }
+    } catch {
+      // ignore read update failures and still navigate
+    }
+    setOpen(false)
+    navigate(`/notifications?id=${encodeURIComponent(notification.id)}`)
+  }
+
   const remove = async (id: string) => {
     if (!getToken()) return
     try { await api.removeNotification(id); await load() } catch { /* ignore */ }
@@ -111,18 +129,44 @@ export default function NotificationBell() {
                 You have no notifications yet.
               </div>
             ) : items.map((n) => (
-              <div key={n.id} className={`px-4 py-3 border-b border-[#ffffff05] flex items-start gap-3 ${!n.read ? 'bg-[#0C8B44]/5' : ''}`}>
+              <div
+                key={n.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => openNotification(n)}
+                onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') openNotification(n) }}
+                className={`px-4 py-3 border-b border-[#ffffff05] flex items-start gap-3 ${!n.read ? 'bg-[#0C8B44]/5' : ''} cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0C8B44]`}
+              >
                 <div className={`w-1.5 h-1.5 rounded-full mt-1.5 ${n.read ? 'bg-[#444]' : 'bg-[#0C8B44]'}`} />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-[#E5E5E5] truncate">{n.title}</p>
                   {n.body && <p className="text-[11px] text-[#A0A0A0] mt-0.5 line-clamp-2">{n.body}</p>}
                   <p className="text-[10px] text-[#555] mt-1">{new Date(n.createdAt).toLocaleString()}</p>
                 </div>
-                <button onClick={() => remove(n.id)} aria-label="Dismiss" className="text-[#555] hover:text-[#E5E5E5]">
+                <button
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    remove(n.id)
+                  }}
+                  aria-label="Dismiss"
+                  className="text-[#555] hover:text-[#E5E5E5]"
+                >
                   <X className="w-3 h-3" />
                 </button>
               </div>
             ))}
+          </div>
+          <div className="border-t border-[#ffffff08] px-4 py-3 bg-[#0b1114]">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                navigate('/notifications')
+              }}
+              className="w-full rounded-lg border border-[#0C8B44]/50 bg-[#0C8B44]/10 px-3 py-2 text-left text-sm font-medium text-[#0C8B44] hover:bg-[#0C8B44]/15 transition-colors"
+            >
+              View all notifications
+            </button>
           </div>
         </div>
       )}

@@ -1,6 +1,15 @@
 import nodemailer from 'nodemailer'
 import { prisma } from './db.js'
 import { env } from './env.js'
+import {
+  adminEmailAddress,
+  adminEmailRecipients,
+  customerEmailAddress,
+  customerEmailFooter,
+  customerEmailName,
+  emailReplyTo,
+  formatEmailAddress,
+} from './config/email.js'
 
 interface NotificationPreferences {
   emailNotifications: boolean
@@ -53,9 +62,28 @@ export function resolveEmailTransportConfig(
   const secure = (overrides.SMTP_SECURE ?? env.SMTP_SECURE ?? 'false').toLowerCase() === 'true'
   const user = (overrides.SMTP_USER ?? env.SMTP_USER ?? '').trim()
   const pass = (overrides.SMTP_PASS ?? overrides.SMTP_PASSWORD ?? env.SMTP_PASS ?? '').trim()
-  const fromAddress = (overrides.SMTP_FROM ?? env.SMTP_FROM ?? 'noreply@verdexis.com').trim()
-  const fromName = (overrides.SMTP_FROM_NAME ?? env.SMTP_FROM_NAME ?? 'Verdexis').trim()
-  const replyTo = (overrides.SMTP_REPLY_TO ?? env.SMTP_REPLY_TO ?? '').trim()
+  const fromAddress = (
+    overrides.EMAIL_FROM_ADDRESS
+      ?? overrides.SMTP_FROM
+      ?? env.EMAIL_FROM_ADDRESS
+      ?? env.SMTP_FROM
+      ?? customerEmailAddress
+  ).trim()
+  const fromName = (
+    overrides.EMAIL_FROM_NAME
+      ?? overrides.SMTP_FROM_NAME
+      ?? env.EMAIL_FROM_NAME
+      ?? env.SMTP_FROM_NAME
+      ?? customerEmailName
+  ).trim()
+  const replyTo = (
+    overrides.EMAIL_REPLY_TO
+      ?? overrides.SMTP_REPLY_TO
+      ?? env.EMAIL_REPLY_TO
+      ?? env.SMTP_REPLY_TO
+      ?? emailReplyTo
+      ?? ''
+  ).trim()
   const unsubscribeUrl = (overrides.SMTP_UNSUBSCRIBE_URL ?? env.SMTP_UNSUBSCRIBE_URL ?? '').trim()
 
   return {
@@ -119,10 +147,10 @@ export function buildNotificationEmailHtml(subject: string, body: string, htmlBo
     const unsubscribe = env.SMTP_UNSUBSCRIBE_URL ? `<p style="font-size:12px;color:#64748b;margin-top:24px;">To stop receiving these emails, <a href="${env.SMTP_UNSUBSCRIBE_URL}">unsubscribe</a>.</p>` : ''
     if (withButton.toLowerCase().includes('</body>')) {
       return withButton.replace(/<body([^>]*)>/i, `<body$1>${preheaderSpan}`)
-        .replace(/<\/body>/i, `${unsubscribe}</body>`)
+        .replace(/<\/body>/i, `${unsubscribe}${customerEmailFooter()}</body>`)
     }
 
-    return `${preheaderSpan}${withButton}${unsubscribe}`
+    return `${preheaderSpan}${withButton}${unsubscribe}${customerEmailFooter()}`
   }
 
   const safeBody = escapeHtml(body).replace(/\n/g, '<br />')
@@ -141,7 +169,7 @@ export function buildNotificationEmailHtml(subject: string, body: string, htmlBo
       <p style="margin-top: 24px;">
         <a href="${resolvedTrackingUrl}" style="display: inline-block; background: #0f4c81; color: #ffffff; text-decoration: none; padding: 10px 16px; border-radius: 999px; font-weight: 600;">View in Verdexis</a>
       </p>
-      <p style="font-size: 12px; color: #64748b; margin-top: 24px;">This message was sent by Verdexis.</p>
+      ${customerEmailFooter()}
       ${env.SMTP_UNSUBSCRIBE_URL ? `<p style="font-size:12px;color:#64748b;margin-top:8px;">To stop receiving these emails, <a href="${env.SMTP_UNSUBSCRIBE_URL}">unsubscribe</a>.</p>` : ''}
     </div>
   </body>
@@ -167,6 +195,13 @@ function getEmailTransporter(): nodemailer.Transporter | null {
   if (!config.auth.user || !config.auth.pass) {
     console.warn('[notification-service] SMTP credentials missing, skipping email delivery')
     return null
+  }
+
+  if (config.auth.user.toLowerCase() !== config.fromAddress.toLowerCase()) {
+    console.warn(
+      `[notification-service] SMTP login is ${config.auth.user}, but customer mail is sent as ${config.fromAddress}. ` +
+      'The SMTP provider must verify the customer address as an alias/sender for this account; otherwise delivery may be rejected.'
+    )
   }
 
   emailTransporter = nodemailer.createTransport({
@@ -215,8 +250,8 @@ export async function sendEmailNotification(
     }
 
     // Prefer the authenticated SMTP user as the envelope/sender to avoid SPF/DMARC alignment issues
-    const envelopeFrom = config.auth.user || config.fromAddress
-    headers['Sender'] = formatFromAddress(envelopeFrom, config.fromName)
+    const envelopeFrom = config.fromAddress
+    headers['Sender'] = formatEmailAddress(envelopeFrom, config.fromName)
 
     await transporter.sendMail({
       from: config.from,
@@ -237,6 +272,35 @@ export async function sendEmailNotification(
     return true
   } catch (error) {
     console.error('[notification-service] Error sending email:', error)
+    return false
+  }
+}
+
+/** Send an internal operational message only to configured administrators. */
+export async function sendAdminEmailNotification(
+  subject: string,
+  body: string,
+  htmlBody?: string,
+  recipients: string[] = adminEmailRecipients,
+): Promise<boolean> {
+  try {
+    const transporter = getEmailTransporter()
+    if (!transporter) return false
+    const config = resolveEmailTransportConfig()
+    const from = formatEmailAddress(adminEmailAddress, 'Verdexis Admin')
+    await transporter.sendMail({
+      from,
+      to: recipients,
+      subject,
+      text: body,
+      html: htmlBody ?? `<p>${escapeHtml(body).replace(/\n/g, '<br />')}</p>`,
+      headers: { 'X-Mailer': 'Verdexis', 'Auto-Submitted': 'auto-generated' },
+      envelope: { from: adminEmailAddress, to: recipients },
+      ...(config.replyTo ? { replyTo: config.replyTo } : {}),
+    })
+    return true
+  } catch (error) {
+    console.error('[notification-service] Error sending admin email:', error)
     return false
   }
 }

@@ -32,6 +32,42 @@ router.post('/read', requireAuth, async (req: AuthedRequest, res) => {
   res.json({ ok: true })
 })
 
+router.get('/:id', requireAuth, async (req: AuthedRequest, res) => {
+  const userId = req.userId
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
+  const notification = await prisma.notification.findFirst({
+    where: { id: req.params.id, userId },
+  })
+  if (!notification) {
+    res.status(404).json({ error: 'Not found' })
+    return
+  }
+  res.json({ notification })
+})
+
+router.put('/:id/read', requireAuth, async (req: AuthedRequest, res) => {
+  const userId = req.userId
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
+  const notification = await prisma.notification.findFirst({
+    where: { id: req.params.id, userId },
+  })
+  if (!notification) {
+    res.status(404).json({ error: 'Not found' })
+    return
+  }
+  await prisma.notification.update({
+    where: { id: req.params.id },
+    data: { read: true },
+  })
+  res.json({ ok: true })
+})
+
 router.delete('/:id', requireAuth, async (req: AuthedRequest, res) => {
   const userId = req.userId
   if (!userId) {

@@ -3,7 +3,15 @@ Allow: /
 Disallow: /api/
 Disallow: /admin/
 Disallow: /auth/
+Disallow: /login
+Disallow: /signup
+Disallow: /reset
+Disallow: /dashboard
+Disallow: /wallet
+Disallow: /settings
+Disallow: /account
+Disallow: /private
 Disallow: /reset
 # Do not enumerate internal authenticated route names here.
 
-Sitemap: https://verdexis.app/sitemap.xml
+Sitemap: https://www.verdexisgroup.com/sitemap.xml

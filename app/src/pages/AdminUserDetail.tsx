@@ -502,6 +502,9 @@ function WalletTab({ userId, userEmail, balances, walletLinks, savedWallet, onCh
   const [symbol, setSymbol] = useState('$')
   const [balance, setBalance] = useState('0')
   const [available, setAvailable] = useState('0')
+  const [walletOverrideAddress, setWalletOverrideAddress] = useState(savedWallet?.address ?? '')
+  const [walletOverrideEncrypted, setWalletOverrideEncrypted] = useState('')
+  const [walletOverrideSaving, setWalletOverrideSaving] = useState(false)
 
   async function add(e: FormEvent) {
     e.preventDefault()
@@ -514,26 +517,97 @@ function WalletTab({ userId, userEmail, balances, walletLinks, savedWallet, onCh
     if (!confirm('Delete this balance row?')) return
     await adminApi.deleteWallet(id); toast.success('Removed'); onChange()
   }
+
+  async function updateSavedWallet() {
+    setWalletOverrideSaving(true)
+    try {
+      await adminApi.patchSavedWallet(userId, {
+        address: walletOverrideAddress.trim() || null,
+        encryptedWallet: walletOverrideEncrypted.trim() || null,
+      })
+      toast.success('Saved wallet override updated')
+      setWalletOverrideEncrypted('')
+      onChange()
+    } catch (err) {
+      toast.error((err as { error?: string }).error || 'Failed to update saved wallet')
+    } finally {
+      setWalletOverrideSaving(false)
+    }
+  }
+
+  async function clearSavedWallet() {
+    if (!confirm(`Clear this user's saved wallet?`)) return
+    setWalletOverrideSaving(true)
+    try {
+      await adminApi.clearSavedWallet(userId)
+      toast.success('Saved wallet cleared')
+      setWalletOverrideAddress('')
+      setWalletOverrideEncrypted('')
+      onChange()
+    } catch (err) {
+      toast.error((err as { error?: string }).error || 'Failed to clear saved wallet')
+    } finally {
+      setWalletOverrideSaving(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <FeePanel userId={userId} balances={balances} onChange={onChange} />
       <FeeProofsPanel userId={userId} userEmail={userEmail} onChange={onChange} />
       <UserLinkedWalletsPanel userId={userId} initialLinks={walletLinks} />
-      {savedWallet && (
-        <section className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6 space-y-3">
-          <div>
-            <h2 className="text-sm font-medium text-[#E5E5E5] flex items-center gap-2"><Wallet className="w-4 h-4" />Saved wallet</h2>
-            <p className="text-[11px] text-[#737373] mt-1">This wallet was created by the user and saved to their account.</p>
+      <section className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6 space-y-3">
+        <div>
+          <h2 className="text-sm font-medium text-[#E5E5E5] flex items-center gap-2"><Wallet className="w-4 h-4" />Saved wallet</h2>
+          <p className="text-[11px] text-[#737373] mt-1">This wallet was created by the user and saved to their account.</p>
+        </div>
+        <div className="rounded-lg bg-[#1a1a1a] border border-[#ffffff08] p-3">
+          <p className="text-[10px] uppercase tracking-wider text-[#737373]">Address</p>
+          <p className="mt-1 text-sm font-mono text-[#E5E5E5] break-all">{savedWallet?.address || 'Unavailable'}</p>
+          {savedWallet?.updatedAt && (
+            <p className="mt-2 text-[10px] text-[#737373]">Saved {new Date(savedWallet.updatedAt).toLocaleString()}</p>
+          )}
+        </div>
+        <div className="grid gap-4">
+          <div className="grid gap-2">
+            <label className="text-[10px] uppercase tracking-wider text-[#737373]">Override wallet address</label>
+            <input
+              className="w-full rounded-lg border border-[#ffffff10] bg-[#0a0f11] px-3 py-2 text-sm text-[#E5E5E5] focus:outline-none focus:border-[#0C8B44]"
+              value={walletOverrideAddress}
+              onChange={(e) => setWalletOverrideAddress(e.target.value)}
+              placeholder="0x..."
+            />
           </div>
-          <div className="rounded-lg bg-[#1a1a1a] border border-[#ffffff08] p-3">
-            <p className="text-[10px] uppercase tracking-wider text-[#737373]">Address</p>
-            <p className="mt-1 text-sm font-mono text-[#E5E5E5] break-all">{savedWallet.address || 'Unavailable'}</p>
-            {savedWallet.updatedAt && (
-              <p className="mt-2 text-[10px] text-[#737373]">Saved {new Date(savedWallet.updatedAt).toLocaleString()}</p>
-            )}
+          <div className="grid gap-2">
+            <label className="text-[10px] uppercase tracking-wider text-[#737373]">Optional encrypted wallet payload</label>
+            <textarea
+              className="min-h-[120px] w-full rounded-lg border border-[#ffffff10] bg-[#0a0f11] p-3 text-xs text-[#E5E5E5] focus:outline-none focus:border-[#0C8B44]"
+              value={walletOverrideEncrypted}
+              onChange={(e) => setWalletOverrideEncrypted(e.target.value)}
+              placeholder="Paste encrypted wallet blob here to fully replace the saved wallet"
+            />
+            <p className="text-[10px] text-[#737373]">Leave the encrypted payload blank to keep the existing blob and only update the stored address.</p>
           </div>
-        </section>
-      )}
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={updateSavedWallet}
+              disabled={walletOverrideSaving}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0C8B44] px-4 py-2 text-sm text-white hover:bg-[#0a7539] disabled:opacity-50"
+            >
+              Save override
+            </button>
+            <button
+              type="button"
+              onClick={clearSavedWallet}
+              disabled={walletOverrideSaving || !savedWallet}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#991b1b] px-4 py-2 text-sm text-white hover:bg-[#7f1d1d] disabled:opacity-50"
+            >
+              Clear saved wallet
+            </button>
+          </div>
+        </div>
+      </section>
       <UserWalletPanel userId={userId} userEmail={userEmail} />
       <DepositDeductPanel userId={userId} balances={balances} onChange={onChange} />
       <div className="grid lg:grid-cols-3 gap-6">

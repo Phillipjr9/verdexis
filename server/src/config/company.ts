@@ -9,7 +9,7 @@ export const companyInfo = {
   
   // Contact Information
   contact: {
-    email: 'support@verdexis.com',
+    email: 'no-reply@verdexisgroup.com',
     phone: '+1 (555) 123-4567',
     whatsapp: '+17196798790',
     telegram: 't.me/+17196798790',
@@ -35,14 +35,14 @@ export const companyInfo = {
 
   // Important Links
   links: {
-    website: 'https://verdexis.com',
+    website: 'https://www.verdexisgroup.com',
     dashboard: 'https://app.verdexis.com',
     helpCenter: 'https://help.verdexis.com',
     blog: 'https://blog.verdexis.com',
-    terms: 'https://verdexis.com/terms',
-    privacy: 'https://verdexis.com/privacy',
-    security: 'https://verdexis.com/security',
-    contact: 'https://verdexis.com/contact',
+    terms: 'https://www.verdexisgroup.com/terms',
+    privacy: 'https://www.verdexisgroup.com/privacy',
+    security: 'https://www.verdexisgroup.com/security',
+    contact: 'https://www.verdexisgroup.com/support',
   },
 
   // Legal Information

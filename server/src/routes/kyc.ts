@@ -1,13 +1,12 @@
 import { Router } from 'express'
 import { z } from 'zod'
-import multer from 'multer'
 import { prisma } from '../db.js'
 import { requireAuth, type AuthedRequest } from '../auth.js'
 import { encryptSsn, validateSsn } from '../kycService.js'
-import { storeDocument } from '../documentService.js'
+import { deleteDocument, storeDocument } from '../documentService.js'
+import { documentUpload } from '../middleware/documentUpload.js'
 
 const router = Router()
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } })
 
 const submitKycSchema = z.object({
   firstName: z.string().min(1).max(100),
@@ -27,7 +26,7 @@ const submitKycSchema = z.object({
 router.post(
   '/upload/:documentType',
   requireAuth,
-  upload.single('document'),
+  documentUpload,
   async (req: AuthedRequest, res) => {
     const documentType = (req.params.documentType || '').toLowerCase()
     if (!['identity', 'address', 'selfie'].includes(documentType)) {
@@ -57,7 +56,7 @@ router.post(
       }
 
       // Parse existing documents
-      let docs: Array<{ type: string; id: string; uploaded: boolean; hash?: string; size?: number; name?: string }> = []
+      let docs: Array<{ type: string; id: string; uploaded: boolean; hash?: string; size?: number; name?: string; storagePath?: string }> = []
       try {
         if (user.kycDocumentsJson) {
           docs = JSON.parse(user.kycDocumentsJson)
@@ -66,7 +65,11 @@ router.post(
         docs = []
       }
 
-      // Remove old document of same type
+      // Remove the previous file as well as its metadata when replacing it.
+      const previous = docs.find(d => d.type === documentType)
+      if (previous?.storagePath) {
+        await deleteDocument(req.userId!, previous.storagePath)
+      }
       docs = docs.filter(d => d.type !== documentType)
 
       // Add new document
@@ -77,6 +80,7 @@ router.post(
         hash: stored.hash,
         size: stored.fileSize,
         name: stored.fileName,
+        storagePath: stored.storagePath,
       })
 
       // Update user
@@ -148,7 +152,7 @@ router.delete('/document/:id', requireAuth, async (req: AuthedRequest, res) => {
       return
     }
 
-    let docs: Array<{ type: string; id: string; uploaded: boolean }> = []
+    let docs: Array<{ type: string; id: string; uploaded: boolean; storagePath?: string }> = []
     try {
       docs = JSON.parse(user.kycDocumentsJson)
     } catch (e) {
@@ -159,6 +163,10 @@ router.delete('/document/:id', requireAuth, async (req: AuthedRequest, res) => {
     if (!doc) {
       res.status(404).json({ error: 'Document not found' })
       return
+    }
+
+    if (doc.storagePath) {
+      await deleteDocument(req.userId!, doc.storagePath)
     }
 
     // Remove from database

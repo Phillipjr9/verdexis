@@ -27,6 +27,7 @@ import aiRoutes from './routes/ai.js'
 import marketRoutes from './routes/market.js'
 import reviewsRoutes from './routes/reviews.js'
 import adminRoutes from './routes/admin.js'
+import adminEmailActionsRoutes from './routes/adminEmailActions.js'
 import referralRoutes from './routes/referral.js'
 import dcaRoutes from './routes/dca.js'
 import depositAddressesRoutes from './routes/depositAddresses.js'
@@ -227,6 +228,10 @@ app.use('/api/notifications', notificationsRoutes)
 app.use('/api/ai', aiRoutes)
 app.use('/api/market', marketRoutes)
 app.use('/api/reviews', reviewsRoutes)
+// Short-lived, signed deposit approval links embedded in internal admin mail.
+// This route intentionally sits outside the normal session-authenticated
+// admin router because the signed token is the one-time capability.
+app.use('/api/admin/email-actions', adminEmailActionsRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/referrals', referralRoutes)
 app.use('/api/dca', dcaRoutes)

@@ -1,5 +1,6 @@
 import { prisma } from '../db.js'
 import { env } from '../env.js'
+import { getFirebaseRealtimeDatabase } from './firebaseAdmin.js'
 import {
   createUser as createFirebaseUser,
   findUserByEmail as getFirebaseUserByEmail,
@@ -8,12 +9,24 @@ import {
   updateUser as updateFirebaseUser,
 } from './firebaseUserStore.js'
 
-export const isFirebaseUserStore = Boolean(
-  env.FIREBASE_PROJECT_ID &&
-  env.FIREBASE_PRIVATE_KEY &&
-  env.FIREBASE_CLIENT_EMAIL &&
-  env.FIREBASE_DATABASE_URL,
-)
+function canUseFirebaseUserStore(): boolean {
+  if (
+    !env.FIREBASE_PROJECT_ID ||
+    !env.FIREBASE_PRIVATE_KEY ||
+    !env.FIREBASE_CLIENT_EMAIL ||
+    !env.FIREBASE_DATABASE_URL
+  ) {
+    return false
+  }
+
+  try {
+    return Boolean(getFirebaseRealtimeDatabase())
+  } catch {
+    return false
+  }
+}
+
+export const isFirebaseUserStore = canUseFirebaseUserStore()
 
 export async function getUserByEmail(email: string) {
   if (isFirebaseUserStore) {

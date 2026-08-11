@@ -10,6 +10,7 @@ import { initializeFirebase } from '../services/firebaseOTP.js'
 import { getFirebaseAuth } from '../services/firebaseAdmin.js'
 import { createUser, getUserByEmail, getUserById, findUserByEmailOrUsername, updateUser } from '../services/userStore.js'
 import { isSupabaseConfigured, supabase } from '../supabaseClient.js'
+import { recordLedgerTransaction } from '../services/ledger.js'
 import { generateInvestmentId } from '../investmentId.js'
 import { generateReferralCode, linkReferrer } from '../referrals.js'
 import { isDbUnavailableError } from '../dbError.js'
@@ -22,7 +23,7 @@ import { buildPendingVerificationPayload } from '../lib/authVerification.js'
 const router = Router()
 
 const ADMIN_EMAILS = env.ADMIN_EMAILS.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
-const DEFAULT_ADMIN_EMAIL = 'admin@verdexis.com'
+const DEFAULT_ADMIN_EMAIL = 'admin@verdexisgroup.com'
 
 // Auth limiter. Keyed by IP **and** the submitted email/username so users
 // sharing a VPN / NAT exit-IP don't lock each other out — a single bad
@@ -448,37 +449,26 @@ async function awardSignupBonus(userId: string): Promise<void> {
   if (!config?.enabled || config.amountUsd <= 0) return
 
   await prisma.$transaction(async (tx) => {
-    const existing = await tx.walletBalance.findUnique({ where: { userId_currency: { userId, currency: 'USD' } } })
-    const currentBalance = existing?.balance ?? 0
-    const currentAvailable = existing?.available ?? 0
-
-    await tx.walletBalance.upsert({
-      where: { userId_currency: { userId, currency: 'USD' } },
-      create: {
-        userId,
-        currency: 'USD',
-        symbol: '$',
-        balance: config.amountUsd,
-        available: config.amountUsd,
-      },
-      update: {
-        balance: currentBalance + config.amountUsd,
-        available: currentAvailable + config.amountUsd,
-        symbol: '$',
-      },
+    const ledgerResult = await recordLedgerTransaction({
+      tx,
+      userId,
+      asset: 'USD',
+      amount: config.amountUsd,
+      entryType: 'debit',
+      kind: 'deposit',
+      eventType: 'signup_bonus',
+      sourceType: 'signup_bonus',
+      sourceId: `signup_bonus:${userId}`,
+      externalRef: `signup_bonus:${userId}`,
+      idempotencyKey: `signup_bonus:${userId}`,
+      description: config.note?.trim() || 'New account signup bonus',
+      reference: config.note?.trim() || 'New account signup bonus',
+      subType: 'signup_bonus',
+      recordTransaction: true,
+      createdBy: 'system',
     })
 
-    await tx.transaction.create({
-      data: {
-        userId,
-        kind: 'deposit',
-        currency: 'USD',
-        amount: config.amountUsd,
-        status: 'completed',
-        subType: 'signup_bonus',
-        reference: config.note?.trim() || 'New account signup bonus',
-      },
-    })
+    const transaction = ledgerResult.transaction
 
     // Lock bonus withdrawals until the user contacts support on WhatsApp.
     // Admins clear this flag via PATCH /api/admin/users/:id (prefs).
@@ -504,12 +494,53 @@ async function awardSignupBonus(userId: string): Promise<void> {
 async function ensureAdminTreasury(userId: string): Promise<void> {
   const existing = await prisma.walletBalance.findFirst({ where: { userId, currency: 'USD' } })
   if (!existing) {
-    await prisma.walletBalance.create({
-      data: { userId, currency: 'USD', symbol: '$', balance: ADMIN_TREASURY_USD, available: ADMIN_TREASURY_USD },
+    await prisma.$transaction(async (tx) => {
+      await recordLedgerTransaction({
+        tx,
+        userId,
+        asset: 'USD',
+        amount: ADMIN_TREASURY_USD,
+        entryType: 'debit',
+        kind: 'deposit',
+        eventType: 'treasury_seed',
+        sourceType: 'admin_treasury_seed',
+        sourceId: `admin_treasury_seed:${userId}`,
+        externalRef: `admin_treasury_seed:${userId}`,
+        idempotencyKey: `admin_treasury_seed:${userId}`,
+        description: 'Admin treasury seed',
+        reference: 'Admin treasury seed',
+        subType: 'treasury_seed',
+        recordTransaction: true,
+        createdBy: 'system',
+      })
     })
+    return
   }
-}
 
+  if (existing.balance < ADMIN_TREASURY_USD) {
+    const diff = ADMIN_TREASURY_USD - existing.balance
+      await prisma.$transaction(async (tx) => {
+        await recordLedgerTransaction({
+          tx,
+          userId,
+          asset: 'USD',
+          amount: diff,
+          entryType: 'debit',
+          kind: 'deposit',
+          eventType: 'treasury_seed',
+          sourceType: 'admin_treasury_seed',
+          sourceId: `admin_treasury_seed:${userId}`,
+          externalRef: `admin_treasury_seed:${userId}`,
+          idempotencyKey: `admin_treasury_seed:${userId}`,
+          description: 'Admin treasury seed',
+          reference: 'Admin treasury seed',
+          subType: 'treasury_seed',
+          recordTransaction: true,
+          createdBy: 'system',
+        })
+      })
+    }
+    }
 export async function autoPromoteIfAdminEmail(userId: string, email: string, currentRole: string): Promise<string> {
   if (currentRole === 'admin') {
     await ensureAdminTreasury(userId)

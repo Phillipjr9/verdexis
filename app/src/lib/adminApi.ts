@@ -422,6 +422,11 @@ export const adminApi = {
   deleteWallet: (id: string) =>
     request<{ ok: boolean }>(`/api/admin/wallet/${id}`, { method: 'DELETE' }),
 
+  patchSavedWallet: (userId: string, payload: { encryptedWallet?: string | null; address?: string | null }) =>
+    request<{ savedWallet?: AdminSavedWallet | null }>(`/api/admin/users/${userId}/saved-wallet`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  clearSavedWallet: (userId: string) =>
+    request<{ ok: boolean }>(`/api/admin/users/${userId}/saved-wallet`, { method: 'DELETE' }),
+
   // Per-user crypto / wire deposit destinations the admin assigns.
   // Stored server-side in the user's prefs.depositAddresses, so they
   // surface to the user on any device they sign in on.

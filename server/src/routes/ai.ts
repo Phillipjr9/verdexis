@@ -34,7 +34,7 @@ router.post('/chat', requireAuth, aiLimiter, async (req, res) => {
   const parse = chatSchema.safeParse(req.body)
   if (!parse.success) { res.status(400).json({ error: 'Invalid input' }); return }
 
-  const apiKey = process.env.OPENAI_API_KEY
+  const apiKey = process.env.OPENAI_API_KEY || process.env.VERCEL_AI_KEY
   if (!apiKey) { res.status(503).json({ error: 'LLM not configured' }); return }
 
   const model = process.env.OPENAI_MODEL || 'gpt-4o-mini'
@@ -57,8 +57,7 @@ router.post('/chat', requireAuth, aiLimiter, async (req, res) => {
   ].join('\n\n')
 
   try {
-    if (process.env.OPENAI_API_KEY) {
-      const apiKey = process.env.OPENAI_API_KEY
+    if (apiKey) {
       const r = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {

@@ -1,16 +1,15 @@
-import { cert, initializeApp, type App } from 'firebase-admin/app'
-import { getAuth, type Auth } from 'firebase-admin/auth'
-import { getFirestore, type Firestore } from 'firebase-admin/firestore'
-import { getDatabase, type Database } from 'firebase-admin/database'
+import { createRequire } from 'node:module'
 import { env } from '../env.js'
 
-let firebaseApp: App | null = null
+const require = createRequire(import.meta.url)
+
+let firebaseApp: any = null
 let firebaseInitError: Error | null = null
 let firebaseAttempted = false
 
-export function initializeFirebaseAdmin(): App {
+export function initializeFirebaseAdmin(): any {
   if (firebaseApp) return firebaseApp
-  
+
   if (firebaseInitError) {
     throw firebaseInitError
   }
@@ -23,14 +22,15 @@ export function initializeFirebaseAdmin(): App {
 
   try {
     if (process.env.FIREBASE_CONFIG) {
-      firebaseApp = initializeApp()
-      return firebaseApp
+      return initializeFirebaseApp('default')
     }
 
     if (!env.FIREBASE_PROJECT_ID || !env.FIREBASE_PRIVATE_KEY || !env.FIREBASE_CLIENT_EMAIL) {
       throw new Error('Firebase Admin SDK is not configured. Set FIREBASE_PROJECT_ID, FIREBASE_PRIVATE_KEY, and FIREBASE_CLIENT_EMAIL.')
     }
 
+    const adminApp = requireFirebaseAdminApp()
+    const { cert, initializeApp } = adminApp
     firebaseApp = initializeApp({
       credential: cert({
         projectId: env.FIREBASE_PROJECT_ID,
@@ -48,7 +48,22 @@ export function initializeFirebaseAdmin(): App {
   }
 }
 
-export function getFirebaseAdminApp(): App | null {
+function initializeFirebaseApp(name?: string): any {
+  const { initializeApp } = requireFirebaseAdminApp()
+  firebaseApp = initializeApp(name ? undefined : undefined)
+  return firebaseApp
+}
+
+function requireFirebaseAdminApp(): any {
+  return requireDynamicFirebaseModule('firebase-admin/app')
+}
+
+function requireDynamicFirebaseModule(moduleName: string): any {
+  const mod = require(moduleName)
+  return mod
+}
+
+export function getFirebaseAdminApp(): any | null {
   try {
     return initializeFirebaseAdmin()
   } catch (error) {
@@ -57,21 +72,27 @@ export function getFirebaseAdminApp(): App | null {
   }
 }
 
-export function getFirebaseFirestore(): Firestore | null {
+export function getFirebaseFirestore(): any | null {
   const app = getFirebaseAdminApp()
-  return app ? getFirestore(app) : null
+  if (!app) return null
+  const { getFirestore } = requireDynamicFirebaseModule('firebase-admin/firestore')
+  return getFirestore(app)
 }
 
-export function getFirebaseRealtimeDatabase(): Database | null {
+export function getFirebaseRealtimeDatabase(): any | null {
   if (!env.FIREBASE_DATABASE_URL) {
     console.warn('[firebase] FIREBASE_DATABASE_URL not set')
     return null
   }
   const app = getFirebaseAdminApp()
-  return app ? getDatabase(app) : null
+  if (!app) return null
+  const { getDatabase } = requireDynamicFirebaseModule('firebase-admin/database')
+  return getDatabase(app)
 }
 
-export function getFirebaseAuth(): Auth | null {
+export function getFirebaseAuth(): any | null {
   const app = getFirebaseAdminApp()
-  return app ? getAuth(app) : null
+  if (!app) return null
+  const { getAuth } = requireDynamicFirebaseModule('firebase-admin/auth')
+  return getAuth(app)
 }

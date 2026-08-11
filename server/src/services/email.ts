@@ -6,6 +6,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { companyInfo } from '../config/company.js'
+import { customerEmailFooter, emailLinks } from '../config/email.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -153,7 +154,7 @@ class EmailService {
       USER_NAME: userName,
       ONBOARDING_URL: `${env.APP_BASE_URL}/onboarding`,
       HELP_CENTER_URL: `${env.APP_BASE_URL}/help`,
-      SUPPORT_EMAIL: env.SMTP_USER || 'support@verdexis.com',
+      SUPPORT_EMAIL: emailLinks.support,
     })
 
     return this.send({

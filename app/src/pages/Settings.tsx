@@ -105,6 +105,13 @@ export default function Settings() {
   const [passkeysLoading, setPasskeysLoading] = useState(false)
   const [registeringPasskey, setRegisteringPasskey] = useState(false)
   const [passkeyError, setPasskeyError] = useState<string | null>(null)
+  const [emailVerified, setEmailVerified] = useState(false)
+  const [phoneVerified, setPhoneVerified] = useState(false)
+  const [phoneVerificationSent, setPhoneVerificationSent] = useState(false)
+  const [phoneVerificationCode, setPhoneVerificationCode] = useState('')
+  const [sendingEmailVerification, setSendingEmailVerification] = useState(false)
+  const [sendingPhoneVerification, setSendingPhoneVerification] = useState(false)
+  const [verifyingPhoneCode, setVerifyingPhoneCode] = useState(false)
 
   useEffect(() => {
     const auth = localStorage.getItem('verdexis_auth')
@@ -120,6 +127,7 @@ export default function Settings() {
           .then((r) => setWithdrawalFeeRate(r.ratePct))
           .catch(() => {})
       }
+      if (parsed.emailVerified) setEmailVerified(true)
     } catch {}
   }, [])
 
@@ -139,6 +147,29 @@ export default function Settings() {
     }
     fetchPasskeys()
   }, [isAuthed])
+
+  useEffect(() => {
+    if (!getToken()) return
+
+    let cancelled = false
+    const refreshVerificationStatus = async () => {
+      try {
+        const status = await api.verificationStatus()
+        if (cancelled) return
+        setEmailVerified(status.emailVerified)
+        setPhoneVerified(status.phoneVerified)
+      } catch {
+        if (cancelled) return
+      }
+    }
+
+    refreshVerificationStatus()
+    window.addEventListener('verdexis:profile', refreshVerificationStatus)
+    return () => {
+      cancelled = true
+      window.removeEventListener('verdexis:profile', refreshVerificationStatus)
+    }
+  }, [])
 
   const update = <K extends keyof UserPrefs>(key: K, value: UserPrefs[K]) => {
     const next = { ...prefs, [key]: value }
@@ -162,16 +193,28 @@ export default function Settings() {
       const patch: Record<string, unknown> = {}
       if (key === 'name') patch.name = value
       else if (key === 'username') patch.username = (value as string).trim().toLowerCase() || null
+      else if (key === 'email') patch.email = (value as string).trim().toLowerCase()
+      else if (key === 'phone') patch.phone = value
       else if (key === 'twoFactorEnabled') patch.twoFactor = value
       else patch.prefs = next
       
       api.patchProfile(patch)
-        .then(() => {
+        .then(async (res) => {
+          setStoredUser(res.user)
+          if (key === 'email' || key === 'phone') {
+            try {
+              const status = await api.verificationStatus()
+              setEmailVerified(status.emailVerified)
+              setPhoneVerified(status.phoneVerified)
+            } catch {
+              /* ignore */
+            }
+          }
           if (key !== 'username') toast.success('Saved')
         })
         .catch((err) => {
           if (key === 'username') toast.error((err as { error?: string }).error || 'Username unavailable')
-          else toast.error('Failed to save preference')
+          else toast.error((err as { error?: string }).error || 'Failed to save preference')
         })
     } else {
       if (key !== 'username') toast.success('Saved locally')
@@ -252,6 +295,54 @@ export default function Settings() {
     localStorage.clear()
     toast.success('Account deleted')
     setTimeout(() => { window.location.href = '/' }, 600)
+  }
+
+  const handleSendEmailVerification = async () => {
+    setSendingEmailVerification(true)
+    try {
+      await api.sendVerification()
+      toast.success('Verification link sent. Check your email or notifications.')
+    } catch (err) {
+      toast.error((err as { error?: string }).error || 'Failed to send verification link')
+    } finally {
+      setSendingEmailVerification(false)
+    }
+  }
+
+  const handleSendPhoneVerification = async () => {
+    if (!prefs.phone?.trim()) {
+      toast.error('Enter a phone number before requesting verification.')
+      return
+    }
+    setSendingPhoneVerification(true)
+    try {
+      await api.sendPhoneVerification(prefs.phone.trim())
+      setPhoneVerificationSent(true)
+      toast.success('Verification code sent to your email.')
+    } catch (err) {
+      toast.error((err as { error?: string }).error || 'Failed to send verification code')
+    } finally {
+      setSendingPhoneVerification(false)
+    }
+  }
+
+  const handleVerifyPhoneCode = async () => {
+    if (!phoneVerificationCode.trim()) {
+      toast.error('Enter the verification code.')
+      return
+    }
+    setVerifyingPhoneCode(true)
+    try {
+      await api.verifyPhone(phoneVerificationCode.trim(), prefs.phone.trim())
+      setPhoneVerified(true)
+      setPhoneVerificationSent(false)
+      setPhoneVerificationCode('')
+      toast.success('Phone verified successfully.')
+    } catch (err) {
+      toast.error((err as { error?: string }).error || 'Failed to verify phone')
+    } finally {
+      setVerifyingPhoneCode(false)
+    }
   }
 
   const reloadPasskeys = async () => {
@@ -423,7 +514,65 @@ export default function Settings() {
                     <input type="text" value={prefs.username} onChange={(e) => update('username', e.target.value)}
                       placeholder="@username" className="w-full bg-[#0a0e10] border border-[#ffffff10] rounded-lg px-4 py-3 text-[#E5E5E5] focus:border-[#0C8B44] focus:outline-none" />
                   </Field>
-                  <Field label="Email"><p className="text-sm text-[#A0A0A0] py-3">{prefs.email}</p></Field>
+                  <Field label="Email">
+                    <input type="email" value={prefs.email} onChange={(e) => update('email', e.target.value)}
+                      className="w-full bg-[#0a0e10] border border-[#ffffff10] rounded-lg px-4 py-3 text-[#E5E5E5] focus:border-[#0C8B44] focus:outline-none" />
+                    <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-xs text-[#737373]">
+                        {emailVerified
+                          ? 'Email verified ✅'
+                          : 'Email not verified. Send a link to confirm ownership.'}
+                      </p>
+                      {!emailVerified && (
+                        <button
+                          onClick={handleSendEmailVerification}
+                          disabled={sendingEmailVerification}
+                          className="inline-flex items-center justify-center rounded-lg bg-[#0C8B44] px-3 py-2 text-xs font-medium text-white hover:bg-[#0a7539] disabled:opacity-50"
+                        >
+                          {sendingEmailVerification ? 'Sending…' : 'Send link'}
+                        </button>
+                      )}
+                    </div>
+                  </Field>
+                  <Field label="Phone">
+                    <input type="text" value={prefs.phone} onChange={(e) => update('phone', e.target.value)}
+                      placeholder="+1 555 010 0000" className="w-full bg-[#0a0e10] border border-[#ffffff10] rounded-lg px-4 py-3 text-[#E5E5E5] focus:border-[#0C8B44] focus:outline-none" />
+                    <div className="mt-2 space-y-3">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-xs text-[#737373]">
+                          {phoneVerified
+                            ? 'Phone verified ✅'
+                            : 'Phone not verified. Verify it for support and security.'}
+                        </p>
+                        <button
+                          onClick={handleSendPhoneVerification}
+                          disabled={sendingPhoneVerification || !prefs.phone.trim()}
+                          className="inline-flex items-center justify-center rounded-lg bg-[#0C8B44] px-3 py-2 text-xs font-medium text-white hover:bg-[#0a7539] disabled:opacity-50"
+                        >
+                          {sendingPhoneVerification ? 'Sending…' : 'Send code'}
+                        </button>
+                      </div>
+                      {!phoneVerified && phoneVerificationSent && (
+                        <div className="grid gap-2">
+                          <input
+                            type="text"
+                            value={phoneVerificationCode}
+                            onChange={(e) => setPhoneVerificationCode(e.target.value)}
+                            placeholder="Enter verification code"
+                            className="w-full bg-[#0a0e10] border border-[#ffffff10] rounded-lg px-4 py-3 text-[#E5E5E5] focus:border-[#0C8B44] focus:outline-none"
+                          />
+                          <button
+                            onClick={handleVerifyPhoneCode}
+                            disabled={verifyingPhoneCode || !phoneVerificationCode.trim()}
+                            className="inline-flex items-center justify-center rounded-lg bg-[#0C8B44] px-3 py-2 text-xs font-medium text-white hover:bg-[#0a7539] disabled:opacity-50"
+                          >
+                            {verifyingPhoneCode ? 'Verifying…' : 'Verify phone'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-xs text-[#737373] mt-2">Update your phone number for notifications and support.</p>
+                  </Field>
                 </div>
               )}
 

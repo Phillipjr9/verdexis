@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useSearchParams } from 'react-router-dom'
 import Navigation from '../components/Navigation'
@@ -27,6 +27,7 @@ import {
   Coins, Percent, Plus, Trash2, Wallet as WalletIcon,
   ExternalLink, Building2, Shield,
 } from 'lucide-react'
+import WithdrawalFlow from '../components/WithdrawalFlow'
 
 type TabType = 'overview' | 'deposit' | 'withdraw' | 'transfer' | 'income'
 type IncomeKind = 'dividend' | 'interest'
@@ -276,6 +277,8 @@ export default function WalletPage() {
   // submit button's spinner + the inline status message under the tx field.
   const [verifying, setVerifying] = useState(false)
   const [verifyResult, setVerifyResult] = useState<VerifyStatus | null>(null)
+  const depositInFlight = useRef(false)
+  const [depositSubmitting, setDepositSubmitting] = useState(false)
   const [recipient, setRecipient] = useState('')
   // Transfer-tab mode: convert USD to crypto in your own wallet, OR send funds
   // to another Verdexis user identified by email.
@@ -931,12 +934,13 @@ export default function WalletPage() {
     )
   }
 
-  const handleDeposit = async () => {
+  const performDeposit = async () => {
     if (!amount || parseFloat(amount) <= 0) {
       setTransferStatus({ kind: 'error', title: 'Deposit declined', message: 'Enter a valid amount.' })
       return
     }
     const amt = parseFloat(amount)
+    const depositIdempotencyKey = newIdempotencyKey()
     if (selectedCurrency === 'USD') {
       if (usdMethod === 'wire') {
         if (!wireInstructions) {
@@ -1049,7 +1053,7 @@ export default function WalletPage() {
         fromAddress: txHash || undefined,
         asset: selectedCurrency,
         amount: creditedAmount,
-      })
+      }, depositIdempotencyKey)
 
       fundingTransferMessage = pendingResponse.transfer?.message ?? null
     } catch {
@@ -1087,6 +1091,18 @@ export default function WalletPage() {
     setAmount('')
     setCryptoTxHash('')
     setTransactions(portfolioStore.getTransactions())
+  }
+
+  const handleDeposit = async () => {
+    if (depositInFlight.current) return
+    depositInFlight.current = true
+    setDepositSubmitting(true)
+    try {
+      await performDeposit()
+    } finally {
+      depositInFlight.current = false
+      setDepositSubmitting(false)
+    }
   }
 
   const handleWithdraw = async () => {
@@ -2300,7 +2316,7 @@ export default function WalletPage() {
                   <button
                     onClick={handleDeposit}
                     disabled={
-                      !amount || (
+                      depositSubmitting || !amount || (
                         usdMethod === 'ach'
                           ? !banks.find((b) => b.id === selectedBankId && b.status === 'verified')
                           : !wireInstructions
@@ -2308,7 +2324,7 @@ export default function WalletPage() {
                     }
                     className="w-full py-3.5 bg-[#0C8B44] text-white text-sm font-medium rounded-xl hover:bg-[#0a7539] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    {usdMethod === 'wire'
+                    {depositSubmitting ? 'Submitting deposit…' : usdMethod === 'wire'
                       ? wireInstructions
                         ? `I sent $${amount || '0'} via wire`
                         : 'Wire instructions not available'
@@ -2424,8 +2440,8 @@ export default function WalletPage() {
                     </div>
                   )}
 
-                  <button onClick={handleDeposit} disabled={!cryptoInstructions || !amount || verifying} className="w-full py-3.5 bg-[#0C8B44] text-white text-sm font-medium rounded-xl hover:bg-[#0a7539] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
-                    {verifying ? 'Verifying on-chain…' : `I sent ${amount || '0'} ${selectedCurrency}`}
+                  <button onClick={handleDeposit} disabled={depositSubmitting || !cryptoInstructions || !amount || verifying} className="w-full py-3.5 bg-[#0C8B44] text-white text-sm font-medium rounded-xl hover:bg-[#0a7539] transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+                    {depositSubmitting ? 'Submitting deposit…' : verifying ? 'Verifying on-chain…' : `I sent ${amount || '0'} ${selectedCurrency}`}
                   </button>
                 </div>
               )}
@@ -2435,6 +2451,9 @@ export default function WalletPage() {
           {activeTab === 'withdraw' && (
             <div className="glass-card p-8 max-w-lg">
               <h3 className="text-xl font-medium text-[#E5E5E5] mb-6">Withdraw Funds</h3>
+              <div className="mb-4">
+                <WithdrawalFlow defaultAddress={recipient} />
+              </div>
               {bonusLockState.locked && (
                 <div className="mb-6 rounded-xl border border-[#F57C00]/30 bg-[#F57C00]/5 p-4">
                   <p className="text-sm text-[#E5E5E5] font-medium mb-1">Contact support to enable withdrawals</p>
@@ -3011,6 +3030,8 @@ export default function WalletPage() {
         </div>
       </div>
       <Footer />
+
+      
 
       {/* Transaction detail modal — opens when the user taps an amount in
           the history list. Shows the exact dd/mm/yyyy date and a polished

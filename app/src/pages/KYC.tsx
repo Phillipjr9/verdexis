@@ -39,9 +39,22 @@ function KYCInner() {
   ]
   const stepIdx = steps.findIndex(s => s.key === step)
 
-  const fakeUpload = (setter: (v: string) => void) => {
-    toast.success('Document uploaded')
-    setter('uploaded')
+  const uploadDocument = async (
+    documentType: 'identity' | 'address' | 'selfie',
+    file: File,
+    setter: (v: string) => void,
+  ) => {
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File must be 10 MB or smaller')
+      return
+    }
+    try {
+      const result = await api.uploadKycDocument(documentType, file)
+      setter(result.document.id)
+      toast.success('Document uploaded')
+    } catch (error) {
+      toast.error((error as { error?: string })?.error || 'Failed to upload document')
+    }
   }
 
   const submit = async () => {
@@ -65,11 +78,6 @@ function KYCInner() {
         addressCity: city,
         addressZip: zip,
         idDocType: idType as 'passport' | 'dl' | 'id',
-        documentsJson: JSON.stringify([
-          { type: 'identity', uploaded: !!idFile },
-          { type: 'address', uploaded: !!addressFile },
-          { type: 'selfie', uploaded: !!selfieFile },
-        ]),
       })
       setStep('done')
       toast.success('KYC information submitted for review')
@@ -225,11 +233,12 @@ function KYCInner() {
                       <span className="text-xs text-[#0C8B44]">Document uploaded successfully</span>
                     </div>
                   ) : (
-                    <button onClick={() => fakeUpload(setIdFile)} className="w-full py-6 border-2 border-dashed border-[#ffffff15] rounded-lg hover:border-[#0C8B44]/50 transition-colors flex flex-col items-center gap-2">
+                    <label className="w-full py-6 border-2 border-dashed border-[#ffffff15] rounded-lg hover:border-[#0C8B44]/50 transition-colors flex flex-col items-center gap-2 cursor-pointer">
                       <Upload className="w-5 h-5 text-[#737373]" />
                       <span className="text-xs text-[#737373]">Click to upload or drag & drop</span>
                       <span className="text-[10px] text-[#737373]">JPG, PNG or PDF · Max 10 MB</span>
-                    </button>
+                      <input type="file" accept="image/jpeg,image/png,application/pdf" className="sr-only" onChange={e => { const file = e.target.files?.[0]; if (file) void uploadDocument('identity', file, setIdFile) }} />
+                    </label>
                   )}
                 </div>
                 <button onClick={() => { if (!firstName || !lastName || !dob || !ssn || !idFile) { toast.error('Complete all fields'); return } setStep('address') }} className="w-full py-2.5 bg-[#0C8B44] text-white text-xs font-medium uppercase tracking-[0.05em] rounded-lg hover:bg-[#0a7539] transition-colors">
@@ -264,10 +273,11 @@ function KYCInner() {
                       <span className="text-xs text-[#0C8B44]">Document uploaded successfully</span>
                     </div>
                   ) : (
-                    <button onClick={() => fakeUpload(setAddressFile)} className="w-full py-6 border-2 border-dashed border-[#ffffff15] rounded-lg hover:border-[#0C8B44]/50 transition-colors flex flex-col items-center gap-2">
+                    <label className="w-full py-6 border-2 border-dashed border-[#ffffff15] rounded-lg hover:border-[#0C8B44]/50 transition-colors flex flex-col items-center gap-2 cursor-pointer">
                       <Upload className="w-5 h-5 text-[#737373]" />
                       <span className="text-xs text-[#737373]">Upload proof of address</span>
-                    </button>
+                      <input type="file" accept="image/jpeg,image/png,application/pdf" className="sr-only" onChange={e => { const file = e.target.files?.[0]; if (file) void uploadDocument('address', file, setAddressFile) }} />
+                    </label>
                   )}
                 </div>
                 <div className="flex gap-3">
@@ -296,11 +306,12 @@ function KYCInner() {
                     <span className="text-xs text-[#0C8B44]">Selfie uploaded successfully</span>
                   </div>
                 ) : (
-                  <button onClick={() => fakeUpload(setSelfieFile)} className="w-full py-10 border-2 border-dashed border-[#ffffff15] rounded-xl hover:border-[#0C8B44]/50 transition-colors flex flex-col items-center gap-3">
+                  <label className="w-full py-10 border-2 border-dashed border-[#ffffff15] rounded-xl hover:border-[#0C8B44]/50 transition-colors flex flex-col items-center gap-3 cursor-pointer">
                     <Camera className="w-8 h-8 text-[#737373]" />
                     <span className="text-sm text-[#737373]">Upload selfie with ID</span>
                     <span className="text-[10px] text-[#737373]">JPG or PNG · Max 10 MB</span>
-                  </button>
+                    <input type="file" accept="image/jpeg,image/png" className="sr-only" onChange={e => { const file = e.target.files?.[0]; if (file) void uploadDocument('selfie', file, setSelfieFile) }} />
+                  </label>
                 )}
                 <div className="flex gap-3">
                   <button onClick={() => setStep('address')} className="flex-1 py-2.5 border border-[#ffffff10] text-[#737373] text-xs rounded-lg hover:text-[#E5E5E5] transition-colors">Back</button>

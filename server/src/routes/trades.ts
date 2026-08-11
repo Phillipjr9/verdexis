@@ -6,8 +6,15 @@ import { requireAuth, type AuthedRequest } from '../auth.js'
 import { brokerEnabled, submitPaperOrder } from '../broker.js'
 import { idempotency } from '../idempotency.js'
 import { VALIDATION_LIMITS, isValidSymbol, isValidAmount } from '../errorHandler.js'
+import { recordLedgerTransaction } from '../services/ledger.js'
 
 const router = Router()
+
+function getIdempotencyKey(req: AuthedRequest): string | undefined {
+  const raw = req.headers?.['idempotency-key'] ?? req.headers?.['Idempotency-Key']
+  if (!raw) return undefined
+  return Array.isArray(raw) ? raw[0] : String(raw)
+}
 
 // Money-mutation endpoints get tighter rate limits. Adjusted: 20/min instead of 30
 // to balance security with usability for active traders
@@ -84,17 +91,23 @@ router.post('/', requireAuth, tradeLimiter, idempotency(), async (req: AuthedReq
     if (side === 'buy' && currentUsd < total) {
       throw Object.assign(new Error('Insufficient USD'), { status: 400 })
     }
-    const nextUsd = side === 'buy' ? currentUsd - total : currentUsd + total
-    await tx.walletBalance.upsert({
-      where: { userId_currency: { userId, currency: 'USD' } },
-      create: {
-        userId,
-        currency: 'USD',
-        symbol: '$',
-        balance: nextUsd,
-        available: nextUsd,
-      },
-      update: { balance: nextUsd, available: nextUsd },
+
+    await recordLedgerTransaction({
+      tx,
+      userId,
+      asset: 'USD',
+      amount: total,
+      entryType: side === 'buy' ? 'credit' : 'debit',
+      kind: 'trade',
+      eventType: `trade_${side}`,
+      sourceType: 'trade',
+      sourceId: `trade:${userId}:${side}:${symbol}:${amount}:${price}`,
+      externalRef: `trade:${userId}:${side}:${symbol}:${amount}:${price}`,
+      idempotencyKey: getIdempotencyKey(req),
+      description: `Trade ${side} ${symbol}`,
+      reference: `Trade ${side} ${symbol}`,
+      subType: side,
+      recordTransaction: true,
     })
 
     // 2. Adjust holding

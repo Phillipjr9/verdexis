@@ -1,7 +1,8 @@
 import express from 'express'
+import { header as getHeader } from '../utils/headers.js'
 
 function checkAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
-  const secret = req.header('x-admin-secret')
+  const secret = getHeader(req, 'x-admin-secret')
   const NODE_ENV = process.env.NODE_ENV
   const ADMIN_API_SECRET = process.env.ADMIN_API_SECRET
 

@@ -1,5 +1,3 @@
-import { Connection, Keypair, PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL, sendAndConfirmTransaction, clusterApiUrl } from '@solana/web3.js'
-import { createAssociatedTokenAccountInstruction, createTransferCheckedInstruction, getAssociatedTokenAddress, getMint } from '@solana/spl-token'
 import { Contract, JsonRpcProvider, Wallet, getBytes, parseUnits } from 'ethers'
 import { env } from '../env.js'
 
@@ -198,12 +196,35 @@ export function buildWithdrawalTransferPlan(input: {
   }
 }
 
-function parseSolanaSecretKey(value: string): Keypair {
+async function getSolanaWalletRuntime() {
+  const [{ Connection, Keypair, PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL, sendAndConfirmTransaction, clusterApiUrl }, splToken] = await Promise.all([
+    import('@solana/web3.js'),
+    import('@solana/spl-token'),
+  ])
+
+  return {
+    Connection,
+    Keypair,
+    PublicKey,
+    SystemProgram,
+    Transaction,
+    LAMPORTS_PER_SOL,
+    sendAndConfirmTransaction,
+    clusterApiUrl,
+    createAssociatedTokenAccountInstruction: splToken.createAssociatedTokenAccountInstruction,
+    createTransferCheckedInstruction: splToken.createTransferCheckedInstruction,
+    getAssociatedTokenAddress: splToken.getAssociatedTokenAddress,
+    getMint: splToken.getMint,
+  }
+}
+
+async function parseSolanaSecretKey(value: string): Promise<any> {
   const sanitized = value.trim()
   const candidate = sanitized.startsWith('[')
     ? JSON.parse(sanitized)
     : Uint8Array.from(Buffer.from(sanitized, 'base64'))
 
+  const { Keypair } = await getSolanaWalletRuntime()
   return Keypair.fromSecretKey(Uint8Array.from(candidate))
 }
 
@@ -233,8 +254,11 @@ async function executeSolanaWithdrawal(plan: WithdrawalTransferPlan): Promise<Wi
   }
 
   try {
+    const runtime = await getSolanaWalletRuntime()
+    const { Connection, Keypair, PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL, sendAndConfirmTransaction, clusterApiUrl, createAssociatedTokenAccountInstruction, createTransferCheckedInstruction, getAssociatedTokenAddress, getMint } = runtime
+
     const connection = new Connection(env.SOLANA_RPC_ENDPOINT || clusterApiUrl('mainnet-beta'), 'confirmed')
-    const signer = parseSolanaSecretKey(privateKey)
+    const signer = Keypair.fromSecretKey(Uint8Array.from(Buffer.from(privateKey.trim(), 'base64')))
     const destination = new PublicKey(plan.destinationAddress)
 
     const tx = new Transaction()

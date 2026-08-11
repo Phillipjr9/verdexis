@@ -43,9 +43,8 @@ const SECTIONS: Array<{ id: string; title: string; body: string[] }> = [
     id: 'jurisdiction',
     title: 'Jurisdiction & Eligibility',
     body: [
-      'Verdexis is not registered as a broker-dealer, investment adviser, FCM, or money services business in any jurisdiction.',
-      'The platform is offered for general information purposes and may not be available or appropriate in your country. You are responsible for compliance with all local laws.',
-      'Verdexis does not custody assets, execute trades on your behalf, or act as a fiduciary.',
+      'No regulatory registration, license, custody, fiduciary, or authorization claim is made here without verified company documentation. Regulatory information will be published where applicable after review.',
+      'The platform may not be available or appropriate in every jurisdiction. You are responsible for complying with applicable local laws.',
     ],
   },
   {
@@ -62,11 +61,7 @@ const SECTIONS: Array<{ id: string; title: string; body: string[] }> = [
     id: 'fees',
     title: 'Fees & Charges',
     body: [
-      'Trading fee: a flat 0.10% (10 basis points) is added to buys and deducted from sells. The fee is itemised in the order Review modal before you confirm.',
-      'Account & management fee: funded accounts are subject to a recurring 0.4% monthly fee, calculated on the prevailing USD wallet balance and debited on the 26th of each calendar month. The debit is itemised in your transaction history.',
-      'Withdrawal fees: bank (ACH / wire) withdrawals are free. Crypto withdrawals carry a Verdexis processing fee that scales with the withdrawal amount, plus the underlying blockchain network (gas) fee. The total is always shown for confirmation before submission.',
-      'Deposit fees: free for both bank and crypto deposits. Network confirmation costs for incoming crypto are paid by the sender.',
-      'No subscription fees: Verdexis is free to sign up and use. There are no monthly or annual plan fees — only the transparent trading, withdrawal and account-management fees described above.',
+      'Fees vary by service and must be confirmed from the authoritative in-app fee disclosure before a transaction. Do not rely on examples or unofficial figures.',
     ],
   },
   {
@@ -118,7 +113,7 @@ export default function Disclosures() {
           <div className="mt-16 p-5 rounded-2xl bg-amber-400/5 border border-amber-400/20">
             <p className="text-xs text-amber-200/90 leading-relaxed">
               By continuing to use Verdexis you acknowledge that you have read, understood, and accept these disclosures.
-              Questions? Email <a href="mailto:legal@verdexis.com" className="underline">legal@verdexis.com</a>.
+              Questions? Use the official <a href="/support" className="underline">Verdexis Support page</a>.
             </p>
           </div>
         </div>

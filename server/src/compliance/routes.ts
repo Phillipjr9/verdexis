@@ -1,5 +1,4 @@
 import express from 'express'
-import { enqueueComplianceCheck } from './producer.js'
 
 export function registerComplianceRoutes(app: express.Router): void {
   app.post('/api/compliance/tx', express.json(), async (req, res) => {
@@ -10,6 +9,7 @@ export function registerComplianceRoutes(app: express.Router): void {
         return
       }
 
+      const { enqueueComplianceCheck } = await import('./producer.js')
       await enqueueComplianceCheck({ txId, userId, from, to, amount, currency, metadata })
 
       res.status(202).json({ status: 'queued', txId })

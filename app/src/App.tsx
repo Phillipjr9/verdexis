@@ -15,6 +15,7 @@ import { SessionTimeoutWarning } from './components/SessionTimeoutWarning'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { ErrorRecovery } from './components/ErrorRecovery'
 import { Toaster } from 'sonner'
+import TxModalHost from './components/TxModalHost'
 
 // Error Boundary wrapper for lazy-loaded components
 const withLazyErrorBoundary = <P extends object>(
@@ -45,6 +46,7 @@ const News = withLazyErrorBoundary(() => import('./pages/News'), 'News')
 const Settings = withLazyErrorBoundary(() => import('./pages/Settings'), 'Settings')
 const Legal = withLazyErrorBoundary(() => import('./pages/Legal'), 'Legal')
 const About = withLazyErrorBoundary(() => import('./pages/About'), 'About')
+const Products = withLazyErrorBoundary(() => import('./pages/Products'), 'Products')
 const NotFound = withLazyErrorBoundary(() => import('./pages/NotFound'), '404')
 const ResetPassword = withLazyErrorBoundary(() => import('./pages/ResetPassword'), 'Reset Password')
 const Alerts = withLazyErrorBoundary(() => import('./pages/Alerts'), 'Alerts')
@@ -100,9 +102,12 @@ const VerifyEmail = withLazyErrorBoundary(() => import('./pages/VerifyEmail'), '
 const KYCEnhanced = withLazyErrorBoundary(() => import('./pages/KYCEnhanced'), 'KYC Enhanced')
 const CryptoDepositSafe = withLazyErrorBoundary(() => import('./pages/CryptoDepositSafe'), 'Crypto Deposit Safe')
 const NotificationSettings = withLazyErrorBoundary(() => import('./pages/NotificationSettings'), 'Notification Settings')
+const Notifications = withLazyErrorBoundary(() => import('./pages/Notifications'), 'Notifications')
 const LinkedWallets = withLazyErrorBoundary(() => import('./pages/LinkedWallets'), 'Linked Wallets')
 const Limits = withLazyErrorBoundary(() => import('./pages/Limits'), 'Limits')
 const WalletVerification = withLazyErrorBoundary(() => import('./pages/WalletVerification'), 'Wallet Verification')
+const Login = withLazyErrorBoundary(() => import('./pages/Login'), 'Login')
+const PublicInformation = withLazyErrorBoundary(() => import('./pages/PublicInformation'), 'Public information')
 
 export default function App() {
   useKeyboardShortcuts()
@@ -121,6 +126,7 @@ export default function App() {
       <OnboardingTips />
       <SessionTimeoutWarning />
       <Toaster position="top-right" theme="dark" richColors />
+      <TxModalHost />
     </ErrorBoundary>
   )
 }
@@ -133,6 +139,8 @@ function RoutedPages() {
       <ErrorBoundary resetKey={location.pathname} scope="this page">
       <Routes location={location}>
           <Route path="/" element={<Home />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Login />} />
           <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
           <Route path="/trading" element={<Trading />} />
           <Route path="/markets" element={<Markets />} />
@@ -143,10 +151,26 @@ function RoutedPages() {
           <Route path="/news" element={<News />} />
           <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
           <Route path="/settings/notifications" element={<RequireAuth><NotificationSettings /></RequireAuth>} />
+          <Route path="/notifications" element={<RequireAuth><Notifications /></RequireAuth>} />
           <Route path="/alerts" element={<RequireAuth><Alerts /></RequireAuth>} />
           <Route path="/goals" element={<RequireAuth><Goals /></RequireAuth>} />
           <Route path="/legal" element={<Legal />} />
           <Route path="/about" element={<About />} />
+          <Route path="/products" element={<Products />} />
+          <Route path="/privacy" element={<PublicInformation />} />
+          <Route path="/terms" element={<PublicInformation />} />
+          <Route path="/cookies" element={<PublicInformation />} />
+          <Route path="/cookie-preferences" element={<PublicInformation />} />
+          <Route path="/risk-disclosure" element={<PublicInformation />} />
+          <Route path="/security" element={<PublicInformation />} />
+          <Route path="/accessibility" element={<PublicInformation />} />
+          <Route path="/regulatory" element={<PublicInformation />} />
+          <Route path="/fees" element={<PublicInformation />} />
+          <Route path="/contact" element={<PublicInformation />} />
+          <Route path="/support" element={<PublicInformation />} />
+          <Route path="/security/fraud-prevention" element={<PublicInformation />} />
+          <Route path="/careers" element={<PublicInformation />} />
+          <Route path="/faq" element={<PublicInformation />} />
           <Route path="/admin/status" element={<RequireAdmin><StatusPage /></RequireAdmin>} />
           <Route path="/disclosures" element={<Disclosures />} />
           <Route path="/help" element={<Help />} />

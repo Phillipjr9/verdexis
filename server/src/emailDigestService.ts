@@ -1,8 +1,7 @@
-import nodemailer from 'nodemailer'
-import { env } from './env.js'
 import { prisma } from './db.js'
 import { PortfolioService } from './portfolioService.js'
-import { resolveEmailTransportConfig } from './notificationService.js'
+import { sendEmailNotification } from './notificationService.js'
+import { customerEmailFooter } from './config/email.js'
 
 interface DigestConfig {
   frequency: 'daily' | 'weekly' | 'monthly' | 'never'
@@ -13,18 +12,6 @@ interface DigestConfig {
 }
 
 export class EmailDigestService {
-  private transporter: nodemailer.Transporter
-
-  constructor() {
-    const config = resolveEmailTransportConfig()
-    this.transporter = nodemailer.createTransport({
-      host: config.host,
-      port: config.port,
-      secure: config.secure,
-      auth: config.auth,
-    })
-  }
-
   async sendDailyDigest(userId: string): Promise<void> {
     const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true } })
     if (!user) return
@@ -43,25 +30,13 @@ export class EmailDigestService {
 
     const html = this.generateDigestHTML(user.name, metrics, holdings, trades, alerts)
 
-    const config = resolveEmailTransportConfig()
-    const envelopeFrom = config.auth.user || config.fromAddress
-    const from = config.from
-
-    await this.transporter.sendMail({
-      from,
-      replyTo: config.replyTo,
-      to: user.email,
-      subject: `Your VERDEXIS Daily Summary - ${new Date().toLocaleDateString()}`,
+    await sendEmailNotification(
+      user.email,
+      `Your VERDEXIS Daily Summary - ${new Date().toLocaleDateString()}`,
+      'Your Verdexis daily portfolio summary is ready.',
       html,
-      headers: {
-        'X-Mailer': 'Verdexis',
-        'Auto-Submitted': 'auto-generated',
-        ...(config.replyTo ? { 'Reply-To': config.replyTo } : {}),
-        ...(config.unsubscribeUrl ? { 'List-Unsubscribe': `<${config.unsubscribeUrl}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } : {}),
-        ...(envelopeFrom ? { 'Sender': config.fromName ? `${config.fromName} <${envelopeFrom}>` : envelopeFrom } : {}),
-      },
-      envelope: { from: envelopeFrom, to: user.email },
-    })
+      { userId, kind: 'portfolio_digest', title: 'Daily portfolio summary', body: 'Your Verdexis daily portfolio summary is ready.' },
+    )
 
     console.log(`[email-digest] sent to ${user.email}`)
   }
@@ -182,6 +157,7 @@ export class EmailDigestService {
     <div class="footer">
       <p>This is an automated email from VERDEXIS. You can adjust your email preferences in Settings.</p>
       <p>&copy; 2024 VERDEXIS. All rights reserved.</p>
+      ${customerEmailFooter()}
     </div>
   </div>
 </body>

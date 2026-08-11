@@ -1,16 +1,16 @@
 import { Router } from 'express'
 import { requireAuth, requireAdmin, type AuthedRequest } from '../auth.js'
-import { TokenRegistryAgent } from '../scripts/tokenRegistryAgent.js'
 
 const router = Router()
 
 router.use(requireAuth)
 router.use(requireAdmin)
 
-let agentInstance: TokenRegistryAgent | null = null
+let agentInstance: any | null = null
 
-function getAgent(): TokenRegistryAgent {
+async function getAgent(): Promise<any> {
   if (!agentInstance) {
+    const { TokenRegistryAgent } = await import('../scripts/tokenRegistryAgent.js')
     agentInstance = new TokenRegistryAgent(
       process.env.ANTHROPIC_API_KEY,
       process.env.ETHERSCAN_API_KEY,
@@ -31,7 +31,8 @@ router.post('/query', async (req: AuthedRequest, res) => {
   }
 
   try {
-    const rawResult = await getAgent().runQuery(query)
+    const agent = await getAgent()
+    const rawResult = await agent.runQuery(query)
     let parsedResult: unknown = rawResult
 
     try {
@@ -85,7 +86,8 @@ router.post('/register', async (req: AuthedRequest, res) => {
   }
 
   try {
-    const rawResult = await getAgent().registerToken({
+    const agent = await getAgent()
+    const rawResult = await agent.registerToken({
       query,
       chain: chain === 'solana' || chain === 'ethereum' ? chain : undefined,
       address,
@@ -120,7 +122,8 @@ router.post('/register', async (req: AuthedRequest, res) => {
 
 router.get('/status', async (_req, res) => {
   try {
-    const status = getAgent().getRegistryStatus()
+    const agent = await getAgent()
+    const status = agent.getRegistryStatus()
     res.json({ ok: true, registryStatus: status })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

@@ -1,7 +1,9 @@
-import { getMessaging } from 'firebase-admin/messaging'
+import { createRequire } from 'node:module'
 import { env } from './env.js'
 import { prisma } from './db.js'
 import { initializeFirebaseAdmin, getFirebaseAdminApp } from './services/firebaseAdmin.js'
+
+const require = createRequire(import.meta.url)
 
 interface PushNotification {
   title: string
@@ -72,6 +74,7 @@ export class PushNotificationService {
       const tokens = fcmTokens.map((t) => t.value)
 
       // Send multicast message (up to 500 tokens at a time)
+      const { getMessaging } = require('firebase-admin/messaging')
       const messaging = getMessaging(getFirebaseAdminApp())
       const response = await messaging.sendEachForMulticast({
         notification,

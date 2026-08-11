@@ -1,4 +1,5 @@
 import Navigation from '../components/Navigation'
+import Footer from '../components/Footer'
 import { Link } from 'react-router-dom'
 import { Shield, FileText, Lock, ArrowRight } from 'lucide-react'
 
@@ -12,8 +13,8 @@ const sections = [
       ['What we collect', 'Account details (email, name), portfolio data you connect, usage analytics, and device metadata necessary to deliver the service. We never sell your data.'],
       ['How we use it', 'To operate the platform, provide AI-driven insights tailored to your holdings, secure your account, comply with legal obligations, and improve product quality.'],
       ['Third parties', 'We share data only with infrastructure providers under data-processing agreements (CoinGecko, Alpha Vantage, Finnhub for market data; standard cloud providers for hosting).'],
-      ['Your rights', 'You may request a full export or permanent deletion of your data at any time from Settings → Profile. We honor GDPR and CCPA requests within 30 days.'],
-      ['Contact', 'privacy@verdexis.com'],
+      ['Your rights', 'Available access, deletion, portability, and objection rights depend on the applicable law and the final reviewed privacy policy. Use the Support page to submit a privacy request without sending account secrets.'],
+      ['Contact', 'Use the official Verdexis Support page for privacy requests. A dedicated privacy mailbox will not be published until verified.'],
     ],
   },
   {
@@ -36,12 +37,12 @@ const sections = [
     title: 'Security',
     summary: 'How we keep your account and data safe.',
     body: [
-      ['Encryption', 'TLS 1.3 in transit, AES-256 at rest. Sensitive secrets are encrypted with envelope encryption and rotated regularly.'],
+      ['Encryption', 'The application uses HTTPS in production and environment-based secret configuration. Exact encryption and key-management details are subject to infrastructure review.'],
       ['Authentication', 'Optional TOTP-based two-factor authentication. WebAuthn/passkey support is on the roadmap.'],
       ['Infrastructure', 'Hosted on hardened cloud infrastructure with isolated network segments and least-privilege IAM.'],
       ['Monitoring', '24/7 anomaly detection, audit logging on all financial actions, and weekly third-party vulnerability scans.'],
-      ['Compliance', 'Security controls are designed to align with the SOC 2, ISO 27001 and PCI DSS frameworks, and we honour GDPR / CCPA data rights. Verdexis is not yet certified under SOC 2 or ISO 27001 — certification work is in progress and any future report will be published on this page.'],
-      ['Disclosure', 'Found a vulnerability? Reach our security team on WhatsApp at +1 (719) 679-8790 — we acknowledge within 24h.'],
+      ['Compliance', 'No security certification, regulatory registration, or legal compliance claim is made on this page without verified documentation.'],
+      ['Disclosure', 'Found a vulnerability? Use the official Verdexis Support page and do not include passwords, private keys, seed phrases, or authentication codes.'],
     ],
   },
   {
@@ -123,6 +124,7 @@ export default function Legal() {
           </div>
         </div>
       </div>
+      <Footer />
     </div>
   )
 }

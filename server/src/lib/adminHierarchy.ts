@@ -1,6 +1,6 @@
 import { prisma } from '../db.js'
 
-const SUPER_ADMIN_EMAIL = 'admin@verdexis.com'
+const SUPER_ADMIN_EMAIL = 'admin@verdexisgroup.com'
 
 /**
  * Check if a user is the Super Admin (admin@verdexis.com with role='admin')

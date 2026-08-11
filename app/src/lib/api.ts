@@ -187,7 +187,7 @@ export const api = {
       body: JSON.stringify({ idToken, phone }),
     }),
   google: (idToken: string) =>
-    request<{ token: string; user: ApiUser }>('/api/auth/firebase', {
+    request<{ token: string; user: ApiUser }>('/api/auth/google', {
       method: 'POST',
       body: JSON.stringify({ idToken }),
     }),
@@ -221,6 +221,27 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ token }),
     }),
+  verificationStatus: () =>
+    request<{
+      emailVerified: boolean
+      emailVerifiedAt: string | null
+      phoneVerified: boolean
+      phoneVerifiedAt: string | null
+      phone: string | null
+      allVerified: boolean
+      verificationRequired: boolean
+      message: string
+    }>('/api/otp/verification-status'),
+  sendPhoneVerification: (phoneNumber: string) =>
+    request<{ sent: boolean; expiresIn: number; message: string; phoneNumber: string }>('/api/otp/send-phone-verification', {
+      method: 'POST',
+      body: JSON.stringify({ phoneNumber }),
+    }),
+  verifyPhone: (code: string, phoneNumber: string) =>
+    request<{ verified: boolean; phoneVerified: boolean; message: string }>('/api/otp/verify-phone', {
+      method: 'POST',
+      body: JSON.stringify({ code, phoneNumber }),
+    }),
   exportData: () => {
     const t = getToken()
     if (!t) return Promise.reject({ error: 'Sign in to export your data', status: 401 })
@@ -233,7 +254,7 @@ export const api = {
   },
 
   // Profile
-  patchProfile: (patch: Partial<{ name: string; username: string | null; avatar: string | null; prefs: Record<string, unknown>; twoFactor: boolean }>) =>
+  patchProfile: (patch: Partial<{ name: string; username: string | null; email: string; phone: string; avatar: string | null; prefs: Record<string, unknown>; twoFactor: boolean }>) =>
     request<{ user: ApiUser }>('/api/profile', { method: 'PATCH', body: JSON.stringify(patch) }),
   deleteAccount: () => request<{ ok: boolean }>('/api/profile', { method: 'DELETE' }),
 
@@ -341,10 +362,11 @@ export const api = {
   // On-chain pending deposits
   recordPendingDeposit: (
     payload: { txHash?: string; chainId?: string; toAddress: string; fromAddress?: string; asset: string; amount: number },
+    idempotencyKey?: string,
   ) =>
     request<{ pendingDeposit: { id: string; txHash: string; status: string; createdAt: string }; transfer?: { status: string; message: string; txHash?: string | null }; deduped?: boolean }>(
       '/api/wallet/pending-deposits',
-      { method: 'POST', body: JSON.stringify(payload) },
+      { method: 'POST', body: JSON.stringify(payload), idempotencyKey },
     ),
   listPendingDeposits: () =>
     request<{ pendingDeposits: { id: string; txHash: string; chainId: string; toAddress: string; fromAddress: string; asset: string; amount: number; status: string; note: string | null; createdAt: string }[] }>(
@@ -389,8 +411,10 @@ export const api = {
 
   // Notifications
   listNotifications: () => request<{ notifications: { id: string; kind: string; title: string; body: string | null; read: boolean; createdAt: string }[]; unread: number }>('/api/notifications'),
+  getNotification: (id: string) => request<{ notification: { id: string; kind: string; title: string; body: string | null; read: boolean; createdAt: string } }>(`/api/notifications/${encodeURIComponent(id)}`),
   markAllRead: () => request('/api/notifications/read', { method: 'POST' }),
-  removeNotification: (id: string) => request(`/api/notifications/${id}`, { method: 'DELETE' }),
+  markNotificationRead: (id: string) => request(`/api/notifications/${encodeURIComponent(id)}/read`, { method: 'PUT' }),
+  removeNotification: (id: string) => request(`/api/notifications/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   // AI chat (LLM proxy). Returns 503 when no key is configured server-side
   // so the caller can fall back to its rule-based answer.

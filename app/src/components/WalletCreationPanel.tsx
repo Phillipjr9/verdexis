@@ -19,6 +19,7 @@ import {
   type WalletCreationResult,
   type ImportedWallet,
 } from '../lib/walletCreation'
+import CongratsPopup from './CongratsPopup'
 
 export function WalletCreationPanel() {
   const [activeTab, setActiveTab] = useState<'create' | 'import' | 'unlock'>('create')
@@ -56,6 +57,7 @@ export function WalletCreationPanel() {
       const newWallet = generateWallet()
       setWallet(newWallet)
       toast.success('Wallet created successfully!')
+      setShowCongrats(true)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to generate wallet')
     } finally {
@@ -155,6 +157,8 @@ export function WalletCreationPanel() {
     navigator.clipboard.writeText(text)
     toast.success(`${label} copied to clipboard!`)
   }
+
+  const [showCongrats, setShowCongrats] = useState(false)
 
   const downloadBackup = () => {
     if (!wallet || !('mnemonic' in wallet)) return
@@ -469,6 +473,7 @@ export function WalletCreationPanel() {
           </Card>
         </TabsContent>
       </Tabs>
+        <CongratsPopup visible={showCongrats} onClose={() => setShowCongrats(false)} address={savedAddress} />
     </div>
   )
 }

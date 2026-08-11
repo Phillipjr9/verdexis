@@ -21,6 +21,7 @@
 
 import type { Request, Response, NextFunction } from 'express'
 import type { AuthedRequest } from './auth.js'
+import { getIdempotencyKeyFromReq } from './utils/headers.js'
 
 interface CachedResponse {
   status: number
@@ -114,7 +115,7 @@ function keyFor(req: AuthedRequest, headerKey: string): string {
 export function idempotency() {
   return async function idempotencyMiddleware(req: Request, res: Response, next: NextFunction) {
     const ar = req as AuthedRequest
-    const raw = req.header('Idempotency-Key') || req.header('idempotency-key')
+    const raw = getIdempotencyKeyFromReq(req as Request)
     if (!raw) return next()
 
     // Reject obviously malformed keys early. We accept anything 8\u2013128 chars

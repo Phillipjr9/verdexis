@@ -3,6 +3,8 @@ import { z } from 'zod'
 import { prisma } from '../db.js'
 import { requireAuth, type AuthedRequest } from '../auth.js'
 import { depositMonitor } from '../depositMonitor.js'
+import { recordLedgerTransaction } from '../services/ledger.js'
+import { alertAdminsOfDeposit } from '../services/depositAlerts.js'
 
 const router = Router()
 
@@ -48,6 +50,7 @@ router.post('/initiate', requireAuth, async (req: AuthedRequest, res) => {
 
     // Register address for on-chain monitoring
     depositMonitor.registerDeposit(pendingDeposit.id, toAddress, userId, currency)
+    await alertAdminsOfDeposit(userId, amount, currency, pendingDeposit.id, `Pending deposit ${pendingDeposit.id}; destination ${toAddress}.`)
 
     res.json({
       deposit_id: pendingDeposit.id,
@@ -159,47 +162,41 @@ router.post('/:depositId/confirm', requireAuth, async (req: AuthedRequest, res) 
       return
     }
 
-    // Credit user's wallet
-    const walletBalance = await prisma.walletBalance.findUnique({
-      where: {
-        userId_currency: {
-          userId: deposit.userId,
-          currency: deposit.asset,
-        },
-      },
-    })
-
-    const newBalance = (walletBalance?.balance || 0) + deposit.amount
-    const newAvailable = (walletBalance?.available || 0) + deposit.amount
-
-    await prisma.walletBalance.upsert({
-      where: {
-        userId_currency: {
-          userId: deposit.userId,
-          currency: deposit.asset,
-        },
-      },
-      create: {
+    await prisma.$transaction(async (tx) => {
+      const ledgerResult = await recordLedgerTransaction({
+        tx,
         userId: deposit.userId,
-        currency: deposit.asset,
-        symbol: deposit.asset,
-        balance: newBalance,
-        available: newAvailable,
-      },
-      update: {
-        balance: newBalance,
-        available: newAvailable,
-      },
-    })
+        asset: deposit.asset,
+        amount: deposit.amount,
+        entryType: 'debit',
+        kind: 'deposit',
+        eventType: 'deposit_confirmed',
+        sourceType: 'pending_deposit',
+        sourceId: deposit.id,
+        externalRef: txHash,
+        idempotencyKey: deposit.id,
+        description: `Manual deposit confirmation for pending deposit ${deposit.id}`,
+        metadata: {
+          chainId: deposit.chainId,
+          fromAddress: deposit.fromAddress,
+          toAddress: deposit.toAddress,
+          note: deposit.note,
+          confirmations: confirmations || 1,
+        },
+        createdBy: req.userId ?? 'admin',
+        reference: `Manual deposit confirmation ${deposit.id}`,
+        recordTransaction: true,
+      })
 
-    // Mark deposit as completed
-    await prisma.pendingDeposit.update({
-      where: { id: depositId },
-      data: {
-        status: 'completed',
-        txHash,
-        updatedAt: new Date(),
-      },
+      await tx.pendingDeposit.update({
+        where: { id: depositId },
+        data: {
+          status: 'completed',
+          txHash,
+          updatedAt: new Date(),
+          creditedTxId: ledgerResult.transaction?.id,
+        },
+      })
     })
 
     res.json({

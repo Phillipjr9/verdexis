@@ -9,9 +9,16 @@ import { api, clearStoredAuth, getToken } from '../lib/api'
 import { useWeb3 } from '../hooks/use-web3'
 
 const publicLinks = [
+  { label: 'Home', path: '/' },
   { label: 'Markets', path: '/markets' },
-  { label: 'Trade', path: '/trading' },
   { label: 'News', path: '/news' },
+  { label: 'About', path: '/about' },
+  { label: 'Products', path: '/products' },
+  { label: 'Fees', path: '/disclosures' },
+  { label: 'Resources', path: '/faq' },
+  { label: 'Help', path: '/help' },
+  { label: 'Support', path: '/support' },
+  { label: 'Legal', path: '/legal' },
 ]
 
 const userPrivateLinks = [

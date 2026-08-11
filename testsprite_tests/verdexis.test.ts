@@ -133,8 +133,27 @@ describe('VERDEXIS API Test Suite', () => {
       }, context.token);
 
       expect(status).toBe(200);
-      expect(data.name).toBe('Updated Name');
-      expect(data.prefs.theme).toBe('light');
+      expect(data.user.name).toBe('Updated Name');
+      expect(data.user.prefs.theme).toBe('light');
+    });
+
+    it('PATCH /api/profile - Update user email and phone', async () => {
+      const newEmail = `updated-${context.email}`;
+      const newPhone = '+1 555 987 6543';
+
+      const { status, data } = await apiCall('PATCH', '/api/profile', {
+        email: newEmail,
+        phone: newPhone,
+      }, context.token);
+
+      expect(status).toBe(200);
+      expect(data.user).toBeDefined();
+      expect(data.user.email).toBe(newEmail);
+      expect(data.user.prefs.phone).toBe(newPhone);
+      expect(data.user.emailVerified).toBe(false);
+      expect(data.user.phoneVerified).toBe(false);
+
+      context.email = newEmail;
     });
 
     it('POST /api/auth/forgot - Request password reset', async () => {

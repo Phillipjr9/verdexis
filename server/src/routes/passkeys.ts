@@ -152,6 +152,7 @@ router.post('/register/verify', requireAuth, async (req: AuthedRequest, res) => 
       expectedChallenge: storedChallenge.challenge,
       expectedOrigin: ORIGIN,
       expectedRPID: RP_ID,
+      requireUserVerification: false,
     })
 
     if (!verification.verified || !verification.registrationInfo) {

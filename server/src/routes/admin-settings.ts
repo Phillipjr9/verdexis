@@ -33,7 +33,7 @@ const DEFAULT_SETTINGS = {
   ],
   general: [
     { key: 'platform_name', value: 'Verdexis', type: 'string', category: 'general' },
-    { key: 'support_email', value: 'support@verdexis.com', type: 'string', category: 'general' },
+    { key: 'support_email', value: 'https://www.verdexisgroup.com/support', type: 'string', category: 'general' },
     { key: 'maintenance_mode', value: 'false', type: 'boolean', category: 'general' },
     { key: 'signup_bonus_enabled', value: 'false', type: 'boolean', category: 'general' },
     { key: 'signup_bonus_amount', value: '0', type: 'number', category: 'general' },
@@ -97,7 +97,7 @@ async function ensureDefaultSettings() {
   }
 }
 
-router.get('/settings/all', async (req: AuthedRequest, res) => {
+router.get('/all', async (req: AuthedRequest, res) => {
   try {
     await ensureDefaultSettings()
     const settings = await prisma.appSetting.findMany({ orderBy: { key: 'asc' } })
@@ -126,7 +126,7 @@ router.get('/settings/all', async (req: AuthedRequest, res) => {
   }
 })
 
-router.get('/settings/:key', async (req: AuthedRequest, res) => {
+router.get('/:key', async (req: AuthedRequest, res) => {
   try {
     const setting = await prisma.appSetting.findUnique({ where: { key: req.params.key } })
     if (!setting) return res.status(404).json({ error: 'Setting not found' })
@@ -149,7 +149,7 @@ router.get('/settings/:key', async (req: AuthedRequest, res) => {
   }
 })
 
-router.post('/settings/:key/save', async (req: AuthedRequest, res) => {
+router.post('/:key/save', async (req: AuthedRequest, res) => {
   const { value } = req.body
   const adminEmail = (req as any).user?.email ?? 'unknown'
 
@@ -179,7 +179,7 @@ router.post('/settings/:key/save', async (req: AuthedRequest, res) => {
   }
 })
 
-router.post('/settings/:id/verify', async (req: AuthedRequest, res) => {
+router.post('/:id/verify', async (req: AuthedRequest, res) => {
   try {
     const setting = await prisma.appSetting.findUnique({ where: { key: req.params.id } })
     if (!setting) return res.status(404).json({ error: 'Setting not found' })
@@ -191,7 +191,7 @@ router.post('/settings/:id/verify', async (req: AuthedRequest, res) => {
   }
 })
 
-router.post('/settings/verify-all', async (req: AuthedRequest, res) => {
+router.post('/verify-all', async (req: AuthedRequest, res) => {
   try {
     const settings = await prisma.appSetting.findMany()
     let verified = 0
@@ -208,7 +208,7 @@ router.post('/settings/verify-all', async (req: AuthedRequest, res) => {
   }
 })
 
-router.get('/settings/logs', async (req: AuthedRequest, res) => {
+router.get('/logs', async (req: AuthedRequest, res) => {
   try {
     res.json({ logs: [] })
   } catch (error) {
@@ -216,7 +216,7 @@ router.get('/settings/logs', async (req: AuthedRequest, res) => {
   }
 })
 
-router.get('/settings/summary', async (req: AuthedRequest, res) => {
+router.get('/summary', async (req: AuthedRequest, res) => {
   try {
     const settings = await prisma.appSetting.findMany()
     const byCategory = {} as Record<string, { total: number; verified: number; failed: number }>

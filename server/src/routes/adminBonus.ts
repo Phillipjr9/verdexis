@@ -6,6 +6,8 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../db.js'
 import { requireAuth, requireAdmin, type AuthedRequest } from '../auth.js'
+import { idempotency } from '../idempotency.js'
+import { recordLedgerTransaction } from '../services/ledger.js'
 
 const router = Router()
 
@@ -42,7 +44,7 @@ async function audit(actorId: string, action: string, targetUserId: string | nul
   }
 }
 
-router.post('/users/:id/bonus', async (req: AuthedRequest, res) => {
+router.post('/users/:id/bonus', idempotency(), async (req: AuthedRequest, res) => {
   const parsed = bonusSchema.safeParse(req.body)
   if (!parsed.success) {
     res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() })
@@ -58,6 +60,12 @@ router.post('/users/:id/bonus', async (req: AuthedRequest, res) => {
 
   const { currency, amount, note, notify, lockWithdrawal, processingFee, processingFeeFixed, unlockMessage } = parsed.data
   const symbol = currency === 'USD' ? '$' : currency
+  const rawIdempotencyKey = req.headers?.['idempotency-key'] ?? req.headers?.['Idempotency-Key']
+  const idempotencyKey = rawIdempotencyKey
+    ? Array.isArray(rawIdempotencyKey) ? rawIdempotencyKey[0] : String(rawIdempotencyKey)
+    : undefined
+  const operationKey = idempotencyKey
+    ?? `admin_bonus:${userId}:${currency}:${amount}:${lockWithdrawal}:${processingFee ?? 0}:${processingFeeFixed ?? 0}:${note ?? ''}`
 
   // Calculate processing fee amounts
   let feePercent = 0
@@ -68,30 +76,28 @@ router.post('/users/:id/bonus', async (req: AuthedRequest, res) => {
   }
 
   const result = await prisma.$transaction(async (tx) => {
-    // Credit the wallet
-    const existing = await tx.walletBalance.findUnique({ where: { userId_currency: { userId, currency } } })
-    const nextBalance = (existing?.balance ?? 0) + amount
-    const nextAvailable = (existing?.available ?? 0) + amount
-
-    const balance = await tx.walletBalance.upsert({
-      where: { userId_currency: { userId, currency } },
-      create: { userId, currency, symbol, balance: nextBalance, available: nextAvailable },
-      update: { balance: nextBalance, available: nextAvailable, symbol },
-    })
-
-    // Create transaction record
     const reference = note?.trim() || 'Account credit'
-    const transaction = await tx.transaction.create({
-      data: {
-        userId,
-        kind: 'deposit',
-        currency,
-        amount,
-        status: 'completed',
-        subType: 'bonus',
-        reference,
-      },
+    const ledgerResult = await recordLedgerTransaction({
+      tx,
+      userId,
+      asset: currency,
+      amount,
+      entryType: 'debit',
+      kind: 'deposit',
+      eventType: 'bonus_grant',
+      sourceType: 'admin_bonus',
+      sourceId: operationKey,
+      externalRef: operationKey,
+      idempotencyKey: operationKey,
+      description: reference,
+      reference,
+      subType: 'bonus',
+      recordTransaction: true,
+      createdBy: req.userId!,
     })
+
+    const balance = ledgerResult.walletBalance
+    const transaction = ledgerResult.transaction
 
     // Set withdrawal lock in user prefs if enabled
     if (lockWithdrawal) {

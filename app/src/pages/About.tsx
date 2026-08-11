@@ -1,4 +1,5 @@
 import Navigation from '../components/Navigation'
+import Footer from '../components/Footer'
 import { Link } from 'react-router-dom'
 import {
   Sparkles, Shield, Globe, Users, Zap, Heart, MessageCircle, Twitter, Linkedin, ArrowRight,
@@ -144,6 +145,7 @@ export default function About() {
           </div>
         </div>
       </div>
+      <Footer />
     </div>
   )
 }
