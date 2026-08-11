@@ -8,27 +8,44 @@ const BACKEND_URL = 'https://verdexis-ckgz.onrender.com';
 
 export default async (req: VercelRequest, res: VercelResponse) => {
   try {
-    // Proxy the request to the Render backend
-    const path = req.url || '/';
-    const query = new URLSearchParams(typeof req.query === 'object' ? Object.entries(req.query).flat() : []).toString();
-    const targetUrl = `${BACKEND_URL}${path}${query ? '?' + query : ''}`;
+    // Build target URL with query string
+    const pathWithQuery = req.url?.includes('?') 
+      ? req.url 
+      : `${req.url || '/'}${Object.keys(req.query || {}).length > 0 ? '?' + new URLSearchParams(req.query as Record<string, string>).toString() : ''}`;
+    
+    const targetUrl = `${BACKEND_URL}${pathWithQuery}`;
+    console.log(`Proxying ${req.method} ${targetUrl}`);
+    
+    // Prepare headers
+    const headers: Record<string, string> = {};
+    Object.entries(req.headers).forEach(([key, val]) => {
+      if (!['host', 'connection', 'content-length'].includes(key.toLowerCase())) {
+        headers[key] = String(val);
+      }
+    });
+    
+    // Prepare body
+    let body: string | undefined;
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+    }
     
     const response = await fetch(targetUrl, {
       method: req.method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...Object.entries(req.headers)
-          .filter(([key]) => !['host', 'connection'].includes(key.toLowerCase()))
-          .reduce((acc, [key, val]) => ({ ...acc, [key]: val }), {}),
-      },
-      body: req.method !== 'GET' && req.method !== 'HEAD' ? JSON.stringify(req.body) : undefined,
+      headers,
+      body,
     });
     
     const data = await response.text();
     res.status(response.status);
-    Object.entries(response.headers).forEach(([key, val]) => {
-      if (key.toLowerCase() !== 'content-encoding') res.setHeader(key, val);
+    
+    // Copy response headers
+    Object.entries(response.headers.raw?.() || {}).forEach(([key, values]) => {
+      if (key.toLowerCase() !== 'content-encoding') {
+        res.setHeader(key, Array.isArray(values) ? values[0] : values);
+      }
     });
+    
     res.end(data);
   } catch (error) {
     console.error('Proxy error:', error);
