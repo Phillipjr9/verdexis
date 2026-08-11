@@ -624,11 +624,15 @@ router.post('/signup', ensureDbReady, authLimiter, async (req, res) => {
     const otpResult = await otpService.create(user.id, 'email_verification')
     if (!otpResult.error && otpResult.code) {
       signupOtpCode = otpResult.code
-      process.nextTick(() => {
-        emailService.sendOTP(user.email, user.name, otpResult.code!, 10, user.id).catch(err => {
-          console.error('[auth] Failed to send signup OTP email:', err)
+      const emailSent = await emailService.sendOTP(user.email, user.name, otpResult.code!, 10, user.id)
+      if (!emailSent) {
+        console.error('[auth] Signup OTP email failed to send to', user.email)
+        res.status(500).json({
+          error: 'Verification email failed',
+          message: 'Unable to send verification code. Please try again or contact support.',
         })
-      })
+        return
+      }
       const pendingToken = signToken({ sub: user.id, email: user.email, v: (user as { tokenVersion?: number }).tokenVersion ?? 0, otpPending: true, signupVerification: true })
       pendingVerificationPayload = buildPendingVerificationPayload({ kind: 'signup', pendingToken, email: user.email })
     }
@@ -708,11 +712,15 @@ router.post('/signup/resend-otp', ensureDbReady, authLimiter, async (req, res) =
     return
   }
 
-  process.nextTick(() => {
-    emailService.sendOTP(user!.email, user!.name, otpResult.code!, 10, user!.id).catch(err => {
-      console.error('[auth] Failed to resend signup OTP email:', err)
+  const emailSent = await emailService.sendOTP(user.email, user.name, otpResult.code!, 10, user.id)
+  if (!emailSent) {
+    console.error('[auth] Failed to resend signup OTP email to', user.email)
+    res.status(500).json({
+      error: 'Verification email failed',
+      message: 'Unable to resend verification code. Please try again or contact support.',
     })
-  })
+    return
+  }
 
   const pendingToken = signToken({ sub: user.id, email: user.email, v: (user as { tokenVersion?: number }).tokenVersion ?? 0, otpPending: true, signupVerification: true })
   const payload = buildPendingVerificationPayload({ kind: 'signup', pendingToken, email: user.email })
