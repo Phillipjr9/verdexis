@@ -299,8 +299,9 @@
     display: none;
   }
   .animate-marquee {
-    animation: marquee 40s linear infinite;
+    animation: marquee 24s linear infinite;
     will-change: transform;
+    backface-visibility: hidden;
   }
   /* Knock out the baked-in black background of the logo PNG and crop to
      show only the V glyph (the PNG also contains "VERDEXIS" text we

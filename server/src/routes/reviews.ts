@@ -83,12 +83,14 @@ router.post('/', requireAuth, reviewWriteLimiter, async (req: AuthedRequest, res
       text: parse.data.text,
       authorName: user.name,
       authorAvatar: user.avatar,
+      approved: false,
     },
     update: {
       rating: parse.data.rating,
       text: parse.data.text,
       authorName: user.name,
       authorAvatar: user.avatar,
+      approved: false,
     },
     select: { id: true, rating: true, text: true, authorName: true, authorAvatar: true, approved: true, createdAt: true, updatedAt: true },
   })

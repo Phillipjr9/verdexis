@@ -260,6 +260,68 @@ router.get('/users', async (req: AuthedRequest, res) => {
   res.json({ users: hydrated, total, page, limit })
 })
 
+const reviewListSchema = z.object({
+  status: z.enum(['all', 'pending', 'approved']).default('pending'),
+})
+
+router.get('/reviews', async (req, res) => {
+  const parsed = reviewListSchema.safeParse(req.query)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid query' })
+    return
+  }
+
+  const where: Record<string, unknown> = {}
+  if (parsed.data.status === 'pending') where.approved = false
+  if (parsed.data.status === 'approved') where.approved = true
+
+  const reviews = await prisma.review.findMany({
+    where,
+    orderBy: { updatedAt: 'desc' },
+    select: {
+      id: true,
+      rating: true,
+      text: true,
+      authorName: true,
+      authorAvatar: true,
+      approved: true,
+      createdAt: true,
+      updatedAt: true,
+      user: { select: { id: true, email: true, name: true } },
+    },
+  })
+
+  res.json({ reviews })
+})
+
+router.post('/reviews/:id/approve', async (req, res) => {
+  const id = req.params.id
+  try {
+    const review = await prisma.review.update({
+      where: { id },
+      data: { approved: true },
+    })
+    await audit(req.userId!, 'review.approve', review.userId, { id })
+    res.json({ review })
+  } catch (error) {
+    res.status(404).json({ error: 'Review not found' })
+  }
+})
+
+router.post('/reviews/:id/reject', async (req, res) => {
+  const id = req.params.id
+  try {
+    const review = await prisma.review.update({
+      where: { id },
+      data: { approved: false },
+    })
+    await audit(req.userId!, 'review.reject', review.userId, { id })
+    res.json({ review })
+  } catch (error) {
+    res.status(404).json({ error: 'Review not found' })
+  }
+})
+
 // --- create user ---------------------------------------------------------
 
 const createUserSchema = z.object({

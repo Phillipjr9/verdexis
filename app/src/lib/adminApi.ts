@@ -296,6 +296,27 @@ export const adminApi = {
   rejectDeposit: (txId: string, reason?: string) =>
     request<{ transaction: AdminTransaction }>(`/api/admin/deposits/${txId}/reject`, { method: 'POST', body: JSON.stringify({ reason: reason || '' }) }),
 
+  listPendingReviews: () =>
+    request<{
+      reviews: Array<{
+        id: string
+        rating: number
+        text: string
+        authorName: string
+        authorAvatar: string | null
+        approved: boolean
+        createdAt: string
+        updatedAt: string
+        user: { id: string; email: string; name: string }
+      }>
+    }>('/api/admin/reviews?status=pending'),
+
+  approveReview: (id: string) =>
+    request<{ review: { id: string; approved: boolean } }>(`/api/admin/reviews/${encodeURIComponent(id)}/approve`, { method: 'POST' }),
+
+  rejectReview: (id: string) =>
+    request<{ review: { id: string; approved: boolean } }>(`/api/admin/reviews/${encodeURIComponent(id)}/reject`, { method: 'POST' }),
+
   // --- On-chain (PendingDeposit) approval queue ---
   // These come from users who connected a self-custody wallet and sent ETH
   // (or other native asset) to the admin treasury address. Admin verifies

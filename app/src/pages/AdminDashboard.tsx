@@ -14,6 +14,7 @@ export default function AdminDashboard() {
   const [seedLoading, setSeedLoading] = useState(false)
   const [treasuryBalance, setTreasuryBalance] = useState<number | null>(null)
   const [sessionStats, setSessionStats] = useState<AdminSessionStats | null>(null)
+  const [pendingReviewCount, setPendingReviewCount] = useState<number | null>(null)
 
   useEffect(() => {
     let active = true
@@ -21,6 +22,19 @@ export default function AdminDashboard() {
       .then((result) => {
         if (!active) return
         setSessionStats(result.stats)
+      })
+      .catch(() => {
+        if (!active) return
+      })
+    return () => { active = false }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    adminApi.listPendingReviews()
+      .then((result) => {
+        if (!active) return
+        setPendingReviewCount(result.reviews.length)
       })
       .catch(() => {
         if (!active) return
@@ -85,6 +99,17 @@ export default function AdminDashboard() {
               <MetricBadge icon={<ShieldCheck className="w-4 h-4" />} label="OTP verified" value={String(sessionStats.otpVerifiedSessions)} trend="" color="blue" />
               <MetricBadge icon={<Hourglass className="w-4 h-4" />} label="Expired sessions" value={String(sessionStats.expiredSessions)} trend="" color="orange" />
               <MetricBadge icon={<BarChart3 className="w-4 h-4" />} label="Avg session sec" value={`${sessionStats.averageSessionDuration}s`} trend="" color="green" />
+            </div>
+          )}
+          {pendingReviewCount !== null && (
+            <div className="mb-8">
+              <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-5 inline-flex items-center gap-3">
+                <FileCheck2 className="w-5 h-5 text-[#0C8B44]" />
+                <div>
+                  <p className="text-xs uppercase tracking-[0.25em] text-[#737373]">Pending testimonials</p>
+                  <p className="text-2xl font-light text-[#E5E5E5]">{pendingReviewCount}</p>
+                </div>
+              </div>
             </div>
           )}
 
@@ -173,6 +198,7 @@ export default function AdminDashboard() {
               </h2>
               <div className="space-y-2">
                 <ActionButton to="/admin/users" icon={<Users className="w-4 h-4" />} label="Manage Users" />
+                <ActionButton to="/admin/reviews" icon={<FileCheck2 className="w-4 h-4" />} label="Review Testimonials" />
                 <ActionButton to="/admin/deposits" icon={<Banknote className="w-4 h-4" />} label="Deposit Settings" />
                 <ActionButton to="/admin/transfer" icon={<ArrowLeftRight className="w-4 h-4" />} label="Transfer Funds" />
                 <ActionButton to="/admin/broadcast" icon={<MegaphoneIcon className="w-4 h-4" />} label="Send Broadcast" />
@@ -282,6 +308,7 @@ export default function AdminDashboard() {
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             <OperationLink to="/admin/users" icon={<Users className="w-5 h-5" />} label="Users" />
+            <OperationLink to="/admin/reviews" icon={<FileCheck2 className="w-5 h-5" />} label="Reviews" />
             <OperationLink to="/admin/transfer" icon={<ArrowLeftRight className="w-5 h-5" />} label="Transfer" />
             <OperationLink to="/admin/deposits" icon={<Banknote className="w-5 h-5" />} label="Deposits" />
             <OperationLink to="/admin/deposit-addresses" icon={<MapPin className="w-5 h-5" />} label="Addresses" />

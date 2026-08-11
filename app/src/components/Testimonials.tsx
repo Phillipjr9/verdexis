@@ -52,6 +52,7 @@ export default function Testimonials({ onSignInRequired }: { onSignInRequired?: 
   const [text, setText] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [hasMine, setHasMine] = useState(false)
+  const [myReviewApproved, setMyReviewApproved] = useState<boolean | null>(null)
 
   const load = () => {
     api.listReviews()
@@ -69,6 +70,7 @@ export default function Testimonials({ onSignInRequired }: { onSignInRequired?: 
             setRating(r.review.rating)
             setText(r.review.text)
             setHasMine(true)
+            setMyReviewApproved(r.review.approved)
           }
         })
         .catch(() => { /* offline */ })
@@ -92,8 +94,9 @@ export default function Testimonials({ onSignInRequired }: { onSignInRequired?: 
     setSubmitting(true)
     try {
       await api.upsertReview({ rating, text: trimmed })
-      toast.success(hasMine ? 'Review updated — thanks!' : 'Thanks for the review!')
+      toast.success(hasMine ? 'Review updated and is pending admin approval.' : 'Review submitted and is pending admin approval.')
       setHasMine(true)
+      setMyReviewApproved(false)
       setFormOpen(false)
       load()
     } catch (e) {

@@ -1,65 +1,45 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { useState } from 'react'
+import { Link, Navigate } from 'react-router-dom'
 import Navigation from '../components/Navigation'
 import Footer from '../components/Footer'
 import AuthModal from '../components/AuthModal'
 import Testimonials from '../components/Testimonials'
 import ScrambleText from '../components/ScrambleText'
 import TetrahedronCanvas from '../components/Tetrahedron'
-import { aiService, type AIInsight } from '../lib/aiService'
-import { marketData, type CryptoQuote } from '../lib/marketData'
-import { liveTicker } from '../lib/liveTicker'
-import { formatPrice, formatUsdCompact } from '@/lib/utils'
-import {
-  TrendingUp, TrendingDown, ArrowRight, Sparkles, Shield,
-  Zap, BarChart3, PieChart, Activity, Bot,
-  ChevronRight, Wallet, LineChart, BrainCircuit, Lock,
-  Globe, Server, CheckCircle, Play,
-  FileText, Fingerprint, Eye,
-} from 'lucide-react'
+import { ArrowRight, Shield, ChevronRight, CheckCircle, Play, Lock, Fingerprint, Eye, Server, Globe, Sparkles, Wallet } from 'lucide-react'
 
-const testimonials: { name: string; role: string; company: string; image: string; text: string; rating: number }[] = []
-// `testimonials` is intentionally empty + unused; the homepage testimonial
-// section is rendered by <Testimonials /> which fetches real reviews from
-// /api/reviews and merges them with curated seed quotes.
-void testimonials
-
-const howItWorks = [
-  { step: '01', title: 'Connect Your Accounts', desc: 'Link your exchange accounts, wallets, and bank accounts securely. Verdexis supports leading exchanges and major blockchains.', icon: Globe, color: '#0C8B44' },
-  { step: '02', title: 'AI Analyzes Everything', desc: 'Our AI engine processes your entire financial picture — portfolio allocation, market conditions, and emerging opportunities — 24/7.', icon: BrainCircuit, color: '#6A0DAD' },
-  { step: '03', title: 'Get Actionable Insights', desc: 'Receive personalized recommendations with confidence scores. Rebalance alerts, entry/exit signals, tax-loss harvesting — all instant.', icon: Zap, color: '#F57C00' },
-  { step: '04', title: 'Execute With One Click', desc: 'Act on insights directly from the dashboard. Smart order routing finds the best prices. Set automated strategies.', icon: CheckCircle, color: '#2196F3' },
+const platformStats = [
+  { value: 'Unified', label: 'All your accounts', icon: Globe },
+  { value: 'Secure', label: 'Encryption first', icon: Shield },
+  { value: 'Clear', label: 'Performance signals', icon: Sparkles },
+  { value: 'Accessible', label: 'Desktop & mobile', icon: Wallet },
 ]
 
-const partnerLogos = [
-  { name: 'CoinGecko', image: 'https://s2.coinmarketcap.com/static/img/coins/64x64/8000.png' },
-  { name: 'Binance', image: 'https://s2.coinmarketcap.com/static/img/exchanges/64x64/270.png' },
-  { name: 'Coinbase', image: 'https://s2.coinmarketcap.com/static/img/exchanges/64x64/89.png' },
-  { name: 'Kraken', image: 'https://s2.coinmarketcap.com/static/img/exchanges/64x64/24.png' },
-  { name: 'Crypto.com', image: 'https://s2.coinmarketcap.com/static/img/exchanges/64x64/294.png' },
-  { name: 'Gemini', image: 'https://s2.coinmarketcap.com/static/img/exchanges/64x64/202.png' },
-  { name: 'Bybit', image: 'https://s2.coinmarketcap.com/static/img/exchanges/64x64/521.png' },
-  { name: 'KuCoin', image: 'https://s2.coinmarketcap.com/static/img/exchanges/64x64/311.png' },
-  { name: 'OKX', image: 'https://s2.coinmarketcap.com/static/img/exchanges/64x64/298.png' },
-  { name: 'Uniswap', image: 'https://s2.coinmarketcap.com/static/img/coins/64x64/7083.png' },
-  { name: 'Aave', image: 'https://s2.coinmarketcap.com/static/img/coins/64x64/7060.png' },
-  { name: 'Lido', image: 'https://s2.coinmarketcap.com/static/img/coins/64x64/8000.png' },
+const featureItems = [
+  { icon: Globe, title: 'Unified financial view', desc: 'Bring checking, savings, investments, and other assets into a single, secure overview.' },
+  { icon: Sparkles, title: 'Clear progress signals', desc: 'Understand your money with easy-to-read summaries and simple performance indicators.' },
+  { icon: Wallet, title: 'Cashflow tracking', desc: 'Monitor balances, transfers, spending, and savings all in one place.' },
+  { icon: Shield, title: 'Security-first design', desc: 'Built with strong controls, encryption, and account protection from day one.' },
+  { icon: Server, title: 'Reliable access', desc: 'Fast, dependable access so you can check your finances whenever you need.' },
+  { icon: Lock, title: 'Privacy controls', desc: 'You decide what data is shared and how it is used.' },
 ]
 
-import { cryptoIconFor, cryptoIconErrorFallback } from '../lib/cryptoIcon'
+const securityItems = [
+  { icon: Lock, title: 'AES-256 encryption', desc: 'Your information is encrypted at rest and in transit.' },
+  { icon: Fingerprint, title: 'Two-factor authentication', desc: 'Add extra protection to your account with TOTP security.' },
+  { icon: Eye, title: 'Privacy by design', desc: 'Consent-based analytics and no data selling.' },
+  { icon: Server, title: 'Audit logging', desc: 'Actions are logged so you always have a clear record of activity.' },
+]
 
-const securityFeatures = [
-  { icon: Lock, title: 'AES-256 Encryption', desc: 'All data encrypted at rest and in transit' },
-  { icon: Fingerprint, title: 'Two-Factor Authentication', desc: 'TOTP authenticator app support; WebAuthn/passkeys on the roadmap' },
-  { icon: Eye, title: 'Privacy by Design', desc: 'Consent-based analytics, no data selling' },
-  { icon: Server, title: 'Segregated Custody', desc: 'Custodial deposits held in segregated institutional infrastructure' },
-  { icon: Shield, title: 'Non-Custodial Option', desc: 'Read-only API connections leave your exchange keys with you' },
-  { icon: FileText, title: 'Full Audit Trail', desc: 'Immutable logs of every action on your account' },
+const faqItems = [
+  { q: 'Is Verdexis free?', a: 'Yes. Verdexis is free to sign up and use, with optional premium upgrades for advanced planning tools.' },
+  { q: 'How is my data protected?', a: 'All information is encrypted with AES-256 at rest and TLS 1.3 in transit, and we support two-factor authentication for every account.' },
+  { q: 'Can I use Verdexis on mobile?', a: 'Yes. Verdexis is designed to work across desktop and mobile so you can check your finances wherever you are.' },
+  { q: 'What support is available?', a: 'Our support team is available through the in-app help center and live chat for account questions and setup assistance.' },
+  { q: 'Is Verdexis financial advice?', a: 'No. Verdexis provides insights and analysis to help you make decisions, but it is not a registered investment adviser.' },
 ]
 
 export default function Home() {
-  // If the user is already authenticated, send them straight to the
-  // dashboard. Computed once per render — checked AFTER hooks below.
   const isAuthed = (() => {
     try {
       return !!localStorage.getItem('verdexis_token') || (!!localStorage.getItem('verdexis_auth') && !!localStorage.getItem('verdexis_holdings'))
@@ -68,111 +48,11 @@ export default function Home() {
     }
   })()
 
-  const [insights, setInsights] = useState<AIInsight[]>([])
-  const [cryptoData, setCryptoData] = useState<CryptoQuote[]>([])
-  const [livePrices, setLivePrices] = useState<Record<string, number>>({})
   const [authOpen, setAuthOpen] = useState(false)
   const [authMode, setAuthMode] = useState<'signup' | 'login'>('signup')
-  const navigate = useNavigate()
-
-  useEffect(() => {
-    marketData.getCryptoList()
-      .then(setCryptoData)
-      .catch((error) => {
-        console.warn('[Home] crypto list fetch failed', error)
-      })
-
-    aiService.getPortfolioInsights()
-      .then(setInsights)
-      .catch((error) => {
-        console.warn('[Home] AI insights fetch failed', error)
-      })
-
-    // Refresh the snapshot list (sparklines, market caps, 24h %) every 30s
-    // so even sections that key off CryptoQuote (not just liveTicker) stay
-    // fresh while the visitor is on the landing page.
-    const refresh = setInterval(() => {
-      marketData.getCryptoList()
-        .then(setCryptoData)
-        .catch((error) => {
-          console.warn('[Home] crypto list refresh failed', error)
-        })
-    }, 30_000)
-    return () => clearInterval(refresh)
-  }, [])
-
-  // Subscribe to live ticker for the top-5 coins so the marquee + preview
-  // prices visibly tick every ~2s instead of being frozen on the snapshot
-  // captured at mount. We key by coingecko id (the same id liveTicker uses
-  // internally) and merge into a Record we read with useMemo below.
-  const topIds = cryptoData.slice(0, 5).map((c) => c.id).join(',')
-  useEffect(() => {
-    if (!topIds) return
-    const ids = topIds.split(',')
-    const unsubs = ids.map((id) => liveTicker.subscribe(id, (p) => {
-      setLivePrices((prev) => (prev[id] === p ? prev : { ...prev, [id]: p }))
-    }))
-    return () => { unsubs.forEach((u) => u()) }
-  }, [topIds])
 
   const openSignup = () => { setAuthMode('signup'); setAuthOpen(true) }
-  // Gated nav: if the visitor is signed in, navigate inside the SPA;
-  // otherwise prompt them to sign up.
-  const goAuthed = (path: string) => {
-    if (isAuthed) {
-      navigate(path)
-    } else {
-      openSignup()
-    }
-  }
   const openLogin = () => { setAuthMode('login'); setAuthOpen(true) }
-
-  // Overlay live ticker prices on top of the CoinGecko snapshot so every
-  // place that reads `current_price` automatically gets the fresh value.
-  const liveCryptos = useMemo(() => cryptoData.map((c) => {
-    const p = livePrices[c.id]
-    return p != null && p > 0 ? { ...c, current_price: p } : c
-  }), [cryptoData, livePrices])
-
-  const topCryptos = liveCryptos.slice(0, 5)
-  // Live total market cap of the top 5 cryptos shown in the preview. This is
-  // an actual public market metric — not a fake "net worth".
-  const totalValue = topCryptos.reduce((sum, c) => sum + (c.market_cap || 0), 0)
-  // 24h weighted change across the same basket so the +/- next to the figure
-  // reflects the same underlying numbers.
-  const previousValue = topCryptos.reduce((sum, c) => {
-    const mc = c.market_cap || 0
-    const pct = c.price_change_percentage_24h || 0
-    return sum + mc / (1 + pct / 100)
-  }, 0)
-  const change24hAbs = totalValue - previousValue
-  const change24hPct = previousValue > 0 ? (change24hAbs / previousValue) * 100 : 0
-  // BTC 7-day sparkline drives the preview chart so what the user sees on the
-  // landing page is the same data the dashboard would show. Append the live
-  // BTC price to the tail so the rightmost bar visibly grows/shrinks every
-  // ~2s as new ticks arrive.
-  const baseHeroSparkline = topCryptos.find((c) => c.id === 'bitcoin')?.sparkline_in_7d?.price
-    ?? topCryptos[0]?.sparkline_in_7d?.price
-    ?? []
-  const heroLivePrice = livePrices['bitcoin'] ?? topCryptos.find((c) => c.id === 'bitcoin')?.current_price
-  const heroSparkline = useMemo(() => {
-    if (baseHeroSparkline.length === 0) return baseHeroSparkline
-    if (heroLivePrice == null || heroLivePrice <= 0) return baseHeroSparkline
-    const last = baseHeroSparkline[baseHeroSparkline.length - 1]
-    if (Math.abs(heroLivePrice - last) / Math.max(last, 1e-9) < 1e-6) return baseHeroSparkline
-    return [...baseHeroSparkline.slice(1), heroLivePrice]
-  }, [baseHeroSparkline, heroLivePrice])
-  const heroSparkSlim = heroSparkline.length > 30
-    ? heroSparkline.filter((_, i) => i % Math.ceil(heroSparkline.length / 30) === 0).slice(0, 30)
-    : heroSparkline
-  const heroMin = heroSparkSlim.length ? Math.min(...heroSparkSlim) : 0
-  const heroMax = heroSparkSlim.length ? Math.max(...heroSparkSlim) : 1
-  const heroRange = Math.max(heroMax - heroMin, 1e-9)
-  // Allocation weights = each top-3 coin's share of the top-3 market cap, so
-  // the bars next to BTC/ETH/SOL are honest market-cap percentages.
-  const top3MarketCap = topCryptos.slice(0, 3).reduce((s, c) => s + (c.market_cap || 0), 0)
-
-  const getCryptoLogo = (c: { id?: string; symbol?: string; image?: string }) => cryptoIconFor(c)
 
   if (isAuthed) return <Navigate to="/dashboard" replace />
 
@@ -181,7 +61,6 @@ export default function Home() {
       <Navigation />
       <AuthModal isOpen={authOpen} onClose={() => setAuthOpen(false)} defaultMode={authMode} />
 
-      {/* ===== HERO ===== */}
       <section className="relative min-h-screen flex items-center justify-center overflow-hidden"
         style={{ backgroundImage: 'radial-gradient(rgba(255,255,255,0.03) 1px, transparent 1px)', backgroundSize: '4px 4px' }}>
         <TetrahedronCanvas />
@@ -189,21 +68,20 @@ export default function Home() {
           <h1 className="text-6xl md:text-7xl lg:text-[80px] font-light tracking-[-0.04em] text-[#E5E5E5] mb-4">
             <ScrambleText text="Multiply Your Wealth." />
           </h1>
-          <p className="text-2xl md:text-4xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-6">AI-Powered Trading Meets Complete Financial Clarity.</p>
-          <p className="text-base md:text-lg text-[#A0A0A0] max-w-lg mx-auto mb-10 leading-relaxed">Connect your wallets, automate your trades, and watch your net worth grow with institutional-grade AI analysis powered by real-time market data.</p>
+          <p className="text-2xl md:text-4xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-6">A simpler way to understand your money and move forward with confidence.</p>
+          <p className="text-base md:text-lg text-[#A0A0A0] max-w-lg mx-auto mb-10 leading-relaxed">Securely connect your accounts, track progress, and keep your finances organized without the noise.</p>
           <div className="flex items-center justify-center gap-4 flex-wrap">
-            <button onClick={openSignup} className="px-8 py-3.5 bg-[#0C8B44] text-white text-sm font-medium tracking-[0.04em] uppercase rounded-lg hover:bg-[#0a7539] transition-colors glow-accent">Start Free &mdash; Sign Up</button>
-            <Link to="/markets" className="flex items-center gap-2 px-8 py-3.5 text-[#E5E5E5] text-sm font-medium tracking-[0.04em] uppercase border border-[#ffffff15] rounded-lg hover:border-[#0C8B44]/30 transition-colors"><Play className="w-4 h-4" />Explore Markets</Link>
+            <button onClick={openSignup} className="px-8 py-3.5 bg-[#0C8B44] text-white text-sm font-medium tracking-[0.04em] uppercase rounded-lg hover:bg-[#0a7539] transition-colors glow-accent">Start Free</button>
+            <a href="#features" className="flex items-center gap-2 px-8 py-3.5 text-[#E5E5E5] text-sm font-medium tracking-[0.04em] uppercase border border-[#ffffff15] rounded-lg hover:border-[#0C8B44]/30 transition-colors"><Play className="w-4 h-4" />See the platform</a>
           </div>
           <p className="text-xs text-[#737373] mt-4">No credit card required. Free forever plan available. <button onClick={openLogin} className="text-[#0C8B44] hover:text-[#00E676] underline-offset-4 hover:underline transition-colors">Already have an account? Sign in</button></p>
         </div>
       </section>
 
-      {/* ===== STATS BAR ===== */}
       <section className="py-12 md:py-20 px-6 border-y border-[#ffffff08]">
         <div className="max-w-[1280px] mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8">
-            {[{ value: 'Real-time', label: 'Market Data', icon: Activity }, { value: 'Multi-Asset', label: 'Crypto + Equities', icon: BarChart3 }, { value: 'AI-Native', label: 'Insights & Alerts', icon: BrainCircuit }, { value: '24/7', label: 'Global Coverage', icon: Globe }].map((stat) => (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8 text-center">
+            {platformStats.map((stat) => (
               <div key={stat.label} className="text-center">
                 <div className="w-12 h-12 rounded-2xl bg-[#0C8B44]/10 flex items-center justify-center mx-auto mb-4"><stat.icon className="w-6 h-6 text-[#0C8B44]" /></div>
                 <p className="text-3xl md:text-4xl font-light tracking-[-0.03em] text-[#E5E5E5]">{stat.value}</p>
@@ -214,535 +92,59 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ===== ANIMATED STATS COUNTER ===== */}
-      <section className="py-10 md:py-16 px-6 bg-[#070C0E] border-b border-[#ffffff08]">
-        <div className="max-w-[1280px] mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-8">
-            <div className="text-center p-6 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff05]">
-              <p className="text-5xl md:text-6xl font-light text-[#0C8B44] mb-2 tabular-nums">10K+</p>
-              <p className="text-sm text-[#A0A0A0]">Active Traders</p>
-              <p className="text-xs text-[#737373] mt-2">Growing community worldwide</p>
-            </div>
-            <div className="text-center p-6 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff05]">
-              <p className="text-5xl md:text-6xl font-light text-[#4CAF50] mb-2 tabular-nums">$500M+</p>
-              <p className="text-sm text-[#A0A0A0]">Assets Under Management</p>
-              <p className="text-xs text-[#737373] mt-2">Real trading volume</p>
-            </div>
-            <div className="text-center p-6 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff05]">
-              <p className="text-5xl md:text-6xl font-light text-[#2196F3] mb-2 tabular-nums">4.8★</p>
-              <p className="text-sm text-[#A0A0A0]">User Rating</p>
-              <p className="text-xs text-[#737373] mt-2">Based on 2,400+ reviews</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ===== REAL-TIME MARKET STATS BAR ===== */}
-      <section className="py-4 md:py-6 px-6 bg-[#0a0f11] border-b border-[#ffffff08]">
-        <div className="max-w-[1280px] mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4 text-center">
-            <div>
-              <p className="text-xs text-[#737373] mb-1">Global 24h Volume</p>
-              <p className="text-lg font-medium text-[#E5E5E5]">$85.2B</p>
-            </div>
-            <div>
-              <p className="text-xs text-[#737373] mb-1">Top Gainer (24h)</p>
-              <p className="text-lg font-medium text-[#4CAF50]">+125.3% SOL</p>
-            </div>
-            <div>
-              <p className="text-xs text-[#737373] mb-1">BTC Dominance</p>
-              <p className="text-lg font-medium text-[#E5E5E5]">42.8%</p>
-            </div>
-            <div>
-              <p className="text-xs text-[#737373] mb-1">Global Market Cap</p>
-              <p className="text-lg font-medium text-[#E5E5E5]">$2.1T</p>
-            </div>
-          </div>
-        </div>
-      </section>
-      {topCryptos.length > 0 && (
-        <section className="py-4 border-y border-[#ffffff08] bg-[#0a0f11] overflow-hidden">
-          <div className="flex items-center gap-10 animate-marquee whitespace-nowrap">
-            {[...topCryptos, ...topCryptos, ...topCryptos].map((c, idx) => (
-              <Link to={`/asset/${c.id}`} key={`${c.id}-${idx}`} className="flex items-center gap-2 text-sm hover:opacity-80 transition-opacity">
-                {getCryptoLogo(c) ? (
-                  <img
-                    src={getCryptoLogo(c)!}
-                    alt={c.name}
-                    className="w-5 h-5 rounded-full object-cover"
-                    onError={cryptoIconErrorFallback(c.symbol.toUpperCase()[0] || '?', c.id)}
-                  />
-                ) : (
-                  <div className="w-5 h-5 rounded-full bg-[#0C8B44]/20 text-[10px] font-bold text-[#0C8B44] flex items-center justify-center">{c.symbol.toUpperCase()[0]}</div>
-                )}
-                <span className="text-[#E5E5E5] font-medium">{c.symbol.toUpperCase()}</span>
-                <span className="text-[#A0A0A0] tabular-nums">{formatPrice(c.current_price)}</span>
-                <span className={c.price_change_percentage_24h >= 0 ? 'text-[#4CAF50]' : 'text-[#f44336]'}>
-                  {c.price_change_percentage_24h >= 0 ? '▲' : '▼'} {Math.abs(c.price_change_percentage_24h).toFixed(2)}%
-                </span>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <section className="py-10 md:py-16 px-6 bg-[#070C0E] border-y border-[#ffffff08]">
-        <div className="max-w-[1280px] mx-auto">
-          <p className="text-center text-xs tracking-[0.05em] uppercase text-[#737373] mb-6 md:mb-8">Trusted by leading platforms</p>
-          <div className="flex items-center justify-center gap-6 md:gap-12 flex-wrap">
-            {partnerLogos.map((p) => (
-              <div key={p.name} className="flex items-center">
-                <img src={p.image} alt={p.name} className="h-12 w-auto object-contain opacity-90 hover:opacity-100 transition-opacity" />
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ===== HOW IT WORKS ===== */}
-      <section className="py-16 md:py-24 px-6 bg-[#0a0f11]">
+      <section id="features" className="py-16 md:py-24 px-6 bg-[#0a0f11]">
         <div className="max-w-[1280px] mx-auto">
           <div className="text-center mb-10 md:mb-16">
-            <span className="text-xs tracking-[0.05em] uppercase text-[#0C8B44] mb-3 block">How It Works</span>
-            <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-4">Four Steps to Smarter Investing</h2>
-            <p className="text-[#A0A0A0] max-w-lg mx-auto">From account connection to AI-powered execution &mdash; a seamless journey.</p>
+            <span className="text-xs tracking-[0.05em] uppercase text-[#0C8B44] mb-3 block">Platform</span>
+            <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-4">Built for modern investors who want control and clarity.</h2>
+            <p className="text-[#A0A0A0] max-w-lg mx-auto">Everything you need to monitor progress, set goals, and keep your finances under one roof.</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-            {howItWorks.map((step) => (
-              <div key={step.step} className="relative">
-                <div className="liquid-card p-8 h-full" style={{ '--fill-color': `${step.color}15` } as React.CSSProperties}>
-                  <div className="flex items-center justify-between mb-6">
-                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: `${step.color}15`, border: `1px solid ${step.color}30` }}>
-                      <step.icon className="w-7 h-7" style={{ color: step.color }} />
-                    </div>
-                    <span className="text-4xl font-light text-[#ffffff08]">{step.step}</span>
-                  </div>
-                  <h3 className="text-xl font-medium text-[#E5E5E5] mb-3">{step.title}</h3>
-                  <p className="text-sm text-[#A0A0A0] leading-relaxed">{step.desc}</p>
-                </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {featureItems.map((feature) => (
+              <div key={feature.title} className="p-8 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff05] hover:border-[#0C8B44]/30 transition-all duration-300 group">
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-6 transition-transform group-hover:scale-110 bg-[#0C8B44]/10"><feature.icon className="w-7 h-7 text-[#0C8B44]" /></div>
+                <h3 className="text-xl font-medium text-[#E5E5E5] mb-3">{feature.title}</h3>
+                <p className="text-sm text-[#A0A0A0] leading-relaxed">{feature.desc}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ===== HUMAN IMAGE + SOCIAL PROOF ===== */}
-      <section className="py-16 md:py-24 px-6">
+      <Testimonials onSignInRequired={openLogin} />
+
+      <section className="py-16 md:py-24 px-6 bg-[#0a0f11]">
         <div className="max-w-[1280px] mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-12 items-center">
-            <div className="relative">
-              <div className="rounded-2xl overflow-hidden border border-[#ffffff08]">
-                <img src="/assets/showcase-trading-desk.jpg" alt="Professional trading setup" className="w-full h-[400px] object-cover" />
-              </div>
-              <div className="absolute -bottom-6 -right-6 glass-card p-4 rounded-xl border border-[#0C8B44]/30">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-[#0C8B44]/20 flex items-center justify-center"><TrendingUp className="w-6 h-6 text-[#0C8B44]" /></div>
-                  <div><p className="text-lg font-light text-[#E5E5E5]">Multi-asset</p><p className="text-xs text-[#737373]">Crypto, equities &amp; fiat in one view</p></div>
-                </div>
-              </div>
-            </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-16 items-center">
             <div>
-              <span className="text-xs tracking-[0.05em] uppercase text-[#0C8B44] mb-3 block">Why Traders Choose Us</span>
-              <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-6">Built by Traders, for Traders</h2>
-              <p className="text-[#A0A0A0] mb-8 leading-relaxed">We built Verdexis because we were frustrated with fragmented tools. No single platform combined professional-grade trading, AI analysis, and portfolio management. So we created it.</p>
+              <span className="text-xs tracking-[0.05em] uppercase text-[#0C8B44] mb-3 block">Security</span>
+              <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-6">Institutional-grade protection for your finances.</h2>
+              <p className="text-[#A0A0A0] mb-8 leading-relaxed">Your accounts and data are protected with strong controls and standard practices designed for reliability.</p>
               <div className="space-y-4">
-                {[{ icon: Zap, title: 'Sub-second execution', desc: 'Smart order routing across leading exchanges' }, { icon: BrainCircuit, title: 'AI that actually helps', desc: 'Not generic advice &mdash; personalized, data-driven insights' }, { icon: Shield, title: 'Your keys, your crypto', desc: 'Non-custodial options with institutional security' }].map((item) => (                  <div key={item.title} className="flex items-start gap-4 p-4 rounded-xl bg-[#1a1a1a]/50 border border-[#ffffff05]">
+                {securityItems.map((item) => (
+                  <div key={item.title} className="flex items-start gap-4 p-4 rounded-xl bg-[#1a1a1a]/50 border border-[#ffffff05]">
                     <div className="w-10 h-10 rounded-xl bg-[#0C8B44]/10 flex items-center justify-center shrink-0"><item.icon className="w-5 h-5 text-[#0C8B44]" /></div>
                     <div><p className="text-sm font-medium text-[#E5E5E5]">{item.title}</p><p className="text-xs text-[#737373]">{item.desc}</p></div>
                   </div>
                 ))}
               </div>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ===== DASHBOARD PREVIEW with REAL CRYPTO LOGOS ===== */}
-      <section className="py-16 md:py-24 px-6 bg-[#0a0f11]">
-        <div className="max-w-[1280px] mx-auto">
-          <div className="text-center mb-10 md:mb-16">
-            <span className="text-xs tracking-[0.05em] uppercase text-[#0C8B44] mb-3 block">Dashboard</span>
-            <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-4">Your Financial Command Center</h2>
-            <p className="text-[#A0A0A0] max-w-lg mx-auto">Real-time portfolio tracking, AI insights, and market analysis &mdash; all in one place.</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-            {/* Net Worth */}
-            <div className="liquid-card col-span-1 md:col-span-2 p-8" style={{ '--fill-color': 'rgba(12,139,68,0.15)' } as React.CSSProperties}>
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <p className="text-sm text-[#A0A0A0] mb-1">Top 5 Crypto Market Cap</p>
-                  <p className="text-5xl font-light tracking-[-0.03em] text-[#E5E5E5]">{totalValue > 0 ? formatUsdCompact(totalValue) : '—'}</p>
-                  {totalValue > 0 && (
-                    <p className={`text-sm mt-1 flex items-center gap-1 ${change24hAbs >= 0 ? 'text-[#4CAF50]' : 'text-[#E53935]'}`}>
-                      {change24hAbs >= 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                      {change24hAbs >= 0 ? '+' : ''}{formatUsdCompact(change24hAbs)} ({change24hPct >= 0 ? '+' : ''}{change24hPct.toFixed(2)}%)
-                    </p>
-                  )}
-                </div>
-                <div className="w-16 h-16 rounded-2xl bg-[#0C8B44]/10 flex items-center justify-center"><Wallet className="w-8 h-8 text-[#0C8B44]" /></div>
-              </div>
-              <div className="h-24 flex items-end gap-1">
-                {heroSparkSlim.length > 0 ? heroSparkSlim.map((p, i) => {
-                  const h = ((p - heroMin) / heroRange) * 100
-                  return <div key={i} className="flex-1 rounded-t-sm" style={{ height: `${Math.max(h, 4)}%`, background: i >= heroSparkSlim.length - 5 ? 'linear-gradient(to top, #0C8B44, #00E676)' : 'rgba(12,139,68,0.3)' }} />
-                }) : <div className="flex-1 text-xs text-[#737373] text-center self-center">Loading live BTC chart…</div>}
-              </div>
-              <div className="mt-6 space-y-3">
-                {topCryptos.slice(0, 3).map((c) => {
-                  const share = top3MarketCap > 0 ? ((c.market_cap || 0) / top3MarketCap) * 100 : 0
-                  return (
-                  <Link to={`/asset/${c.id}`} key={c.id} className="flex items-center justify-between hover:bg-[#ffffff05] -mx-2 px-2 py-1 rounded-lg transition-colors">
-                    <div className="flex items-center gap-3">
-                      {getCryptoLogo(c) ? (
-                        <img
-                          src={getCryptoLogo(c)!}
-                          alt={c.name}
-                          className="w-8 h-8 rounded-full object-cover"
-                          onError={cryptoIconErrorFallback(c.symbol.toUpperCase()[0] || '?', c.id)}
-                        />
-                      ) : (
-                        <div className="w-8 h-8 rounded-full bg-[#0C8B44]/20 flex items-center justify-center text-xs font-bold text-[#0C8B44]">{c.symbol.toUpperCase()[0]}</div>
-                      )}
-                      <span className="text-sm text-[#E5E5E5]">{c.name}</span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="w-24 h-2 bg-[#1a1a1a] rounded-full overflow-hidden"><div className="h-full rounded-full bg-[#0C8B44]" style={{ width: `${share.toFixed(1)}%` }} /></div>
-                      <span className="text-sm text-[#A0A0A0] w-20 text-right tabular-nums">{formatPrice(c.current_price)}</span>
-                    </div>
-                  </Link>
-                  )
-                })}
-              </div>
-            </div>
-            {/* AI Strategy */}
-            <div className="liquid-card p-8" style={{ '--fill-color': 'rgba(106,13,173,0.15)' } as React.CSSProperties}>
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-12 h-12 rounded-2xl bg-[#6A0DAD]/20 flex items-center justify-center"><BrainCircuit className="w-6 h-6 text-[#9C27B0]" /></div>
-                <div><h3 className="text-lg font-medium text-[#E5E5E5]">AI Strategy</h3><p className="text-xs text-[#737373]">Updated 2 min ago</p></div>
-              </div>
-              {insights[0] && (
-                <div className="mb-6 p-4 rounded-xl bg-[#6A0DAD]/10 border border-[#6A0DAD]/20">
-                  <p className="text-sm text-[#E5E5E5] leading-relaxed">{insights[0].description}</p>
-                  <div className="flex items-center gap-2 mt-3"><span className="text-xs text-[#737373]">Confidence</span><div className="flex-1 h-1.5 bg-[#1a1a1a] rounded-full overflow-hidden"><div className="h-full rounded-full bg-gradient-to-r from-[#6A0DAD] to-[#9C27B0]" style={{ width: `${insights[0].confidence}%` }} /></div><span className="text-xs text-[#9C27B0]">{insights[0].confidence}%</span></div>
-                </div>
-              )}
-              <div className="space-y-3">
-                {insights.slice(1, 3).map((ins, i) => (
-                  <div key={i} className="flex items-start gap-3 p-3 rounded-lg bg-[#1a1a1a]/50">
-                    {ins.type === 'alert' ? <Zap className="w-4 h-4 text-[#F57C00] mt-0.5 shrink-0" /> : <Sparkles className="w-4 h-4 text-[#0C8B44] mt-0.5 shrink-0" />}
-                    <div><p className="text-xs font-medium text-[#E5E5E5]">{ins.title}</p><p className="text-xs text-[#737373] mt-1 line-clamp-2">{ins.description}</p></div>
-                  </div>
-                ))}
-              </div>
-              <button type="button" onClick={() => goAuthed('/ai')} className="w-full flex items-center justify-center gap-2 mt-6 py-3 rounded-xl bg-[#6A0DAD]/20 text-[#9C27B0] text-sm font-medium hover:bg-[#6A0DAD]/30 transition-colors"><Bot className="w-4 h-4" />Ask AI Analyst</button>
-            </div>
-            {/* Market Cap Breakdown (top 3 cryptos, real share of basket) */}
-            <div className="liquid-card p-8" style={{ '--fill-color': 'rgba(0,131,143,0.15)' } as React.CSSProperties}>
-              <h3 className="text-lg font-medium text-[#E5E5E5] mb-4">Top 3 Market Share</h3>
-              {(() => {
-                const colors = ['#0C8B44', '#2196F3', '#FF9800']
-                const slices = topCryptos.slice(0, 3).map((c, i) => ({
-                  id: c.id,
-                  label: c.name,
-                  pct: top3MarketCap > 0 ? ((c.market_cap || 0) / top3MarketCap) * 100 : 0,
-                  color: colors[i],
-                  logo: getCryptoLogo(c),
-                }))
-                const C = 2 * Math.PI * 40 // circumference
-                const arcLengths = slices.map((s) => (s.pct / 100) * C)
-                const offsets = arcLengths.map((_, i) => arcLengths.slice(0, i).reduce((sum, n) => sum + n, 0))
-                return (
-                  <>
-                    <div className="flex items-center justify-center mb-6">
-                      {slices.length > 0 ? (
-                        <svg viewBox="0 0 100 100" className="w-32 h-32">
-                          {slices.map((s, i) => {
-                            const len = arcLengths[i]
-                            const dasharray = `${len} ${C - len}`
-                            const dashoffset = -offsets[i]
-                            return (
-                              <circle key={s.id} cx="50" cy="50" r="40" fill="none" stroke={s.color} strokeWidth="20" strokeDasharray={dasharray} strokeDashoffset={dashoffset} transform="rotate(-90 50 50)" />
-                            )
-                          })}
-                          <circle cx="50" cy="50" r="25" fill="#070C0E" />
-                        </svg>
-                      ) : (
-                        <div className="w-32 h-32 rounded-full border border-[#ffffff10] flex items-center justify-center text-xs text-[#737373]">Loading…</div>
-                      )}
-                    </div>
-                    <div className="space-y-2">
-                      {slices.map((item) => (
-                        <div key={item.id} className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            {item.logo ? <img src={item.logo} alt={item.label} className="w-5 h-5 rounded-full object-cover" /> : <div className="w-3 h-3 rounded-full" style={{ background: item.color }} />}
-                            <span className="text-sm text-[#A0A0A0]">{item.label}</span>
-                          </div>
-                          <span className="text-sm text-[#E5E5E5]">{item.pct.toFixed(1)}%</span>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )
-              })()}
-            </div>
-            {/* Market Pulse with REAL crypto logos */}
-            <div className="liquid-card col-span-1 md:col-span-2 p-8" style={{ '--fill-color': 'rgba(12,139,68,0.1)' } as React.CSSProperties}>
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-medium text-[#E5E5E5]">Live Markets</h3>
-                <Link to="/markets" className="text-xs text-[#0C8B44] hover:text-[#00E676] transition-colors flex items-center gap-1">View All <ChevronRight className="w-3 h-3" /></Link>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {topCryptos.slice(0, 3).map((c) => (
-                  <Link to={`/asset/${c.id}`} key={c.id} className="block p-4 rounded-xl bg-[#1a1a1a]/50 border border-[#ffffff05] hover:border-[#0C8B44]/30 transition-all">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        {getCryptoLogo(c) ? (
-                          <img
-                            src={getCryptoLogo(c)!}
-                            alt={c.name}
-                            className="w-6 h-6 rounded-full object-cover"
-                            onError={cryptoIconErrorFallback(c.symbol.toUpperCase()[0] || '?', c.id)}
-                          />
-                        ) : (
-                          <div className="w-6 h-6 rounded-full bg-[#0C8B44]/20 flex items-center justify-center text-xs font-bold text-[#0C8B44]">{c.symbol.toUpperCase()[0]}</div>
-                        )}
-                        <span className="text-sm font-medium text-[#E5E5E5]">{c.symbol.toUpperCase()}/USD</span>
-                      </div>
-                      {c.price_change_percentage_24h >= 0 ? <TrendingUp className="w-4 h-4 text-[#4CAF50]" /> : <TrendingDown className="w-4 h-4 text-[#f44336]" />}
-                    </div>
-                    <p className="text-2xl font-light text-[#E5E5E5]">{formatPrice(c.current_price)}</p>
-                    <p className={`text-xs mt-1 ${c.price_change_percentage_24h >= 0 ? 'text-[#4CAF50]' : 'text-[#f44336]'}`}>{c.price_change_percentage_24h >= 0 ? '+' : ''}{c.price_change_percentage_24h.toFixed(2)}%</p>
-                    <div className="flex items-end gap-0.5 mt-3 h-8">
-                      {c.sparkline_in_7d?.price.slice(-20).map((price, i, arr) => {
-                        const min = Math.min(...arr), max = Math.max(...arr), height = ((price - min) / (max - min)) * 100
-                        return <div key={i} className="flex-1 rounded-t-sm" style={{ height: `${Math.max(10, height)}%`, background: c.price_change_percentage_24h >= 0 ? '#4CAF50' : '#f44336', opacity: 0.4 + (i / arr.length) * 0.6 }} />
-                      })}
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ===== AI ASSISTANT with REAL AI ROBOT IMAGE ===== */}
-      <section className="py-16 md:py-24 px-6">
-        <div className="max-w-[1280px] mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-16 items-center">
-            <div>
-              <span className="text-xs tracking-[0.05em] uppercase text-[#0C8B44] mb-3 block">AI Assistant</span>
-              <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-6">Your Personal AI Financial Analyst</h2>
-              <p className="text-[#A0A0A0] mb-8 leading-relaxed">Get real-time portfolio analysis, market insights, and personalized trading strategies powered by advanced AI. Our assistant processes market data 24/7 to keep you ahead of the curve.</p>
-              <div className="space-y-4">
-                {[{ icon: BarChart3, text: 'Portfolio performance analysis' }, { icon: Activity, text: 'Real-time market sentiment tracking' }, { icon: Shield, text: 'Risk assessment and alerts' }, { icon: Zap, text: 'Automated trading strategies' }].map((f) => (
-                  <div key={f.text} className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg bg-[#0C8B44]/20 flex items-center justify-center"><f.icon className="w-4 h-4 text-[#0C8B44]" /></div><span className="text-sm text-[#E5E5E5]">{f.text}</span></div>
-                ))}
-              </div>
-              <button type="button" onClick={() => goAuthed('/ai')} className="inline-flex items-center gap-2 mt-8 px-6 py-3 bg-[#0C8B44] text-white text-sm font-medium tracking-[0.04em] uppercase rounded-lg hover:bg-[#0a7539] transition-colors glow-accent">Try AI Analyst<ArrowRight className="w-4 h-4" /></button>
-            </div>
-            {/* REAL AI ROBOT IMAGE */}
             <div className="rounded-2xl overflow-hidden border border-[#ffffff08]">
-              <img src="/assets/ai-robot-hero.jpg" alt="AI Financial Analyst Robot" className="w-full h-[500px] object-cover" />
+              <img src="/assets/showcase-team.jpg" alt="Team collaborating on financial decisions" className="w-full h-[420px] object-cover" />
             </div>
           </div>
         </div>
       </section>
 
-      {/* ===== FEATURES ===== */}
-      <section className="py-16 md:py-24 px-6 bg-[#0a0f11]">
-        <div className="max-w-[1280px] mx-auto">
-          <div className="text-center mb-10 md:mb-16">
-            <span className="text-xs tracking-[0.05em] uppercase text-[#0C8B44] mb-3 block">Features</span>
-            <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-4">Everything You Need to Win</h2>
-            <p className="text-[#A0A0A0] max-w-lg mx-auto">A complete suite of professional-grade tools for modern investors.</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[{ icon: LineChart, title: 'Advanced Trading', desc: 'Execute trades with precision using our professional-grade interface with real-time charts and full order book depth.', color: '#0C8B44' }, { icon: BrainCircuit, title: 'AI-Powered Insights', desc: 'Get personalized investment recommendations and market analysis from our advanced AI financial analyst.', color: '#6A0DAD' }, { icon: Shield, title: 'Bank-Grade Security', desc: 'Your assets are protected with multi-signature wallets, 2FA, and institutional-grade AES-256 encryption.', color: '#00838F' }, { icon: PieChart, title: 'Portfolio Tracking', desc: 'Track all your assets across crypto and traditional markets in one unified, real-time dashboard.', color: '#F57C00' }, { icon: Activity, title: 'Real-Time Data', desc: 'Access live market data from global exchanges with sub-second updates and comprehensive coverage.', color: '#2196F3' }, { icon: Wallet, title: 'Multi-Asset Wallet', desc: 'Manage crypto and fiat in one place. Deposit, withdraw, and transfer with ease and low fees.', color: '#4CAF50' }].map((f) => (
-              <div key={f.title} className="p-8 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff05] hover:border-[#0C8B44]/30 transition-all duration-300 group">
-                <div className="w-14 h-14 rounded-2xl flex items-center justify-center mb-6 transition-transform group-hover:scale-110" style={{ background: `${f.color}15` }}><f.icon className="w-7 h-7" style={{ color: f.color }} /></div>
-                <h3 className="text-xl font-medium text-[#E5E5E5] mb-3">{f.title}</h3>
-                <p className="text-sm text-[#A0A0A0] leading-relaxed">{f.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ===== TESTIMONIALS — horizontal swipe carousel + user-submitted reviews ===== */}
-      <Testimonials onSignInRequired={openLogin} />
-
-      {/* ===== COMPARISON TABLE ===== */}
-      <section className="py-16 md:py-24 px-6 bg-[#070C0E]">
-        <div className="max-w-[1280px] mx-auto">
-          <div className="text-center mb-10 md:mb-16">
-            <span className="text-xs tracking-[0.05em] uppercase text-[#0C8B44] mb-3 block">Why Choose VERDEXIS</span>
-            <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-4">Compare the Difference</h2>
-            <p className="text-[#A0A0A0] max-w-lg mx-auto">VERDEXIS stands out with features other platforms charge for.</p>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-[#ffffff08]">
-                  <th className="text-left py-4 px-4 text-[#E5E5E5] font-medium">Feature</th>
-                  <th className="text-center py-4 px-4 text-[#0C8B44] font-medium">VERDEXIS</th>
-                  <th className="text-center py-4 px-4 text-[#737373] font-medium">Competitor A</th>
-                  <th className="text-center py-4 px-4 text-[#737373] font-medium">Competitor B</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#ffffff05]">
-                {[
-                  { feature: 'AI Portfolio Analysis', verdexis: true, compA: false, compB: true },
-                  { feature: 'Free Forever Plan', verdexis: true, compA: false, compB: false },
-                  { feature: 'Real-Time Market Data', verdexis: true, compA: true, compB: true },
-                  { feature: 'Multi-Asset Support', verdexis: true, compA: true, compB: true },
-                  { feature: 'Non-Custodial Option', verdexis: true, compA: false, compB: false },
-                  { feature: 'Price Alerts', verdexis: true, compA: true, compB: true },
-                  { feature: 'Copy Trading', verdexis: true, compA: false, compB: true },
-                  { feature: 'Paper Trading', verdexis: true, compA: false, compB: false },
-                  { feature: 'Tax Loss Harvesting', verdexis: true, compA: false, compB: false },
-                  { feature: 'API Access', verdexis: true, compA: true, compB: true },
-                ].map((row) => (
-                  <tr key={row.feature}>
-                    <td className="py-3 px-4 text-[#E5E5E5]">{row.feature}</td>
-                    <td className="text-center py-3 px-4">{row.verdexis ? <CheckCircle className="w-5 h-5 text-[#0C8B44] mx-auto" /> : <div className="w-5 h-5 rounded-full border border-[#737373] mx-auto" />}</td>
-                    <td className="text-center py-3 px-4">{row.compA ? <CheckCircle className="w-5 h-5 text-[#737373] mx-auto" /> : <div className="w-5 h-5 rounded-full border border-[#737373] mx-auto" />}</td>
-                    <td className="text-center py-3 px-4">{row.compB ? <CheckCircle className="w-5 h-5 text-[#737373] mx-auto" /> : <div className="w-5 h-5 rounded-full border border-[#737373] mx-auto" />}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      {/* ===== SECURITY BADGES ===== */}
-      <section className="py-10 md:py-16 px-6 bg-[#0a0f11] border-y border-[#ffffff08]">
-        <div className="max-w-[1280px] mx-auto">
-          <p className="text-center text-xs tracking-[0.05em] uppercase text-[#737373] mb-6 md:mb-8">Enterprise Grade Security</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              { image: '/assets/encryption-seal.png', label: 'Bank-Level\nEncryption', desc: 'AES-256' },
-              { image: '/assets/security-seal.png', label: 'Non-Custodial', desc: 'Your keys' },
-              { image: '/assets/security-seal.png', label: 'Security Audited', desc: 'SOC 2 Ready' },
-              { image: '/assets/security-seal.png', label: 'Instant Transfers', desc: '24/7 Available' },
-            ].map((badge) => (
-              <div key={badge.label} className="p-6 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff05] text-center">
-                <img src={badge.image} alt={badge.label} className="w-16 h-16 mx-auto mb-4 object-contain" />
-                <p className="text-sm font-medium text-[#E5E5E5] mb-1 whitespace-pre-line">{badge.label}</p>
-                <p className="text-xs text-[#737373]">{badge.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ===== BLOG/NEWS PREVIEW ===== */}
-      <section className="py-16 md:py-24 px-6 bg-[#070C0E]">
-        <div className="max-w-[1280px] mx-auto">
-          <div className="text-center mb-10 md:mb-16">
-            <span className="text-xs tracking-[0.05em] uppercase text-[#0C8B44] mb-3 block">Latest Insights</span>
-            <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-4">Market Updates & Trading Tips</h2>
-            <p className="text-[#A0A0A0] max-w-lg mx-auto">Stay ahead with expert analysis and market news.</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[
-              { date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }), title: 'Bitcoin Halving: What Investors Should Know', category: 'Market Analysis', image: '📊' },
-              { date: new Date(Date.now() - 86400000).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }), title: 'DCA Strategy: Building Wealth Over Time', category: 'Trading Tips', image: '📈' },
-              { date: new Date(Date.now() - 172800000).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }), title: 'Ethereum Gas Fees at All-Time Low', category: 'News', image: '⚡' },
-            ].map((article, i) => (
-              <Link key={i} to="/news" className="group p-6 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff05] hover:border-[#0C8B44]/30 transition-all">
-                <div className="text-5xl mb-4 group-hover:scale-110 transition-transform">{article.image}</div>
-                <p className="text-xs text-[#0C8B44] mb-2 uppercase tracking-wider">{article.category}</p>
-                <h3 className="text-lg font-medium text-[#E5E5E5] mb-3 group-hover:text-[#0C8B44] transition-colors">{article.title}</h3>
-                <p className="text-xs text-[#737373]">{article.date}</p>
-              </Link>
-            ))}
-          </div>
-          <div className="text-center mt-8">
-            <Link to="/news" className="inline-flex items-center gap-2 px-6 py-3 text-[#0C8B44] text-sm font-medium border border-[#0C8B44]/30 rounded-lg hover:bg-[#0C8B44]/10 transition-colors">
-              View All Articles <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* ===== FLOATING CTA BUTTON (Mobile) ===== */}
-      <style>{`
-        @media (max-width: 768px) {
-          .floating-cta {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            z-index: 50;
-          }
-        }
-      `}</style>
-
-      {/* ===== HUMAN IMAGE SHOWCASE ===== */}
-      <section className="py-16 md:py-24 px-6 bg-[#0a0f11]">
-        <div className="max-w-[1280px] mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[{ img: '/assets/showcase-team.jpg', title: 'Built for teams and individuals', desc: 'From solo day traders to fund teams — everyone finds their edge.' }, { img: '/assets/showcase-mobile.jpg', title: 'Trade anywhere, anytime', desc: 'Professional-grade tools in your pocket. Never miss a market move.' }, { img: '/assets/showcase-success.jpg', title: 'Built for serious investors', desc: 'Institutional-grade analytics, charting and AI insights for every portfolio.' }].map((card) => (
-              <div key={card.title} className="rounded-2xl overflow-hidden border border-[#ffffff08] group">
-                <img src={card.img} alt={card.title} className="w-full h-64 object-cover group-hover:scale-105 transition-transform duration-500" />
-                <div className="p-6"><p className="text-base font-medium text-[#E5E5E5]">{card.title}</p><p className="text-sm text-[#737373] mt-1">{card.desc}</p></div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ===== SECURITY (NO DUPLICATE BADGES - just text features) ===== */}
-      <section className="py-16 md:py-24 px-6 bg-[#0a0f11]">
-        <div className="max-w-[1280px] mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-16 items-center">
-            <div>
-              <span className="text-xs tracking-[0.05em] uppercase text-[#0C8B44] mb-3 block">Security</span>
-              <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-6">Institutional-Grade Protection</h2>
-              <p className="text-[#A0A0A0] mb-8 leading-relaxed">Your assets and data are protected by the same security primitives used by leading financial institutions: defence-in-depth, least-privilege access, and encryption everywhere.</p>
-              <div className="space-y-4">
-                {securityFeatures.map((s) => (
-                  <div key={s.title} className="flex items-start gap-4 p-4 rounded-xl bg-[#1a1a1a]/50 border border-[#ffffff05]">
-                    <div className="w-10 h-10 rounded-xl bg-[#0C8B44]/10 flex items-center justify-center shrink-0"><s.icon className="w-5 h-5 text-[#0C8B44]" /></div>
-                    <div><p className="text-sm font-medium text-[#E5E5E5]">{s.title}</p><p className="text-xs text-[#737373]">{s.desc}</p></div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            {/* Security guarantees — plain text, no badge claims we can't substantiate. */}
-            <div className="flex flex-col items-start justify-center gap-4 p-8 rounded-2xl bg-[#1a1a1a]/40 border border-[#ffffff05]">
-              <Shield className="w-7 h-7 text-[#0C8B44]" />
-              <h3 className="text-xl font-light text-[#E5E5E5]">Built on industry standards</h3>
-              <ul className="space-y-2 text-sm text-[#A0A0A0]">
-                <li className="flex items-start gap-2"><CheckCircle className="w-4 h-4 text-[#0C8B44] mt-0.5 shrink-0" /> AES-256 encryption at rest, TLS 1.3 in transit.</li>
-                <li className="flex items-start gap-2"><CheckCircle className="w-4 h-4 text-[#0C8B44] mt-0.5 shrink-0" /> Optional TOTP two-factor authentication on every account.</li>
-                <li className="flex items-start gap-2"><CheckCircle className="w-4 h-4 text-[#0C8B44] mt-0.5 shrink-0" /> Audit logging on every financial action.</li>
-                <li className="flex items-start gap-2"><CheckCircle className="w-4 h-4 text-[#0C8B44] mt-0.5 shrink-0" /> GDPR &amp; CCPA data-rights workflow built in.</li>
-              </ul>
-              <p className="text-xs text-[#737373] pt-2">Engineered to align with SOC 2, ISO 27001, PCI DSS and GDPR control frameworks.</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ===== FAQ ===== */}
-      <section id="faq" className="py-16 md:py-24 px-6 bg-[#0a0f11]">
+      <section id="faq" className="py-16 md:py-24 px-6 bg-[#070C0E]">
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-8 md:mb-12">
             <span className="text-xs tracking-[0.05em] uppercase text-[#0C8B44] mb-3 block">FAQ</span>
-            <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-4">Common Questions</h2>
-            <p className="text-[#A0A0A0]">Everything you need to know before getting started.</p>
+            <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-4">Common questions answered.</h2>
+            <p className="text-[#A0A0A0]">Everything you need to know before starting with Verdexis.</p>
           </div>
           <div className="space-y-3">
-            {[
-              { q: 'Is Verdexis really free?', a: 'Yes. Verdexis is free to sign up and use — real-time market data, portfolio tracking, AI insights and price alerts are all included at no cost. We only charge transparent on-chain network fees and exchange spreads when you trade.' },
-              { q: 'Do you custody my crypto?', a: 'No. Verdexis is non-custodial by default — your keys, your crypto. We support read-only API connections to your exchanges and wallets so you can track and analyse without giving up control.' },
-              { q: 'How is my data secured?', a: 'All data is encrypted with AES-256 at rest and TLS 1.3 in transit. Our controls are designed to align with SOC 2, ISO 27001 and PCI DSS frameworks, and we never sell user data.' },
-              { q: 'Which exchanges and assets do you support?', a: 'Verdexis connects to Coinbase today (Binance and Kraken integrations are on the roadmap) and the major blockchains (Bitcoin, Ethereum, Solana, Polygon). Stocks and ETFs are sourced from Alpha Vantage and Finnhub.' },
-              { q: 'How do I get help?', a: 'Our support team is available on WhatsApp at +1 (719) 679-8790. Tap the green chat button at the bottom-right of any page to start a conversation, or browse the in-app Help Center for guides and walkthroughs.' },
-              { q: 'Is the AI advice financial advice?', a: 'No. Verdexis AI provides market analysis and portfolio insights for educational purposes. It is not a registered investment adviser and nothing on the platform constitutes personalised investment advice.' },
-            ].map((item) => (
+            {faqItems.map((item) => (
               <details key={item.q} className="group p-5 rounded-xl bg-[#0f1619]/50 border border-[#ffffff05] hover:border-[#0C8B44]/30 transition-colors">
                 <summary className="flex items-center justify-between cursor-pointer text-sm font-medium text-[#E5E5E5] list-none">
                   <span>{item.q}</span>
@@ -755,48 +157,27 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ===== NEWSLETTER SIGNUP ===== */}
-      <section className="py-16 md:py-24 px-6 bg-[#0a0f11]">
-        <div className="max-w-[800px] mx-auto text-center">
-          <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-4">Never Miss a Market Move</h2>
-          <p className="text-[#A0A0A0] mb-8">Get weekly market insights and trading strategies delivered to your inbox.</p>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <input
-              type="email"
-              placeholder="Enter your email"
-              className="flex-1 px-4 py-3 rounded-lg bg-[#1a1a1a] border border-[#ffffff08] text-[#E5E5E5] placeholder-[#737373] focus:outline-none focus:border-[#0C8B44]"
-            />
-            <button className="px-6 py-3 bg-[#0C8B44] text-white font-medium rounded-lg hover:bg-[#0a7539] transition-colors whitespace-nowrap">
-              Subscribe
-            </button>
-          </div>
-          <p className="text-xs text-[#737373] mt-4">✓ No spam. Unsubscribe anytime. Privacy policy included.</p>
-        </div>
-      </section>
-
-      {/* ===== FINAL CTA ===== */}
       <section className="py-16 md:py-24 px-6">
         <div className="max-w-[1280px] mx-auto">
           <div className="liquid-card p-8 md:p-12 lg:p-16 text-center relative overflow-hidden" style={{ '--fill-color': 'rgba(12,139,68,0.08)' } as React.CSSProperties}>
             <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(rgba(12,139,68,0.3) 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
             <div className="relative z-10">
-              <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-4">Ready to Transform Your Wealth?</h2>
-              <p className="text-[#A0A0A0] max-w-xl mx-auto mb-8">Sign up to get AI-powered trading, portfolio management and real-time market intelligence in one workspace.</p>
+              <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-4">Ready to simplify your finances?</h2>
+              <p className="text-[#A0A0A0] max-w-xl mx-auto mb-8">Sign up to start tracking your accounts, securing your data, and staying organized with one clear financial workspace.</p>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                 <button onClick={openSignup} className="px-8 py-3.5 bg-[#0C8B44] text-white text-sm font-medium tracking-[0.04em] uppercase rounded-lg hover:bg-[#0a7539] transition-colors glow-accent">Get Started Free</button>
-                <Link to="/markets" className="flex items-center gap-2 px-8 py-3.5 text-[#E5E5E5] text-sm font-medium tracking-[0.04em] uppercase border border-[#ffffff15] rounded-lg hover:border-[#0C8B44]/30 hover:text-[#0C8B44] transition-colors">Explore Markets</Link>
+                <a href="#faq" className="flex items-center gap-2 px-8 py-3.5 text-[#E5E5E5] text-sm font-medium tracking-[0.04em] uppercase border border-[#ffffff15] rounded-lg hover:border-[#0C8B44]/30 hover:text-[#0C8B44] transition-colors">View FAQ</a>
               </div>
               <div className="flex items-center justify-center gap-6 mt-8 text-xs text-[#737373]">
                 <span className="flex items-center gap-1.5"><CheckCircle className="w-3 h-3 text-[#0C8B44]" />No credit card required</span>
-                <span className="flex items-center gap-1.5"><CheckCircle className="w-3 h-3 text-[#0C8B44]" />Free to sign up</span>
-                <span className="flex items-center gap-1.5"><CheckCircle className="w-3 h-3 text-[#0C8B44]" />Non-custodial by default</span>
+                <span className="flex items-center gap-1.5"><CheckCircle className="w-3 h-3 text-[#0C8B44]" />Free forever plan available</span>
+                <span className="flex items-center gap-1.5"><CheckCircle className="w-3 h-3 text-[#0C8B44]" />Secure account protections</span>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ===== FOOTER ===== */}
       <Footer />
     </div>
   )

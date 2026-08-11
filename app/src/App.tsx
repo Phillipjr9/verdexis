@@ -90,6 +90,7 @@ const Integrations = withLazyErrorBoundary(() => import('./pages/Integrations'),
 const Changelog = withLazyErrorBoundary(() => import('./pages/Changelog'), 'Changelog')
 const AdminSettings = withLazyErrorBoundary(() => import('./pages/AdminSettings'), 'Admin Settings')
 const AdminAnalytics = withLazyErrorBoundary(() => import('./pages/AdminAnalytics'), 'Admin Analytics')
+const AdminReviews = withLazyErrorBoundary(() => import('./pages/AdminReviews'), 'Admin Reviews')
 const AdvancedOrders = withLazyErrorBoundary(() => import('./pages/AdvancedOrders'), 'Advanced Orders')
 const OrderHistory = withLazyErrorBoundary(() => import('./pages/OrderHistory'), 'Order History')
 const CryptoDeposit = withLazyErrorBoundary(() => import('./pages/CryptoDeposit'), 'Crypto Deposit')
@@ -180,6 +181,7 @@ function RoutedPages() {
           <Route path="/admin/users" element={<RequireAdmin><AdminUsers /></RequireAdmin>} />
           <Route path="/admin/users/:id" element={<RequireAdmin><AdminUserDetail /></RequireAdmin>} />
           <Route path="/admin/audit" element={<RequireAdmin><AdminAudit /></RequireAdmin>} />
+          <Route path="/admin/reviews" element={<RequireAdmin><AdminReviews /></RequireAdmin>} />
           <Route path="/admin/transfer" element={<RequireAdmin><AdminTransfer /></RequireAdmin>} />
           <Route path="/admin/broadcast" element={<RequireAdmin><AdminBroadcast /></RequireAdmin>} />
           <Route path="/admin/deposits" element={<RequireAdmin><AdminDeposits /></RequireAdmin>} />
