@@ -155,7 +155,6 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
         setPendingToken(r.pendingToken)
         setPendingFlow(mode === 'signup' ? 'signup' : 'login')
         setOtpMessage(r.message || '')
-        if (r.devCode) setOtpMessage((prev) => `${prev} Dev code: ${r.devCode}`)
         setMode('otp')
         setLoading(false)
         return
@@ -369,9 +368,6 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
                         const res = await api.signupResendOtp(form.email)
                         setPendingToken(res.pendingToken)
                         setOtpMessage(res.message || `A new code was sent to ${res.email}`)
-                        if (res.devCode) {
-                          setOtpMessage((prev) => `${prev} Dev code: ${res.devCode}`)
-                        }
                         toast.success('Verification code resent')
                       } catch (err) {
                         const e = err as ApiError
