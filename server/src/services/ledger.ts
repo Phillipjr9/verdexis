@@ -22,6 +22,12 @@ export function toMinorUnits(amount: number, currency: string): bigint {
   return BigInt(negative ? `-${normalized}` : normalized)
 }
 
+const isSqlite = (process.env.DATABASE_PROVIDER || '').toLowerCase() === 'sqlite'
+
+function ledgerEntryIdsValue(ids: string[]) {
+  return (isSqlite ? JSON.stringify(ids) : ids) as any
+}
+
 export function fromMinorUnits(amountMinorUnits: bigint, currency: string): number {
   const decimals = getCurrencyDecimals(currency)
   const scale = 10n ** BigInt(decimals)
@@ -97,7 +103,7 @@ export async function recordLedgerTransaction({
       userId,
       eventType,
       eventStatus: pending ? 'pending' : 'completed',
-      ledgerEntryIds: JSON.stringify([]),
+      ledgerEntryIds: ledgerEntryIdsValue([]),
       details: metadata ? JSON.stringify(metadata) : undefined,
       externalRef,
       idempotencyKey: idempotencyKey ?? externalRef,
@@ -128,7 +134,7 @@ export async function recordLedgerTransaction({
 
   await tx.financialEvent.update({
     where: { id: event.id },
-    data: { ledgerEntryIds: JSON.stringify([entry.id]) },
+    data: { ledgerEntryIds: ledgerEntryIdsValue([entry.id]) },
   })
 
   const accountBalance = await tx.accountBalance.upsert({
@@ -245,7 +251,7 @@ export async function recordLedgerBalanceReservation({
       userId,
       eventType,
       eventStatus: 'completed',
-      ledgerEntryIds: JSON.stringify([]),
+      ledgerEntryIds: ledgerEntryIdsValue([]),
       details: metadata ? JSON.stringify(metadata) : undefined,
       externalRef,
       idempotencyKey: idempotencyKey ?? externalRef,
@@ -276,7 +282,7 @@ export async function recordLedgerBalanceReservation({
 
   await tx.financialEvent.update({
     where: { id: event.id },
-    data: { ledgerEntryIds: JSON.stringify([entry.id]) },
+    data: { ledgerEntryIds: ledgerEntryIdsValue([entry.id]) },
   })
 
   const existingWalletBalance = await tx.walletBalance.findUnique({
