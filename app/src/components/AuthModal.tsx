@@ -607,11 +607,11 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
                 </button>
                 <button
                   type="button"
-                  onClick={handleGoogleSignIn}
-                  disabled={loading || !isFirebaseConfigured}
+                  onClick={handleAuth0SignIn}
+                  disabled={loading}
                   className="w-full flex items-center justify-center gap-2 py-3.5 bg-white/10 border border-[#ffffff15] text-[#E5E5E5] text-sm font-medium rounded-xl hover:bg-white/15 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  <span className="text-sm">Sign in with Google</span>
+                  <span className="text-sm">Sign in with Google (Auth0)</span>
                 </button>
                 <button
                   type="button"
