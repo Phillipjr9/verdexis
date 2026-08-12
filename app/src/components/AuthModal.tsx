@@ -241,7 +241,8 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
     setLoading(true)
     try {
       await loginWithPopup({ authorizationParams: { prompt: 'select_account' } })
-      const accessToken = await getAccessTokenSilently()
+      const audience = (import.meta.env.VITE_AUTH0_AUDIENCE as string | undefined) || undefined
+      const accessToken = await getAccessTokenSilently(audience ? { authorizationParams: { audience } } : undefined)
       if (!accessToken) throw new Error('No access token received from Auth0')
       const result = await api.auth0(accessToken)
       setToken(result.token)
