@@ -40,6 +40,29 @@ self.addEventListener('fetch', (event) => {
   // Skip non-GET requests
   if (request.method !== 'GET') return
 
+  const isNavigationRequest =
+    request.mode === 'navigate' ||
+    (request.headers.get('accept') || '').includes('text/html') ||
+    url.pathname === '/' ||
+    url.pathname === '/index.html'
+
+  if (isNavigationRequest) {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone()
+            caches.open(CACHE_VERSION).then((cache) => {
+              cache.put(request, clone)
+            })
+          }
+          return response
+        })
+        .catch(() => caches.match(request).then((cached) => cached || caches.match('/index.html')))
+    )
+    return
+  }
+
   // API requests - network first, cache fallback
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(

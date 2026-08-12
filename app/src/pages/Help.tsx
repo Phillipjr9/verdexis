@@ -21,7 +21,7 @@ const SECTIONS: Section[] = [
     items: [
       {
         q: 'How do I create an account?',
-        a: 'Click "Get Started" in the top-right, enter your email and a strong password (12+ chars with letters, numbers, and a symbol). Verify your email and you\'re in. You can also sign in with Google.',
+        a: 'Click "Get Started" in the top-right, enter your email and a strong password (12+ chars with letters, numbers, and a symbol). Verify your email and you\'re in.',
       },
       {
         q: 'What can I do with the free plan?',

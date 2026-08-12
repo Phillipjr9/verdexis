@@ -2,7 +2,7 @@
 const https = require('https');
 const { URL } = require('url');
 const API_HOST = 'api.render.com';
-const SERVICE_ID = 'srv-d8prertqb8s738gd810';
+const SERVICE_ID = 'srv-d8prrertqb8s738gd810';
 const key = process.env.RENDER_API_KEY;
 if (!key) {
   console.error('RENDER_API_KEY environment variable is not set');
@@ -40,7 +40,7 @@ function request(method, path, body) {
     const patchBody = {
       serviceDetails: {
         envSpecificDetails: {
-          dockerCommand: 'sh -lc "node scripts/resolve-failed-migration.js || true && npx prisma migrate deploy --schema server/prisma/schema.prisma && node dist/index.js"',
+          dockerCommand: '',
           dockerContext: '.',
           dockerfilePath: './Dockerfile'
         }

@@ -316,7 +316,11 @@ router.get('/coingecko/markets', async (req, res) => {
     res.set('Cache-Control', 'public, max-age=20')
     res.json(data)
   } catch (err) {
-    res.status(502).json({ error: 'coingecko_unavailable', detail: (err as Error).message })
+    console.warn('[market] coingecko simple-price failed:', (err as Error).message)
+    // Return an empty object instead of 502 so the frontend can render
+    // gracefully when CoinGecko is temporarily rate-limited.
+    res.set('Cache-Control', 'public, max-age=15')
+    res.json({})
   }
 })
 
@@ -404,7 +408,11 @@ router.get('/coingecko/simple-price', async (req, res) => {
     res.set('Cache-Control', 'public, max-age=45')
     res.json(data)
   } catch (err) {
-    res.status(502).json({ error: 'coingecko_unavailable', detail: (err as Error).message })
+    console.warn('[market] coingecko simple-price failed:', (err as Error).message)
+    res.set('Cache-Control', 'public, max-age=15')
+    // Return an empty object instead of 502 so the frontend can render
+    // gracefully when CoinGecko is temporarily rate-limited.
+    res.json({})
   }
 })
 

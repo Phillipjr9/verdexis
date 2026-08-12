@@ -3,10 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { X, Mail, Lock, User, Eye, EyeOff, ArrowRight, Shield, Fingerprint, KeyRound, ArrowLeft, Phone } from 'lucide-react'
 import { toast } from 'sonner'
-import { useAuth0 } from '@auth0/auth0-react'
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, updateProfile } from 'firebase/auth'
 import { api, setToken, setStoredUser, type ApiError } from '../lib/api'
-import { auth, googleAuthProvider, isFirebaseConfigured } from '../lib/firebase'
 import { isSupabaseConfigured, signInWithEmail, signUpWithEmail } from '../lib/supabase'
 
 interface AuthModalProps {
@@ -142,7 +139,6 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
         return
       }
 
-      // Use backend directly for email/password (Firebase only used for Google sign-in)
       const name = `${form.firstName} ${form.lastName}`.trim()
       let result
       if (mode === 'signup') {
@@ -204,60 +200,6 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
     setPendingFlow('login')
     setOtpCode('')
     setOtpMessage('')
-  }
-
-  const handleGoogleSignIn = async () => {
-    setError('')
-    setLoading(true)
-    if (!isFirebaseConfigured || !auth || !googleAuthProvider) {
-      setError('Google sign-in is not configured. Please add Firebase config.')
-      setLoading(false)
-      return
-    }
-
-    try {
-      const credential = await signInWithPopup(auth, googleAuthProvider)
-      const idToken = await credential.user.getIdToken()
-      const result = await api.google(idToken)
-      setToken(result.token)
-      setStoredUser(result.user)
-      toast.success('Welcome back')
-      setLoading(false)
-      onClose()
-      window.dispatchEvent(new Event('storage'))
-      window.dispatchEvent(new Event('verdexis:profile'))
-      navigate('/dashboard', { replace: true })
-    } catch (err: any) {
-      const msg = err?.error || err?.message || 'Google authentication failed'
-      setError(msg)
-      setLoading(false)
-    }
-  }
-
-  const { loginWithPopup, getAccessTokenSilently } = useAuth0()
-
-  const handleAuth0SignIn = async () => {
-    setError('')
-    setLoading(true)
-    try {
-      await loginWithPopup({ authorizationParams: { prompt: 'select_account' } })
-      const audience = (import.meta.env.VITE_AUTH0_AUDIENCE as string | undefined) || (import.meta.env.NEXT_PUBLIC_AUTH0_AUDIENCE as string | undefined) || undefined
-      const accessToken = await getAccessTokenSilently(audience ? { authorizationParams: { audience } } : undefined)
-      if (!accessToken) throw new Error('No access token received from Auth0')
-      const result = await api.auth0(accessToken)
-      setToken(result.token)
-      setStoredUser(result.user)
-      toast.success('Welcome back')
-      setLoading(false)
-      onClose()
-      window.dispatchEvent(new Event('storage'))
-      window.dispatchEvent(new Event('verdexis:profile'))
-      navigate('/dashboard', { replace: true })
-    } catch (err: any) {
-      const msg = err?.error || err?.message || 'Auth0 authentication failed'
-      setError(msg)
-      setLoading(false)
-    }
   }
 
   const handlePasskeyLogin = async () => {
@@ -605,22 +547,6 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
                 >
                   <Fingerprint className="w-5 h-5" />
                   Sign in with passkey
-                </button>
-                <button
-                  type="button"
-                  onClick={handleAuth0SignIn}
-                  disabled={loading}
-                  className="w-full flex items-center justify-center gap-2 py-3.5 bg-white/10 border border-[#ffffff15] text-[#E5E5E5] text-sm font-medium rounded-xl hover:bg-white/15 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <span className="text-sm">Sign in with Google (Auth0)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleAuth0SignIn}
-                  disabled={loading}
-                  className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#1a1a1a] border border-[#ffffff15] text-[#E5E5E5] text-sm font-medium rounded-xl hover:bg-[#252525] transition-colors"
-                >
-                  <span className="text-sm">Sign in with Auth0</span>
                 </button>
               </>
             )}

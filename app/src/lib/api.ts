@@ -186,21 +186,6 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ pendingToken, code }),
     }),
-  firebaseAuth: (idToken: string, phone?: string) =>
-    request<{ token: string; user: ApiUser }>('/api/auth/firebase', {
-      method: 'POST',
-      body: JSON.stringify({ idToken, phone }),
-    }),
-  google: (idToken: string) =>
-    request<{ token: string; user: ApiUser }>('/api/auth/google', {
-      method: 'POST',
-      body: JSON.stringify({ idToken }),
-    }),
-  auth0: (accessToken: string) =>
-    request<{ token: string; user: ApiUser }>('/api/auth/auth0', {
-      method: 'POST',
-      body: JSON.stringify({ accessToken }),
-    }),
   supabaseAuth: (accessToken: string) =>
     request<{ token: string; user: ApiUser }>('/api/auth/supabase', {
       method: 'POST',
