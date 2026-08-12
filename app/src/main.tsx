@@ -8,14 +8,14 @@ import { initAnalytics, initErrorReporting } from './lib/telemetry'
 import { CurrencyProvider } from './lib/currencyContext'
 import { hydrateDensity } from './lib/density'
 import { initUpdatePrompt } from './lib/updatePrompt'
-import { registerServiceWorker } from './lib/serviceWorker'
+import { unregisterServiceWorker } from './lib/serviceWorker'
 
 initTheme()
 hydrateDensity()
 initErrorReporting()
 initAnalytics() // no-op unless cookies accepted AND VITE_PLAUSIBLE_DOMAIN set
 initUpdatePrompt()
-registerServiceWorker()
+unregisterServiceWorker()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
