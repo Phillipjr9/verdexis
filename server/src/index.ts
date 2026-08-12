@@ -11,12 +11,15 @@ import helmet from 'helmet'
 import compression from 'compression'
 import jwt from 'jsonwebtoken'
 import rateLimit from 'express-rate-limit'
+import { z } from 'zod'
 import path from 'node:path'
 import fs from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { WebSocketServer } from 'ws'
 import http from 'node:http'
 import authRoutes, { promoteAllAdminEmails } from './routes/auth.js'
+import { signToken, verifyToken } from './auth.js'
+import { getUserById } from './services/userStore.js'
 import profileRoutes from './routes/profile.js'
 import holdingsRoutes from './routes/holdings.js'
 import walletRoutes from './routes/wallet.js'
@@ -255,6 +258,32 @@ app.get('/api/health', async (_req, res) => {
     database: dbStatus,
     adminBootstrap: ADMIN_BOOTSTRAP_STATUS,
   })
+})
+
+// Temporary debug route: list registered routes (remove before prod)
+app.get('/__routes', (_req, res) => {
+  try {
+    const routes: string[] = []
+    const stack = (app as any)._router.stack || []
+    for (const layer of stack) {
+      if (layer.route && layer.route.path) {
+        const methods = Object.keys(layer.route.methods || {}).join(',')
+        routes.push(`${methods.toUpperCase()} ${layer.route.path}`)
+      } else if (layer.name === 'router' && layer.handle && layer.regexp) {
+        // attempt to list child router paths
+        const subStack = layer.handle.stack || []
+        for (const l of subStack) {
+          if (l.route && l.route.path) {
+            const methods = Object.keys(l.route.methods || {}).join(',')
+            routes.push(`${methods.toUpperCase()} (sub) ${l.route.path}`)
+          }
+        }
+      }
+    }
+    res.json({ count: routes.length, routes: routes.slice(0, 100) })
+  } catch (e) {
+    res.status(500).json({ error: 'Unable to list routes' })
+  }
 })
 
 app.use('/api/auth', authRoutes)

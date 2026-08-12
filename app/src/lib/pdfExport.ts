@@ -87,6 +87,15 @@ export function generateTransactionsPDF(transactions: TransactionData[], filenam
 <!DOCTYPE html>
 <html>
 <head>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18384264054"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);} 
+    gtag('js', new Date());
+
+    gtag('config', 'AW-18384264054');
+  </script>
   <meta charset="utf-8">
   <title>VERDEXIS Transaction Statement</title>
   <style>

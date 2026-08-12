@@ -1,4 +1,4 @@
-import { Router } from 'express'
+import { Router, type Request } from 'express'
 import { requireAuth, type AuthedRequest } from '../auth.js'
 import { prisma } from '../db.js'
 import {
@@ -28,27 +28,50 @@ setInterval(() => {
   }
 }, 60000)
 
-// Extract domain from APP_BASE_URL
-function getRpId(): string {
-  if (process.env.RP_ID) return process.env.RP_ID
-  const baseUrl = process.env.APP_BASE_URL || 'http://localhost:5173'
+function parseOrigin(value: string | string[] | undefined): string | undefined {
+  if (!value) return undefined
+  const raw = Array.isArray(value) ? value[0] : value
   try {
-    const url = new URL(baseUrl)
-    return url.hostname
+    return new URL(raw).origin
   } catch {
-    return 'localhost'
+    return undefined
   }
 }
 
-function getOrigin(): string {
-  return process.env.APP_BASE_URL || 'http://localhost:5173'
+function getRequestOrigin(req: Request): string {
+  if (process.env.PASSKEY_ORIGIN) return process.env.PASSKEY_ORIGIN
+  return (
+    parseOrigin(req.headers.origin) ||
+    parseOrigin(req.headers.referer) ||
+    process.env.APP_BASE_URL ||
+    'http://localhost:5173'
+  )
 }
 
-const RP_ID = getRpId()
-const RP_NAME = 'Verdexis'
-const ORIGIN = getOrigin()
+function getRequestRpId(req: Request): string {
+  if (process.env.PASSKEY_RP_ID) return process.env.PASSKEY_RP_ID
 
-console.log('[passkeys] Configured with RP_ID:', RP_ID, 'ORIGIN:', ORIGIN)
+  const origin = parseOrigin(req.headers.origin) || parseOrigin(req.headers.referer)
+  if (origin) {
+    try {
+      return new URL(origin).hostname
+    } catch {
+      // fallback to APP_BASE_URL
+    }
+  }
+
+  if (process.env.APP_BASE_URL) {
+    try {
+      return new URL(process.env.APP_BASE_URL).hostname
+    } catch {
+      // fallback to localhost
+    }
+  }
+
+  return 'localhost'
+}
+
+const RP_NAME = 'Verdexis'
 
 // List user's passkeys
 router.get('/', requireAuth, async (req: AuthedRequest, res) => {
@@ -99,7 +122,7 @@ router.post('/register/options', requireAuth, async (req: AuthedRequest, res) =>
     })
 
     const options = await generateRegistrationOptions({
-      rpID: RP_ID,
+      rpID: getRequestRpId(req),
       rpName: RP_NAME,
       userID: Buffer.from(user.id),
       userName: user.email,
@@ -147,11 +170,13 @@ router.post('/register/verify', requireAuth, async (req: AuthedRequest, res) => 
 
     challenges.delete(challengeKey)
 
+    const expectedOrigin = getRequestOrigin(req)
+    const expectedRpId = getRequestRpId(req)
     const verification = await verifyRegistrationResponse({
       response,
       expectedChallenge: storedChallenge.challenge,
-      expectedOrigin: ORIGIN,
-      expectedRPID: RP_ID,
+      expectedOrigin,
+      expectedRPID: expectedRpId,
       requireUserVerification: false,
     })
 
@@ -223,7 +248,7 @@ router.post('/auth/options', async (req, res) => {
     }
 
     const options = await generateAuthenticationOptions({
-      rpID: RP_ID,
+      rpID: getRequestRpId(req),
       allowCredentials: passkeys.map((pk) => ({
         id: pk.credentialId as any,
         transports: ['usb', 'ble', 'nfc', 'internal'] as const,
@@ -281,11 +306,13 @@ router.post('/auth/verify', async (req, res) => {
       return res.status(404).json({ error: 'Passkey not found' })
     }
 
+    const expectedOrigin = getRequestOrigin(req)
+    const expectedRpId = getRequestRpId(req)
     const verification = await verifyAuthenticationResponse({
       response,
       expectedChallenge: storedChallenge.challenge,
-      expectedOrigin: ORIGIN,
-      expectedRPID: RP_ID,
+      expectedOrigin,
+      expectedRPID: expectedRpId,
       credential: {
         id: passkey.credentialId,
         publicKey: Buffer.from(passkey.publicKey, 'base64'),

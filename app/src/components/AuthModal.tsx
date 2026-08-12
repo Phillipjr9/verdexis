@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { X, Mail, Lock, User, Eye, EyeOff, ArrowRight, Shield, Fingerprint, KeyRound, ArrowLeft, Phone } from 'lucide-react'
 import { toast } from 'sonner'
+import { useAuth0 } from '@auth0/auth0-react'
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, updateProfile } from 'firebase/auth'
 import { api, setToken, setStoredUser, type ApiError } from '../lib/api'
 import { auth, googleAuthProvider, isFirebaseConfigured } from '../lib/firebase'
@@ -233,6 +234,31 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
     }
   }
 
+  const { loginWithPopup, getAccessTokenSilently } = useAuth0()
+
+  const handleAuth0SignIn = async () => {
+    setError('')
+    setLoading(true)
+    try {
+      await loginWithPopup({ authorizationParams: { prompt: 'select_account' } })
+      const accessToken = await getAccessTokenSilently()
+      if (!accessToken) throw new Error('No access token received from Auth0')
+      const result = await api.auth0(accessToken)
+      setToken(result.token)
+      setStoredUser(result.user)
+      toast.success('Welcome back')
+      setLoading(false)
+      onClose()
+      window.dispatchEvent(new Event('storage'))
+      window.dispatchEvent(new Event('verdexis:profile'))
+      navigate('/dashboard', { replace: true })
+    } catch (err: any) {
+      const msg = err?.error || err?.message || 'Auth0 authentication failed'
+      setError(msg)
+      setLoading(false)
+    }
+  }
+
   const handlePasskeyLogin = async () => {
     setError('')
     setLoading(true)
@@ -366,6 +392,34 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
                       setResendLoading(true)
                       try {
                         const res = await api.signupResendOtp(form.email)
+                        setPendingToken(res.pendingToken)
+                        setOtpMessage(res.message || `A new code was sent to ${res.email}`)
+                        toast.success('Verification code resent')
+                      } catch (err) {
+                        const e = err as ApiError
+                        setError(e.error || 'Could not resend verification code.')
+                      } finally {
+                        setResendLoading(false)
+                      }
+                    }}
+                    disabled={resendLoading}
+                    className="w-full mt-2 py-3.5 text-sm text-[#E5E5E5] bg-[#1a1a1a] border border-[#ffffff08] rounded-xl hover:bg-[#252525] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {resendLoading ? 'Resending…' : 'Resend code'}
+                  </button>
+                )}
+                {pendingFlow === 'login' && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setError('')
+                      if (!pendingToken) {
+                        setError('No pending session available to resend code.')
+                        return
+                      }
+                      setResendLoading(true)
+                      try {
+                        const res = await api.loginResendOtp(pendingToken)
                         setPendingToken(res.pendingToken)
                         setOtpMessage(res.message || `A new code was sent to ${res.email}`)
                         toast.success('Verification code resent')
@@ -558,6 +612,14 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
                   className="w-full flex items-center justify-center gap-2 py-3.5 bg-white/10 border border-[#ffffff15] text-[#E5E5E5] text-sm font-medium rounded-xl hover:bg-white/15 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <span className="text-sm">Sign in with Google</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAuth0SignIn}
+                  disabled={loading}
+                  className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#1a1a1a] border border-[#ffffff15] text-[#E5E5E5] text-sm font-medium rounded-xl hover:bg-[#252525] transition-colors"
+                >
+                  <span className="text-sm">Sign in with Auth0</span>
                 </button>
               </>
             )}

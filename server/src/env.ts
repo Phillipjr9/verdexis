@@ -6,6 +6,11 @@ if (process.env.NODE_ENV === 'test') {
   process.env.JWT_SECRET = process.env.JWT_SECRET || 'testjwtsecret000000'
 }
 
+const optionalNonEmptyString = z.preprocess((value) => {
+  if (typeof value === 'string' && value.trim() === '') return undefined
+  return value
+}, z.string().min(1).optional())
+
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
@@ -17,6 +22,8 @@ const schema = z.object({
   APP_BASE_URL: z.string().default('http://localhost:5173'),
   APP_URL: z.string().default('https://www.verdexisgroup.com'),
   PRODUCTION_ORIGIN: z.string().optional(),
+  PASSKEY_RP_ID: z.string().optional(),
+  PASSKEY_ORIGIN: z.string().optional(),
   ALERT_POLL_ENABLED: z.coerce.boolean().default(true),
   ALERT_POLL_INTERVAL_MS: z.coerce.number().int().min(15_000).default(60_000),
   // Comma-separated list of emails that auto-promote to admin on next login.
@@ -41,11 +48,11 @@ const schema = z.object({
   COINBASE_PROXY_URL: z.string().optional(),
   // Optional blockchain RPC endpoints for custodial withdrawals.
   ETHEREUM_RPC_ENDPOINT: z.string().url().optional(),
-  ETHEREUM_WITHDRAWAL_PRIVATE_KEY: z.string().min(1).optional(),
+  ETHEREUM_WITHDRAWAL_PRIVATE_KEY: optionalNonEmptyString,
   SOLANA_RPC_ENDPOINT: z.string().url().optional(),
-  SOLANA_WITHDRAWAL_PRIVATE_KEY: z.string().min(1).optional(),
+  SOLANA_WITHDRAWAL_PRIVATE_KEY: optionalNonEmptyString,
   BSC_RPC_ENDPOINT: z.string().url().optional(),
-  BSC_WITHDRAWAL_PRIVATE_KEY: z.string().min(1).optional(),
+  BSC_WITHDRAWAL_PRIVATE_KEY: optionalNonEmptyString,
   ALCHEMY_PAYMASTER_POLICY_ID: z.string().min(1).optional(),
   BTC_WITHDRAWAL_ENABLED: z.coerce.boolean().default(false),
   BNB_TOKEN_ADDRESS: z.string().optional(),
@@ -118,6 +125,9 @@ const schema = z.object({
   CRYPTOCOM_PAY_SECRET: z.string().optional(),
   SUPABASE_URL: z.string().url().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+  AUTH0_DOMAIN: z.string().optional(),
+  AUTH0_CLIENT_ID: z.string().optional(),
+  AUTH0_CLIENT_SECRET: z.string().optional(),
   FIREBASE_PROJECT_ID: z.string().optional(),
   FIREBASE_PRIVATE_KEY: z.string().optional(),
   FIREBASE_CLIENT_EMAIL: z.string().optional(),
@@ -164,6 +174,8 @@ const envSummary = {
   CORS_ORIGIN: parsed.data.CORS_ORIGIN,
   APP_BASE_URL: parsed.data.APP_BASE_URL,
   PRODUCTION_ORIGIN: parsed.data.PRODUCTION_ORIGIN,
+  PASSKEY_RP_ID_SET: !!parsed.data.PASSKEY_RP_ID,
+  PASSKEY_ORIGIN_SET: !!parsed.data.PASSKEY_ORIGIN,
   SUPABASE_URL_SET: !!parsed.data.SUPABASE_URL,
   FIREBASE_PROJECT_ID_SET: !!parsed.data.FIREBASE_PROJECT_ID,
   FIREBASE_DATABASE_URL_SET: !!parsed.data.FIREBASE_DATABASE_URL,

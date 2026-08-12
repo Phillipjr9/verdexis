@@ -55,6 +55,15 @@ export class EmailDigestService {
 <!DOCTYPE html>
 <html>
 <head>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18384264054"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);} 
+    gtag('js', new Date());
+
+    gtag('config', 'AW-18384264054');
+  </script>
   <style>
     body { font-family: Arial, sans-serif; color: #333; }
     .container { max-width: 600px; margin: 0 auto; padding: 20px; }

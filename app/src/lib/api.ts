@@ -171,6 +171,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ email }),
     }),
+  loginResendOtp: (pendingToken: string) =>
+    request<{ otpRequired: true; pendingToken: string; verificationType: 'login'; email: string; message: string; devCode?: string }>('/api/auth/login-resend-otp', {
+      method: 'POST',
+      body: JSON.stringify({ pendingToken }),
+    }),
   login: (identifier: string, password: string) =>
     request<{ token: string; user: ApiUser } | { otpRequired: true; pendingToken: string; verificationType?: 'login' | 'signup'; message?: string; devCode?: string }>('/api/auth/login', {
       method: 'POST',
@@ -190,6 +195,11 @@ export const api = {
     request<{ token: string; user: ApiUser }>('/api/auth/google', {
       method: 'POST',
       body: JSON.stringify({ idToken }),
+    }),
+  auth0: (accessToken: string) =>
+    request<{ token: string; user: ApiUser }>('/api/auth/auth0', {
+      method: 'POST',
+      body: JSON.stringify({ accessToken }),
     }),
   supabaseAuth: (accessToken: string) =>
     request<{ token: string; user: ApiUser }>('/api/auth/supabase', {

@@ -67,11 +67,20 @@ export class EmailService {
 
   private getFallbackTemplate(): string {
     return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <style>
+  <html lang="en">
+  <head>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18384264054"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);} 
+      gtag('js', new Date());
+
+      gtag('config', 'AW-18384264054');
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
     body { margin: 0; padding: 20px; background: #f4f6f8; font-family: Arial, sans-serif; }
     .container { max-width: 600px; margin: 0 auto; background: white; padding: 40px; border-radius: 8px; }
     .code { font-size: 32px; font-weight: bold; color: #0077d9; text-align: center; letter-spacing: 8px; margin: 30px 0; }

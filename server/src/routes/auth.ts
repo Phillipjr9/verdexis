@@ -278,6 +278,114 @@ router.post('/firebase', ensureDbReady, authLimiter, handleFirebaseAuth)
 router.post('/google', ensureDbReady, authLimiter, handleFirebaseAuth)
 router.post('/supabase', ensureDbReady, authLimiter, handleSupabaseAuth)
 
+const auth0AuthSchema = z.object({
+  accessToken: z.string().min(10),
+})
+
+async function handleAuth0Auth(req: Request, res: Response) {
+  const parsed = auth0AuthSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid input' })
+    return
+  }
+
+  const auth0Domain = env.AUTH0_DOMAIN
+  if (!auth0Domain) {
+    res.status(501).json({ error: 'Auth0 is not configured' })
+    return
+  }
+
+  // Call Auth0 /userinfo to validate the access token and fetch user info
+  let userInfo: any
+  try {
+    const r = await fetch(`${auth0Domain.replace(/\/$/, '')}/userinfo`, {
+      headers: { Authorization: `Bearer ${parsed.data.accessToken}` },
+    })
+    if (!r.ok) {
+      console.error('[auth] Auth0 token verification failed:', await r.text())
+      res.status(401).json({ error: 'Invalid Auth0 access token' })
+      return
+    }
+    userInfo = await r.json()
+  } catch (err) {
+    console.error('[auth] Auth0 /userinfo error:', err)
+    res.status(401).json({ error: 'Invalid Auth0 access token' })
+    return
+  }
+
+  const email = (userInfo.email || '').toLowerCase()
+  if (!email) {
+    res.status(400).json({ error: 'Auth0 user did not provide an email address' })
+    return
+  }
+
+  let user: Awaited<ReturnType<typeof getUserByEmail>> | null = null
+  try {
+    user = await getUserByEmail(email)
+  } catch (dbError) {
+    if (!isDbUnavailableError(dbError)) {
+      console.error('[verdexis-api] Database error during Auth0 auth:', dbError)
+      res.status(503).json({ error: 'Service temporarily unavailable' })
+      return
+    }
+    res.status(503).json({ error: 'Database unavailable' })
+    return
+  }
+
+  const isVerified = Boolean(userInfo.email_verified)
+
+  if (!user) {
+    const randomPassword = crypto.randomBytes(32).toString('hex')
+    const passwordHash = await bcrypt.hash(randomPassword, 12)
+    user = await createUser({
+      email,
+      name: (userInfo.name || userInfo.nickname || email.split('@')[0]).toString(),
+      passwordHash,
+      role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user',
+      emailVerified: isVerified,
+      emailVerifiedAt: isVerified ? new Date() : null,
+      prefs: JSON.stringify({ auth0Sub: userInfo.sub }),
+      walletBalances: {
+        create: [{ currency: 'USD', symbol: '$', balance: 0, available: 0 }],
+      },
+    })
+  }
+
+  if (user && !user.emailVerified && !isVerified) {
+    res.status(403).json({
+      error: 'Email verification required',
+      message: 'Please verify your email address before signing in.',
+    })
+    return
+  }
+
+  if (user && !user.emailVerified && isVerified) {
+    try {
+      user = await updateUser(user.id, { emailVerified: true, emailVerifiedAt: new Date() })
+      user.emailVerified = true
+    } catch {
+      // Best-effort only
+    }
+  }
+
+  if (user.suspended) {
+    res.status(403).json({ error: 'Account suspended' })
+    return
+  }
+
+  let role = user.role
+  try {
+    role = await autoPromoteIfAdminEmail(user.id, user.email, user.role)
+  } catch {
+    // Best-effort only
+  }
+
+  const token = signToken({ sub: user.id, email: user.email, v: (user as { tokenVersion?: number }).tokenVersion ?? 0 })
+  res.json({ token, user: publicUser({ ...user, role, emailVerified: !!user.emailVerified, phoneVerified: !!user.phoneVerified }) })
+}
+
+router.post('/auth0', ensureDbReady, authLimiter, handleAuth0Auth)
+
 function normalizeDate(value: string | Date | null | undefined): string | null {
   if (!value) return null
   const date = value instanceof Date ? value : new Date(value)
@@ -728,6 +836,92 @@ router.post('/signup/resend-otp', ensureDbReady, authLimiter, async (req, res) =
 
   res.status(202).json({
     ...payload,
+    ...(isDev ? { devCode: otpResult.code } : {}),
+  })
+})
+
+const loginResendSchema = z.object({
+  pendingToken: z.string().min(10),
+})
+
+router.post('/login/resend-otp', authLimiter, async (req, res) => {
+  const parsed = loginResendSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() })
+    return
+  }
+
+  const payload = verifyToken(parsed.data.pendingToken) as { sub?: string; otpPending?: boolean } | null
+  if (!payload?.sub || !payload.otpPending) {
+    res.status(401).json({ error: 'Invalid or expired session' })
+    return
+  }
+
+  const user = await getUserById(payload.sub)
+  if (!user) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+
+  const otpResult = await otpService.create(user.id, 'login')
+  if (otpResult.error) {
+    res.status(429).json({ error: otpResult.error })
+    return
+  }
+
+  // send the OTP asynchronously but don't block the response
+  process.nextTick(() => {
+    emailService.sendOTP(user.email, user.name, otpResult.code!, 10, user.id).catch(err => {
+      console.error('[auth] Failed to send login OTP email:', err)
+    })
+  })
+
+  const pendingToken = signToken({ sub: user.id, email: user.email, v: (user as { tokenVersion?: number }).tokenVersion ?? 0, otpPending: true })
+  const payloadOut = buildPendingVerificationPayload({ kind: 'login', pendingToken, email: user.email })
+  const isDev = (env.NODE_ENV || 'development') !== 'production'
+  res.status(202).json({
+    ...payloadOut,
+    ...(isDev ? { devCode: otpResult.code } : {}),
+  })
+})
+
+// Alternative resend endpoint (flat path) to avoid routing edge-cases
+router.post('/login-resend-otp', authLimiter, async (req, res) => {
+  const parsed = loginResendSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() })
+    return
+  }
+
+  const payload = verifyToken(parsed.data.pendingToken) as { sub?: string; otpPending?: boolean } | null
+  if (!payload?.sub || !payload.otpPending) {
+    res.status(401).json({ error: 'Invalid or expired session' })
+    return
+  }
+
+  const user = await getUserById(payload.sub)
+  if (!user) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+
+  const otpResult = await otpService.create(user.id, 'login')
+  if (otpResult.error) {
+    res.status(429).json({ error: otpResult.error })
+    return
+  }
+
+  process.nextTick(() => {
+    emailService.sendOTP(user.email, user.name, otpResult.code!, 10, user.id).catch(err => {
+      console.error('[auth] Failed to send login OTP email (alt):', err)
+    })
+  })
+
+  const pendingToken = signToken({ sub: user.id, email: user.email, v: (user as { tokenVersion?: number }).tokenVersion ?? 0, otpPending: true })
+  const payloadOut = buildPendingVerificationPayload({ kind: 'login', pendingToken, email: user.email })
+  const isDev = (env.NODE_ENV || 'development') !== 'production'
+  res.status(202).json({
+    ...payloadOut,
     ...(isDev ? { devCode: otpResult.code } : {}),
   })
 })
