@@ -761,12 +761,12 @@ router.post('/login/resend-otp', authLimiter, async (req, res) => {
     return
   }
 
-  // send the OTP asynchronously but don't block the response
-  process.nextTick(() => {
-    emailService.sendOTP(user.email, user.name, otpResult.code!, 10, user.id).catch(err => {
-      console.error('[auth] Failed to send login OTP email:', err)
-    })
-  })
+  const emailSent = await emailService.sendOTP(user.email, user.name, otpResult.code!, 10, user.id)
+  if (!emailSent) {
+    console.error('[auth] Failed to send login OTP email to', user.email)
+    res.status(500).json({ error: 'Failed to send login OTP email' })
+    return
+  }
 
   const pendingToken = signToken({ sub: user.id, email: user.email, v: (user as { tokenVersion?: number }).tokenVersion ?? 0, otpPending: true })
   const payloadOut = buildPendingVerificationPayload({ kind: 'login', pendingToken, email: user.email })
@@ -803,11 +803,12 @@ router.post('/login-resend-otp', authLimiter, async (req, res) => {
     return
   }
 
-  process.nextTick(() => {
-    emailService.sendOTP(user.email, user.name, otpResult.code!, 10, user.id).catch(err => {
-      console.error('[auth] Failed to send login OTP email (alt):', err)
-    })
-  })
+  const emailSent = await emailService.sendOTP(user.email, user.name, otpResult.code!, 10, user.id)
+  if (!emailSent) {
+    console.error('[auth] Failed to send login OTP email (alt) to', user.email)
+    res.status(500).json({ error: 'Failed to send login OTP email' })
+    return
+  }
 
   const pendingToken = signToken({ sub: user.id, email: user.email, v: (user as { tokenVersion?: number }).tokenVersion ?? 0, otpPending: true })
   const payloadOut = buildPendingVerificationPayload({ kind: 'login', pendingToken, email: user.email })
@@ -880,11 +881,12 @@ router.post('/login', ensureDbReady, authLimiter, async (req, res) => {
         res.status(429).json({ error: result.error })
         return
       }
-      process.nextTick(() => {
-        emailService.sendOTP(user.email, user.name, result.code!, 10, user.id).catch(err => {
-          console.error('[auth] Failed to send OTP email:', err)
-        })
-      })
+      const emailSent = await emailService.sendOTP(user.email, user.name, result.code!, 10, user.id)
+      if (!emailSent) {
+        console.error('[auth] Failed to send OTP email for login to', user.email)
+        res.status(500).json({ error: 'Failed to send OTP email' })
+        return
+      }
       const pendingToken = signToken({ sub: user.id, email: user.email, v: (user as { tokenVersion?: number }).tokenVersion ?? 0, otpPending: true })
       const pendingPayload = buildPendingVerificationPayload({ kind: 'login', pendingToken, email: user.email })
       const isDev = (env.NODE_ENV || 'development') !== 'production'

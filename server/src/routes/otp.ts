@@ -100,7 +100,11 @@ router.post('/send-otp', requireAuth, otpLimiter, async (req: AuthedRequest, res
       deliveryResult = await cognitoOTPService.sendOTP(phoneNumber, user.id)
     } else {
       // Send via email
-      await emailService.sendOTP(user.email, user.name, code, 10, user.id)
+      const emailSent = await emailService.sendOTP(user.email, user.name, code, 10, user.id)
+      if (!emailSent) {
+        res.status(500).json({ error: 'Failed to send OTP email' })
+        return
+      }
       deliveryResult = { success: true, provider: 'email' }
     }
 
@@ -262,7 +266,11 @@ router.post('/send-phone-verification', requireAuth, otpLimiter, async (req: Aut
     })
 
     // Send OTP via SMS or email
-    await emailService.sendOTP(user.email, user.name, code, 10, user.id)
+    const emailSent = await emailService.sendOTP(user.email, user.name, code, 10, user.id)
+    if (!emailSent) {
+      res.status(500).json({ error: 'Failed to send verification code' })
+      return
+    }
 
     res.json({
       sent: true,
@@ -360,7 +368,11 @@ router.post('/send-email-verification', requireAuth, otpLimiter, async (req: Aut
     const code = result.code!
 
     // Send OTP via email
-    await emailService.sendOTP(user.email, user.name, code, 10, user.id)
+    const emailSent = await emailService.sendOTP(user.email, user.name, code, 10, user.id)
+    if (!emailSent) {
+      res.status(500).json({ error: 'Failed to send verification email' })
+      return
+    }
 
     res.json({
       sent: true,

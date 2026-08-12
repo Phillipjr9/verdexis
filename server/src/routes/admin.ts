@@ -1,4 +1,4 @@
-import { Router } from 'express'
+import { Router, type Response } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { z } from 'zod'
@@ -12,6 +12,7 @@ import { generateInvestmentId } from '../investmentId.js'
 import { idempotency } from '../idempotency.js'
 import { creditReferralBonus } from '../referrals.js'
 import { recordLedgerTransaction, recordLedgerBalanceReservation } from '../services/ledger.js'
+import { assignUserToAdmin } from '../lib/adminHierarchy.js'
 
 const router = Router()
 
@@ -182,6 +183,22 @@ async function isUserAssignedToAdmin(userId: string, adminId: string): Promise<b
   return !!assignment
 }
 
+async function getUserAccess(req: AuthedRequest, userId: string): Promise<{ superAdmin: boolean; assigned: boolean }> {
+  const superAdmin = await isSuperAdmin(req.userId!)
+  if (superAdmin) return { superAdmin: true, assigned: true }
+  const assigned = await isUserAssignedToAdmin(userId, req.userId!)
+  return { superAdmin, assigned }
+}
+
+async function ensureUserAccess(req: AuthedRequest, res: Response, userId: string): Promise<{ superAdmin: boolean; assigned: boolean } | null> {
+  const access = await getUserAccess(req, userId)
+  if (!access.assigned) {
+    res.status(404).json({ error: 'User not found' })
+    return null
+  }
+  return access
+}
+
 // --- users list / search -------------------------------------------------
 // Super Admin sees ALL users
 // Sub-Admins see only their assigned users
@@ -336,6 +353,10 @@ const createUserSchema = z.object({
 router.post('/users', async (req: AuthedRequest, res) => {
   const parsed = createUserSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() }); return }
+  if (parsed.data.role === 'admin') {
+    res.status(403).json({ error: 'Only Super Admin can create admins. Use /api/admin/hierarchy/admins instead.' })
+    return
+  }
   const exists = await prisma.user.findUnique({ where: { email: parsed.data.email } })
   if (exists) { res.status(409).json({ error: 'A user with that email already exists' }); return }
   if (parsed.data.username) {
@@ -351,7 +372,7 @@ router.post('/users', async (req: AuthedRequest, res) => {
         username: parsed.data.username ?? null,
         name: parsed.data.name,
         passwordHash,
-        role: parsed.data.role,
+        role: 'user',
         investmentId,
       },
     })
@@ -377,7 +398,16 @@ router.post('/users', async (req: AuthedRequest, res) => {
         })
       })
     }
-    await audit(req.userId!, 'user.create', u.id, { email: parsed.data.email, role: parsed.data.role, investmentId: u.investmentId, initialUsdBalance: parsed.data.initialUsdBalance ?? 0 })
+
+    await assignUserToAdmin(req.userId!, u.id, req.userId!)
+
+    await audit(req.userId!, 'user.create', u.id, {
+      email: parsed.data.email,
+      role: 'user',
+      investmentId: u.investmentId,
+      initialUsdBalance: parsed.data.initialUsdBalance ?? 0,
+      assignedToAdmin: req.userId!
+    })
     res.status(201).json({ user: publicUser(u) })
   } catch (e) {
     res.status(400).json({ error: (e as Error).message })
@@ -386,8 +416,9 @@ router.post('/users', async (req: AuthedRequest, res) => {
 
 // --- single user (full profile) -----------------------------------------
 
-router.get('/users/:id', async (req, res) => {
+router.get('/users/:id', async (req: AuthedRequest, res) => {
   const id = req.params.id
+  if (!(await ensureUserAccess(req, res, id))) return
   const user = await prisma.user.findUnique({ where: { id } })
   if (!user) { res.status(404).json({ error: 'Not found' }); return }
   const [holdings, walletBalances, walletLinks, transactions, trades, watchlist, alerts, notifications] = await Promise.all([
@@ -429,8 +460,7 @@ const savedWalletPayloadSchema = z.object({
 
 router.patch('/users/:id/saved-wallet', async (req: AuthedRequest, res) => {
   const userId = req.params.id ?? ''
-  const superAdmin = await isSuperAdmin(req.userId!)
-  if (!superAdmin) { res.status(403).json({ error: 'Forbidden' }); return }
+  if (!(await ensureUserAccess(req, res, userId))) return
 
   const parsed = savedWalletPayloadSchema.safeParse(req.body)
   if (!parsed.success) {
@@ -479,8 +509,7 @@ router.patch('/users/:id/saved-wallet', async (req: AuthedRequest, res) => {
 
 router.delete('/users/:id/saved-wallet', async (req: AuthedRequest, res) => {
   const userId = req.params.id ?? ''
-  const superAdmin = await isSuperAdmin(req.userId!)
-  if (!superAdmin) { res.status(403).json({ error: 'Forbidden' }); return }
+  if (!(await ensureUserAccess(req, res, userId))) return
 
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { prefs: true } })
   if (!user) { res.status(404).json({ error: 'User not found' }); return }
@@ -506,10 +535,9 @@ const adminWalletLinkSchema = z.object({
   setPrimary: z.boolean().default(true),
 })
 
-router.get('/users/:id/wallet-links', async (req, res) => {
+router.get('/users/:id/wallet-links', async (req: AuthedRequest, res) => {
   const userId = req.params.id ?? ''
-  const exists = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })
-  if (!exists) { res.status(404).json({ error: 'User not found' }); return }
+  if (!(await ensureUserAccess(req, res, userId))) return
   const links = await prisma.walletLink.findMany({
     where: { userId },
     orderBy: [{ isPrimary: 'desc' }, { linkedAt: 'desc' }],
@@ -519,15 +547,7 @@ router.get('/users/:id/wallet-links', async (req, res) => {
 
 router.post('/users/:id/wallet-links', async (req: AuthedRequest, res) => {
   const userId = req.params.id ?? ''
-  
-  const superAdmin = await isSuperAdmin(req.userId ?? '')
-  const assigned = await isUserAssignedToAdmin(userId, req.userId ?? '')
-  
-  if (!superAdmin && !assigned) {
-    res.status(404).json({ error: 'User not found' })
-    return
-  }
-  
+  if (!(await ensureUserAccess(req, res, userId))) return
   const parsed = adminWalletLinkSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() }); return }
 
@@ -581,6 +601,7 @@ router.post('/users/:id/wallet-links', async (req: AuthedRequest, res) => {
 router.post('/users/:id/wallet-links/:linkId/primary', async (req: AuthedRequest, res) => {
   const userId = req.params.id ?? ''
   const linkId = req.params.linkId ?? ''
+  if (!(await ensureUserAccess(req, res, userId))) return
 
   const link = await prisma.walletLink.findFirst({ where: { id: linkId, userId } })
   if (!link) { res.status(404).json({ error: 'Wallet link not found' }); return }
@@ -606,6 +627,7 @@ router.post('/users/:id/wallet-links/:linkId/primary', async (req: AuthedRequest
 router.delete('/users/:id/wallet-links/:linkId', async (req: AuthedRequest, res) => {
   const userId = req.params.id ?? ''
   const linkId = req.params.linkId ?? ''
+  if (!(await ensureUserAccess(req, res, userId))) return
   const row = await prisma.walletLink.findFirst({ where: { id: linkId, userId } })
   if (!row) { res.status(404).json({ error: 'Wallet link not found' }); return }
 
@@ -654,6 +676,7 @@ const patchUserSchema = z.object({
 
 router.patch('/users/:id', async (req: AuthedRequest, res) => {
   const id = req.params.id ?? ''
+  if (!(await ensureUserAccess(req, res, id))) return
   const parsed = patchUserSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() }); return }
   const data: Record<string, unknown> = { ...parsed.data }
@@ -700,13 +723,14 @@ router.patch('/users/:id', async (req: AuthedRequest, res) => {
 // --- force-set password --------------------------------------------------
 
 router.post('/users/:id/password', async (req: AuthedRequest, res) => {
+  const targetUserId = req.params.id ?? ''
+  if (!(await ensureUserAccess(req, res, targetUserId))) return
   const schema = z.object({ password: z.string().min(8).max(200), revokeSessions: z.boolean().default(true) })
   const parsed = schema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input' }); return }
   const passwordHash = await bcrypt.hash(parsed.data.password, 12)
   const data: { passwordHash: string; tokenVersion?: { increment: number } } = { passwordHash }
   if (parsed.data.revokeSessions) data.tokenVersion = { increment: 1 }
-  const targetUserId = req.params.id ?? ''
   await prisma.user.update({ where: { id: targetUserId }, data })
   await audit(req.userId!, 'user.password.reset', targetUserId, { revokeSessions: parsed.data.revokeSessions })
   res.json({ ok: true })
@@ -716,6 +740,7 @@ router.post('/users/:id/password', async (req: AuthedRequest, res) => {
 
 router.post('/users/:id/revoke', async (req: AuthedRequest, res) => {
   const targetUserId = req.params.id ?? ''
+  if (!(await ensureUserAccess(req, res, targetUserId))) return
   await prisma.user.update({ where: { id: targetUserId }, data: { tokenVersion: { increment: 1 } } })
   await audit(req.userId!, 'user.sessions.revoke', targetUserId, null)
   res.json({ ok: true })
@@ -725,6 +750,7 @@ router.post('/users/:id/revoke', async (req: AuthedRequest, res) => {
 
 router.delete('/users/:id', async (req: AuthedRequest, res) => {
   const targetUserId = req.params.id ?? ''
+  if (!(await ensureUserAccess(req, res, targetUserId))) return
   if (targetUserId === req.userId) { res.status(400).json({ error: 'Cannot delete yourself' }); return }
   await prisma.user.delete({ where: { id: targetUserId } })
   await audit(req.userId!, 'user.delete', targetUserId, null)
@@ -745,6 +771,7 @@ router.post('/users/:id/holdings', async (req: AuthedRequest, res) => {
   const parsed = holdingSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input' }); return }
   const userId = req.params.id ?? ''
+  if (!(await ensureUserAccess(req, res, userId))) return
   const holdingData: any = { userId, ...parsed.data }
   const h = await prisma.holding.upsert({
     where: { userId_symbol: { userId, symbol: parsed.data.symbol } },
@@ -779,9 +806,10 @@ const walletSchema = z.object({
 })
 
 router.post('/users/:id/wallet', idempotency(), async (req: AuthedRequest, res) => {
+  const userId = req.params.id ?? ''
+  if (!(await ensureUserAccess(req, res, userId))) return
   const parsed = walletSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input' }); return }
-  const userId = req.params.id ?? ''
   const { currency, symbol, balance: targetBalance, available: targetAvailable } = parsed.data
 
   try {
@@ -858,6 +886,11 @@ router.delete('/wallet/:wid', async (req: AuthedRequest, res) => {
       }
 
       // Prevent deletion if any presentational or ledger balances are non-zero.
+      if (!(await getUserAccess(req, w.userId)).assigned) {
+        const e: any = new Error('Wallet not found')
+        e.status = 404
+        throw e
+      }
       if (w.balance !== 0 || w.available !== 0) {
         const e: any = new Error('Cannot delete wallet with non-zero balance; record a ledger transaction to zero the account first')
         e.status = 400
@@ -929,20 +962,7 @@ const depositSchema = z.object({
 
 router.post('/users/:id/deposit', idempotency(), async (req: AuthedRequest, res) => {
   const targetUserId = req.params.id ?? ''
-  const superAdmin = await isSuperAdmin(req.userId ?? '')
-  const assigned = await isUserAssignedToAdmin(targetUserId, req.userId ?? '')
-  const targetIsAdmin = (await prisma.user.findUnique({ where: { id: targetUserId }, select: { role: true } }))?.role === 'admin'
-  
-  // Super admin can deposit to anyone
-  // Regular admin can deposit to assigned users
-  // Super admin can deposit to any admin (including sub-admins)
-  // Sub-admin can deposit to their assigned users (including other admins if explicitly assigned)
-  const canDeposit = superAdmin || assigned || (superAdmin && targetIsAdmin)
-  
-  if (!canDeposit) {
-    res.status(404).json({ error: 'User not found' })
-    return
-  }
+  if (!(await ensureUserAccess(req, res, targetUserId))) return
   const parsed = depositSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() }); return }
   const userId = targetUserId
@@ -1081,13 +1101,7 @@ const deductSchema = z.object({
 
 router.post('/users/:id/deduct', idempotency(), async (req: AuthedRequest, res) => {
   const targetUserId = req.params.id ?? ''
-  const superAdmin = await isSuperAdmin(req.userId ?? '')
-  const assigned = await isUserAssignedToAdmin(targetUserId, req.userId ?? '')
-  
-  if (!superAdmin && !assigned) {
-    res.status(404).json({ error: 'User not found' })
-    return
-  }
+  if (!(await ensureUserAccess(req, res, targetUserId))) return
   const parsed = deductSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() }); return }
   const userId = targetUserId
@@ -1154,14 +1168,7 @@ router.post('/users/:id/hold', async (req: AuthedRequest, res) => {
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() }); return }
   const userId = req.params.id ?? ''
   if (userId === req.userId) { res.status(400).json({ error: 'Cannot place a hold on your own account' }); return }
-  
-  const superAdmin = await isSuperAdmin(req.userId ?? '')
-  const assigned = await isUserAssignedToAdmin(userId, req.userId ?? '')
-  
-  if (!superAdmin && !assigned) {
-    res.status(404).json({ error: 'User not found' })
-    return
-  }
+  if (!(await ensureUserAccess(req, res, userId))) return
   const u = await prisma.user.update({
     where: { id: userId },
     data: {
@@ -1183,6 +1190,7 @@ router.post('/users/:id/hold', async (req: AuthedRequest, res) => {
 
 router.post('/users/:id/unhold', async (req: AuthedRequest, res) => {
   const userId = req.params.id ?? ''
+  if (!(await ensureUserAccess(req, res, userId))) return
   const u = await prisma.user.update({
     where: { id: userId },
     data: { holdActive: false, holdType: null, holdReason: null, holdNote: null, holdAt: null },
@@ -1206,10 +1214,11 @@ const txSchema = z.object({
 })
 
 router.post('/users/:id/transactions', idempotency(), async (req: AuthedRequest, res) => {
+  const userId = req.params.id ?? ''
+  if (!(await ensureUserAccess(req, res, userId))) return
   const parsed = txSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input' }); return }
   const { createdAt, ...rest } = parsed.data
-  const userId = req.params.id ?? ''
   // Determine the cash-flow direction this transaction should have on the
   // wallet balance. Credits add, debits subtract. We only move money when
   // status === 'completed' (pending/failed/reversed don't change the
@@ -1282,6 +1291,9 @@ router.post('/users/:id/transactions', idempotency(), async (req: AuthedRequest,
 })
 
 router.patch('/transactions/:tid', async (req: AuthedRequest, res) => {
+  const tx = await prisma.transaction.findUnique({ where: { id: req.params.tid } })
+  if (!tx) { res.status(404).json({ error: 'Transaction not found' }); return }
+  if (!(await ensureUserAccess(req, res, tx.userId))) return
   const partial = txSchema.partial().safeParse(req.body)
   if (!partial.success) { res.status(400).json({ error: 'Invalid input' }); return }
   const { createdAt, ...rest } = partial.data
@@ -1293,6 +1305,9 @@ router.patch('/transactions/:tid', async (req: AuthedRequest, res) => {
 })
 
 router.delete('/transactions/:tid', async (req: AuthedRequest, res) => {
+  const tx = await prisma.transaction.findUnique({ where: { id: req.params.tid } })
+  if (!tx) { res.status(404).json({ error: 'Transaction not found' }); return }
+  if (!(await ensureUserAccess(req, res, tx.userId))) return
   const t = await prisma.transaction.delete({ where: { id: req.params.tid } })
   await audit(req.userId!, 'transaction.delete', t.userId, { id: t.id })
   res.json({ ok: true })
@@ -1317,6 +1332,7 @@ router.get('/deposits/pending', async (_req, res) => {
 router.post('/deposits/:tid/approve', idempotency(), async (req: AuthedRequest, res) => {
   const tx = await prisma.transaction.findUnique({ where: { id: req.params.tid } })
   if (!tx) { res.status(404).json({ error: 'Deposit request not found' }); return }
+  if (!(await ensureUserAccess(req, res, tx.userId))) return
   if (tx.kind !== 'deposit') { res.status(400).json({ error: 'Not a deposit transaction' }); return }
   if (tx.status !== 'pending') { res.status(409).json({ error: `Already ${tx.status}` }); return }
   const symbol = tx.currency === 'USD' ? '$' : tx.currency
@@ -1365,6 +1381,7 @@ router.post('/deposits/:tid/reject', async (req: AuthedRequest, res) => {
   const reason = typeof req.body?.reason === 'string' ? req.body.reason.slice(0, 500) : ''
   const tx = await prisma.transaction.findUnique({ where: { id: req.params.tid } })
   if (!tx) { res.status(404).json({ error: 'Deposit request not found' }); return }
+  if (!(await ensureUserAccess(req, res, tx.userId))) return
   if (tx.kind !== 'deposit') { res.status(400).json({ error: 'Not a deposit transaction' }); return }
   if (tx.status !== 'pending') { res.status(409).json({ error: `Already ${tx.status}` }); return }
   const updated = await prisma.transaction.update({
@@ -1396,10 +1413,11 @@ const tradeSchema = z.object({
 })
 
 router.post('/users/:id/trades', async (req: AuthedRequest, res) => {
+  const userId = req.params.id ?? ''
+  if (!(await ensureUserAccess(req, res, userId))) return
   const parsed = tradeSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input' }); return }
   const total = parsed.data.amount * parsed.data.price
-  const userId = req.params.id ?? ''
   const tradeData: any = { userId, ...parsed.data, total }
   const t = await prisma.trade.create({ data: tradeData })
   await audit(req.userId!, 'trade.create', userId, parsed.data)
@@ -1407,6 +1425,9 @@ router.post('/users/:id/trades', async (req: AuthedRequest, res) => {
 })
 
 router.delete('/trades/:tid', async (req: AuthedRequest, res) => {
+  const trade = await prisma.trade.findUnique({ where: { id: req.params.tid } })
+  if (!trade) { res.status(404).json({ error: 'Trade not found' }); return }
+  if (!(await ensureUserAccess(req, res, trade.userId))) return
   const t = await prisma.trade.delete({ where: { id: req.params.tid } })
   await audit(req.userId!, 'trade.delete', t.userId, { id: t.id })
   res.json({ ok: true })
@@ -1423,9 +1444,10 @@ const alertSchema = z.object({
 })
 
 router.post('/users/:id/alerts', async (req: AuthedRequest, res) => {
+  const userId = req.params.id ?? ''
+  if (!(await ensureUserAccess(req, res, userId))) return
   const parsed = alertSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input' }); return }
-  const userId = req.params.id ?? ''
   // Explicitly pass required fields to ensure type safety
   const alertData = {
     userId,
@@ -1441,6 +1463,9 @@ router.post('/users/:id/alerts', async (req: AuthedRequest, res) => {
 })
 
 router.delete('/alerts/:aid', async (req: AuthedRequest, res) => {
+  const alert = await prisma.priceAlert.findUnique({ where: { id: req.params.aid } })
+  if (!alert) { res.status(404).json({ error: 'Alert not found' }); return }
+  if (!(await ensureUserAccess(req, res, alert.userId))) return
   const a = await prisma.priceAlert.delete({ where: { id: req.params.aid } })
   await audit(req.userId!, 'alert.delete', a.userId, { id: a.id })
   res.json({ ok: true })
@@ -1449,6 +1474,9 @@ router.delete('/alerts/:aid', async (req: AuthedRequest, res) => {
 // --- watchlist -----------------------------------------------------------
 
 router.delete('/watchlist/:wid', async (req: AuthedRequest, res) => {
+  const watchlist = await prisma.watchlist.findUnique({ where: { id: req.params.wid } })
+  if (!watchlist) { res.status(404).json({ error: 'Watchlist item not found' }); return }
+  if (!(await ensureUserAccess(req, res, watchlist.userId))) return
   const w = await prisma.watchlist.delete({ where: { id: req.params.wid } })
   await audit(req.userId!, 'watchlist.delete', w.userId, { symbol: w.symbol })
   res.json({ ok: true })
@@ -1463,9 +1491,10 @@ const notifSchema = z.object({
 })
 
 router.post('/users/:id/notifications', async (req: AuthedRequest, res) => {
+  const userId = req.params.id ?? ''
+  if (!(await ensureUserAccess(req, res, userId))) return
   const parsed = notifSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input' }); return }
-  const userId = req.params.id ?? ''
   const notifData: any = { userId, ...parsed.data }
   const n = await prisma.notification.create({ data: notifData })
   await audit(req.userId!, 'notification.create', userId, parsed.data)
@@ -1473,6 +1502,9 @@ router.post('/users/:id/notifications', async (req: AuthedRequest, res) => {
 })
 
 router.delete('/notifications/:nid', async (req: AuthedRequest, res) => {
+  const notif = await prisma.notification.findUnique({ where: { id: req.params.nid } })
+  if (!notif) { res.status(404).json({ error: 'Notification not found' }); return }
+  if (!(await ensureUserAccess(req, res, notif.userId))) return
   const n = await prisma.notification.delete({ where: { id: req.params.nid } })
   await audit(req.userId!, 'notification.delete', n.userId, { id: n.id })
   res.json({ ok: true })
@@ -1595,8 +1627,9 @@ router.get('/audit.csv', async (req: AuthedRequest, res) => {
 })
 
 // Per-user audit timeline (both as actor and target)
-router.get('/users/:id/audit', async (req, res) => {
+router.get('/users/:id/audit', async (req: AuthedRequest, res) => {
   const id = req.params.id
+  if (!(await ensureUserAccess(req, res, id))) return
   const limit = Math.min(parseInt(String(req.query.limit ?? '200'), 10) || 200, 1000)
   const logs = await prisma.adminAudit.findMany({
     where: { OR: [{ targetUserId: id }, { actorId: id }] },
@@ -1662,13 +1695,8 @@ router.post('/users/bulk', async (req: AuthedRequest, res) => {
 // pointing back to the admin. The client banner shows "viewing as <email>".
 
 router.post('/users/:id/impersonate', async (req: AuthedRequest, res) => {
-  const superAdmin = await isSuperAdmin(req.userId!)
-  if (!superAdmin) {
-    res.status(404).json({ error: 'Endpoint not found' })
-    return
-  }
-  
   const id = req.params.id ?? ''
+  if (!(await ensureUserAccess(req, res, id))) return
   if (id === req.userId) { res.status(400).json({ error: 'Cannot impersonate yourself' }); return }
   const target = await prisma.user.findUnique({ where: { id }, select: { id: true, email: true, name: true, role: true, suspended: true, tokenVersion: true } })
   if (!target) { res.status(404).json({ error: 'User not found' }); return }
@@ -1699,9 +1727,10 @@ const adjustHoldingSchema = z.object({
 })
 
 router.post('/users/:id/holdings/adjust', async (req: AuthedRequest, res) => {
+  const userId = req.params.id ?? ''
+  if (!(await ensureUserAccess(req, res, userId))) return
   const parsed = adjustHoldingSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() }); return }
-  const userId = req.params.id ?? ''
   const { symbol, side, amount, price, reason, note } = parsed.data
   const reference = `Position ${side}${note ? ' — ' + note : ''}`
   const result = await prisma.$transaction(async (tx) => {
@@ -1750,6 +1779,7 @@ router.post('/transactions/:tid/reverse', async (req: AuthedRequest, res) => {
   const tid = req.params.tid
   const original = await prisma.transaction.findUnique({ where: { id: tid } })
   if (!original) { res.status(404).json({ error: 'Transaction not found' }); return }
+  if (!(await ensureUserAccess(req, res, original.userId))) return
   if (original.status === 'reversed') { res.status(400).json({ error: 'Already reversed' }); return }
   // Direction of money in the original
   const credited = original.kind === 'deposit' || original.kind === 'dividend' || original.kind === 'interest'
@@ -1804,13 +1834,10 @@ const transferSchema = z.object({
 
 // Cleanup: ensure only one primary wallet per user
 router.post('/users/:id/cleanup-wallets', async (req: AuthedRequest, res) => {
-  const superAdmin = await isSuperAdmin(req.userId!)
-  if (!superAdmin) {
-    res.status(404).json({ error: 'Endpoint not found' })
-    return
-  }
-  
   const userId = req.params.id ?? ''
+  if (!(await ensureUserAccess(req, res, userId))) return
+  
+  // Cleanup wallet links for the permitted user.
   
   // Get all wallet links for this user
   const wallets = await prisma.walletLink.findMany({
@@ -1972,11 +1999,11 @@ router.post('/transfer', idempotency(), async (req: AuthedRequest, res) => {
   
   const superAdmin = await isSuperAdmin(req.userId!)
   
-  // Super admin can transfer from anyone
-  // Sub-admins can transfer from their assigned users (including admins if explicitly assigned)
+  // Super admin can transfer from anyone.
+  // Sub-admins can transfer from their assigned users, or from their own admin account.
   if (!superAdmin) {
     const assignedFrom = await isUserAssignedToAdmin(fromUserId, req.userId!)
-    if (!assignedFrom) {
+    if (!assignedFrom && fromUserId !== req.userId!) {
       res.status(404).json({ error: 'User not found' })
       return
     }
@@ -2065,18 +2092,10 @@ const feeSchema = z.object({
 })
 
 router.post('/users/:id/fee', idempotency(), async (req: AuthedRequest, res) => {
+  const userId = req.params.id ?? ''
+  if (!(await ensureUserAccess(req, res, userId))) return
   const parsed = feeSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() }); return }
-  const userId = req.params.id ?? ''
-  
-  const superAdmin = await isSuperAdmin(req.userId ?? '')
-  const assigned = await isUserAssignedToAdmin(userId, req.userId ?? '')
-  
-  if (!superAdmin && !assigned) {
-    res.status(404).json({ error: 'User not found' })
-    return
-  }
-  
   const { currency, amount, feeType, note, allowNegative } = parsed.data
   const symbol = currency === 'USD' ? '$' : currency
   const reference = `Fee (${feeType})${note ? ': ' + note : ''}`
@@ -2129,6 +2148,7 @@ router.post('/users/:id/kyc', async (req: AuthedRequest, res) => {
   const parsed = kycSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() }); return }
   const userId = req.params.id ?? ''
+  if (!(await ensureUserAccess(req, res, userId))) return
   const u = await prisma.user.update({
     where: { id: userId },
     data: {
@@ -2160,6 +2180,7 @@ router.patch('/users/:id/limits', async (req: AuthedRequest, res) => {
   const parsed = limitsSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() }); return }
   const userId = req.params.id ?? ''
+  if (!(await ensureUserAccess(req, res, userId))) return
   const u = await prisma.user.update({ where: { id: userId }, data: parsed.data })
   await audit(req.userId!, 'user.limits.update', userId, parsed.data)
   res.json({ user: publicUser(u) })
@@ -2173,6 +2194,7 @@ router.patch('/users/:id/ip-allowlist', async (req: AuthedRequest, res) => {
   const parsed = ipSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input' }); return }
   const userId = req.params.id ?? ''
+  if (!(await ensureUserAccess(req, res, userId))) return
   const u = await prisma.user.update({ where: { id: userId }, data: { ipAllowlist: parsed.data.ipAllowlist || null } })
   await audit(req.userId!, 'user.ipAllowlist.update', userId, parsed.data)
   res.json({ user: publicUser(u) })
@@ -2190,6 +2212,7 @@ router.post('/users/:id/email', async (req: AuthedRequest, res) => {
   const parsed = emailSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() }); return }
   const userId = req.params.id ?? ''
+  if (!(await ensureUserAccess(req, res, userId))) return
   const exists = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true } })
   if (!exists) { res.status(404).json({ error: 'User not found' }); return }
   const emailSent = await sendEmailNotification(exists.email, parsed.data.subject, parsed.data.body, undefined, {
@@ -2380,6 +2403,7 @@ const depositAddressesSchema = z.object({
 
 router.get('/users/:id/deposit-addresses', async (req: AuthedRequest, res) => {
   const id = req.params.id
+  if (!(await ensureUserAccess(req, res, id))) return
   const u = await prisma.user.findUnique({ where: { id }, select: { prefs: true } })
   if (!u) { res.status(404).json({ error: 'Not found' }); return }
   let prefs: Record<string, unknown> = {}
@@ -2389,6 +2413,7 @@ router.get('/users/:id/deposit-addresses', async (req: AuthedRequest, res) => {
 
 router.put('/users/:id/deposit-addresses', async (req: AuthedRequest, res) => {
   const id = req.params.id
+  if (!(await ensureUserAccess(req, res, id))) return
   const parsed = depositAddressesSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() }); return }
   const target = await prisma.user.findUnique({ where: { id }, select: { prefs: true } })
@@ -2407,6 +2432,7 @@ router.put('/users/:id/deposit-addresses', async (req: AuthedRequest, res) => {
 
 router.delete('/users/:id/deposit-addresses', async (req: AuthedRequest, res) => {
   const id = req.params.id
+  if (!(await ensureUserAccess(req, res, id))) return
   const target = await prisma.user.findUnique({ where: { id }, select: { prefs: true } })
   if (!target) { res.status(404).json({ error: 'Not found' }); return }
   let prefs: Record<string, unknown> = {}
@@ -2602,14 +2628,7 @@ router.post('/referrals/:referralId/cancel', async (req: AuthedRequest, res) => 
 // Get user's OTP settings
 router.get('/users/:id/otp-settings', async (req: AuthedRequest, res) => {
   const userId = req.params.id
-  
-  const superAdmin = await isSuperAdmin(req.userId!)
-  const assigned = await isUserAssignedToAdmin(userId, req.userId!)
-  
-  if (!superAdmin && !assigned) {
-    res.status(404).json({ error: 'User not found' })
-    return
-  }
+  if (!(await ensureUserAccess(req, res, userId))) return
   
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -2660,18 +2679,11 @@ const updateOTPSettingsSchema = z.object({
 
 router.put('/users/:id/otp-settings', async (req: AuthedRequest, res) => {
   const userId = req.params.id
+  if (!(await ensureUserAccess(req, res, userId))) return
   const parsed = updateOTPSettingsSchema.safeParse(req.body)
   
   if (!parsed.success) {
     res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() })
-    return
-  }
-  
-  const superAdmin = await isSuperAdmin(req.userId!)
-  const assigned = await isUserAssignedToAdmin(userId, req.userId!)
-  
-  if (!superAdmin && !assigned) {
-    res.status(404).json({ error: 'User not found' })
     return
   }
   
@@ -2950,16 +2962,9 @@ const withdrawalFeeOverrideSchema = z.object({
 
 router.post('/users/:id/withdrawal-fee-override', async (req: AuthedRequest, res) => {
   const userId = req.params.id ?? ''
+  if (!(await ensureUserAccess(req, res, userId))) return
   const parsed = withdrawalFeeOverrideSchema.safeParse(req.body)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() }); return }
-  
-  const superAdmin = await isSuperAdmin(req.userId ?? '')
-  const assigned = await isUserAssignedToAdmin(userId, req.userId ?? '')
-  
-  if (!superAdmin && !assigned) {
-    res.status(404).json({ error: 'User not found' })
-    return
-  }
   
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, name: true, prefs: true } })
   if (!user) { res.status(404).json({ error: 'User not found' }); return }
@@ -2998,14 +3003,7 @@ router.post('/users/:id/withdrawal-fee-override', async (req: AuthedRequest, res
 
 router.delete('/users/:id/withdrawal-fee-override', async (req: AuthedRequest, res) => {
   const userId = req.params.id ?? ''
-  
-  const superAdmin = await isSuperAdmin(req.userId ?? '')
-  const assigned = await isUserAssignedToAdmin(userId, req.userId ?? '')
-  
-  if (!superAdmin && !assigned) {
-    res.status(404).json({ error: 'User not found' })
-    return
-  }
+  if (!(await ensureUserAccess(req, res, userId))) return
   
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, name: true, prefs: true } })
   if (!user) { res.status(404).json({ error: 'User not found' }); return }
@@ -3036,14 +3034,7 @@ router.delete('/users/:id/withdrawal-fee-override', async (req: AuthedRequest, r
 
 router.get('/users/:id/withdrawal-fee', async (req: AuthedRequest, res) => {
   const userId = req.params.id ?? ''
-  
-  const superAdmin = await isSuperAdmin(req.userId ?? '')
-  const assigned = await isUserAssignedToAdmin(userId, req.userId ?? '')
-  
-  if (!superAdmin && !assigned) {
-    res.status(404).json({ error: 'User not found' })
-    return
-  }
+  if (!(await ensureUserAccess(req, res, userId))) return
   
   const user = await prisma.user.findUnique({
     where: { id: userId },
