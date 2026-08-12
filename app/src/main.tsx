@@ -21,9 +21,9 @@ registerServiceWorker()
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <Auth0Provider
-      domain={import.meta.env.VITE_AUTH0_DOMAIN as string | undefined}
-      clientId={import.meta.env.VITE_AUTH0_CLIENT_ID as string | undefined}
-      authorizationParams={{ redirect_uri: window.location.origin, audience: import.meta.env.VITE_AUTH0_AUDIENCE as string | undefined }}
+      domain={(import.meta.env.VITE_AUTH0_DOMAIN as string | undefined) || (import.meta.env.NEXT_PUBLIC_AUTH0_DOMAIN as string | undefined)}
+      clientId={(import.meta.env.VITE_AUTH0_CLIENT_ID as string | undefined) || (import.meta.env.NEXT_PUBLIC_AUTH0_CLIENT_ID as string | undefined)}
+      authorizationParams={{ redirect_uri: window.location.origin, audience: (import.meta.env.VITE_AUTH0_AUDIENCE as string | undefined) || (import.meta.env.NEXT_PUBLIC_AUTH0_AUDIENCE as string | undefined) }}
     >
       <BrowserRouter>
         <CurrencyProvider>
