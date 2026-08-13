@@ -1,15 +1,10 @@
 import nodemailer from 'nodemailer'
+import fs from 'node:fs'
+import path from 'node:path'
 import { prisma } from './db.js'
 import { env } from './env.js'
-import {
-  adminEmailAddress,
-  adminEmailRecipients,
-  customerEmailAddress,
-  customerEmailFooter,
-  customerEmailName,
-  emailReplyTo,
-  formatEmailAddress,
-} from './config/email.js'
+import { customerEmailAddress, customerEmailName, adminEmailAddress, adminEmailRecipients, customerEmailFooter, emailReplyTo, formatEmailAddress, emailLogoUrl } from './config/email.js'
+import { companyInfo } from './config/company.js'
 
 interface NotificationPreferences {
   emailNotifications: boolean
@@ -44,15 +39,7 @@ export interface EmailTransportConfig {
   unsubscribeUrl?: string
 }
 
-function formatFromAddress(address: string, fromName?: string): string {
-  const trimmedAddress = address.trim()
-  const trimmedName = (fromName ?? '').trim()
-
-  if (!trimmedAddress) return ''
-  if (!trimmedName) return trimmedAddress
-
-  return `${trimmedName} <${trimmedAddress}>`
-}
+// use `formatEmailAddress` from config/email for consistent formatting
 
 export function resolveEmailTransportConfig(
   overrides: Record<string, string | undefined> = process.env
@@ -91,7 +78,7 @@ export function resolveEmailTransportConfig(
     port,
     secure,
     auth: { user, pass },
-    from: formatFromAddress(fromAddress, fromName),
+    from: formatEmailAddress(fromAddress, fromName),
     fromAddress,
     fromName,
     replyTo: replyTo || undefined,
@@ -141,16 +128,65 @@ export function buildNotificationEmailHtml(subject: string, body: string, htmlBo
   const preheader = `${subject} — ${body.replace(/\n/g, ' ').slice(0, 120)}`
 
   if (htmlBody) {
-    const withButton = appendTrackingButtonToHtml(htmlBody, resolvedTrackingUrl)
-    // ensure a hidden preheader for inbox preview and a footer with unsubscribe if configured
+    // If the provided htmlBody is a full document, preserve it and just
+    // append the button/footer. If it's a fragment, wrap it in a branded
+    // container so all emails share the same professional layout.
+    const isFullDocument = /<\/?html|<\/?body/i.test(htmlBody)
+    const contentFragment = appendTrackingButtonToHtml(htmlBody, resolvedTrackingUrl)
     const preheaderSpan = `<div style="display:none!important;visibility:hidden;opacity:0;color:transparent;height:0;width:0;">${escapeHtml(preheader)}</div>`
     const unsubscribe = env.SMTP_UNSUBSCRIBE_URL ? `<p style="font-size:12px;color:#64748b;margin-top:24px;">To stop receiving these emails, <a href="${env.SMTP_UNSUBSCRIBE_URL}">unsubscribe</a>.</p>` : ''
-    if (withButton.toLowerCase().includes('</body>')) {
-      return withButton.replace(/<body([^>]*)>/i, `<body$1>${preheaderSpan}`)
-        .replace(/<\/body>/i, `${unsubscribe}${customerEmailFooter()}</body>`)
+
+    if (isFullDocument) {
+      if (contentFragment.toLowerCase().includes('</body>')) {
+        return contentFragment.replace(/<body([^>]*)>/i, `<body$1>${preheaderSpan}`)
+          .replace(/<\/body>/i, `${unsubscribe}${customerEmailFooter()}</body>`)
+      }
+
+      return `${preheaderSpan}${contentFragment}${unsubscribe}${customerEmailFooter()}`
     }
 
-    return `${preheaderSpan}${withButton}${unsubscribe}${customerEmailFooter()}`
+    // Prefer remote logo URL. Do NOT inline large base64 data URIs into the
+    // HTML (they bloat output and sometimes appear as truncated text). If the
+    // image fails to load, hide it instead of swapping to an embedded blob.
+    const primaryLogoSrc = emailLogoUrl || 'cid:verdexis-logo'
+
+    // Build a branded wrapper for fragment content
+    const wrapper = `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${escapeHtml(subject)}</title>
+    <style>
+    body { margin:0; padding:0; background:#f4f6f8; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    .email-wrapper { max-width:600px; margin:18px auto; background:#ffffff; border-radius:8px; overflow:visible; box-shadow:none; border:1px solid #e6eef6 }
+    .email-header { padding:18px 12px 8px 12px; text-align:center; background:transparent }
+    .email-header img { width:96px; max-width:45%; height:auto; display:block; margin:0 auto; image-rendering:-webkit-optimize-contrast; }
+      .email-content { padding:20px 24px; color:#0f172a; line-height:1.45; font-size:15px }
+      .email-footer { background:#f8fafc; padding:18px; text-align:center; color:#64748b; font-size:13px }
+      a.btn { display:inline-block; background:#0f4c81; color:#fff; padding:10px 16px; border-radius:8px; text-decoration:none; font-weight:600 }
+      img.responsive { max-width:100%; height:auto; display:block }
+      @media (max-width:600px){ .email-content{padding:16px} .email-header img{width:80px} }
+    </style>
+  </head>
+  <body>
+    ${preheaderSpan}
+    <div class="email-wrapper">
+      <div class="email-header">
+        <img class="responsive" src="${primaryLogoSrc}" alt="${escapeHtml(companyInfo.name)}" onerror="this.onerror=null;this.style.display='none'" />
+      </div>
+      <div class="email-content">
+        ${contentFragment}
+      </div>
+      <div class="email-footer">
+        ${unsubscribe}
+        ${customerEmailFooter()}
+      </div>
+    </div>
+  </body>
+</html>`
+
+    return wrapper
   }
 
   const safeBody = escapeHtml(body).replace(/\n/g, '<br />')
@@ -259,8 +295,16 @@ export async function sendEmailNotification(
     }
 
     // Prefer the authenticated SMTP user as the envelope/sender to avoid SPF/DMARC alignment issues
-    const envelopeFrom = config.fromAddress
+    // If the SMTP auth user is available, use it for the MAIL FROM (envelope) to align with provider policies.
+    const envelopeFrom = config.auth && config.auth.user ? config.auth.user : config.fromAddress
     headers['Sender'] = formatEmailAddress(envelopeFrom, config.fromName)
+
+    // We will prefer the public `emailLogoUrl` (remote URL) so email clients
+    // fetch the logo inline and do not render it as an attachment preview.
+    // Keep a data-URI fallback in `logoDataUri` but do not add attachments.
+    const attachments: Array<any> = []
+
+    console.log('[notification-service] Sending email:', { to: email, subject, attachments: [] })
 
     await transporter.sendMail({
       from: config.from,
@@ -271,7 +315,11 @@ export async function sendEmailNotification(
       html,
       headers,
       envelope: { from: envelopeFrom, to: email },
+      // Intentionally not including attachments to avoid Gmail showing the
+      // logo as an attached file; rely on the remote `emailLogoUrl` or the
+      // embedded data URI in the HTML as fallbacks.
     })
+
 
     if (options.userId && options.createWebNotification !== false) {
       await createTrackedWebNotification(options.userId, options.kind ?? 'email', options.title ?? subject, options.body ?? body)

@@ -6,7 +6,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { companyInfo } from '../config/company.js'
-import { customerEmailFooter, emailLinks } from '../config/email.js'
+import { customerEmailFooter, emailLinks, emailLogoUrl } from '../config/email.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -51,23 +51,20 @@ class EmailService {
 
   private loadTemplates() {
     const templateDir = path.join(__dirname, '../../templates')
-    const templateFiles = [
-      'email_otp_verification.html',
-      'email_welcome.html',
-      'email_transaction_confirmation.html',
-      'email_security.html',
-      'email_error_notification.html',
-      'email_password_reset.html',
-    ]
-
-    for (const file of templateFiles) {
-      try {
-        const content = fs.readFileSync(path.join(templateDir, file), 'utf-8')
-        const name = file.replace('email_', '').replace('.html', '')
-        this.templates.set(name, content)
-      } catch {
-        // Template file doesn't exist, skip
+    try {
+      const files = fs.readdirSync(templateDir)
+      for (const file of files) {
+        if (!/^email_.+\.html$/i.test(file)) continue
+        try {
+          const content = fs.readFileSync(path.join(templateDir, file), 'utf-8')
+          const name = file.replace(/^email_/, '').replace(/\.html$/i, '')
+          this.templates.set(name, content)
+        } catch (err) {
+          // skip unreadable
+        }
       }
+    } catch (err) {
+      // templates directory may not exist
     }
   }
 
@@ -84,6 +81,10 @@ class EmailService {
       TWITTER: companyInfo.social.twitter,
       FACEBOOK: companyInfo.social.facebook,
       YEAR: new Date().getFullYear().toString(),
+      LOGO_URL: emailLogoUrl,
+      LOGO_CID: 'cid:verdexis-logo',
+      SUPPORT_LINK: emailLinks.support,
+      WEBSITE_LINK: emailLinks.website,
       ...vars,
     }
 
@@ -170,7 +171,8 @@ class EmailService {
   }
 
   async sendPasswordReset(to: string, userName: string, resetUrl: string, userId?: string): Promise<boolean> {
-    const template = this.templates.get('password_reset')
+    // Use the Colorlib-inspired simple transactional template we added
+    const template = this.templates.get('colorlib_simple') || this.templates.get('password_reset')
     if (!template) {
       // Fallback to simple text email
       const html = `

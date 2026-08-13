@@ -1,68 +1,21 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18384264054"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);} 
-    gtag('js', new Date());
+<!-- Welcome fragment: wrapper will provide header/footer -->
+<div style="padding:20px;font-family:Segoe UI, Tahoma, Geneva, Verdana, sans-serif;color:#0f172a">
+  <h2 style="margin:0 0 12px 0;font-size:20px;color:#0f172a">Welcome, {{USER_NAME}} 👋</h2>
+  <p style="margin:0 0 16px 0;color:#475569">Thanks for joining {{COMPANY_NAME}} — we're excited to help you get started.</p>
 
-    gtag('config', 'AW-18384264054');
-  </script>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <style>
-    body { margin: 0; padding: 0; background: #f4f6f8; font-family: Arial, sans-serif; color: #1e293b; }
-    table { border-collapse: collapse; width: 100%; }
-    .wrapper { width: 100%; padding: 20px; background: #f4f6f8; }
-    .container { width: 100%; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; }
-    .header { background: #0f4c81; padding: 22px; text-align: center; }
-    .header h1 { margin: 0; color: #ffffff; font-size: 24px; }
-    .content { padding: 24px; }
-    .content h2 { margin-top: 0; color: #0f4c81; font-size: 22px; }
-    .content p { margin: 16px 0; line-height: 1.6; font-size: 15px; }
-    .feature-list { padding: 0; margin: 16px 0; }
-    .feature-list li { list-style: none; margin: 10px 0; padding-left: 24px; position: relative; }
-    .feature-list li:before { content: "✓"; position: absolute; left: 0; color: #16a34a; font-weight: bold; }
-    .button { display: inline-block; margin: 20px 0; padding: 12px 24px; background: #0f4c81; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: bold; }
-    .footer { padding: 20px; background: #f8fafc; color: #64748b; font-size: 13px; text-align: center; }
-    .footer a { color: #0f4c81; text-decoration: none; }
-  </style>
-</head>
-<body>
-  <table class="wrapper" role="presentation" cellpadding="0" cellspacing="0">
-    <tr>
-      <td>
-        <table class="container" role="presentation" cellpadding="0" cellspacing="0">
-          <tr>
-            <td class="header">
-              <h1>Welcome to Verdexis</h1>
-            </td>
-          </tr>
-          <tr>
-            <td class="content">
-              <h2>Hello {{USER_NAME}},</h2>
-              <p>We’re glad you’re here. Verdexis gives you smart portfolio monitoring and trading insights, all in one place.</p>
-              <p>Get started with these steps:</p>
-              <ul class="feature-list">
-                <li>Connect your wallet or portfolio</li>
-                <li>Customize your preferences</li>
-                <li>Explore AI-powered market insights</li>
-              </ul>
-              <p><a href="{{ONBOARDING_URL}}" class="button">Complete your setup</a></p>
-              <p>If you have questions, visit <a href="{{HELP_CENTER_URL}}" style="color:#0f4c81; text-decoration:none;">our help center</a> or email {{SUPPORT_EMAIL}}.</p>
-            </td>
-          </tr>
-          <tr>
-            <td class="footer">
-              Verdexis · {{COMPANY_ADDRESS}}<br />
-              <a href="{{TERMS_LINK}}">Terms</a> | <a href="{{PRIVACY_LINK}}">Privacy</a>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
+  <div style="margin:18px 0;padding:16px;border-radius:12px;background:linear-gradient(135deg,#f0fdf4 0%,#dcfce7 100%);border:1px solid #bbf7d0;text-align:center">
+    <p style="margin:0 0 8px;font-weight:600;color:#166534">Complete your setup</p>
+    <p style="margin:0 0 12px;color:#15803d">Connect your first portfolio and personalize your alerts.</p>
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin:0 auto">
+      <tr>
+        <td align="center">
+          <a href="{{ONBOARDING_URL}}" style="background:#0f4c81;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:600">Complete Your Setup</a>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  <p style="margin:0;color:#64748b">Explore: <a href="{{DASHBOARD_URL}}">Dashboard</a> · <a href="{{MARKETS_URL}}">Markets</a> · <a href="{{PORTFOLIO_URL}}">Portfolio</a></p>
+
+  <div style="margin-top:18px;font-size:13px;color:#64748b">Need help? <a href="{{HELP_CENTER_URL}}">Help Center</a> or <a href="mailto:{{SUPPORT_EMAIL}}">Contact Support</a></div>
+</div>

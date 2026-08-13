@@ -1,0 +1,25 @@
+<!-- Template fragment: core content only (wrapper will add header/footer) -->
+<div>
+  <div style="padding:20px">
+    <h1 style="margin:0 0 12px 0;color:#0f172a;font-size:20px">Hi {{USER_NAME}}</h1>
+    <p style="margin:0 0 16px 0;color:#475569">We received a request to reset the password for your {{COMPANY_NAME}} account. Click the button below to reset it. The link will expire in 1 hour.</p>
+
+    <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="margin:16px 0;width:100%">
+      <tr>
+        <td align="center">
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0">
+            <tr>
+              <td align="center">
+                <a href="{{RESET_URL}}" target="_blank" rel="noopener" style="background:#0f4c81;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:600">Reset Password</a>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <p style="font-size:13px;color:#6b7280">If the button doesn't work, open this link in your browser: <a class="text-link" href="{{RESET_URL}}" style="word-break:break-word;display:inline-block;max-width:100%">Open reset link</a></p>
+    <p style="color:#9ca3af;font-size:13px;margin-top:12px">Request Time: {{REQUEST_TIME}}<br/>Expires: {{EXPIRY_TIME}}</p>
+    <p style="font-size:13px;color:#6b7280">If you didn't request this, ignore this email or <a href="{{CONTACT_LINK}}">contact support</a>.</p>
+  </div>
+</div>

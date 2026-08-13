@@ -20,7 +20,14 @@ export const emailLinks = {
   security: `${appUrl}/security`,
 }
 
-const emailLogoUrl = `${appUrl}/assets/logo-icon-transparent.png`
+// Prefer an explicit public logo from companyInfo.branding when available;
+// fall back to the app assets path.
+// Force the email logo to use the public site wordmark to ensure consistency
+// in all clients. Prefer the explicit company branding.logo if set, otherwise
+// point at the public site logo on the verdexisgroup domain.
+export const emailLogoUrl = (companyInfo?.branding?.logo && companyInfo.branding.logo.length)
+  ? companyInfo.branding.logo
+  : `https://www.verdexisgroup.com/assets/logo-icon-transparent.png`
 const whatsappUrl = `https://wa.me/${companyInfo.contact.whatsapp.replace(/\D/g, '')}`
 const telegramUrl = companyInfo.contact.telegram.startsWith('http')
   ? companyInfo.contact.telegram
@@ -33,18 +40,14 @@ export function formatEmailAddress(address: string, name = customerEmailName): s
 export function customerEmailFooter(): string {
   return `<hr style="border:0;border-top:1px solid #e5e7eb;margin:28px 0 16px" />
 <p style="font-size:12px;line-height:1.6;color:#64748b;margin:0">
-  <img src="${emailLogoUrl}" alt="Verdexis" width="24" height="24" style="display:inline-block;vertical-align:middle;margin-right:6px" /><strong style="vertical-align:middle">Verdexis</strong><br />
-  <a href="${emailLinks.website}">${emailLinks.website}</a><br />
-  Support: <a href="${emailLinks.support}">${emailLinks.support}</a><br />
+  <img src="${emailLogoUrl}" alt="${companyInfo.name}" width="20" height="20" style="display:inline-block;vertical-align:middle;margin-right:6px" /><strong style="vertical-align:middle">${companyInfo.name}</strong><br />
+  <a href="${emailLinks.website}">verdexisgroup.com</a><br />
+  Support: <a href="${emailLinks.support}">Support</a><br />
   <a href="${emailLinks.privacy}">Privacy</a> ·
   <a href="${emailLinks.terms}">Terms</a> ·
   <a href="${emailLinks.security}">Security</a>
   <br /><br />
-  <a href="${whatsappUrl}" style="display:inline-block;margin-right:10px;color:#166534;text-decoration:none">
-    <img src="https://cdn.simpleicons.org/whatsapp/25D366" alt="WhatsApp" width="20" height="20" style="vertical-align:middle;margin-right:4px" /> WhatsApp support
-  </a>
-  <a href="${telegramUrl}" style="display:inline-block;color:#0369a1;text-decoration:none">
-    <img src="https://cdn.simpleicons.org/telegram/229ED9" alt="Telegram" width="20" height="20" style="vertical-align:middle;margin-right:4px" /> Telegram support
-  </a>
+  <a href="${whatsappUrl}" style="display:inline-block;margin-right:10px;color:#166534;text-decoration:none">WhatsApp support</a>
+  <a href="${telegramUrl}" style="display:inline-block;color:#0369a1;text-decoration:none">Telegram support</a>
 </p>`
 }

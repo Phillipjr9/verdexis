@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>{{EMAIL_TITLE}}</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <style>
+    /* Reset styles */
+    body, table, td, p, a, li, blockquote {
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+    }
+    table, td {
+      mso-table-lspace: 0pt;
+      mso-table-rspace: 0pt;
+    }
+    img {
+      -ms-interpolation-mode: bicubic;
+      border: 0;
+      height: auto;
+      line-height: 100%;
+      outline: none;
+      text-decoration: none;
+    }
+    
+    /* Base styles */
+    html, body { height: auto !important; overflow: auto !important; }
+    body {
+      margin: 0 !important;
+      padding: 0 !important;
+      background-color: #f4f6f8;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+    }
+    
+    /* Container */
+    .email-wrapper {
+      width: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      overflow: hidden;
+      border-radius: 12px;
+    }
+    
+    /* Header */
+    .email-header {
+      background: linear-gradient(135deg, #0C8B44 0%, #0a6b35 100%);
+      padding: 32px 24px;
+      text-align: center;
+    }
+    
+    .email-header img {
+      max-width: 160px;
+      height: auto;
+      margin-bottom: 16px;
+    }
+    
+    .email-header h1 {
+      color: #ffffff;
+      margin: 0;
+      font-size: 24px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    
+    .email-header .subtitle {
+      color: rgba(255, 255, 255, 0.9);
+      margin: 8px 0 0;
+      font-size: 14px;
+      font-weight: 400;
+    }
+    
+    /* Content */
+    .email-content {
+      padding: 32px;
+      color: #1e293b;
+    }
+    
+    .email-content h2 {
+      color: #0C8B44;
+      margin: 0 0 16px;
+      font-size: 22px;
+      font-weight: 600;
+    }
+    
+    .email-content p {
+      margin: 0 0 16px;
+      line-height: 1.6;
+      font-size: 15px;
+      color: #475569;
+    }
+    
+    /* Alert boxes */
+    .alert {
+      padding: 16px 20px;
+      border-radius: 8px;
+      margin: 20px 0;
+      border-left: 4px solid;
+    }
+    
+    .alert-success {
+      background-color: #f0fdf4;
+      border-left-color: #0C8B44;
+      color: #166534;
+    }
+    
+    .alert-warning {
+      background-color: #fffbeb;
+      border-left-color: #f59e0b;
+      color: #92400e;
+    }
+    
+    .alert-error {
+      background-color: #fef2f2;
+      border-left-color: #dc2626;
+      color: #991b1b;
+    }
+    
+    .alert-info {
+      background-color: #eff6ff;
+      border-left-color: #0077d9;
+      color: #1e40af;
+    }
+    
+    .alert-title {
+      font-weight: 600;
+      font-size: 16px;
+      margin: 0 0 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .alert-text {
+      margin: 0;
+      font-size: 14px;
+    }
+    
+    /* Info cards */
+    .info-card {
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    
+    .info-card-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 0 0 12px;
+    }
+    
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    
+    .detail-row:last-child {
+      border-bottom: none;
+    }
+    
+    .detail-label {
+      color: #64748b;
+      font-size: 14px;
+    }
+    
+    .detail-value {
+      color: #1e293b;
+      font-weight: 600;
+      font-size: 14px;
+      text-align: right;
+    }
+    
+    /* Code display */
+    .code-box {
+      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+      border: 2px dashed #0C8B44;
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+      margin: 24px 0;
+    }
+    
+    .code-display {
+      font-family: 'Courier New', monospace;
+      font-size: 24px;
+      font-weight: 700;
+      color: #0C8B44;
+      letter-spacing: 4px;
+      margin: 0;
+      line-height:1;
+      word-break:break-all;
+    }
+    
+    .code-label {
+      font-size: 12px;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-top: 8px;
+    }
+    
+    /* Buttons */
+    .btn {
+      display: inline-block;
+      padding: 14px 28px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 15px;
+      margin: 8px 4px;
+      transition: all 0.2s;
+    }
+    
+    .btn-primary {
+      background-color: #0C8B44;
+      color: #ffffff !important;
+    }
+    
+    .btn-secondary {
+      background-color: transparent;
+      color: #0C8B44 !important;
+      border: 2px solid #0C8B44;
+    }
+    
+    .btn-danger {
+      background-color: #dc2626;
+      color: #ffffff !important;
+    }
+    
+    /* Footer */
+    .email-footer {
+      background-color: #f8fafc;
+      padding: 32px;
+      border-top: 1px solid #e2e8f0;
+      text-align: center;
+    }
+    
+    .footer-brand {
+      font-weight: 600;
+      color: #1e293b;
+      font-size: 13px;
+      margin: 0 0 8px;
+    }
+    
+    .footer-address {
+      color: #64748b;
+      font-size: 13px;
+      margin: 0 0 16px;
+      line-height: 1.5;
+    }
+    
+    .footer-links {
+      margin: 16px 0;
+    }
+    
+    .footer-links a {
+      color: #0C8B44;
+      text-decoration: none;
+      font-size: 13px;
+      margin: 0 12px;
+    }
+    
+    .footer-social {
+      margin: 20px 0;
+    }
+    
+    .footer-social a {
+      display: inline-block;
+      margin: 0 8px;
+    }
+    
+    .footer-social img {
+      width: 24px;
+      height: 24px;
+    }
+    
+    .footer-legal {
+      color: #94a3b8;
+      font-size: 12px;
+      margin: 16px 0 0;
+    }
+    
+    /* Responsive */
+    @media screen and (max-width: 600px) {
+      .email-content {
+        padding: 24px 20px;
+      }
+      
+      .email-footer {
+        padding: 24px 20px;
+      }
+      
+      .code-display {
+        font-size: 28px;
+        letter-spacing: 4px;
+      }
+      
+      .btn {
+        display: block;
+        width: 100%;
+        margin: 8px 0;
+        text-align: center;
+        box-sizing: border-box;
+      }
+      
+      .detail-row {
+        flex-direction: column;
+        gap: 4px;
+      }
+      
+      .detail-value {
+        text-align: left;
+      }
+    }
+    
+    /* Dark mode support */
+    @media (prefers-color-scheme: dark) {
+      body {
+        background-color: #0f172a;
+      }
+      
+      .email-wrapper {
+        background-color: #1e293b;
+      }
+      
+      .email-content {
+        color: #f1f5f9;
+      }
+      
+      .email-content p {
+        color: #cbd5e1;
+      }
+      
+      .info-card {
+        background-color: #334155;
+        border-color: #475569;
+      }
+      
+      .detail-label {
+        color: #94a3b8;
+      }
+      
+      .detail-value {
+        color: #f1f5f9;
+      }
+      
+      .email-footer {
+        background-color: #0f172a;
+        border-color: #334155;
+      }
+      
+      .footer-brand {
+        color: #f1f5f9;
+      }
+      
+      .footer-address {
+        color: #94a3b8;
+      }
+    }
+  </style>
+</head>
+<body>
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <tr>
+      <td align="center" style="padding: 20px 0;">
+        <div class="email-wrapper">
+          <!-- Header -->
+          <div class="email-header" role="presentation">
+            <table role="presentation" width="100%" style="border-collapse:collapse">
+              <tr>
+                <td style="width:160px;vertical-align:middle;text-align:center;padding:6px 0">
+                  <img src="{{LOGO_CID}}" alt="" width="140" style="display:block;border:0;outline:none;text-decoration:none;height:auto;" onerror="this.onerror=null;this.src='{{LOGO_URL}}'">
+                </td>
+                <td style="vertical-align:middle;text-align:left;padding-left:12px">
+                  <h1 style="margin:0;font-size:20px">{{HEADER_TITLE}}</h1>
+                  <div class="subtitle">{{HEADER_SUBTITLE}}</div>
+                </td>
+              </tr>
+            </table>
+          </div>
+          
+          <!-- Content -->
+          <div class="email-content">
+            {{EMAIL_BODY}}
+          </div>
+          
+          <!-- Footer -->
+          <div class="email-footer">
+            <p class="footer-brand">{{COMPANY_NAME}}</p>
+            <p class="footer-address">
+              {{COMPANY_ADDRESS}}<br>
+              <a href="tel:{{COMPANY_PHONE}}" style="color: #0C8B44; text-decoration: none;">{{COMPANY_PHONE}}</a>
+            </p>
+            
+            <div class="footer-links">
+              <a href="{{PRIVACY_LINK}}">Privacy</a>
+              <a href="{{TERMS_LINK}}">Terms</a>
+              <a href="{{SECURITY_LINK}}">Security</a>
+              <a href="{{SUPPORT_LINK}}">Support</a>
+            </div>
+            
+            <div class="footer-social">
+              <a href="{{WHATSAPP_URL}}">
+                <img src="https://cdn.simpleicons.org/whatsapp/25D366" alt="WhatsApp" style="width: 24px; height: 24px;">
+              </a>
+              <a href="{{TELEGRAM_URL}}">
+                <img src="https://cdn.simpleicons.org/telegram/229ED9" alt="Telegram" style="width: 24px; height: 24px;">
+              </a>
+              <a href="{{LINKEDIN_URL}}">
+                <img src="https://cdn.simpleicons.org/linkedin/0A66C2" alt="LinkedIn" style="width: 24px; height: 24px;">
+              </a>
+              <a href="{{TWITTER_URL}}">
+                <img src="https://cdn.simpleicons.org/x/000000" alt="X" style="width: 24px; height: 24px;">
+              </a>
+            </div>
+            
+            <p class="footer-legal">
+              © {{YEAR}} Verdexis. All rights reserved.<br>
+              This email was sent to {{USER_EMAIL}}.
+            </p>
+          </div>
+        </div>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
