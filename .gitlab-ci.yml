@@ -1,0 +1,30 @@
+stages:
+  - build
+  - deploy
+
+cache:
+  paths:
+    - node_modules/
+
+build_frontend:
+  image: node:20
+  stage: build
+  script:
+    - cd app
+    - npm ci
+    - npm run build
+  artifacts:
+    paths:
+      - app/dist
+  only:
+    - main
+
+deploy_vercel:
+  image: node:20
+  stage: deploy
+  script:
+    - cd app
+    - npm ci --no-audit --no-fund
+    - npx vercel --prod --yes --cwd . --token "$VERCEL_TOKEN" --force
+  only:
+    - main
