@@ -46,7 +46,6 @@ const News = withLazyErrorBoundary(() => import('./pages/News'), 'News')
 const Settings = withLazyErrorBoundary(() => import('./pages/Settings'), 'Settings')
 const Legal = withLazyErrorBoundary(() => import('./pages/Legal'), 'Legal')
 const About = withLazyErrorBoundary(() => import('./pages/About'), 'About')
-const Products = withLazyErrorBoundary(() => import('./pages/Products'), 'Products')
 const NotFound = withLazyErrorBoundary(() => import('./pages/NotFound'), '404')
 const ResetPassword = withLazyErrorBoundary(() => import('./pages/ResetPassword'), 'Reset Password')
 const Alerts = withLazyErrorBoundary(() => import('./pages/Alerts'), 'Alerts')
@@ -188,7 +187,7 @@ function RoutedPages() {
           <Route path="/goals" element={<RequireAuth><Goals /></RequireAuth>} />
           <Route path="/legal" element={<Legal />} />
           <Route path="/about" element={<About />} />
-          <Route path="/products" element={<Products />} />
+          {/* Products page removed from public site - keep page file for internal features if needed */}
           <Route path="/privacy" element={<PublicInformation />} />
           <Route path="/terms" element={<PublicInformation />} />
           <Route path="/cookies" element={<PublicInformation />} />

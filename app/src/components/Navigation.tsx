@@ -13,7 +13,6 @@ const publicLinks = [
   { label: 'Markets', path: '/markets' },
   { label: 'News', path: '/news' },
   { label: 'About', path: '/about' },
-  { label: 'Products', path: '/products' },
   { label: 'Fees', path: '/disclosures' },
   { label: 'Resources', path: '/faq' },
   { label: 'Help', path: '/help' },
