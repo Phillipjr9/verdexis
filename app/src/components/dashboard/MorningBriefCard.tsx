@@ -158,7 +158,7 @@ export default function MorningBriefCard({
                   : insight.kind === 'action' ? '#FF9800'
                     : '#737373'
             return (
-              <li key={i} className="text-xs text-[#A0A0A0] flex gap-2 leading-relaxed">
+              <li key={`brief-${i}`} className="text-xs text-[#A0A0A0] flex gap-2 leading-relaxed">
                 <span
                   className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0"
                   style={{ background: dot }}

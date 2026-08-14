@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken'
 import type { Request, Response, NextFunction } from 'express'
 import { prisma } from './db.js'
 import { env } from './env.js'
+import { setRlsContext } from './lib/rls.js'
 
 const SECRET = env.JWT_SECRET
 const EXPIRES_IN = env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn']
@@ -69,7 +70,7 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
   // Cheap existence check; cache could be added later.
   const user = await prisma.user.findUnique({
     where: { id: payload.sub },
-    select: { id: true, email: true, role: true, suspended: true, tokenVersion: true },
+    select: { id: true, email: true, role: true, suspended: true, deletedAt: true, tokenVersion: true },
   })
   if (!user) {
     res.status(401).json({ error: 'User not found' })
@@ -84,9 +85,20 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
     res.status(403).json({ error: 'Account suspended' })
     return
   }
+  if (user.deletedAt) {
+    res.status(403).json({ error: 'Account deleted. Please contact support to restore access.' })
+    return
+  }
   req.userId = user.id
   req.userEmail = user.email
   req.userRole = user.role === 'admin' ? 'admin' : 'user'
+
+  try {
+    await setRlsContext({ id: user.id, role: user.role })
+  } catch (err) {
+    console.warn('[auth] RLS context setup failed for user', user.id, err instanceof Error ? err.message : String(err))
+  }
+
   next()
 }
 

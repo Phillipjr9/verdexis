@@ -22,6 +22,9 @@ model User {
   role                 String    @default("user")
   suspended            Boolean   @default(false)
   suspendedReason      String?
+  deletedAt            DateTime?
+  deletedReason        String?
+  deletionRequestedAt  DateTime?
   holdActive           Boolean   @default(false)
   holdType             String?
   holdReason           String?
@@ -651,6 +654,25 @@ model Notification {
   createdAt DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+model DeletedUserArchive {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  email          String
+  name           String
+  username       String?
+  role           String
+  status         String   @default("user_requested_deletion")
+  reason         String?
+  archiveJson    String
+  createdAt      DateTime @default(now())
+  reviewedAt     DateTime?
+  reviewedBy     String?
+  reviewedReason String?
+
+  @@index([status, createdAt])
+  @@index([reviewedAt])
 }
 
 model AdminAudit {

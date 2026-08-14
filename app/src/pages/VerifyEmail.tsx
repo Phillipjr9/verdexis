@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { CheckCircle2, AlertCircle, Loader2, MailCheck } from 'lucide-react'
-import { api, setStoredUser } from '../lib/api'
+import { api, setStoredUser, setToken } from '../lib/api'
 
 type State = 'pending' | 'verifying' | 'success' | 'error'
 
@@ -23,13 +23,17 @@ export default function VerifyEmail() {
         setMessage('Your email is verified — redirecting to your dashboard…')
         if (result.user) {
           try {
+            if (result.token) setToken(result.token)
             setStoredUser(result.user)
+            try {
+              localStorage.removeItem('verdexis_just_verified')
+            } catch { /* ignore */ }
           } catch {
             /* ignore */
           }
           window.dispatchEvent(new Event('verdexis:profile'))
         }
-        setTimeout(() => navigate('/dashboard'), 1500)
+        setTimeout(() => navigate('/dashboard'), 1200)
       } catch (e) {
         if (cancelled) return
         setState('error')

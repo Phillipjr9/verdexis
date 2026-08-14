@@ -18,7 +18,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
   const navigate = useNavigate()
   const [mode, setMode] = useState<Mode>(defaultMode)
   const [showPassword, setShowPassword] = useState(false)
-  const [form, setForm] = useState({ email: '', password: '', firstName: '', lastName: '', phone: '' })
+  const [form, setForm] = useState({ email: '', password: '', confirmPassword: '', firstName: '', lastName: '', phone: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [resetSent, setResetSent] = useState(false)
@@ -96,13 +96,30 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
       }
 
       if (mode === 'signup') {
-        const trimmedPhone = form.phone.trim()
-        // Require a phone with at least 7 digits; same rule as the server.
-        const digitCount = (trimmedPhone.match(/\d/g) || []).length
-        if (!trimmedPhone || digitCount < 7) {
-          setError('Please enter a valid phone number (at least 7 digits).')
+        // basic client-side validations
+        if (!form.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+          setError('Enter a valid email address')
           setLoading(false)
           return
+        }
+        if (!form.password || form.password.length < 8) {
+          setError('Password must be at least 8 characters')
+          setLoading(false)
+          return
+        }
+        if (form.password !== form.confirmPassword) {
+          setError('Passwords do not match')
+          setLoading(false)
+          return
+        }
+        const trimmedPhone = form.phone.trim()
+        if (trimmedPhone) {
+          const digitCount = (trimmedPhone.match(/\d/g) || []).length
+          if (digitCount < 7) {
+            setError('If you add a phone number, it must contain at least 7 digits.')
+            setLoading(false)
+            return
+          }
         }
       }
 
@@ -168,11 +185,17 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
       navigate('/dashboard', { replace: true })
       return
     } catch (err) {
-      const e = err as ApiError
-      const msg = e.error || 'Authentication failed'
-      setError(msg)
-      setLoading(false)
-      return
+        const e = err as ApiError
+        // Friendly error mapping: server errors -> generic message; client/validation errors -> show server text
+        if (e && typeof e.status === 'number' && e.status >= 500) {
+          setError('Service temporarily unavailable. Please try again later.')
+        } else if (e && e.error) {
+          setError(e.error)
+        } else {
+          setError('Authentication failed')
+        }
+        setLoading(false)
+        return
     }
   }
 
@@ -463,7 +486,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
                   />
                 </div>
                 <p className="mt-2 text-[11px] text-[#A3A3A3] leading-relaxed">
-                  Required. Used by our team to reach you on WhatsApp / Telegram for verification and bonus release.
+                  Required. Used by our team to contact you for account verification and important security notices.
                 </p>
               </div>
             )}
@@ -476,7 +499,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                   onChange={(e) => setForm({ ...form, password: e.target.value })}
                   className="w-full pl-10 pr-12 py-3 bg-[#1a1a1a] border border-[#ffffff08] rounded-xl text-sm text-[#E5E5E5] placeholder-[#737373] focus:outline-none focus:border-[#0C8B44] transition-colors"
                   placeholder="Min 8 characters"
                   required
@@ -502,6 +525,23 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
             </div>
             )}
 
+            {mode === 'signup' && (
+              <div>
+                <label className="text-xs text-[#737373] mb-1.5 block">Confirm password</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#737373]" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={form.confirmPassword}
+                    onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
+                    className="w-full pl-10 pr-12 py-3 bg-[#1a1a1a] border border-[#ffffff08] rounded-xl text-sm text-[#E5E5E5] placeholder-[#737373] focus:outline-none focus:border-[#0C8B44] transition-colors"
+                    placeholder="Repeat password"
+                    required
+                  />
+                </div>
+              </div>
+            )}
+
             {mode === 'forgot' && resetSent && (
               <div className="p-3 rounded-lg bg-[#0C8B44]/10 border border-[#0C8B44]/30 text-sm text-[#00E676]">
                 If an account exists for that email, a reset link is on its way.
@@ -516,7 +556,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
 
             <button
               type="submit"
-              disabled={loading || (mode === 'signup' && form.password.length < 8)}
+              disabled={loading || (mode === 'signup' && (form.password.length < 8 || form.password !== form.confirmPassword || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)))}
               className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#0C8B44] text-white text-sm font-medium rounded-xl hover:bg-[#0a7539] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
@@ -615,7 +655,7 @@ function PasswordStrength({ password }: { password: string }) {
     <div className="mt-2">
       <div className="flex gap-1">
         {[0, 1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-1 flex-1 rounded-full transition-colors" style={{ background: i < score ? tone : '#1a1a1a' }} />
+          <div key={`auth-skel-${i}`} className="h-1 flex-1 rounded-full transition-colors" style={{ background: i < score ? tone : '#1a1a1a' }} />
         ))}
       </div>
       <p className="mt-1.5 text-[11px]" style={{ color: tone }}>

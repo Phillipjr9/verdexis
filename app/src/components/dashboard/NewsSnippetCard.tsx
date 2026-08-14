@@ -57,7 +57,7 @@ export default function NewsSnippetCard() {
       ) : (
         <div className="space-y-3">
           {news.map((n, i) => (
-            <a key={i} href={n.url} target="_blank" rel="noopener noreferrer" className="block group">
+            <a key={`news-${i}`} href={n.url} target="_blank" rel="noopener noreferrer" className="block group">
               <p className="text-sm text-[#E5E5E5] leading-snug group-hover:text-[#0C8B44] transition-colors line-clamp-2">{n.headline}</p>
               <div className="flex items-center gap-2 mt-1 text-[11px] text-[#737373]">
                 <span>{n.source}</span><span>·</span><span>{fmtAge(n.datetime)}</span>

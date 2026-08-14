@@ -38,11 +38,11 @@ export default function ConnectedAccountsCard() {
           </Link>
         ) : (
           <div className="space-y-2">
-            {banks.slice(0, 3).map((b) => {
+            {banks.slice(0, 3).map((b, i) => {
               const dot = b.status === 'verified' ? '#4CAF50' : b.status === 'pending' ? '#FF9800' : '#f44336'
               const Icon = b.status === 'verified' ? ShieldCheck : b.status === 'pending' ? Clock : X
               return (
-                <div key={b.id} className="flex items-center gap-3 p-3 rounded-xl bg-[#1a1a1a]/50">
+                <div key={`${b.id}-${i}`} className="flex items-center gap-3 p-3 rounded-xl bg-[#1a1a1a]/50">
                   <div className="w-8 h-8 rounded-lg bg-[#0C8B44]/10 flex items-center justify-center shrink-0">
                     <Building2 className="w-4 h-4 text-[#0C8B44]" />
                   </div>

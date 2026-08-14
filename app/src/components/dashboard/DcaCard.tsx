@@ -46,10 +46,10 @@ export default function DcaCard() {
         <p className="text-xs text-[#737373]">No recurring buys configured.</p>
       ) : (
         <div className="space-y-2">
-          {schedules.map((s) => {
+          {schedules.map((s, i) => {
             const next = msUntil(nextRunMs(s))
             return (
-              <div key={s.id} className="flex items-center gap-3 p-3 rounded-xl bg-[#1a1a1a]/50">
+              <div key={`${s.id}-${i}`} className="flex items-center gap-3 p-3 rounded-xl bg-[#1a1a1a]/50">
                 <div className="w-9 h-9 rounded-lg bg-[#FF9800]/10 flex items-center justify-center text-[10px] font-bold text-[#FF9800] shrink-0">{s.asset}</div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-[#E5E5E5] truncate">${s.amountUsd} every {s.intervalDays}d</p>

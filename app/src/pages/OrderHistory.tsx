@@ -149,8 +149,8 @@ export default function OrderHistory() {
             { label: 'Sells', value: stats.totalSells },
             { label: 'Total Volume', value: `$${stats.totalVolume.toLocaleString(undefined, { maximumFractionDigits: 2 })}` },
             { label: 'Total Fees', value: `$${stats.totalFees.toLocaleString(undefined, { maximumFractionDigits: 2 })}` },
-          ].map((stat) => (
-            <div key={stat.label} className="rounded-xl bg-[#0f1619]/50 border border-[#ffffff08] p-4">
+          ].map((stat, i) => (
+            <div key={`${stat.label}-${i}`} className="rounded-xl bg-[#0f1619]/50 border border-[#ffffff08] p-4">
               <p className="text-[10px] uppercase tracking-wider text-[#737373] mb-1">{stat.label}</p>
               <p className="text-xl font-light text-[#E5E5E5]">{stat.value}</p>
             </div>

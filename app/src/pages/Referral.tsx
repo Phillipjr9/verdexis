@@ -105,8 +105,8 @@ function ReferralInner() {
               { label: 'Total Earned', value: `$${totalEarned}`, icon: TrendingUp, color: '#0C8B44' },
               { label: 'Active Referrals', value: activeCount, icon: Users, color: '#0C8B44' },
               { label: 'Pending', value: pendingCount, icon: Users, color: '#737373' },
-            ].map(s => (
-              <div key={s.label} className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-5 text-center">
+            ].map((s, i) => (
+              <div key={`${s.label}-${i}`} className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-5 text-center">
                 <s.icon className="w-5 h-5 mx-auto mb-2" style={{ color: s.color }} />
                 <p className="text-2xl font-light text-[#E5E5E5]">{s.value}</p>
                 <p className="text-[10px] uppercase tracking-[0.05em] text-[#737373] mt-1">{s.label}</p>

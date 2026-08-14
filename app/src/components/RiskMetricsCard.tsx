@@ -85,10 +85,10 @@ export default function RiskMetricsCard() {
         <Shield className="w-5 h-5 text-[#0C8B44]" />
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {items.map((it) => {
+        {items.map((it, i) => {
           const Icon = it.icon
           return (
-            <div key={it.label} className="rounded-lg bg-[#0a0a0a] border border-[#ffffff08] p-3">
+            <div key={`${it.label}-${i}`} className="rounded-lg bg-[#0a0a0a] border border-[#ffffff08] p-3">
               <div className="flex items-center gap-2 text-[#737373] text-[11px] uppercase tracking-wider">
                 <Icon className="w-3 h-3" />
                 {it.label}

@@ -378,7 +378,7 @@ function PendingSection({ title, icon, count, color, items, link }: { title: str
       </div>
       <div className="space-y-3">
         {items.map((item, i) => (
-          <div key={i} className="flex items-center justify-between py-2 border-t border-[#ffffff05]">
+          <div key={`adm-row-${i}`} className="flex items-center justify-between py-2 border-t border-[#ffffff05]">
             <div className="min-w-0">
               <p className="text-sm text-[#E5E5E5] truncate">{item.user}</p>
               <p className="text-xs text-[#737373]">{item.time}</p>
@@ -419,7 +419,7 @@ function ActivityCard({ title, icon, items }: { title: string; icon: ReactNode; 
       </h3>
       <div className="space-y-3">
         {items.map((item, i) => (
-          <div key={i} className="flex items-center justify-between py-3 border-b border-[#ffffff05] last:border-0">
+          <div key={`adm-row2-${i}`} className="flex items-center justify-between py-3 border-b border-[#ffffff05] last:border-0">
             <div className="min-w-0">
               <p className="text-sm text-[#E5E5E5] truncate">{item.name}</p>
               <p className="text-xs text-[#737373] truncate">{item.email}</p>

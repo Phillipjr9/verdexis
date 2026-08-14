@@ -19,7 +19,7 @@ async function main() {
 
   await transporter.verify()
   const envelopeFrom = cfg.auth.user || cfg.from
-  const to = 'dianasmith6525@gmail.com'
+  const to = process.env.TO || process.argv[2] || 'dianasmith6525@gmail.com'
   const otp = Math.floor(100000 + Math.random() * 900000).toString()
 
   await transporter.sendMail({

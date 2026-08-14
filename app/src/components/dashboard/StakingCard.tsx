@@ -59,12 +59,12 @@ export default function StakingCard() {
         <p className="text-xs text-[#737373]">No staking positions yet.</p>
       ) : (
         <div className="space-y-2">
-          {positions.map((p) => {
+          {positions.map((p, i) => {
             const r = pendingRewardFor(p)
             const logo = cryptoIconFor((p.asset || '').toLowerCase())
             const initial = (p.asset || '?')[0]?.toUpperCase() ?? '?'
             return (
-              <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl bg-[#1a1a1a]/50">
+              <div key={`${p.id}-${i}`} className="flex items-center gap-3 p-3 rounded-xl bg-[#1a1a1a]/50">
                 {logo ? (
                   <img
                     src={logo}

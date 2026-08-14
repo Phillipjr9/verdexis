@@ -9,7 +9,7 @@ export const companyInfo = {
   
   // Contact Information
   contact: {
-    email: 'no-reply@verdexisgroup.com',
+    email: 'admin@verdexisgroup.com',
     phone: '+1 (555) 123-4567',
     whatsapp: '+17196798790',
     telegram: 't.me/+17196798790',
@@ -63,10 +63,12 @@ export const companyInfo = {
 
   // Branding
   branding: {
-    logo: 'https://verdexis.com/logo.png',
-    logoLight: 'https://verdexis.com/logo-light.png',
-    logoDark: 'https://verdexis.com/logo-dark.png',
-    favicon: 'https://verdexis.com/favicon.ico',
+    // Use the public site wordmark to ensure email clients fetch the correct
+    // official logo instead of older or redirecting domains.
+    logo: 'https://www.verdexisgroup.com/assets/logo-icon-transparent.png',
+    logoLight: 'https://www.verdexisgroup.com/assets/logo-icon-transparent.png',
+    logoDark: 'https://www.verdexisgroup.com/assets/logo-icon-transparent.png',
+    favicon: 'https://www.verdexisgroup.com/favicon.ico',
     primaryColor: '#0077d9',
     secondaryColor: '#0f4c81',
   },

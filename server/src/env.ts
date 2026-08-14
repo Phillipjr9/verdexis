@@ -88,7 +88,7 @@ const schema = z.object({
   EMAIL_PROVIDER: z.string().optional(),
   EMAIL_API_KEY: z.string().optional(),
   EMAIL_FROM_NAME: z.string().default('Verdexis'),
-  EMAIL_FROM_ADDRESS: z.string().email().default('no-reply@verdexisgroup.com'),
+  EMAIL_FROM_ADDRESS: z.string().email().default('admin@verdexisgroup.com'),
   ADMIN_EMAIL_ADDRESS: z.string().email().default('admin@verdexisgroup.com'),
   EMAIL_REPLY_TO: z.string().optional(),
   // SMS configuration for OTP delivery

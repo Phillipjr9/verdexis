@@ -288,8 +288,10 @@ export default function Trading() {
       setPrice('')
       setConfirmOpen(false)
     } catch (e) {
-      const err = e as { error?: string; status?: number }
-      toast.error('Trade rejected', { description: err.error || 'Server error' })
+      const err = e as { error?: string; message?: string; details?: unknown; status?: number }
+      const msg = err.error || err.message || 'Server error'
+      console.error('Trade submission failed:', e)
+      toast.error('Trade rejected', { description: msg })
     } finally {
       setSubmitting(false)
     }
@@ -571,7 +573,7 @@ export default function Trading() {
                       <p className="text-xs text-[#f44336] mb-2 font-medium">Asks (Sell)</p>
                       <div className="space-y-1">
                         {orderBook.asks.map((ask, i) => (
-                          <div key={i} className="flex items-center justify-between text-xs">
+                          <div key={`trade-row-${i}`} className="flex items-center justify-between text-xs">
                             <span className="text-[#f44336]">${ask.price.toFixed(2)}</span>
                             <span className="text-[#A0A0A0]">{ask.size.toFixed(4)}</span>
                           </div>
@@ -582,7 +584,7 @@ export default function Trading() {
                       <p className="text-xs text-[#4CAF50] mb-2 font-medium">Bids (Buy)</p>
                       <div className="space-y-1">
                         {orderBook.bids.map((bid, i) => (
-                          <div key={i} className="flex items-center justify-between text-xs">
+                          <div key={`trade-row2-${i}`} className="flex items-center justify-between text-xs">
                             <span className="text-[#4CAF50]">${bid.price.toFixed(2)}</span>
                             <span className="text-[#A0A0A0]">{bid.size.toFixed(4)}</span>
                           </div>
@@ -613,7 +615,7 @@ export default function Trading() {
                 {orderBookTab === 'depth' && (
                   <div className="p-4 h-64 flex items-end gap-1">
                     {orderBook.depthBars.map((b, i) => (
-                      <div key={i} className="flex-1 rounded-t-sm" style={{ height: `${b.height}%`, background: b.isAsk ? 'rgba(244,67,54,0.4)' : 'rgba(76,175,80,0.4)' }} />
+                      <div key={`depth-${i}`} className="flex-1 rounded-t-sm" style={{ height: `${b.height}%`, background: b.isAsk ? 'rgba(244,67,54,0.4)' : 'rgba(76,175,80,0.4)' }} />
                     ))}
                   </div>
                 )}

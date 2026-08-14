@@ -156,10 +156,15 @@ export const api = {
   health: () => request<{ ok: boolean }>('/api/health'),
 
   // Auth
-  signup: (email: string, password: string, name: string, phone: string) =>
+  signup: (email: string, password: string, name: string, phone?: string) =>
     request<{ token: string; user: ApiUser } | { otpRequired: true; pendingToken: string; verificationType?: 'login' | 'signup'; message?: string; devCode?: string }>('/api/auth/signup', {
       method: 'POST',
-      body: JSON.stringify({ email, password, name, phone }),
+      body: JSON.stringify({
+        email,
+        password,
+        name,
+        ...(phone && phone.trim() ? { phone: phone.trim() } : {}),
+      }),
     }),
   signupVerifyOtp: (pendingToken: string, code: string) =>
     request<{ token: string; user: ApiUser; verified: boolean; emailVerified: boolean; message?: string }>('/api/auth/signup/verify-otp', {
@@ -212,7 +217,7 @@ export const api = {
   sendVerification: () =>
     request<{ ok: boolean; alreadyVerified?: boolean; devLink?: string }>('/api/auth/send-verification', { method: 'POST' }),
   verifyEmail: (token: string) =>
-    request<{ user: ApiUser }>('/api/auth/verify-email', {
+    request<{ verified: boolean; token: string; user: ApiUser }>('/api/auth/verify-email', {
       method: 'POST',
       body: JSON.stringify({ token }),
     }),

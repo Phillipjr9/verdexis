@@ -104,7 +104,7 @@ export default function Disclosures() {
               <h2 className="text-2xl font-light text-[#E5E5E5] mb-4">{s.title}</h2>
               <div className="space-y-3">
                 {s.body.map((p, i) => (
-                  <p key={i} className="text-sm text-[#A0A0A0] leading-relaxed">{p}</p>
+                  <p key={`disclosure-p-${i}`} className="text-sm text-[#A0A0A0] leading-relaxed">{p}</p>
                 ))}
               </div>
             </section>

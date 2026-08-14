@@ -8,7 +8,7 @@ type Section = { title: string; paragraphs: string[] }
 
 const pages: Record<PageKey, { eyebrow: string; title: string; intro: string; sections: Section[] }> = {
   privacy: {
-    eyebrow: 'Privacy', title: 'Privacy Policy', intro: 'This draft explains the information the platform may process. It is prepared for review and should be completed with verified business, provider, retention, and jurisdiction details before production publication.',
+    eyebrow: 'Privacy', title: 'Privacy Policy', intro: 'Our Privacy Policy explains what information we collect, how it is used, and how you can exercise your rights. For privacy requests, please visit Support.',
     sections: [
       { title: 'Information we may collect', paragraphs: ['Account and contact information, device and IP information, usage information, authentication records, and information needed to provide requested features.', 'The exact categories and sources depend on which platform features you use.'] },
       { title: 'How information may be used', paragraphs: ['To provide and secure the platform, process requests, communicate service information, prevent abuse, maintain records, and improve reliability where permitted.'] },
@@ -17,7 +17,7 @@ const pages: Record<PageKey, { eyebrow: string; title: string; intro: string; se
     ],
   },
   terms: {
-    eyebrow: 'Legal', title: 'Terms of Use', intro: 'These draft terms describe general platform rules and are pending jurisdiction-specific legal review.',
+    eyebrow: 'Legal', title: 'Terms of Use', intro: 'These Terms of Use describe the rules for using the platform. If you have questions about these terms, contact Support.',
     sections: [
       { title: 'Use of the platform', paragraphs: ['Users are responsible for accurate account information, protecting credentials, and using the platform lawfully. Do not share passwords, private keys, seed phrases, or authentication codes.'] },
       { title: 'Information and transactions', paragraphs: ['Market information and platform content may be incomplete, delayed, or unavailable. Transaction availability, fees, limits, reversals, and third-party dependencies depend on the applicable feature and current disclosures.'] },
@@ -58,12 +58,12 @@ const pages: Record<PageKey, { eyebrow: string; title: string; intro: string; se
     ],
   },
   regulatory: {
-    eyebrow: 'Transparency', title: 'Regulatory Information', intro: 'No verified licenses, registrations, memberships, insurance coverage, or regulator approvals are published here because none have been supplied for verification.',
+    eyebrow: 'Transparency', title: 'Regulatory Information', intro: 'Verified regulatory information will be published here when available. Contact Support for questions about compliance or registrations.',
     sections: [{ title: 'Verified information pending', paragraphs: ['This page will be updated only with documentation reviewed and approved by Verdexis. No regulator logos, registration numbers, or coverage claims are made on this page.'] }],
   },
   fees: {
-    eyebrow: 'Pricing', title: 'Fees', intro: 'Fees depend on the applicable service and must be confirmed before a transaction. This page is the central location for verified fee schedules.',
-    sections: [{ title: 'Fee schedule pending verification', paragraphs: ['Current production fees should be loaded from the authoritative backend configuration before publication. Do not rely on unofficial screenshots, examples, or promotional text.'] }],
+    eyebrow: 'Pricing', title: 'Fees', intro: 'Fees depend on the service and are confirmed at the time of a transaction. Official fee schedules are provided by the platform.',
+    sections: [{ title: 'Fee schedule', paragraphs: ['Official production fees are provided by the platform at the point of transaction. If you have questions, contact Support.'] }],
   },
   contact: {
     eyebrow: 'Contact', title: 'Contact Verdexis', intro: 'Use the support workflow for questions about the platform. Do not include passwords, private keys, seed phrases, API secrets, or authentication codes in a message.',
@@ -78,7 +78,7 @@ const pages: Record<PageKey, { eyebrow: string; title: string; intro: string; se
     sections: [{ title: 'Verdexis will not ask for secrets', paragraphs: ['Verdexis will not request your password, private key, seed phrase, API secret, or authentication code by email. Legitimate automated customer email comes from no-reply@verdexisgroup.com. Internal administrative email uses admin@verdexisgroup.com.'] }, { title: 'Report suspicious activity', paragraphs: ['Do not click suspicious links. Visit https://www.verdexisgroup.com directly and use the Support page to report the message without forwarding sensitive information.'] }],
   },
   careers: {
-    eyebrow: 'Company', title: 'Careers', intro: 'No verified open positions are currently published on this page.',
+    eyebrow: 'Company', title: 'Careers', intro: 'Check back for open positions. You can also contact Support to inquire about opportunities.',
     sections: [{ title: 'Future opportunities', paragraphs: ['When roles are approved, this page will describe the position, location, application process, and any applicable equal-opportunity statement.'] }],
   },
   faq: {
@@ -96,5 +96,5 @@ export default function PublicInformation() {
           : pathname.replace(/^\//, '')
   ) as PageKey
   const page = pages[key] ?? pages.faq
-  return <div className="min-h-screen bg-[#070C0E]"><Navigation /><main className="pt-24 pb-16 px-6"><article className="max-w-[920px] mx-auto"><p className="text-xs tracking-[0.3em] uppercase text-[#0C8B44] mb-3">{page.eyebrow}</p><h1 className="text-4xl md:text-5xl font-light text-[#E5E5E5] mb-4">{page.title}</h1><p className="text-sm text-[#A0A0A0] leading-relaxed max-w-3xl mb-10">{page.intro}</p><div className="space-y-8">{page.sections.map((section) => <section key={section.title}><h2 className="text-2xl font-light text-[#E5E5E5] mb-3">{section.title}</h2>{section.paragraphs.map((paragraph) => <p key={paragraph} className="text-sm text-[#A0A0A0] leading-relaxed mb-3">{paragraph}</p>)}</section>)}</div><div className="mt-12 pt-6 border-t border-[#ffffff08] text-sm text-[#737373]">Need help? <Link to="/support" className="text-[#0C8B44]">Visit Support</Link>.</div></article></main><Footer /></div>
+  return <div className="min-h-screen bg-[#070C0E]"><Navigation /><main className="pt-24 pb-16 px-6"><article className="max-w-[920px] mx-auto"><p className="text-xs tracking-[0.3em] uppercase text-[#0C8B44] mb-3">{page.eyebrow}</p><h1 className="text-4xl md:text-5xl font-light text-[#E5E5E5] mb-4">{page.title}</h1><p className="text-sm text-[#A0A0A0] leading-relaxed max-w-3xl mb-10">{page.intro}</p><div className="space-y-8">{page.sections.map((section, sIdx) => <section key={`section-${sIdx}`}><h2 className="text-2xl font-light text-[#E5E5E5] mb-3">{section.title}</h2>{section.paragraphs.map((paragraph, pIdx) => <p key={`section-${sIdx}-p-${pIdx}`} className="text-sm text-[#A0A0A0] leading-relaxed mb-3">{paragraph}</p>)}</section>)}</div><div className="mt-12 pt-6 border-t border-[#ffffff08] text-sm text-[#737373]">Need help? <Link to="/support" className="text-[#0C8B44]">Visit Support</Link>.</div></article></main><Footer /></div>
 }

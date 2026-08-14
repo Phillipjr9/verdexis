@@ -13,7 +13,32 @@ export default function RequireAuth({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     const token = getToken()
-    setIsAuthenticated(Boolean(token))
+    if (token) {
+      setIsAuthenticated(true)
+      setIsChecking(false)
+      return
+    }
+
+    // Allow immediate access if the user just verified their email and the
+    // client has their profile stored. This lets users continue to protected
+    // pages after clicking a verification link without forcing a full login.
+    try {
+      const raw = localStorage.getItem('verdexis_auth')
+      const justVerified = localStorage.getItem('verdexis_just_verified')
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (parsed.emailVerified || justVerified === '1') {
+          setIsAuthenticated(true)
+          // clear the transient flag so it doesn't persist beyond the session
+          if (justVerified === '1') localStorage.removeItem('verdexis_just_verified')
+          setIsChecking(false)
+          return
+        }
+      }
+    } catch {
+      // fall through to default
+    }
+    setIsAuthenticated(false)
     setIsChecking(false)
   }, [])
 

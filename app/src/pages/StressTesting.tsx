@@ -254,7 +254,7 @@ export default function StressTesting() {
                     const isNegative = bucket.max < currentValue
                     return (
                       <div
-                        key={i}
+                        key={`stress-${i}`}
                         className="flex-1 rounded-t transition-all hover:opacity-70"
                         style={{
                           height: `${height}%`,
@@ -284,11 +284,11 @@ export default function StressTesting() {
                     { label: '50th Percentile (Median)', value: results.percentiles.p50, desc: 'Most likely outcome' },
                     { label: '75th Percentile', value: results.percentiles.p75, desc: '25% chance portfolio will be above this' },
                     { label: '95th Percentile', value: results.percentiles.p95, desc: '5% chance portfolio will be above this' },
-                  ].map((row) => {
+                  ].map((row, i) => {
                     const change = ((row.value - currentValue) / currentValue) * 100
                     const isPositive = change >= 0
                     return (
-                      <div key={row.label} className="flex items-center justify-between py-3 border-b border-[#ffffff05] last:border-0">
+                      <div key={`${row.label}-${i}`} className="flex items-center justify-between py-3 border-b border-[#ffffff05] last:border-0">
                         <div>
                           <p className="text-sm text-[#E5E5E5]">{row.label}</p>
                           <p className="text-xs text-[#737373]">{row.desc}</p>

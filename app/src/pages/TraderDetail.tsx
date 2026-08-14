@@ -217,8 +217,8 @@ export default function TraderDetail() {
 
           {/* Stats Grid */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            {stats.map((stat) => (
-              <div key={stat.label} className="glass-card p-4">
+            {stats.map((stat, i) => (
+              <div key={`${stat.label}-${i}`} className="glass-card p-4">
                 <div className="flex items-center gap-2 text-[#737373] text-xs uppercase tracking-wider mb-2">
                   <stat.icon className="w-3.5 h-3.5" />
                   {stat.label}

@@ -26,17 +26,7 @@ export default function Footer() {
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-8 mb-10 pb-10 border-b border-[#ffffff05]">
           <div className="max-w-sm">
             <div className="flex items-center gap-2 mb-3">
-              <img
-                src="/assets/logo-icon-transparent.png"
-                alt="Verdexis"
-                className="w-7 h-7 object-contain"
-                onError={(e) => {
-                  const t = e.currentTarget
-                  t.style.display = 'none'
-                  const fb = t.nextElementSibling as HTMLElement | null
-                  if (fb) fb.style.display = 'flex'
-                }}
-              />
+              <img src="/assets/logo-icon-transparent.png" alt="Verdexis" className="w-7 h-7 object-contain" onError={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.display = 'none' }} />
               <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#0C8B44] to-[#00E676] items-center justify-center hidden">
                 <span className="text-white text-xs font-bold">V</span>
               </div>
@@ -62,7 +52,7 @@ export default function Footer() {
                 {group.title}<ChevronDown className="w-3.5 h-3.5 md:hidden group-open:rotate-180 transition-transform" />
               </summary>
               <ul className="space-y-2 text-xs text-[#A0A0A0]">
-                {group.links.map(([label, path]) => <li key={path}><Link to={path} className="hover:text-[#0C8B44] transition-colors">{label}</Link></li>)}
+                {group.links.map(([label, path]) => <li key={`${group.title}-${path}`}><Link to={path} className="hover:text-[#0C8B44] transition-colors">{label}</Link></li>)}
               </ul>
             </details>
           ))}

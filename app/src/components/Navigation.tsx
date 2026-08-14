@@ -165,7 +165,8 @@ export default function Navigation() {
         <div className="w-full max-w-[1280px] mx-auto px-4 sm:px-6 flex items-center justify-between gap-3">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 sm:gap-3 shrink-0">
-            <img src="/assets/logo-icon-transparent.png" alt="Verdexis" className="logo-knockout" />
+            {/* Logo with graceful fallback for local asset issues */}
+            <img src="/assets/logo-icon-transparent.png" alt="Verdexis" className="logo-knockout" onError={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.display = 'none' }} />
             <span className="text-lg sm:text-xl font-light tracking-[0.15em] uppercase text-[#E5E5E5]">VERDEXIS</span>
           </Link>
 

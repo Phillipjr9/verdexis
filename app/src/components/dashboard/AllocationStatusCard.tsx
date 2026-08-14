@@ -120,8 +120,8 @@ export default function AllocationStatusCard({ holdings, totalValue }: Props) {
       {/* Allocation Comparison */}
       <div className="space-y-2">
         <p className="text-[10px] uppercase tracking-wider text-[#737373] mb-3">Current vs Target</p>
-        {allocation.drifts.slice(0, 5).map(item => (
-          <div key={item.symbol}>
+        {allocation.drifts.slice(0, 5).map((item, i) => (
+          <div key={`${item.symbol}-${i}`}>
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs text-[#E5E5E5]">{item.symbol}</span>
               <div className="flex items-center gap-2 text-[10px]">

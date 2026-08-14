@@ -31,7 +31,7 @@ export function AdminDashboardCharts() {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-32 bg-[#0f1619]/50 border border-[#ffffff08] rounded-xl animate-pulse" />
+          <div key={`admin-chart-skel-${i}`} className="h-32 bg-[#0f1619]/50 border border-[#ffffff08] rounded-xl animate-pulse" />
         ))}
       </div>
     )

@@ -29,8 +29,8 @@ export default defineConfig({
   plugins: [react(), versionJsonPlugin()],
   server: {
     host: true, // bind 0.0.0.0 so the dev server is reachable from other LAN devices (phone, tablet, other laptop)
-    port: 3000,
-    strictPort: true,
+    port: Number(process.env.PORT || process.env.VITE_PORT) || 3000,
+    strictPort: false,
     proxy: {
       '/api': {
         target: process.env.VITE_API_URL || 'http://localhost:4000',

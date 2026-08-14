@@ -112,6 +112,35 @@ const PublicInformation = withLazyErrorBoundary(() => import('./pages/PublicInfo
 
 export default function App() {
   useKeyboardShortcuts()
+  // Development helper: capture duplicate-key React warnings and print stack traces
+  if (typeof window !== 'undefined' && import.meta.env.DEV) {
+    const _orig = console.error.bind(console)
+    console.error = (...args: any[]) => {
+      try {
+        if (args && args[0] && typeof args[0] === 'string' && args[0].includes('Encountered two children with the same key')) {
+          _orig('React duplicate key warning captured:')
+          _orig(...args)
+          try {
+            _orig('React duplicate key warning - detailed args:')
+            args.forEach((a: any, idx: number) => {
+              try {
+                _orig(`ARG[${idx}] (${typeof a}):`, a)
+              } catch (e) {
+                _orig(`ARG[${idx}] (${typeof a}): [unserializable]`)
+              }
+            })
+          } catch (e) {
+            _orig('React duplicate key warning (args inspect failed)')
+          }
+          _orig(new Error('Duplicate key stack:').stack)
+        } else {
+          _orig(...args)
+        }
+      } catch (e) {
+        _orig(...args)
+      }
+    }
+  }
   
   return (
     <ErrorBoundary>
@@ -142,6 +171,8 @@ function RoutedPages() {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Login />} />
+          <Route path="/auth/login" element={<Login />} />
+          <Route path="/auth/register" element={<Login />} />
           <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
           <Route path="/trading" element={<Trading />} />
           <Route path="/markets" element={<Markets />} />

@@ -165,8 +165,8 @@ function PaperTradingInner() {
               { label: 'Cash Available', value: `$${state.balance.toLocaleString(undefined, { maximumFractionDigits: 2 })}` },
               { label: 'Portfolio Value', value: `$${portfolioValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}` },
               { label: 'Total P&L', value: `${pnl >= 0 ? '+' : ''}$${pnl.toLocaleString(undefined, { maximumFractionDigits: 2 })} (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%)`, color: pnl >= 0 ? '#0C8B44' : '#ef4444' },
-            ].map(s => (
-              <div key={s.label} className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-4">
+            ].map((s, i) => (
+              <div key={`${s.label}-${i}`} className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-4">
                 <p className="text-[10px] uppercase tracking-[0.05em] text-[#737373] mb-1">{s.label}</p>
                 <p className="text-lg font-light" style={{ color: s.color ?? '#E5E5E5' }}>{s.value}</p>
               </div>

@@ -1,4 +1,4 @@
-import { useRef, useMemo } from 'react'
+import { useRef, useMemo, useEffect } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 
@@ -6,14 +6,22 @@ const vertexShader = `
   varying vec3 vNormal;
   varying vec3 vPosition;
   uniform float time;
+  uniform vec2 mouse;
 
   void main() {
     vNormal = normal;
+    // base animated displacement
     vPosition = position + vec3(
       sin(time * 0.5 + position.y) * 0.1,
       cos(time * 0.3 + position.x) * 0.1,
       sin(time * 0.7) * 0.1
     );
+    // pointer-reactive parallax: mouse is 0..1 across screen
+    vec2 m = mouse * 2.0 - 1.0; // -1..1
+    float md = length(vPosition.xy - vec2(m.x, m.y));
+    // falloff with distance so close triangles react more
+    vPosition += vec3(m.x, m.y, 0.0) * (0.18 / (1.0 + md * md));
+
     vec4 mvPosition = modelViewMatrix * vec4(vPosition, 1.0);
     gl_Position = projectionMatrix * mvPosition;
   }
@@ -101,6 +109,20 @@ function SierpinskiTetrahedron({ level = 3 }: { level?: number }) {
     camera.lookAt(0, 0, 0)
   })
 
+  // Pointer listener to update `mouse` uniform (works even when canvas
+  // has pointerEvents disabled because we listen on window).
+  useEffect(() => {
+    const onPointerMove = (e: PointerEvent) => {
+      if (!materialRef.current) return
+      const nx = e.clientX / window.innerWidth
+      const ny = 1 - e.clientY / window.innerHeight
+      const u = materialRef.current.uniforms.mouse
+      if (u && u.value && typeof u.value.set === 'function') u.value.set(nx, ny)
+    }
+    window.addEventListener('pointermove', onPointerMove)
+    return () => window.removeEventListener('pointermove', onPointerMove)
+  }, [])
+
   return (
     <mesh ref={meshRef} geometry={geometry}>
       <shaderMaterial
@@ -111,6 +133,7 @@ function SierpinskiTetrahedron({ level = 3 }: { level?: number }) {
         uniforms={{
           time: { value: 0 },
           colorBase: { value: new THREE.Vector3(0.04, 0.08, 0.1) },
+          mouse: { value: new THREE.Vector2(0, 0) },
         }}
       />
     </mesh>

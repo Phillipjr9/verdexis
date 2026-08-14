@@ -604,6 +604,74 @@ export default function Dashboard() {
     { label: 'Activity', path: '/activity', icon: History, color: '#5C6BC0' },
   ]
 
+  // DEV diagnostic: detect duplicate React keys in common mapped lists
+  if (typeof window !== 'undefined' && import.meta.env.DEV) {
+    const detect = (name: string, keys: Array<string | number | undefined>) => {
+      const freq: Record<string, number> = {}
+      for (const k of keys) {
+        const s = String(k)
+        freq[s] = (freq[s] || 0) + 1
+      }
+      const dups = Object.entries(freq).filter(([, v]) => v > 1)
+      if (dups.length > 0) {
+        console.error(`duplicate-keys-detected: ${name}`, dups.slice(0,5))
+      }
+    }
+
+    try {
+      detect('mobileQuickActions', mobileQuickActions.map((a) => a.label))
+      detect('mobileNavItems', mobileNavItems.map((i) => i.path))
+      detect('quickActions', (isAdminRole ? [
+        'Users','Transfer','Deposits','Broadcast','Audit','Settings'
+      ] : [
+        'Deposit','Withdraw','Trade','Transfer','Convert','Activity'
+      ]))
+      detect('holdings', holdings.map((h, i) => `${h.id}-${i}`))
+      detect('holdings-legend', holdings.map((h, i) => `${h.id}-${i}`))
+      detect('trades', trades.map((t) => t.id))
+      detect('wallet', wallet.map((w) => w.currency))
+      detect('cryptoData', cryptoData.slice(0,6).map((c) => c.id))
+      detect('insights', insights.slice(0,2).map((ins, i) => `dash-card-${i}`))
+    } catch (e) {
+      // best-effort only
+    }
+    // Expose a dev helper to programmatically get duplicate-key findings
+    try {
+      ;(window as any).__runDupDetect = () => {
+        const results: Record<string, Array<[string, number]>> = {}
+        const check = (name: string, keys: Array<string | number | undefined>) => {
+          const freq: Record<string, number> = {}
+          for (const k of keys) {
+            const s = String(k)
+            freq[s] = (freq[s] || 0) + 1
+          }
+          const dups = Object.entries(freq).filter(([, v]) => v > 1) as Array<[string, number]>
+          if (dups.length > 0) results[name] = dups
+        }
+        try {
+          check('mobileQuickActions', mobileQuickActions.map((a) => a.label))
+          check('mobileNavItems', mobileNavItems.map((i) => i.path))
+          check('quickActions', (isAdminRole ? [
+            'Users','Transfer','Deposits','Broadcast','Audit','Settings'
+          ] : [
+            'Deposit','Withdraw','Trade','Transfer','Convert','Activity'
+          ]))
+          check('holdings', holdings.map((h, i) => `${h.id}-${i}`))
+          check('holdings-legend', holdings.map((h, i) => `${h.id}-${i}`))
+          check('trades', trades.map((t) => t.id))
+          check('wallet', wallet.map((w) => w.currency))
+          check('cryptoData', cryptoData.slice(0,6).map((c) => c.id))
+          check('insights', insights.slice(0,2).map((ins, i) => `dash-card-${i}`))
+        } catch (e) {
+          // ignore
+        }
+        return results
+      }
+    } catch (e) {
+      // noop
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#070C0E] overflow-x-hidden">
       <Toaster position="top-right" theme="dark" />
@@ -779,8 +847,8 @@ export default function Dashboard() {
                         value: showNetWorth ? fmtMoney(walletValueUsd) : maskMoney(fmtMoney(walletValueUsd)),
                         detail: 'Available liquidity',
                       },
-                    ].map((item) => (
-                      <div key={item.label} className="rounded-2xl border border-[#ffffff08] bg-[#0f1619]/60 p-3">
+                    ].map((item, i) => (
+                      <div key={`${item.label}-${i}`} className="rounded-2xl border border-[#ffffff08] bg-[#0f1619]/60 p-3">
                         <p className="text-[11px] uppercase tracking-[0.16em] text-[#737373]">{item.label}</p>
                         <p className="mt-1 text-sm font-medium text-[#E5E5E5] tabular-nums truncate">{item.value}</p>
                         <p className="text-[11px] text-[#8EA39B]">{item.detail}</p>
@@ -795,7 +863,7 @@ export default function Dashboard() {
                         <Link to="/activity" className="text-xs text-[#0C8B44] hover:text-[#00E676] transition-colors">View all</Link>
                       </div>
                       <div className="space-y-1">
-                        {transactions.slice(0, 5).map((tx) => {
+                        {transactions.slice(0, 5).map((tx, i) => {
                           const isFiat = tx.currency === 'USD' || tx.currency === 'USDC' || tx.currency === 'USDT'
                           const fmtAmt = Math.abs(tx.amount).toLocaleString(undefined, {
                             minimumFractionDigits: isFiat ? 2 : 0,
@@ -804,8 +872,8 @@ export default function Dashboard() {
                           const sign = tx.amount >= 0 ? '+' : '-'
                           const when = relativeTimeShort(new Date(tx.timestamp))
                           const isPending = tx.status === 'pending'
-                          return (
-                            <Link key={tx.id} to={`/activity?tx=${encodeURIComponent(tx.id)}`} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between py-2 -mx-2 px-2 rounded-lg hover:bg-[#ffffff05] transition-colors">
+                            return (
+                            <Link key={`${tx.id}-${i}`} to={`/activity?tx=${encodeURIComponent(tx.id)}`} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between py-2 -mx-2 px-2 rounded-lg hover:bg-[#ffffff05] transition-colors">
                               <div className="flex items-center gap-3 min-w-0">
                                 <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] leading-none shrink-0 ${tx.type === 'deposit' || tx.type === 'dividend' || tx.type === 'interest' ? 'bg-[#4CAF50]/15 text-[#4CAF50]' : tx.type === 'withdraw' ? 'bg-[#f44336]/15 text-[#f44336]' : 'bg-[#FF9800]/15 text-[#FF9800]'}`}>
                                   {tx.type === 'deposit' || tx.type === 'dividend' || tx.type === 'interest' ? '↓' : tx.type === 'withdraw' ? '↑' : '↔'}
@@ -870,8 +938,8 @@ export default function Dashboard() {
                     { label: 'Cash', value: showNetWorth ? fmtMoney(walletValueUsd) : maskMoney(fmtMoney(walletValueUsd)) },
                     { label: 'Top holding', value: holdings[0] ? `${holdings[0].symbol}` : 'N/A' },
                     { label: 'Assets', value: `${holdings.filter((h) => h.id !== 'usd').length}` },
-                  ].map((item) => (
-                    <div key={item.label} className="flex items-center justify-between rounded-xl bg-[#0f1619]/60 px-3 py-2">
+                  ].map((item, i) => (
+                    <div key={`${item.label}-${i}`} className="flex items-center justify-between rounded-xl bg-[#0f1619]/60 px-3 py-2">
                       <span className="text-sm text-[#A0A0A0]">{item.label}</span>
                       <span className="text-sm font-medium text-[#E5E5E5] tabular-nums">{item.value}</span>
                     </div>
@@ -908,10 +976,10 @@ export default function Dashboard() {
               </div>
 
               <div className="mt-4 grid gap-3 md:grid-cols-3">
-                {onboardingSteps.map((step) => {
+                {onboardingSteps.map((step, i) => {
                   const Icon = step.done ? CheckCircle2 : CircleDashed
                   return (
-                    <Link key={step.label} to={step.to} className="flex items-start gap-3 rounded-xl border border-[#ffffff05] bg-[#1a1a1a]/50 p-3 transition-colors hover:border-[#0C8B44]/30 hover:bg-[#0C8B44]/5">
+                    <Link key={`${step.label}-${i}`} to={step.to} className="flex items-start gap-3 rounded-xl border border-[#ffffff05] bg-[#1a1a1a]/50 p-3 transition-colors hover:border-[#0C8B44]/30 hover:bg-[#0C8B44]/5">
                       <div className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${step.done ? 'bg-[#0C8B44]/15 text-[#0C8B44]' : 'bg-[#ffffff08] text-[#A0A0A0]'}`}>
                         <Icon className="h-4 w-4" />
                       </div>
@@ -949,8 +1017,8 @@ export default function Dashboard() {
             return (
               <div className="-mx-1 sm:mx-0 px-1 sm:px-0 overflow-x-auto sm:overflow-visible no-scrollbar mb-8 dash-mb">
                 <div className="flex sm:grid sm:grid-cols-3 gap-3 sm:gap-4 dash-gap snap-x snap-mandatory sm:snap-none dash-stagger">
-                  {stats.map((stat) => (
-                    <div key={stat.label} className="kpi-tile p-5 dash-pad-card rounded-xl bg-[#0f1619]/50 border border-[#ffffff05] min-w-[16rem] sm:min-w-0 snap-start">
+                  {stats.map((stat, i) => (
+                    <div key={`${stat.label}-${i}`} className="kpi-tile p-5 dash-pad-card rounded-xl bg-[#0f1619]/50 border border-[#ffffff05] min-w-[16rem] sm:min-w-0 snap-start">
                       <div className="flex items-center gap-2 mb-3">
                         <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${stat.accent}1f`, border: `1px solid ${stat.accent}33` }}>
                           <stat.icon className="w-4 h-4" style={{ color: stat.accent }} />
@@ -1115,8 +1183,8 @@ export default function Dashboard() {
                   { label: 'Transfer', icon: ArrowRight, path: '/wallet?action=transfer', color: '#00838F' },
                   { label: 'Convert', icon: Repeat, path: '/wallet?action=convert', color: '#26A69A' },
                   { label: 'Activity', icon: History, path: '/activity', color: '#5C6BC0' },
-                ]).map((action) => (
-              <Link key={action.label} to={action.path}
+                ]).map((action, i) => (
+              <Link key={`${action.label}-${i}`} to={action.path}
                 className="flex flex-col items-center justify-center gap-2 p-4 rounded-xl bg-[#1a1a1a]/50 border border-[#ffffff05] hover:border-[#0C8B44]/40 hover:bg-[#0C8B44]/5 transition-all group">
                 <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: `${action.color}15` }}>
                   <action.icon className="w-5 h-5" style={{ color: action.color }} />
@@ -1147,8 +1215,8 @@ export default function Dashboard() {
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 xl:gap-8">
                   {/* Holdings List */}
                   <div className="space-y-2 sm:space-y-3">
-                    {holdings.map((h) => (
-                      <Link to={`/asset/${h.id}`} key={h.id} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between py-2 px-2 -mx-2 rounded-lg hover:bg-[#ffffff05] transition-colors">
+                    {holdings.map((h, i) => (
+                      <Link to={`/asset/${h.id}`} key={`${h.id}-${i}`} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between py-2 px-2 -mx-2 rounded-lg hover:bg-[#ffffff05] transition-colors">
                         <div className="flex items-center gap-3">
                           {getCryptoLogo(h.symbol || h.id) ? (
                             <img
@@ -1185,7 +1253,7 @@ export default function Dashboard() {
                   {/* Donut Chart + Allocation */}
                   <div className="flex flex-col items-center">
                     <svg viewBox="0 0 120 120" className="w-36 h-36 mb-4">
-                      {(() => {
+                        {(() => {
                         let offset = 0
                         const colors = ['#0C8B44', '#2196F3', '#FF9800', '#9C27B0', '#737373', '#00BCD4']
                         return holdings.map((h, i) => {
@@ -1193,7 +1261,7 @@ export default function Dashboard() {
                           const gap = 360 - dash
                           const el = (
                             <circle
-                              key={h.id}
+                              key={`${h.id}-${i}`}
                               cx="60"
                               cy="60"
                               r="50"
@@ -1218,7 +1286,7 @@ export default function Dashboard() {
                       {holdings.map((h, i) => {
                         const colors = ['#0C8B44', '#2196F3', '#FF9800', '#9C27B0', '#737373', '#00BCD4']
                         return (
-                          <div key={h.id} className="flex items-center justify-between">
+                          <div key={`${h.id}-${i}`} className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               <div className="w-2 h-2 rounded-full" style={{ background: colors[i % colors.length] }} />
                               <span className="text-xs text-[#A0A0A0]">{h.symbol}</span>
@@ -1244,8 +1312,8 @@ export default function Dashboard() {
                 <div className="mt-6 pt-6 border-t border-[#ffffff08]">
                   <h4 className="text-sm font-medium text-[#E5E5E5] mb-3">Recent Trades</h4>
                   <div className="space-y-2">
-                    {trades.map((t) => (
-                      <div key={t.id} className="flex items-center justify-between py-2">
+                    {trades.map((t, i) => (
+                      <div key={`${t.id}-${i}`} className="flex items-center justify-between py-2">
                         <div className="flex items-center gap-3">
                           <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${t.side === 'buy' ? 'bg-[#4CAF50]/20 text-[#4CAF50]' : 'bg-[#f44336]/20 text-[#f44336]'}`}>
                             {t.side === 'buy' ? '+' : '-'}
@@ -1274,7 +1342,7 @@ export default function Dashboard() {
                   <Link to="/wallet" className="text-xs text-[#0C8B44] hover:text-[#00E676] transition-colors">Manage</Link>
                 </div>
                 <div className="space-y-3">
-                  {wallet.map((w) => {
+                  {wallet.map((w, i) => {
                     const cur = w.currency.toUpperCase()
                     const isFiat = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY'].includes(cur)
                     const inner = (
@@ -1300,12 +1368,12 @@ export default function Dashboard() {
                     )
                     if (isFiat) {
                       return (
-                        <div key={w.currency} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 rounded-xl bg-[#1a1a1a]/50">{inner}</div>
+                        <div key={`${w.currency}-${i}`} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 rounded-xl bg-[#1a1a1a]/50">{inner}</div>
                       )
                     }
                     return (
                       <Link
-                        key={w.currency}
+                        key={`${w.currency}-${i}`}
                         to={`/asset/${w.currency.toLowerCase()}`}
                         className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-3 rounded-xl bg-[#1a1a1a]/50 hover:bg-[#1a1a1a]/80 hover:border-[#0C8B44]/30 border border-transparent transition-colors"
                       >
@@ -1333,7 +1401,7 @@ export default function Dashboard() {
                   </div>
                   <div className="space-y-2">
                     {insights.slice(0, 2).map((insight, i) => (
-                      <div key={i} className="p-3 rounded-lg bg-[#1a1a1a]/50 border border-[#ffffff05]">
+                      <div key={`dash-card-${i}`} className="p-3 rounded-lg bg-[#1a1a1a]/50 border border-[#ffffff05]">
                         <div className="flex items-start gap-2">
                           {insight.type === 'recommendation' && <Sparkles className="w-3 h-3 text-[#0C8B44] mt-0.5 shrink-0" />}
                           {insight.type === 'alert' && <AlertTriangle className="w-3 h-3 text-[#F57C00] mt-0.5 shrink-0" />}
@@ -1407,7 +1475,7 @@ export default function Dashboard() {
                 {loading ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-3">
                     {Array.from({ length: 6 }).map((_, i) => (
-                      <div key={i} className="p-3 rounded-xl bg-[#1a1a1a]/50 border border-[#ffffff05] space-y-2">
+                      <div key={`dash-skel-${i}`} className="p-3 rounded-xl bg-[#1a1a1a]/50 border border-[#ffffff05] space-y-2">
                         <div className="flex items-center gap-2">
                           <Skeleton className="w-5 h-5 rounded-full" />
                           <Skeleton className="h-3 w-12" />
@@ -1420,8 +1488,8 @@ export default function Dashboard() {
                   </div>
                 ) : cryptoData.length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-3">
-                    {cryptoData.slice(0, 6).map((crypto) => (
-                      <LiveMarketCard key={crypto.id} crypto={crypto} fmtMoney={fmtMoney} />
+                    {cryptoData.slice(0, 6).map((crypto, i) => (
+                      <LiveMarketCard key={`${crypto.id}-${i}`} crypto={crypto} fmtMoney={fmtMoney} />
                     ))}
                   </div>
                 ) : (
@@ -1445,10 +1513,10 @@ export default function Dashboard() {
       <div className="lg:hidden fixed inset-x-0 bottom-[5.2rem] z-40 px-3">
         <div className="rounded-2xl border border-[#ffffff10] bg-[#0f1619]/90 backdrop-blur-xl shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
           <div className="flex items-center gap-2 overflow-x-auto px-2 py-2 no-scrollbar">
-            {mobileQuickActions.map((action) => {
+            {mobileQuickActions.map((action, i) => {
               const Icon = action.icon
               return (
-                <Link key={action.label} to={action.path} className="flex min-w-[5.4rem] flex-col items-center justify-center gap-1 rounded-xl border border-[#ffffff08] bg-[#1a1a1a]/60 px-2 py-2 text-[10px] font-medium uppercase tracking-[0.04em] text-[#E5E5E5]">
+                <Link key={`${action.label}-${i}`} to={action.path} className="flex min-w-[5.4rem] flex-col items-center justify-center gap-1 rounded-xl border border-[#ffffff08] bg-[#1a1a1a]/60 px-2 py-2 text-[10px] font-medium uppercase tracking-[0.04em] text-[#E5E5E5]">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: `${action.color}15` }}>
                     <Icon className="h-4 w-4" style={{ color: action.color }} />
                   </div>

@@ -49,13 +49,13 @@ export default function CategoryBreakdownCard({ holdings, totalValue }: { holdin
         <h3 className="text-sm font-medium text-[#E5E5E5]">Asset Categories</h3>
       </div>
       <div className="flex h-3 rounded-full overflow-hidden bg-[#1a1a1a] mb-4">
-        {rows.map((r) => (
-          <div key={r.cat} style={{ width: `${r.pct}%`, background: CATEGORY_COLORS[r.cat] || CATEGORY_COLORS.Other }} title={`${r.cat} ${r.pct.toFixed(1)}%`} />
-        ))}
+            {rows.map((r, i) => (
+              <div key={`${r.cat}-${i}`} style={{ width: `${r.pct}%`, background: CATEGORY_COLORS[r.cat] || CATEGORY_COLORS.Other }} title={`${r.cat} ${r.pct.toFixed(1)}%`} />
+            ))}
       </div>
-      <div className="space-y-2">
-        {rows.map((r) => (
-          <div key={r.cat} className="flex items-center justify-between text-xs">
+          <div className="space-y-2">
+            {rows.map((r, i) => (
+              <div key={`${r.cat}-${i}`} className="flex items-center justify-between text-xs">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full" style={{ background: CATEGORY_COLORS[r.cat] || CATEGORY_COLORS.Other }} />
               <span className="text-[#A0A0A0]">{r.cat}</span>

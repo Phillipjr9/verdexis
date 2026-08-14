@@ -81,8 +81,8 @@ export default function Home() {
       <section className="py-12 md:py-20 px-6 border-y border-[#ffffff08]">
         <div className="max-w-[1280px] mx-auto">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8 text-center">
-            {platformStats.map((stat) => (
-              <div key={stat.label} className="text-center">
+            {platformStats.map((stat, i) => (
+              <div key={`${stat.label}-${i}`} className="text-center">
                 <div className="w-12 h-12 rounded-2xl bg-[#0C8B44]/10 flex items-center justify-center mx-auto mb-4"><stat.icon className="w-6 h-6 text-[#0C8B44]" /></div>
                 <p className="text-3xl md:text-4xl font-light tracking-[-0.03em] text-[#E5E5E5]">{stat.value}</p>
                 <p className="text-sm text-[#737373] mt-1">{stat.label}</p>

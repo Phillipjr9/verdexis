@@ -95,8 +95,8 @@ export default function TradingAttribution() {
 
       <div className="space-y-2 pt-2 border-t border-slate-800">
         <p className="text-xs font-semibold text-slate-400 uppercase">Breakdown by Asset</p>
-        {breakdown.slice(0, 5).map((asset) => (
-          <div key={asset.symbol} className="flex justify-between items-center text-sm">
+        {breakdown.slice(0, 5).map((asset, i) => (
+          <div key={`${asset.symbol}-${i}`} className="flex justify-between items-center text-sm">
             <div className="flex items-center gap-2">
               <span className="text-slate-300 font-medium">{asset.symbol}</span>
               <span className="text-slate-500 text-xs">{asset.allocation.toFixed(1)}%</span>

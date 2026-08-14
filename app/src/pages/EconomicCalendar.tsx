@@ -152,7 +152,7 @@ export default function EconomicCalendar() {
               ) : (
                 <div className="space-y-3">
                   {selectedEvents.map((ev, i) => (
-                    <div key={i} className="rounded-xl bg-[#0a0f11] border border-[#ffffff08] p-3">
+                    <div key={`econ-${i}`} className="rounded-xl bg-[#0a0f11] border border-[#ffffff08] p-3">
                       <div className="flex items-start justify-between gap-2 mb-1">
                         <p className="text-xs text-[#E5E5E5] font-medium leading-tight">{ev.title}</p>
                         <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${IMPORTANCE_COLOR[ev.importance]}`}>{ev.importance}</span>
@@ -192,7 +192,7 @@ export default function EconomicCalendar() {
                 </thead>
                 <tbody className="divide-y divide-[#ffffff05]">
                   {visibleEvents.map((ev, i) => (
-                    <tr key={i} className="hover:bg-[#ffffff04] transition-colors">
+                    <tr key={`econ-row-${i}`} className="hover:bg-[#ffffff04] transition-colors">
                       <td className="py-2.5 pr-4 text-[#E5E5E5]">{ev.date.slice(5)}</td>
                       <td className="py-2.5 pr-4 text-[#737373]">{ev.time}</td>
                       <td className="py-2.5 pr-4 text-[#E5E5E5]">{ev.title}</td>

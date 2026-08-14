@@ -127,7 +127,7 @@ export default function Changelog() {
                   {r.entries.map((e, j) => {
                     const meta = TYPE_META[e.type]
                     return (
-                      <div key={j} className="flex items-start gap-3">
+                      <div key={`chlog-${j}`} className="flex items-start gap-3">
                         <span className="text-[10px] px-2 py-0.5 rounded shrink-0 mt-0.5 font-medium" style={{ color: meta.color, background: `${meta.color}15` }}>
                           {meta.label}
                         </span>

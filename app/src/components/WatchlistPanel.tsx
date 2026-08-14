@@ -61,11 +61,11 @@ export default function WatchlistPanel({ availableSymbols, onSelect }: { availab
         <div className="border-t border-[#ffffff08] pt-3">
           <p className="text-[10px] uppercase tracking-[0.05em] text-[#555] mb-2">Quick add</p>
           <div className="flex flex-wrap gap-1">
-            {availableSymbols.slice(0, 8).map((s) => {
+            {availableSymbols.slice(0, 8).map((s, idx) => {
               const watched = watchedSet.has(s.symbol.toUpperCase())
               return (
                 <button
-                  key={s.symbol}
+                  key={`${s.symbol}-${idx}`}
                   onClick={() => watched ? remove(s.symbol.toUpperCase()) : add(s)}
                   className={`text-[11px] px-2 py-1 rounded border transition-colors ${watched ? 'bg-[#0C8B44]/15 border-[#0C8B44]/30 text-[#0C8B44]' : 'border-[#ffffff10] text-[#A0A0A0] hover:border-[#0C8B44]/30'}`}
                 >

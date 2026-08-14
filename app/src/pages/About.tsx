@@ -41,8 +41,8 @@ export default function About() {
 
           {/* Stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-20">
-            {stats.map((s) => (
-              <div key={s.label} className="glass-card p-6 text-center">
+            {stats.map((s, i) => (
+              <div key={`${s.label}-${i}`} className="glass-card p-6 text-center">
                 <p className="text-3xl md:text-4xl font-light tracking-[-0.02em] text-[#E5E5E5]">{s.value}</p>
                 <p className="text-xs text-[#737373] mt-2 uppercase tracking-wider">{s.label}</p>
               </div>
@@ -113,24 +113,20 @@ export default function About() {
                 <p className="text-sm text-[#E5E5E5] group-hover:text-[#25D366] transition-colors">+1 (719) 679-8790</p>
               </a>
               <a
-                href="https://twitter.com/verdexis"
-                target="_blank"
-                rel="noopener noreferrer"
+                href="/contact"
                 className="glass-card p-5 hover:border-[#0C8B44]/30 transition-colors group"
               >
                 <Twitter className="w-5 h-5 text-[#0C8B44] mx-auto mb-2" />
                 <p className="text-xs text-[#737373] mb-1">Twitter</p>
-                <p className="text-sm text-[#E5E5E5] group-hover:text-[#0C8B44] transition-colors">@verdexis</p>
+                <p className="text-sm text-[#E5E5E5] group-hover:text-[#0C8B44] transition-colors">Contact</p>
               </a>
               <a
-                href="https://www.linkedin.com/company/verdexis"
-                target="_blank"
-                rel="noopener noreferrer"
+                href="/contact"
                 className="glass-card p-5 hover:border-[#0C8B44]/30 transition-colors group"
               >
                 <Linkedin className="w-5 h-5 text-[#0C8B44] mx-auto mb-2" />
                 <p className="text-xs text-[#737373] mb-1">LinkedIn</p>
-                <p className="text-sm text-[#E5E5E5] group-hover:text-[#0C8B44] transition-colors">/company/verdexis</p>
+                <p className="text-sm text-[#E5E5E5] group-hover:text-[#0C8B44] transition-colors">Contact</p>
               </a>
             </div>
           </div>

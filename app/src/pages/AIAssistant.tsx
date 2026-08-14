@@ -263,15 +263,15 @@ export default function AIAssistant() {
 
       const inlineRender = (raw: string) =>
         raw.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g).map((part, j) => {
-          if (part.startsWith('**') && part.endsWith('**')) return <strong key={j}>{part.slice(2, -2)}</strong>
-          if (part.startsWith('*') && part.endsWith('*') && part.length > 2) return <em key={j}>{part.slice(1, -1)}</em>
-          if (part.startsWith('`') && part.endsWith('`')) return <code key={j} className="px-1 py-0.5 rounded bg-[#ffffff10] text-[#00E676] text-xs font-mono">{part.slice(1, -1)}</code>
-          return <span key={j}>{part}</span>
+          if (part.startsWith('**') && part.endsWith('**')) return <strong key={`ai-part-${j}`}>{part.slice(2, -2)}</strong>
+          if (part.startsWith('*') && part.endsWith('*') && part.length > 2) return <em key={`ai-part-${j}`}>{part.slice(1, -1)}</em>
+          if (part.startsWith('`') && part.endsWith('`')) return <code key={`ai-part-${j}`} className="px-1 py-0.5 rounded bg-[#ffffff10] text-[#00E676] text-xs font-mono">{part.slice(1, -1)}</code>
+          return <span key={`ai-part-${j}`}>{part}</span>
         })
 
       if (numMatch) {
         return (
-          <span key={i} className="flex gap-2 block">
+          <span key={`ai-inline-${i}`} className="flex gap-2 block">
             <span className="text-[#0C8B44] font-medium shrink-0">{numMatch[1]}.</span>
             <span>{inlineRender(content)}</span>
           </span>
@@ -279,7 +279,7 @@ export default function AIAssistant() {
       }
       if (bulletMatch) {
         return (
-          <span key={i} className="flex gap-2 block">
+          <span key={`ai-inline2-${i}`} className="flex gap-2 block">
             <span className="text-[#0C8B44] shrink-0 mt-0.5">•</span>
             <span>{inlineRender(content)}</span>
           </span>
@@ -287,12 +287,12 @@ export default function AIAssistant() {
       }
       if (quoteMatch) {
         return (
-          <span key={i} className="block border-l-2 border-[#0C8B44]/50 pl-3 text-[#A0A0A0] italic">
+          <span key={`ai-block-${i}`} className="block border-l-2 border-[#0C8B44]/50 pl-3 text-[#A0A0A0] italic">
             {inlineRender(content)}
           </span>
         )
       }
-      return <span key={i} className="block">{inlineRender(content)}</span>
+      return <span key={`ai-inline-render-${i}`} className="block">{inlineRender(content)}</span>
     })
   }
 
@@ -348,7 +348,7 @@ export default function AIAssistant() {
               <div className="flex-1 overflow-y-auto scrollbar-hide p-4 space-y-3">
                 {insightsLoading ? (
                   Array.from({ length: 4 }, (_, i) => (
-                    <div key={i} className="p-4 rounded-xl bg-[#1a1a1a]/50 animate-pulse">
+                    <div key={`ai-pulse-${i}`} className="p-4 rounded-xl bg-[#1a1a1a]/50 animate-pulse">
                       <div className="h-4 bg-[#ffffff08] rounded w-3/4 mb-2" />
                       <div className="h-3 bg-[#ffffff08] rounded w-full mb-1" />
                       <div className="h-3 bg-[#ffffff08] rounded w-2/3" />
@@ -357,7 +357,7 @@ export default function AIAssistant() {
                 ) : (
                   insights.map((insight, i) => (
                     <div
-                      key={i}
+                      key={`ai-key-${i}`}
                       className="p-4 rounded-xl bg-[#1a1a1a]/50 border border-[#ffffff05] hover:border-[#0C8B44]/20 transition-all"
                     >
                       <div className="flex items-start gap-3">
@@ -485,7 +485,7 @@ export default function AIAssistant() {
               <div className="flex-1 overflow-y-auto scrollbar-hide p-3 sm:p-4 space-y-4 min-h-0 pb-28">
                 {messages.map((msg, i) => (
                   <div
-                    key={i}
+                    key={`ai-key2-${i}`}
                     className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
                   >
                     <div

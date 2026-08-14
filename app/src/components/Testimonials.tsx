@@ -154,7 +154,7 @@ export default function Testimonials({ onSignInRequired }: { onSignInRequired?: 
                 <Quote className="w-4 h-4 text-[#0C8B44] mb-3" aria-hidden="true" />
                 <div className="flex items-center gap-0.5 mb-2" aria-label={`${t.rating} out of 5 stars`}>
                   {Array.from({ length: 5 }, (_, i) => (
-                    <Star key={i} className={`w-3.5 h-3.5 ${i < t.rating ? 'text-[#F57C00]' : 'text-[#333]'}`} fill={i < t.rating ? '#F57C00' : 'none'} />
+                    <Star key={`test-star-${i}`} className={`w-3.5 h-3.5 ${i < t.rating ? 'text-[#F57C00]' : 'text-[#333]'}`} fill={i < t.rating ? '#F57C00' : 'none'} />
                   ))}
                 </div>
                 <p className="text-sm text-[#D4D4D4] leading-relaxed line-clamp-5 flex-1">&ldquo;{t.text}&rdquo;</p>

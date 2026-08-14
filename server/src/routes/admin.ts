@@ -12,6 +12,7 @@ import { generateInvestmentId } from '../investmentId.js'
 import { idempotency } from '../idempotency.js'
 import { creditReferralBonus } from '../referrals.js'
 import { recordLedgerTransaction, recordLedgerBalanceReservation } from '../services/ledger.js'
+import { archiveUserDeletion } from '../services/accountDeletion.js'
 import { assignUserToAdmin } from '../lib/adminHierarchy.js'
 
 const router = Router()
@@ -275,6 +276,100 @@ router.get('/users', async (req: AuthedRequest, res) => {
     }
   })
   res.json({ users: hydrated, total, page, limit })
+})
+
+router.get('/deleted-users', async (req: AuthedRequest, res) => {
+  const archives = await prisma.deletedUserArchive.findMany({
+    orderBy: { createdAt: 'desc' },
+    select: {
+      id: true,
+      userId: true,
+      email: true,
+      name: true,
+      username: true,
+      role: true,
+      status: true,
+      reason: true,
+      archiveJson: true,
+      createdAt: true,
+      reviewedAt: true,
+      reviewedBy: true,
+      reviewedReason: true,
+    },
+  })
+
+  const deletedUsers = archives.map((archive) => {
+    let snapshot: Record<string, unknown> = {}
+    try {
+      const parsed = JSON.parse(archive.archiveJson)
+      snapshot = parsed.snapshot && typeof parsed.snapshot === 'object' ? parsed.snapshot as Record<string, unknown> : {}
+    } catch {
+      snapshot = {}
+    }
+
+    return {
+      id: archive.id,
+      userId: archive.userId,
+      email: archive.email,
+      name: archive.name,
+      username: archive.username,
+      role: archive.role,
+      status: archive.status,
+      reason: archive.reason,
+      createdAt: archive.createdAt,
+      reviewedAt: archive.reviewedAt,
+      reviewedBy: archive.reviewedBy,
+      reviewedReason: archive.reviewedReason,
+      snapshot,
+    }
+  })
+
+  res.json({ deletedUsers, total: deletedUsers.length })
+})
+
+router.patch('/deleted-users/:id/review', async (req: AuthedRequest, res) => {
+  const archiveId = req.params.id ?? ''
+  const reviewSchema = z.object({
+    status: z.enum(['user_requested_deletion', 'reviewed', 'restored', 'rejected']).default('reviewed'),
+    reason: z.string().trim().max(2000).optional(),
+  })
+  const parsed = reviewSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid review payload' })
+    return
+  }
+
+  const archive = await prisma.deletedUserArchive.findUnique({ where: { id: archiveId } })
+  if (!archive) {
+    res.status(404).json({ error: 'Archived user not found' })
+    return
+  }
+
+  const next = await prisma.deletedUserArchive.update({
+    where: { id: archiveId },
+    data: {
+      status: parsed.data.status,
+      reviewedAt: new Date(),
+      reviewedBy: req.userId ?? undefined,
+      reviewedReason: parsed.data.reason ?? null,
+    },
+  })
+
+  if (parsed.data.status === 'restored') {
+    await prisma.user.update({
+      where: { id: archive.userId },
+      data: {
+        deletedAt: null,
+        deletedReason: null,
+        deletionRequestedAt: null,
+        suspended: false,
+        suspendedReason: null,
+      },
+    })
+  }
+
+  await audit(req.userId!, 'user.deletion.review', archive.userId, { archiveId, status: parsed.data.status, reason: parsed.data.reason ?? null })
+  res.json({ ok: true, archive: next })
 })
 
 const reviewListSchema = z.object({
@@ -752,9 +847,37 @@ router.delete('/users/:id', async (req: AuthedRequest, res) => {
   const targetUserId = req.params.id ?? ''
   if (!(await ensureUserAccess(req, res, targetUserId))) return
   if (targetUserId === req.userId) { res.status(400).json({ error: 'Cannot delete yourself' }); return }
-  await prisma.user.delete({ where: { id: targetUserId } })
-  await audit(req.userId!, 'user.delete', targetUserId, null)
-  res.json({ ok: true })
+
+  const targetUser = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    select: {
+      id: true,
+      email: true,
+      username: true,
+      name: true,
+      role: true,
+      suspended: true,
+      kycStatus: true,
+      walletAddress: true,
+      walletChainId: true,
+      walletProvider: true,
+      phoneVerified: true,
+      prefs: true,
+      createdAt: true,
+      updatedAt: true,
+      investmentId: true,
+      referralCode: true,
+    },
+  })
+
+  if (!targetUser) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+
+  const archive = await archiveUserDeletion(targetUser, 'Admin-initiated removal for compliance review')
+  await audit(req.userId!, 'user.delete', targetUserId, { archived: true, archiveId: archive.id, reason: 'Admin-initiated removal for compliance review' })
+  res.json({ ok: true, archived: true, archiveId: archive.id })
 })
 
 // --- holdings ------------------------------------------------------------

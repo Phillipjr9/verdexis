@@ -47,10 +47,9 @@ const signupSchema = z.object({
   email: z.string().email().toLowerCase().trim(),
   password: z.string().min(8).max(200),
   name: z.string().min(1).max(80).trim(),
-  // Phone is compulsory at signup so admins can reach the user (e.g. for
-  // KYC + the WhatsApp bonus-withdrawal verification step). Accepts E.164
-  // or local format with at least 7 digits.
-  phone: z.string().trim().min(7).max(32).regex(/^[+0-9 ()\-.]+$/, 'Invalid phone number'),
+  // Phone is optional at signup and can be stored in the user's profile later.
+  // Accepts E.164 or local formats with at least 7 digits when provided.
+  phone: z.string().trim().min(7).max(32).regex(/^[+0-9 ()\-.]+$/, 'Invalid phone number').optional(),
 })
 
 const loginSchema = z.object({
@@ -562,7 +561,7 @@ router.post('/signup', ensureDbReady, authLimiter, async (req, res) => {
     res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() })
     return
   }
-  const { email, password, name } = parsed.data
+  const { email, password, name, phone } = parsed.data
 
   try {
     const existing = await getUserByEmail(email)
@@ -589,7 +588,7 @@ router.post('/signup', ensureDbReady, authLimiter, async (req, res) => {
       investmentId,
       referralCode,
       role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user',
-      prefs: JSON.stringify({ phone: parsed.data.phone }),
+      prefs: JSON.stringify({ phone: phone ?? null }),
     }
     user = await createUser(createData)
   } catch (e) {
@@ -850,6 +849,10 @@ router.post('/login', ensureDbReady, authLimiter, async (req, res) => {
       res.status(401).json({ error: 'Invalid credentials' })
       return
     }
+    if (user.deletedAt) {
+      res.status(403).json({ error: 'Account deleted. Please contact support to restore access.' })
+      return
+    }
     const ok = await bcrypt.compare(password, user.passwordHash)
     if (!ok) {
       res.status(401).json({ error: 'Invalid credentials' })
@@ -952,6 +955,10 @@ router.post('/login/verify-otp', authLimiter, async (req, res) => {
     res.status(403).json({ error: user?.suspended ? 'Account suspended' : 'User not found' })
     return
   }
+  if (user.deletedAt) {
+    res.status(403).json({ error: 'Account deleted. Please contact support to restore access.' })
+    return
+  }
   const role = await autoPromoteIfAdminEmail(user.id, user.email, user.role)
   const clientIp = getClientIp(req)
   process.nextTick(() => {
@@ -988,6 +995,10 @@ router.post('/signup/verify-otp', authLimiter, async (req, res) => {
   const user = await getUserById(payload.sub)
   if (!user || user.suspended) {
     res.status(403).json({ error: user?.suspended ? 'Account suspended' : 'User not found' })
+    return
+  }
+  if (user.deletedAt) {
+    res.status(403).json({ error: 'Account deleted. Please contact support to restore access.' })
     return
   }
 
@@ -1246,9 +1257,21 @@ router.post('/verify-email', authLimiter, async (req, res) => {
     res.status(400).json({ error: 'Invalid or expired verification link' })
     return
   }
+
   const updatedUser = await updateUser(record.userId, { emailVerified: true, emailVerifiedAt: new Date().toISOString() })
   await prisma.emailVerification.update({ where: { id: record.id }, data: { used: true } })
-  res.json({ verified: true, user: publicUser(updatedUser) })
+
+  const sessionToken = signToken({
+    sub: updatedUser.id,
+    email: updatedUser.email,
+    v: (updatedUser as { tokenVersion?: number }).tokenVersion ?? 0,
+  })
+
+  res.json({
+    verified: true,
+    token: sessionToken,
+    user: publicUser(updatedUser),
+  })
 })
 
 export default router

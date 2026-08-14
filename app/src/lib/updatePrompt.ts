@@ -11,6 +11,19 @@ declare const __BUILD_ID__: string
 
 const CURRENT = (typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : 'dev')
 let promptShown = false
+let autoReloadAttempted = false
+
+// Get URL parameter
+function getUrlParam(name: string): string | null {
+  const params = new URLSearchParams(window.location.search)
+  return params.get(name)
+}
+
+// Check if we just reloaded (prevent infinite loops)
+function isFreshReload(): boolean {
+  const navigationType = (performance as unknown as { navigation?: { type?: number } }).navigation?.type
+  return navigationType === 1 // TYPE_RELOAD
+}
 
 async function checkOnce(): Promise<void> {
   if (promptShown) return
@@ -22,6 +35,24 @@ async function checkOnce(): Promise<void> {
     if (!res.ok) return
     const { id } = (await res.json()) as { id?: string }
     if (!id || id === CURRENT) return
+
+    // NEW: Auto-reload once if we haven't tried yet and this isn't already a reload
+    if (!autoReloadAttempted && !isFreshReload() && !getUrlParam('updated')) {
+      autoReloadAttempted = true
+      console.log('[Update] New version detected, auto-reloading...')
+      // Clear all caches before reload
+      if ('caches' in window) {
+        const cacheNames = await caches.keys()
+        await Promise.all(cacheNames.map(name => caches.delete(name)))
+      }
+      // Force reload with cache-busting
+      const url = new URL(window.location.href)
+      url.searchParams.set('updated', id)
+      url.searchParams.set('ts', Date.now().toString())
+      window.location.replace(url.toString())
+      return
+    }
+
     promptShown = true
     toast('A new version is available', {
       description: 'Reload to get the latest changes.',
@@ -32,6 +63,7 @@ async function checkOnce(): Promise<void> {
           // Cache-bust the document itself so Safari refetches index.html.
           const url = new URL(window.location.href)
           url.searchParams.set('v', id)
+          url.searchParams.set('ts', Date.now().toString())
           window.location.replace(url.toString())
         },
       },

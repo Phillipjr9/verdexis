@@ -333,8 +333,8 @@ function KYCInner() {
                   { label: 'Identity Document', value: '✓ Uploaded' },
                   { label: 'Proof of Address', value: '✓ Uploaded' },
                   { label: 'Selfie', value: '✓ Uploaded' },
-                ].map(row => (
-                  <div key={row.label} className="flex justify-between items-center py-2 border-b border-[#ffffff05] text-xs">
+                ].map((row, i) => (
+                  <div key={`${row.label}-${i}`} className="flex justify-between items-center py-2 border-b border-[#ffffff05] text-xs">
                     <span className="text-[#737373]">{row.label}</span>
                     <span className="text-[#E5E5E5]">{row.value}</span>
                   </div>

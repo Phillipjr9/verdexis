@@ -460,7 +460,7 @@ export default function Markets() {
           <div className="rounded-xl bg-[#0f1619]/50 border border-[#ffffff05] overflow-hidden">
             {loading ? (
               <div className="p-6 space-y-3">
-                {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+                {Array.from({ length: 8 }).map((_, i) => <Skeleton key={`mk-skel-${i}`} className="h-10 w-full" />)}
               </div>
             ) : filtered.length === 0 ? (
               <div className="p-16 text-center text-sm text-[#737373]">

@@ -70,7 +70,7 @@ export function AdminQuickStats() {
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
       {stats.map((stat, i) => (
-        <div key={i} className="rounded-xl bg-[#1a1a1a]/50 border border-[#ffffff05] p-4">
+        <div key={`enhfeat-${i}`} className="rounded-xl bg-[#1a1a1a]/50 border border-[#ffffff05] p-4">
           <p className="text-[10px] uppercase tracking-wider text-[#737373] mb-2">{stat.label}</p>
           <div className="flex items-end justify-between">
             <p className="text-2xl font-light text-[#E5E5E5]">{stat.value}</p>
@@ -97,7 +97,7 @@ export function AdminExportData() {
       </h3>
       <div className="space-y-2">
         {exports.map((exp, i) => (
-          <button key={i} className="w-full flex items-center justify-between p-3 rounded-lg bg-[#1a1a1a]/50 border border-[#ffffff05] hover:border-[#0C8B44]/40 transition-colors group">
+          <button key={`enhfeat-btn-${i}`} className="w-full flex items-center justify-between p-3 rounded-lg bg-[#1a1a1a]/50 border border-[#ffffff05] hover:border-[#0C8B44]/40 transition-colors group">
             <div className="text-left">
               <p className="text-sm text-[#E5E5E5]">{exp.label}</p>
               <p className="text-xs text-[#737373]">{exp.format} • {exp.size}</p>
@@ -127,8 +127,8 @@ export function AdminNotifications() {
         <span className="text-xs text-[#737373]">{notifications.filter(n => !n.read).length} unread</span>
       </div>
       <div className="space-y-2">
-        {notifications.map((notif) => (
-          <div key={notif.id} className={`p-3 rounded-lg border ${notif.read ? 'bg-[#1a1a1a]/30 border-[#ffffff05]' : 'bg-[#0C8B44]/10 border-[#0C8B44]/30'}`}>
+        {notifications.map((notif, i) => (
+          <div key={`${notif.id}-${i}`} className={`p-3 rounded-lg border ${notif.read ? 'bg-[#1a1a1a]/30 border-[#ffffff05]' : 'bg-[#0C8B44]/10 border-[#0C8B44]/30'}`}>
             <div className="flex items-start gap-3">
               {!notif.read && <div className="w-2 h-2 rounded-full bg-[#0C8B44] mt-1.5 shrink-0" />}
               <div className="flex-1 min-w-0">
@@ -157,7 +157,7 @@ export function AdminPerformanceMetrics() {
       <h3 className="text-sm font-semibold text-[#E5E5E5] mb-4">Performance Metrics</h3>
       <div className="space-y-3">
         {metrics.map((metric, i) => (
-          <div key={i}>
+          <div key={`enhfeat-sub-${i}`}>
             <div className="flex items-center justify-between mb-1">
               <span className="text-sm text-[#A0A0A0]">{metric.label}</span>
               <span className="text-sm font-medium text-[#E5E5E5]">{metric.value}</span>
@@ -188,7 +188,7 @@ export function AdminUserActivity() {
       </h3>
       <div className="space-y-3">
         {activities.map((activity, i) => (
-          <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-[#1a1a1a]/50 border border-[#ffffff05]">
+          <div key={`enhfeat-item-${i}`} className="flex items-center gap-3 p-3 rounded-lg bg-[#1a1a1a]/50 border border-[#ffffff05]">
             <div className="w-8 h-8 rounded-full bg-[#0C8B44]/20 flex items-center justify-center text-[#0C8B44]">
               <activity.icon className="w-4 h-4" />
             </div>

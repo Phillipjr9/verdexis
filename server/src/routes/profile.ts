@@ -1,9 +1,12 @@
 import { Router } from 'express'
+import bcrypt from 'bcryptjs'
+import crypto from 'node:crypto'
 import { z } from 'zod'
 import { prisma } from '../db.js'
 import { requireAuth, type AuthedRequest } from '../auth.js'
 import { warnUnverified } from '../middleware/verificationCheck.js'
-import { sendAdminEmailNotification } from '../notificationService.js'
+import { sendAdminEmailNotification, sendEmailNotification } from '../notificationService.js'
+import { archiveUserDeletion } from '../services/accountDeletion.js'
 
 const router = Router()
 
@@ -182,8 +185,72 @@ router.delete('/', requireAuth, async (req: AuthedRequest, res) => {
     res.status(401).json({ error: 'Unauthorized' })
     return
   }
-  await prisma.user.delete({ where: { id: userId } })
-  res.json({ ok: true })
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      username: true,
+      name: true,
+      role: true,
+      suspended: true,
+      deletedAt: true,
+      prefs: true,
+      walletAddress: true,
+      walletChainId: true,
+      walletProvider: true,
+      phoneVerified: true,
+      kycStatus: true,
+      createdAt: true,
+      updatedAt: true,
+      investmentId: true,
+      referralCode: true,
+    },
+  })
+
+  if (!user) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+
+  if (user.deletedAt) {
+    res.status(409).json({ error: 'Account already scheduled for deletion' })
+    return
+  }
+
+  const reason = 'User requested account deletion'
+  const archive = await archiveUserDeletion(user, reason)
+
+  const email = user.email
+  let userEmailDelivered = false
+  if (email) {
+    userEmailDelivered = await sendEmailNotification(
+      email,
+      'Your account deletion request has been received',
+      'We have received your request to delete your Verdexis account. Your account is now in a protected archive for review by our admin team, so it remains available for fraud and compliance review while not allowing sign-in access. If you did not request this, contact support immediately.',
+      undefined,
+      { userId: user.id, createWebNotification: true, title: 'Account deletion requested', body: 'Your account has been scheduled for review and deactivation.' },
+    )
+  } else {
+    console.warn('[profile-delete] No email available for deletion notice')
+  }
+
+  await sendAdminEmailNotification(
+    `User account deletion request: ${user.email}`,
+    `User ${user.name} (${user.email}) has requested account deletion.\n\nThe account has been archived for admin review and cannot be used until reviewed.\n\nArchive status: ${archive.status}`,
+  )
+
+  await prisma.notification.create({
+    data: {
+      userId,
+      kind: 'system',
+      title: 'Account deletion requested',
+      body: 'Your account has been archived for admin review and is no longer active.',
+    },
+  }).catch(() => {})
+
+  res.json({ ok: true, archived: true, emailSent: userEmailDelivered })
 })
 
 export default router

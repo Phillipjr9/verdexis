@@ -89,8 +89,8 @@ export default function PortfolioHealthCard({ holdings, wallet, market, netWorth
 
       {/* Sub-score bars */}
       <div className="space-y-2.5 mb-4">
-        {health.subScores.map((s) => (
-          <div key={s.key}>
+        {health.subScores.map((s, i) => (
+          <div key={`${s.key}-${i}`}>
             <div className="flex items-center justify-between text-[11px] mb-1">
               <span className="text-[#A0A0A0]">{s.label}</span>
               <span className="text-[#E5E5E5] tabular-nums">{s.score}</span>
@@ -118,7 +118,7 @@ export default function PortfolioHealthCard({ holdings, wallet, market, netWorth
           </div>
           <ul className="space-y-1.5">
             {health.warnings.map((w, i) => (
-              <li key={i} className="text-[11px] text-[#A0A0A0] flex gap-2">
+              <li key={`health-${i}`} className="text-[11px] text-[#A0A0A0] flex gap-2">
                 <span className="text-[#FF9800] shrink-0">•</span>
                 <span>{w}</span>
               </li>

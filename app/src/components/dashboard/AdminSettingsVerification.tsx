@@ -46,11 +46,23 @@ export function AdminSettingsVerification() {
           'Authorization': `Bearer ${localStorage.getItem('verdexis_token')}`,
         },
       })
+      if (response.status === 401 || response.status === 403) {
+        setSettings([])
+        setSaveLogs([])
+        return
+      }
       const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data?.error || `Request failed with ${response.status}`)
+      }
       setSettings(data.settings || [])
       setSaveLogs(data.logs || [])
-    } catch (error) {
-      toast.error('Failed to load settings')
+    } catch (error: any) {
+      const message = error?.message || error?.error || 'Unknown error'
+      console.error('Failed to load settings:', error)
+      if (!/401|403|User not found|Admin only/i.test(message)) {
+        toast.error(`Failed to load settings: ${message}`)
+      }
     } finally {
       setLoading(false)
     }

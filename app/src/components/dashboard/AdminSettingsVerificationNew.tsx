@@ -49,8 +49,14 @@ export function AdminSettingsVerification() {
       const data = await adminApi.getAllSettings()
       setSettings(data.settings || [])
       setSaveLogs(data.logs || [])
-    } catch (error) {
-      toast.error('Failed to load settings')
+    } catch (error: any) {
+      const message = error?.error || error?.message || 'Unknown error'
+      console.error('Failed to load settings:', error)
+      if (!/401|403|User not found|Admin only/i.test(message)) {
+        toast.error(`Failed to load settings: ${message}`)
+      }
+      setSettings([])
+      setSaveLogs([])
     } finally {
       setLoading(false)
     }

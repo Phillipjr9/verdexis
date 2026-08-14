@@ -54,14 +54,14 @@ export default function TopMovers({ data }: { data: CryptoQuote[] }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <p className="text-[10px] uppercase tracking-[0.05em] text-[#4CAF50] mb-2">Gainers</p>
-          <div className="space-y-2">
-            {gainers.map((c) => <Card key={c.id} c={c} kind="up" />)}
+            <div className="space-y-2">
+            {gainers.map((c, i) => <Card key={`${c.id}-${i}`} c={c} kind="up" />)}
           </div>
         </div>
         <div>
           <p className="text-[10px] uppercase tracking-[0.05em] text-[#f44336] mb-2">Losers</p>
           <div className="space-y-2">
-            {losers.map((c) => <Card key={c.id} c={c} kind="down" />)}
+            {losers.map((c, i) => <Card key={`${c.id}-${i}`} c={c} kind="down" />)}
           </div>
         </div>
       </div>

@@ -97,10 +97,30 @@ async function ensureDefaultSettings() {
   }
 }
 
+function buildFallbackSettings() {
+  return Object.values(DEFAULT_SETTINGS).flat().map(setting => ({
+    key: setting.key,
+    value: setting.value,
+    updatedAt: new Date(),
+    updatedBy: 'system',
+  }))
+}
+
 router.get('/all', async (req: AuthedRequest, res) => {
   try {
     await ensureDefaultSettings()
-    const settings = await prisma.appSetting.findMany({ orderBy: { key: 'asc' } })
+    let settings = [] as Array<{ key: string; value: string; updatedAt: Date; updatedBy: string | null }>
+    try {
+      settings = await prisma.appSetting.findMany({ orderBy: { key: 'asc' } })
+    } catch (error) {
+      console.error('Failed to read app settings from DB, using defaults:', error)
+      settings = buildFallbackSettings()
+    }
+
+    if (settings.length === 0) {
+      settings = buildFallbackSettings()
+    }
+
     const logs: any[] = []
     res.json({
       settings: settings.map(setting => {

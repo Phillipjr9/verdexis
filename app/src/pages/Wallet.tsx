@@ -1789,8 +1789,8 @@ export default function WalletPage() {
                   { label: 'Deposit', tab: 'deposit' as TabType, hint: 'Add cash or crypto' },
                   { label: 'Transfer', tab: 'transfer' as TabType, hint: 'Move between wallets' },
                   { label: 'Income', tab: 'income' as TabType, hint: 'View dividends and interest' },
-                ].map((action) => (
-                  <button key={action.label} onClick={() => setActiveTab(action.tab)} className="rounded-full border border-[#ffffff08] bg-[#1a1a1a]/70 px-3 py-2 text-left transition-colors hover:border-[#0C8B44]/30 hover:bg-[#0C8B44]/10">
+                ].map((action, i) => (
+                  <button key={`wallet-quick-${action.label}-${i}`} onClick={() => setActiveTab(action.tab)} className="rounded-full border border-[#ffffff08] bg-[#1a1a1a]/70 px-3 py-2 text-left transition-colors hover:border-[#0C8B44]/30 hover:bg-[#0C8B44]/10">
                     <p className="text-sm font-medium text-[#E5E5E5]">{action.label}</p>
                     <p className="text-xs text-[#737373]">{action.hint}</p>
                   </button>
@@ -1827,8 +1827,8 @@ export default function WalletPage() {
                 </p>
               </div>
               <div className="flex items-center gap-3">
-                {[{ label: 'Deposit', icon: ArrowDownRight, tab: 'deposit' as TabType, color: '#0C8B44' }, { label: 'Withdraw', icon: ArrowUpRight, tab: 'withdraw' as TabType, color: '#f44336' }, { label: 'Transfer', icon: ArrowLeftRight, tab: 'transfer' as TabType, color: '#2196F3' }, { label: 'Income', icon: Coins, tab: 'income' as TabType, color: '#0C8B44' }].map((action) => (
-                  <button key={action.label} onClick={() => setActiveTab(action.tab)} className="flex flex-col items-center gap-2 group">
+                {[{ label: 'Deposit', icon: ArrowDownRight, tab: 'deposit' as TabType, color: '#0C8B44' }, { label: 'Withdraw', icon: ArrowUpRight, tab: 'withdraw' as TabType, color: '#f44336' }, { label: 'Transfer', icon: ArrowLeftRight, tab: 'transfer' as TabType, color: '#2196F3' }, { label: 'Income', icon: Coins, tab: 'income' as TabType, color: '#0C8B44' }].map((action, i) => (
+                  <button key={`wallet-quick-2-${action.label}-${i}`} onClick={() => setActiveTab(action.tab)} className="flex flex-col items-center gap-2 group">
                     <div className="w-14 h-14 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110" style={{ background: `${action.color}15`, border: `1px solid ${action.color}30` }}>
                       <action.icon className="w-6 h-6" style={{ color: action.color }} />
                     </div>

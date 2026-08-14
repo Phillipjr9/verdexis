@@ -145,7 +145,7 @@ export default function News() {
 
               {/* News grid */}
               {filteredNews.slice(1).map((article, i) => (
-                <div key={i} className="p-6 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff05] hover:border-[#0C8B44]/20 transition-all group">
+                <div key={`news-card-${i}`} className="p-6 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff05] hover:border-[#0C8B44]/20 transition-all group">
                   <div className="flex items-center gap-3 mb-3">
                     {getCategoryIcon(article.category)}
                     <span className="text-xs text-[#737373] uppercase">{article.category}</span>

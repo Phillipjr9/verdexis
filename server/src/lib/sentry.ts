@@ -24,19 +24,27 @@ import { Express, Request, Response, NextFunction } from 'express'
  * Captures errors, performance metrics, and issues in production
  */
 
+export function getSentryInitOptions(dsn = process.env.SENTRY_DSN || ''): Record<string, any> {
+  return {
+    dsn,
+    environment: process.env.NODE_ENV || 'development',
+    tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
+    profilesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
+    // Disable global/default integrations so Sentry does not auto-instrument
+    // Prisma via a proxied client, which can trigger `_engineConfig` access on
+    // partially initialized or wrapped client instances.
+    defaultIntegrations: false,
+    integrations: [
+      new Sentry.Integrations.Http({ tracing: true }),
+    ],
+  }
+}
+
 export function initSentryServer(app: Express): void {
   const dsn = process.env.SENTRY_DSN || ''
 
   if (dsn) {
-    Sentry.init({
-      dsn,
-      environment: process.env.NODE_ENV || 'development',
-      tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
-      profilesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
-      integrations: [
-        new Sentry.Integrations.Http({ tracing: true }),
-      ],
-    })
+    Sentry.init(getSentryInitOptions(dsn))
 
     // Sentry request handler must be first
     app.use(Sentry.Handlers.requestHandler())

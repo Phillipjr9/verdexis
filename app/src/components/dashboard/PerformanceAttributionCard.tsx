@@ -89,8 +89,8 @@ export default function PerformanceAttributionCard({ holdings, trades, fmtMoney 
         <div className="mb-4">
           <p className="text-[10px] uppercase tracking-wider text-[#4CAF50] mb-2">Top Gainers</p>
           <div className="space-y-1.5">
-            {stats.gainers.map(h => (
-              <div key={h.id} className="flex items-center justify-between text-xs">
+            {stats.gainers.map((h, i) => (
+              <div key={`${h.id}-${i}`} className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2 min-w-0">
                   <TrendingUp className="w-3 h-3 text-[#4CAF50] shrink-0" />
                   <span className="text-[#E5E5E5] truncate">{h.symbol}</span>
@@ -110,8 +110,8 @@ export default function PerformanceAttributionCard({ holdings, trades, fmtMoney 
         <div>
           <p className="text-[10px] uppercase tracking-wider text-[#f44336] mb-2">Top Losers</p>
           <div className="space-y-1.5">
-            {stats.losers.map(h => (
-              <div key={h.id} className="flex items-center justify-between text-xs">
+            {stats.losers.map((h, i) => (
+              <div key={`${h.id}-${i}`} className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2 min-w-0">
                   <TrendingDown className="w-3 h-3 text-[#f44336] shrink-0" />
                   <span className="text-[#E5E5E5] truncate">{h.symbol}</span>

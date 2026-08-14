@@ -60,8 +60,8 @@ export default function AlertsSummaryCard() {
       </div>
       {upcoming.length > 0 ? (
         <div className="space-y-1">
-          {upcoming.map((a) => (
-            <div key={a.id} className="flex items-center justify-between text-[11px] text-[#A0A0A0]">
+          {upcoming.map((a, i) => (
+            <div key={`${a.id}-${i}`} className="flex items-center justify-between text-[11px] text-[#A0A0A0]">
               <span>{(a.symbol || '').toUpperCase()}</span>
               <span>{a.direction === 'above' ? '↑' : '↓'} {formatPrice(a.target)}</span>
             </div>

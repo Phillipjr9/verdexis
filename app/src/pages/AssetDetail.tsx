@@ -172,8 +172,10 @@ export default function AssetDetail() {
       await portfolioStore.hydrate(true)
       setAmount('')
     } catch (e) {
-      const err = e as { error?: string }
-      toast.error('Trade rejected', { description: err.error || 'Server error' })
+      const err = e as { error?: string; message?: string; details?: unknown }
+      const msg = err.error || err.message || 'Server error'
+      console.error('Trade submission failed:', e)
+      toast.error('Trade rejected', { description: msg })
     } finally {
       setSubmitting(false)
     }

@@ -93,9 +93,9 @@ export function AdminHierarchyPanel() {
     <div className="space-y-6">
       {/* Tabs */}
       <div className="flex gap-2 border-b border-[#ffffff10]">
-        {(['overview', 'users', 'sub-admins'] as const).map((tab) => (
+        {(['overview', 'users', 'sub-admins'] as const).map((tab, i) => (
           <button
-            key={tab}
+            key={`${tab}-${i}`}
             onClick={() => setActiveTab(tab)}
             className={`px-4 py-2 border-b-2 transition-colors ${
               activeTab === tab

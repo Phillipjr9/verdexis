@@ -243,7 +243,7 @@ export function ComplianceRiskProfile() {
             <p className="font-semibold text-sm mb-2">Flags:</p>
             <ul className="text-sm space-y-1">
               {profile.flags.map((flag, i) => (
-                <li key={i}>• {flag}</li>
+                <li key={`advflag-${i}`}>• {flag}</li>
               ))}
             </ul>
           </div>

@@ -191,8 +191,8 @@ function NFTPortfolioInner() {
               { label: 'Total Cost', value: `${totalCostEth.toFixed(2)} ETH`, sub: `~$${(totalCostEth * ETH_PRICE).toLocaleString()}` },
               { label: 'Unrealized P&L', value: `${totalPnlEth >= 0 ? '+' : ''}${totalPnlEth.toFixed(2)} ETH`, sub: `${totalPnlPct >= 0 ? '+' : ''}${totalPnlPct.toFixed(1)}%`, color: totalPnlEth >= 0 ? '#0C8B44' : '#ef4444' },
               { label: 'Items', value: `${NFTS.reduce((s, n) => s + n.quantity, 0)}`, sub: `${NFTS.length} collections` },
-            ].map(s => (
-              <div key={s.label} className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-4">
+            ].map((s, i) => (
+              <div key={`${s.label}-${i}`} className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-4">
                 <p className="text-[10px] uppercase tracking-[0.05em] text-[#737373] mb-1">{s.label}</p>
                 <p className="text-lg font-light" style={{ color: s.color ?? '#E5E5E5' }}>{s.value}</p>
                 <p className="text-[11px] text-[#737373]">{s.sub}</p>

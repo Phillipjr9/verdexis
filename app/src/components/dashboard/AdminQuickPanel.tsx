@@ -106,9 +106,9 @@ export default function AdminQuickPanel() {
             <Link to="/admin/users" className="text-xs text-[#A0A0A0] hover:text-[#0C8B44]">View all →</Link>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-            {recent.slice(0, 6).map((u) => (
+            {recent.slice(0, 6).map((u, i) => (
               <Link
-                key={u.id} to={`/admin/users/${u.id}`}
+                key={`${u.id}-${i}`} to={`/admin/users/${u.id}`}
                 className="flex items-center justify-between gap-2 px-3 py-2 bg-[#0a0f11]/60 border border-[#ffffff08] rounded-lg hover:border-[#0C8B44]/40 transition-colors"
               >
                 <div className="min-w-0">
