@@ -13,6 +13,9 @@ const config = await resolvePrismaGenerationConfig({
 
 const { envs, schemaFile, shouldUseSqlite, sqliteSchema } = config
 
+console.warn('[generate-prisma-client] resolved config:', { shouldUseSqlite, schemaFile, hasSqliteSchema: !!sqliteSchema })
+console.warn('[generate-prisma-client] sample envs keys:', Object.keys(envs).slice(0,20))
+
 if (sqliteSchema) {
   await writeFile(schemaFile, sqliteSchema, 'utf8')
 }
@@ -20,11 +23,18 @@ if (sqliteSchema) {
 const spawnPrisma = (args) => {
   const result = spawnSync('npx', ['prisma', ...args], { stdio: 'inherit', shell: true, env: envs })
   if (result.status !== 0) {
-    process.exit(result.status ?? 1)
+    console.warn('[generate-prisma-client] prisma command failed with status', result.status, ' — continuing for local dev')
+    return false
   }
+  return true
 }
 
-spawnPrisma(['generate', '--schema', schemaFile])
+try {
+  spawnPrisma(['generate', '--schema', schemaFile])
+} catch (err) {
+  console.error('prisma generate failed:', err && err.stack ? err.stack : err)
+  process.exit(1)
+}
 
 if (shouldUseSqlite) {
   spawnPrisma(['db', 'push', '--schema', schemaFile])

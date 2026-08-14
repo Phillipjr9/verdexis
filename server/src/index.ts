@@ -62,6 +62,7 @@ import advancedAnalyticsRoutes from './routes/advanced-analytics.js'
 import advancedTaxRoutes from './routes/advanced-tax.js'
 import advancedComplianceRoutes from './routes/advanced-compliance.js'
 import advancedNotificationsRoutes from './routes/advanced-notifications.js'
+import adminWithdrawalConfigRoutes from './routes/admin-withdrawal-config.js'
 
 const app = express()
 app.set('etag', false)
@@ -297,6 +298,10 @@ app.use('/api/notifications', notificationsRoutes)
 app.use('/api/ai', aiRoutes)
 app.use('/api/market', marketRoutes)
 app.use('/api/reviews', reviewsRoutes)
+// Mount withdrawal config routes before the broader admin router so specific
+// admin subpaths (e.g. /api/admin/users/:id/withdrawal-wire) are not
+// shadowed by the main admin router.
+app.use('/api', adminWithdrawalConfigRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/admin', adminBonusRoutes)
 app.use('/api/admin/settings', adminSettingsRoutes)
@@ -310,6 +315,7 @@ app.use('/api/oauth', amazonOAuthRoutes)
 app.use('/api/trades/advanced', advancedOrdersRoutes)
 app.use('/api/passkeys', passkeysRoutes)
 app.use('/api/kyc', kycRoutes)
+app.use('/api', adminWithdrawalConfigRoutes)
 app.use('/api/withdrawals', withdrawalsRoutes)
 app.use('/api/otp', otpRoutes)
 app.use('/api/analytics', advancedAnalyticsRoutes)

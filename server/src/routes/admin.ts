@@ -13,7 +13,7 @@ import { idempotency } from '../idempotency.js'
 import { creditReferralBonus } from '../referrals.js'
 import { recordLedgerTransaction, recordLedgerBalanceReservation } from '../services/ledger.js'
 import { archiveUserDeletion } from '../services/accountDeletion.js'
-import { assignUserToAdmin } from '../lib/adminHierarchy.js'
+import { assignUserToAdmin, isSuperAdmin } from '../lib/adminHierarchy.js'
 
 const router = Router()
 
@@ -166,15 +166,6 @@ router.get('/stats', async (_req, res) => {
     recentSignups, recentTx,
   })
 })
-
-// --- Helper: Check if Super Admin ---
-async function isSuperAdmin(userId: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { role: true, email: true },
-  })
-  return user?.role === 'admin' && user?.email === 'admin@verdexisgroup.com'
-}
 
 // --- Helper: Check if user is assigned to admin ---
 async function isUserAssignedToAdmin(userId: string, adminId: string): Promise<boolean> {
@@ -527,6 +518,26 @@ router.get('/users/:id', async (req: AuthedRequest, res) => {
     prisma.notification.findMany({ where: { userId: id }, orderBy: { createdAt: 'desc' }, take: 100 }),
   ])
 
+  // Admin-provided payment details (bank accounts and admin wallet details)
+  // Only return these to the requesting admin that created/owns them, unless
+  // the requester is a Super Admin in which case return all for the user.
+  let adminBankAccounts: any[] = []
+  let adminWalletDetails: any[] = []
+  try {
+    const superA = await isSuperAdmin(req.userId!)
+    if (superA) {
+      adminBankAccounts = await prisma.adminBankAccount.findMany({ where: { userId: id } })
+      adminWalletDetails = await prisma.adminWalletDetail.findMany({ where: { userId: id } })
+    } else {
+      adminBankAccounts = await prisma.adminBankAccount.findMany({ where: { userId: id, adminId: req.userId } })
+      adminWalletDetails = await prisma.adminWalletDetail.findMany({ where: { userId: id, adminId: req.userId } })
+    }
+  } catch (e) {
+    console.error('failed to load admin payment details', e)
+    adminBankAccounts = []
+    adminWalletDetails = []
+  }
+
   let savedWallet: { encryptedWallet?: string; address?: string; updatedAt?: string } | null = null
   try {
     const prefs = user.prefs ? JSON.parse(user.prefs) : {}
@@ -542,6 +553,8 @@ router.get('/users/:id', async (req: AuthedRequest, res) => {
     user: publicUser(user),
     holdings, walletBalances, walletLinks, transactions, trades, watchlist, alerts, notifications,
     savedWallet,
+    adminBankAccounts,
+    adminWalletDetails,
   })
 })
 
@@ -654,16 +667,17 @@ router.post('/users/:id/wallet-links', async (req: AuthedRequest, res) => {
   const provider = parsed.data.provider ?? null
   const label = parsed.data.label ?? null
 
-  const link = await prisma.$transaction(async (tx) => {
-    const otherCount = await tx.walletLink.count({ where: { userId, NOT: { address } } })
-    const existingLink = await tx.walletLink.findUnique({ where: { userId_address: { userId, address } } })
+  let link
+  try {
+    const otherCount = await prisma.walletLink.count({ where: { userId, NOT: { address } } })
+    const existingLink = await prisma.walletLink.findUnique({ where: { userId_address: { userId, address } } })
     const makePrimary = parsed.data.setPrimary || otherCount === 0 || existingLink?.isPrimary === true
 
     if (makePrimary) {
-      await tx.walletLink.updateMany({ where: { userId, isPrimary: true, NOT: { address } }, data: { isPrimary: false } })
+      await prisma.walletLink.updateMany({ where: { userId, isPrimary: true, NOT: { address } }, data: { isPrimary: false } })
     }
 
-    const row = await tx.walletLink.upsert({
+    link = await prisma.walletLink.upsert({
       where: { userId_address: { userId, address } },
       create: { userId, address, chainId, provider, label, isPrimary: makePrimary },
       update: {
@@ -675,13 +689,16 @@ router.post('/users/:id/wallet-links', async (req: AuthedRequest, res) => {
     })
 
     if (makePrimary) {
-      await tx.user.update({
+      await prisma.user.update({
         where: { id: userId },
         data: { walletAddress: address, walletChainId: chainId, walletProvider: provider, walletLinkedAt: new Date() },
       })
     }
-    return row
-  })
+  } catch (err) {
+    console.error('wallet-link upsert failed', err)
+    res.status(500).json({ error: 'Failed to save wallet link' })
+    return
+  }
 
   await audit(req.userId!, 'user.walletLink.upsert', userId, {
     address,

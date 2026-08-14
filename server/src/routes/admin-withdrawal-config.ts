@@ -5,6 +5,10 @@ import { requireAuth, requireAdmin, type AuthedRequest } from '../auth.js'
 
 const router = Router()
 
+// Require authenticated admin for all routes in this file
+router.use(requireAuth)
+router.use(requireAdmin)
+
 // Schema for admin configuring ACH for a user
 const setUserAchSchema = z.object({
   bankAccountId: z.string().optional(), // ID of a system bank account
@@ -188,9 +192,17 @@ router.get('/withdrawal-options', requireAuth, async (req: AuthedRequest, res) =
       return
     }
 
-    const prefs = (user.prefs || {}) as Record<string, unknown>
+    let prefs: Record<string, unknown> = {}
+    try { if (user.prefs) prefs = JSON.parse(user.prefs) } catch { prefs = {} }
     const ach = prefs.withdrawalAch as Record<string, unknown> | undefined
     const wire = prefs.withdrawalWire as Record<string, unknown> | undefined
+
+    const mask = (s?: string | null) => {
+      if (!s) return undefined
+      const clean = String(s).replace(/\s+/g, '')
+      if (clean.length <= 4) return `****${clean}`
+      return `****${clean.slice(-4)}`
+    }
 
     // Get crypto addresses from userWallets or depositInstructions
     // For now, assume crypto is always available if admin configured addresses
@@ -215,8 +227,10 @@ router.get('/withdrawal-options', requireAuth, async (req: AuthedRequest, res) =
         details: wire ? {
           beneficiaryName: wire.beneficiaryName as string,
           bankName: wire.bankName as string,
-          accountNumber: wire.accountNumber as string,
-          routingNumber: wire.routingNumber as string,
+          // Mask full account and routing numbers for security. Frontend may
+          // show the masked value and instruct users to contact support for full details.
+          accountMask: mask(wire.accountNumber as string | undefined) as string | undefined,
+          routingMask: mask(wire.routingNumber as string | undefined) as string | undefined,
           swiftCode: wire.swiftCode as string | undefined,
           reference: wire.reference as string | undefined,
         } : undefined,

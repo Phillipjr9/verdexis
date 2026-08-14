@@ -143,4 +143,20 @@ export default function AllocationStatusCard({ holdings, totalValue }: Props) {
               />
             </div>
             {item.drift > 5 && (
-              <p className="text-[10px] text-[#FF9800] mt-1">Drift: {item.drift.toFixed(1)}%</p>\n            )}\n          </div>\n        ))}\n      </div>\n\n      {/* Recommendation */}\n      <div className=\"mt-4 pt-4 border-t border-[#ffffff08]\">\n        <p className=\"text-[10px] text-[#A0A0A0] leading-relaxed\">\n          {allocation.needsRebalance\n            ? '⚠ Your allocation has drifted from target. Rebalance to maintain your desired risk profile.'\n            : '✓ Your allocation is well-balanced. No rebalancing needed.'}\n        </p>\n      </div>\n    </div>\n  )\n}\n
+              <p className="text-[10px] text-[#FF9800] mt-1">Drift: {item.drift.toFixed(1)}%</p>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Recommendation */}
+      <div className="mt-4 pt-4 border-t border-[#ffffff08]">
+        <p className="text-[10px] text-[#A0A0A0] leading-relaxed">
+          {allocation.needsRebalance
+            ? '⚠ Your allocation has drifted from target. Rebalance to maintain your desired risk profile.'
+            : '✓ Your allocation is well-balanced. No rebalancing needed.'}
+        </p>
+      </div>
+    </div>
+  )
+}

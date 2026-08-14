@@ -3,13 +3,24 @@ import { prisma } from '../db.js'
 const SUPER_ADMIN_EMAIL = 'admin@verdexisgroup.com'
 
 /**
- * Check if a user is the Super Admin (admin@verdexis.com with role='admin')
+ * Check if a user is the Super Admin.
+ *
+ * Prefer the admin hierarchy flag when available (an admin created with
+ * `canCreateAdmins = true` is considered a super-admin). Fall back to the
+ * legacy email-based check for backwards compatibility.
  */
 export async function isSuperAdmin(userId: string): Promise<boolean> {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { email: true, role: true }
-  })
+  try {
+    const hierarchy = await prisma.adminHierarchy.findUnique({
+      where: { adminId: userId },
+      select: { canCreateAdmins: true },
+    })
+    if (hierarchy?.canCreateAdmins) return true
+  } catch (e) {
+    // ignore and fallback
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, email: true } })
   return user?.role === 'admin' && user?.email === SUPER_ADMIN_EMAIL
 }
 
