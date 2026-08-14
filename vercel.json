@@ -24,79 +24,79 @@
       ]
     },
     {
-      "source": "/**/*.js",
+      "source": "/(.*)\\.js",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     },
     {
-      "source": "/**/*.css",
+      "source": "/(.*)\\.css",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     },
     {
-      "source": "/**/*.woff",
+      "source": "/(.*)\\.woff",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     },
     {
-      "source": "/**/*.woff2",
+      "source": "/(.*)\\.woff2",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     },
     {
-      "source": "/**/*.ttf",
+      "source": "/(.*)\\.ttf",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     },
     {
-      "source": "/**/*.otf",
+      "source": "/(.*)\\.otf",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     },
     {
-      "source": "/**/*.png",
+      "source": "/(.*)\\.png",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     },
     {
-      "source": "/**/*.jpg",
+      "source": "/(.*)\\.jpg",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     },
     {
-      "source": "/**/*.jpeg",
+      "source": "/(.*)\\.jpeg",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     },
     {
-      "source": "/**/*.gif",
+      "source": "/(.*)\\.gif",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     },
     {
-      "source": "/**/*.svg",
+      "source": "/(.*)\\.svg",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     },
     {
-      "source": "/**/*.ico",
+      "source": "/(.*)\\.ico",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     },
     {
-      "source": "/**/*.webp",
+      "source": "/(.*)\\.webp",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
