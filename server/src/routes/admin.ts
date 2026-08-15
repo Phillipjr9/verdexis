@@ -168,6 +168,22 @@ router.get('/stats', async (_req, res) => {
   })
 })
 
+// --- transaction lookup -------------------------------------------------
+// Admins can resolve a transaction id to its record and owning user.
+// Only super-admins or admins assigned to the owning user may view it.
+router.get('/transactions/:id', async (req: AuthedRequest, res) => {
+  const txId = String(req.params.id || '')
+  if (!txId) { res.status(400).json({ error: 'Missing transaction id' }); return }
+
+  const tx = await prisma.transaction.findUnique({ where: { id: txId }, include: { user: { select: { id: true, email: true, name: true } } } })
+  if (!tx) { res.status(404).json({ error: 'Transaction not found' }); return }
+
+  const access = await getUserAccess(req, tx.userId)
+  if (!access.assigned) { res.status(404).json({ error: 'Transaction not found' }); return }
+
+  res.json({ transaction: tx })
+})
+
 // --- Helper: Check if user is assigned to admin ---
 async function isUserAssignedToAdmin(userId: string, adminId: string): Promise<boolean> {
   const assignment = await prisma.userAdminAssignment.findFirst({
@@ -1158,7 +1174,7 @@ router.post('/users/:id/deposit', idempotency(), async (req: AuthedRequest, res)
           status: parsed.data.status,
           reference,
           createdAt: occurredAt,
-        },
+        } as any,
       })
       return { holding, transaction }
     })

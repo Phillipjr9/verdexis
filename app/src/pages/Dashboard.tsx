@@ -20,7 +20,6 @@ import ExportMenu from '../components/dashboard/ExportMenu'
 import CustomizeWidgets from '../components/dashboard/CustomizeWidgets'
 import AdminQuickPanel from '../components/dashboard/AdminQuickPanel'
 import { AdminDashboardCharts } from '../components/dashboard/AdminDashboardCharts'
-import { AdminSettingsVerification } from '../components/dashboard/AdminSettingsVerificationNew'
 import TimeRangePicker, { type ChartRange, rangeLabel } from '../components/dashboard/TimeRangePicker'
 import NetWorthChart from '../components/NetWorthChart'
 import EmptyStateCta from '../components/dashboard/EmptyStateCta'
@@ -32,6 +31,7 @@ import { marketData, type CryptoQuote } from '../lib/marketData'
 import { liveTicker } from '../lib/liveTicker'
 import { realTimePrice } from '../lib/realTimePrice'
 import { aiService, type AIInsight } from '../lib/aiService'
+import { api, clearStoredAuth, getToken } from '../lib/api'
 import { portfolioStore, type PortfolioHolding, type Trade, type WalletBalance, type WalletTransaction } from '../lib/portfolioStore'
 import { assetIconFor, cryptoIconErrorFallback } from '../lib/cryptoIcon'
 import { useCurrency } from '../lib/currencyContext'
@@ -164,6 +164,7 @@ export default function Dashboard() {
   const [authOpen, setAuthOpen] = useState(false)
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login')
   const [chartRange, setChartRange] = useState<ChartRange>('1W')
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => !!getToken())
   const [showBenchmark, setShowBenchmark] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -184,7 +185,34 @@ export default function Dashboard() {
     useGrouping: true,
   })
   const [hiddenWidgets, setHiddenWidgets] = useState(() => dashboardLayout.hidden())
-  const isAuthenticated = !!localStorage.getItem('verdexis_token')
+  useEffect(() => {
+    const syncAuthState = () => setIsAuthenticated(!!getToken())
+    syncAuthState()
+    window.addEventListener('storage', syncAuthState)
+    window.addEventListener('verdexis:profile', syncAuthState)
+    return () => {
+      window.removeEventListener('storage', syncAuthState)
+      window.removeEventListener('verdexis:profile', syncAuthState)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isAuthenticated) return
+    let active = true
+    api.me()
+      .then(() => {
+        if (!active) return
+      })
+      .catch(() => {
+        if (!active) return
+        clearStoredAuth()
+        setIsAuthenticated(false)
+        setApiError('Your session expired. Please sign in again.')
+      })
+
+    return () => { active = false }
+  }, [isAuthenticated])
+
   const userName = (() => {
     try {
       const auth = localStorage.getItem('verdexis_auth')
@@ -228,6 +256,15 @@ export default function Dashboard() {
         portfolioStore.markToMarket(quotes)
       }
 
+      if (isAuthenticated) {
+        try {
+          await portfolioStore.hydrate(true)
+        } catch {
+          // Surface cached values if the API is briefly unavailable; the session
+          // validation effect will clear invalid tokens separately.
+        }
+      }
+
       setHoldings([...portfolioStore.getHoldings()])
       setTrades(portfolioStore.getTrades().slice(0, 5))
       setWallet([...portfolioStore.getWallet()])
@@ -242,11 +279,11 @@ export default function Dashboard() {
       if (!silent) setLoading(false)
       setIsRefreshing(false)
     }
-  }, [])
+  }, [isAuthenticated])
 
   useEffect(() => {
-    fetchData()
-    const marketInterval = setInterval(() => fetchData(true), 10000)
+    void fetchData()
+    const marketInterval = setInterval(() => { void fetchData(true) }, 10000)
     const fastTick = setInterval(() => {
       setHoldings([...portfolioStore.getHoldings()])
       setWallet([...portfolioStore.getWallet()])
@@ -727,8 +764,16 @@ export default function Dashboard() {
                 <h2 className="text-sm font-semibold text-[#E5E5E5] mb-4">Admin Overview</h2>
                 <AdminDashboardCharts />
               </div>
-              <div className="mb-8">
-                <AdminSettingsVerification />
+              <div className="mb-8 rounded-3xl border border-[#ffffff10] bg-[#0f1619]/40 p-5">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.14em] text-[#A0A0A0]">Administration</p>
+                    <h2 className="text-lg font-medium text-[#E5E5E5] mt-1">Settings are managed in a dedicated control page</h2>
+                  </div>
+                  <Link to="/admin/settings" className="inline-flex items-center gap-2 rounded-lg border border-[#0C8B44]/30 bg-[#0C8B44]/10 px-3 py-2 text-xs text-[#0C8B44] hover:bg-[#0C8B44]/20 transition-colors">
+                    Open settings
+                  </Link>
+                </div>
               </div>
             </>
           )}

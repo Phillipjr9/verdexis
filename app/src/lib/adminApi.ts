@@ -478,6 +478,8 @@ export const adminApi = {
     request<{ transaction: AdminTransaction }>(`/api/admin/transactions/${id}`, { method: 'PATCH', body: JSON.stringify(tx) }),
   deleteTransaction: (id: string) =>
     request<{ ok: boolean }>(`/api/admin/transactions/${id}`, { method: 'DELETE' }),
+  getTransaction: (id: string) =>
+    request<{ transaction: AdminTransaction & { user: { id: string; email: string; name: string } } }>(`/api/admin/transactions/${encodeURIComponent(id)}`),
 
   // Trades
   createTrade: (userId: string, t: { symbol: string; side: 'buy' | 'sell'; amount: number; price: number }) =>

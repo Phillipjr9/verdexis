@@ -18,10 +18,11 @@ export default function RequireAdmin({ children }: { children: React.ReactNode }
 
     const validateAdmin = async () => {
       try {
-        const { user } = await api.me()
+        const me = await api.me()
         if (cancelled) return
 
-        if (user.role === 'admin') {
+        const user = me?.user
+        if (user?.role === 'admin') {
           setCheck('ok')
         } else {
           toast.error('Admin access required')

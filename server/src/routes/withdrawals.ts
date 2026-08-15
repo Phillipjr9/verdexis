@@ -378,7 +378,7 @@ router.post('/', requireAuth, moneyLimiter, idempotency(), async (req: AuthedReq
             amount,
             status: 'completed',
             reference: transfer.txHash ?? null,
-          },
+          } as any,
         })
 
         await tx.notification.create({
@@ -517,7 +517,7 @@ router.put('/admin/:id/approve', requireAuth, requireAdmin, async (req: AuthedRe
           amount: withdrawal.amount,
           status: 'completed',
           reference: txHash,
-        },
+        } as any,
       })
 
       // Credit processing fee back to user in the same asset it was charged

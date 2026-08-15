@@ -1,8 +1,12 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
+import { adminApi } from '../../lib/adminApi'
 import { Search, Filter, Bell, AlertCircle, TrendingUp, TrendingDown, CheckCircle, Clock, Eye, Download } from 'lucide-react'
 
 export function AdminSearchBar() {
   const [query, setQuery] = useState('')
+  const navigate = useNavigate()
   return (
     <div className="relative">
       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#737373]" />
@@ -11,6 +15,20 @@ export function AdminSearchBar() {
         placeholder="Search users, transactions, alerts..."
         value={query}
         onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={async (e) => {
+          if (e.key !== 'Enter') return
+          e.preventDefault()
+          const q = query.trim()
+          if (!q) return
+          try {
+            const res = await adminApi.getTransaction(q)
+            const uid = res.transaction.user?.id
+            if (!uid) { toast.error('Owning user not found'); return }
+            navigate(`/admin/users/${uid}?tab=transactions&tx=${res.transaction.id}`)
+          } catch (err) {
+            toast.error((err as { error?: string }).error || 'Not found')
+          }
+        }}
         className="w-full pl-10 pr-4 py-2.5 bg-[#1a1a1a] border border-[#ffffff10] rounded-lg text-sm text-[#E5E5E5] placeholder-[#737373] focus:outline-none focus:border-[#0C8B44]"
       />
     </div>

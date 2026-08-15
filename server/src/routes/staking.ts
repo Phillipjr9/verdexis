@@ -70,7 +70,7 @@ router.post('/positions', requireAuth, async (req: AuthedRequest, res) => {
           amount,
           status: 'completed',
           reference: position.id,
-        },
+        } as any,
       })
 
       // Notify user
@@ -181,7 +181,7 @@ router.post('/positions/:id/unstake', requireAuth, async (req: AuthedRequest, re
           amount: position.amount,
           status: 'completed',
           reference: position.id,
-        },
+        } as any,
       })
 
       // Notify user

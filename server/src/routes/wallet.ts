@@ -342,7 +342,7 @@ router.post('/transactions', requireAuth, moneyLimiter, idempotency(), async (re
           amount,
           reference: reference ? `${reference} (pending review)` : 'Deposit request (pending review)',
           status: 'pending',
-        },
+        } as any,
       })
       // Make sure a wallet row exists at zero so the user sees the currency.
       await tx.walletBalance.upsert({

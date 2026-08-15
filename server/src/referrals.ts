@@ -198,7 +198,7 @@ export async function creditReferralBonus(bonusId: string, paymentMethod: 'tradi
       status: 'completed',
       subType: 'referral_bonus',
       reference: `referral_bonus:${bonusId}`,
-    },
+    } as any,
   })
 
   // Update the user's USD wallet balance

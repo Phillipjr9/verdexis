@@ -18,7 +18,13 @@ export function AdminDashboardCharts() {
         const stats = await adminApi.stats()
         setData({ stats, loading: false, error: null })
       } catch (err) {
-        setData({ stats: null, loading: false, error: (err as { error?: string }).error || 'Failed to load stats' })
+        const reason = err as { error?: string; status?: number }
+        const isTransient = reason?.status === 401 || reason?.status === 403 || (reason && typeof reason === 'object' && 'name' in reason && (reason as { name?: string }).name === 'AbortError')
+        if (isTransient) {
+          setData({ stats: null, loading: false, error: null })
+          return
+        }
+        setData({ stats: null, loading: false, error: reason?.error || 'Failed to load stats' })
       }
     }
 

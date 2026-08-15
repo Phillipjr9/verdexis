@@ -31,6 +31,14 @@ export default function AdminSettings() {
   const [otp, setOtp] = useState<OtpAnalytics | null>(null)
   const [otpLoading, setOtpLoading] = useState(true)
 
+  const [govSettings, setGovSettings] = useState({
+    requireOtpForWithdrawals: true,
+    requireKycForWithdrawals: true,
+    autoVerifySettings: true,
+    flagSuspiciousLogins: true,
+  })
+  const [auditNote, setAuditNote] = useState('')
+
   useEffect(() => {
     adminApi.get('/withdrawal-fee-config')
       .then((r: { ratePct: number }) => setRatePct(r.ratePct))
@@ -86,6 +94,16 @@ export default function AdminSettings() {
       .then((r: OtpAnalytics) => setOtp(r))
       .catch(() => {})
       .finally(() => setOtpLoading(false))
+  }
+
+  const setGovToggle = async (key: keyof typeof govSettings, value: boolean) => {
+    setGovSettings((prev) => ({ ...prev, [key]: value }))
+    try {
+      await adminApi.saveSetting(key, String(value))
+      toast.success('Governance setting updated')
+    } catch (error) {
+      toast.error((error as { error?: string })?.error || 'Failed to save governance setting')
+    }
   }
 
   return (
@@ -237,39 +255,101 @@ export default function AdminSettings() {
           {/* Monitoring & compliance */}
           <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6 lg:col-span-2">
             <h2 className="text-xs uppercase tracking-[0.2em] text-[#737373] mb-4">Monitoring & compliance</h2>
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-2">
-                <Shield className="w-4 h-4 text-[#0C8B44]" />
-                <h2 className="text-lg font-medium text-[#E5E5E5]">OTP / 2FA Analytics</h2>
-              </div>
-              <button onClick={refreshOtp} className="text-[11px] text-[#A0A0A0] hover:text-[#0C8B44] flex items-center gap-1">
-                <RefreshCw className="w-3 h-3" /> Refresh
-              </button>
-            </div>
-            <p className="text-xs text-[#737373] mb-5">
-              Platform-wide OTP adoption and activity. Manage per-user OTP settings from the user detail page.
-            </p>
 
-            {otpLoading ? (
-              <p className="text-xs text-[#737373]">Loading…</p>
-            ) : !otp ? (
-              <p className="text-xs text-[#737373]">Analytics unavailable.</p>
-            ) : (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <StatBox label="Total users" value={otp.totalUsers.toLocaleString()} />
-                <StatBox label="OTP enabled" value={otp.otpEnabledCount.toLocaleString()} accent="green" />
-                <StatBox label="Adoption rate" value={otp.adoptionRate} accent="green" />
-                <StatBox label="2FA (twoFactor)" value={String(otp.requirements.twoFactor)} />
-                <StatBox label="OTPs (24h)" value={otp.activity24h.totalOTPs.toLocaleString()} />
-                <StatBox label="Failed OTPs (24h)" value={otp.activity24h.failedOTPs.toLocaleString()} accent={otp.activity24h.failedOTPs > 0 ? 'orange' : undefined} />
-                <StatBox label="Success rate (24h)" value={otp.activity24h.successRate} accent="green" />
-                <StatBox label="Required for login" value={String(otp.requirements.login)} />
+            <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-[#0C8B44]" />
+                    <h2 className="text-lg font-medium text-[#E5E5E5]">OTP / 2FA Analytics</h2>
+                  </div>
+                  <button onClick={refreshOtp} className="text-[11px] text-[#A0A0A0] hover:text-[#0C8B44] flex items-center gap-1">
+                    <RefreshCw className="w-3 h-3" /> Refresh
+                  </button>
+                </div>
+                <p className="text-xs text-[#737373] mb-5">
+                  Platform-wide OTP adoption and activity. Manage per-user OTP settings from the user detail page.
+                </p>
+
+                {otpLoading ? (
+                  <p className="text-xs text-[#737373]">Loading…</p>
+                ) : !otp ? (
+                  <p className="text-xs text-[#737373]">Analytics unavailable.</p>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <StatBox label="Total users" value={otp.totalUsers.toLocaleString()} />
+                    <StatBox label="OTP enabled" value={otp.otpEnabledCount.toLocaleString()} accent="green" />
+                    <StatBox label="Adoption rate" value={otp.adoptionRate} accent="green" />
+                    <StatBox label="2FA (twoFactor)" value={String(otp.requirements.twoFactor)} />
+                    <StatBox label="OTPs (24h)" value={otp.activity24h.totalOTPs.toLocaleString()} />
+                    <StatBox label="Failed OTPs (24h)" value={otp.activity24h.failedOTPs.toLocaleString()} accent={otp.activity24h.failedOTPs > 0 ? 'orange' : undefined} />
+                    <StatBox label="Success rate (24h)" value={otp.activity24h.successRate} accent="green" />
+                    <StatBox label="Required for login" value={String(otp.requirements.login)} />
+                  </div>
+                )}
               </div>
-            )}
+
+              <div className="rounded-2xl bg-[#121a1f]/80 border border-[#ffffff08] p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <Settings className="w-4 h-4 text-[#0C8B44]" />
+                  <h3 className="text-lg font-medium text-[#E5E5E5]">Verification & governance</h3>
+                </div>
+
+                <div className="space-y-4">
+                  <ToggleRow
+                    label="Require OTP on withdrawals"
+                    enabled={govSettings.requireOtpForWithdrawals}
+                    onToggle={(value) => setGovToggle('requireOtpForWithdrawals', value)}
+                  />
+                  <ToggleRow
+                    label="Require KYC before withdrawals"
+                    enabled={govSettings.requireKycForWithdrawals}
+                    onToggle={(value) => setGovToggle('requireKycForWithdrawals', value)}
+                  />
+                  <ToggleRow
+                    label="Auto-verify admin setting changes"
+                    enabled={govSettings.autoVerifySettings}
+                    onToggle={(value) => setGovToggle('autoVerifySettings', value)}
+                  />
+                  <ToggleRow
+                    label="Flag suspicious logins"
+                    enabled={govSettings.flagSuspiciousLogins}
+                    onToggle={(value) => setGovToggle('flagSuspiciousLogins', value)}
+                  />
+
+                  <div>
+                    <label className="text-[10px] uppercase tracking-[0.2em] text-[#737373] block mb-2">Audit note</label>
+                    <input
+                      type="text"
+                      value={auditNote}
+                      onChange={(e) => setAuditNote(e.target.value)}
+                      placeholder="Optional review note"
+                      className="w-full px-3 py-2 bg-[#0a0f11] border border-[#ffffff10] rounded-lg text-sm text-[#E5E5E5] focus:outline-none focus:border-[#0C8B44]"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
+  )
+}
+
+function ToggleRow({ label, enabled, onToggle }: { label: string; enabled: boolean; onToggle: (value: boolean) => void }) {
+  return (
+    <label className="flex items-center justify-between gap-4 rounded-xl border border-[#ffffff08] bg-[#10181b] px-3 py-2.5 cursor-pointer">
+      <span className="text-sm text-[#E5E5E5]">{label}</span>
+      <button
+        type="button"
+        aria-label={label}
+        onClick={() => onToggle(!enabled)}
+        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${enabled ? 'bg-[#0C8B44]' : 'bg-[#2d2d2d]'}`}
+      >
+        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+      </button>
+    </label>
   )
 }
 

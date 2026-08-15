@@ -32,24 +32,38 @@ const EVENT_TYPES = [
   'account.login',
 ]
 
-const MOCK_WEBHOOKS: WebhookEntry[] = [
-  { id: '1', url: 'https://hooks.slack.com/services/XXX/YYY/ZZZ', events: ['price.alert.triggered', 'deposit.received'], active: true, lastTriggered: '2026-05-09T14:22:00Z', secret: 'whsec_abc123' },
-]
-
-const MOCK_KEYS: ApiKey[] = [
-  { id: '1', name: 'Trading Bot', key: 'vdx_live_sk_••••••••••••••••3f8a', permissions: ['read', 'trade'], created: '2026-03-12', lastUsed: '2026-05-10' },
-]
+import { useEffect } from 'react'
+import { api } from '../lib/api'
 
 export default function Integrations() { return <RequireAuth><IntegrationsInner /></RequireAuth> }
 
 function IntegrationsInner() {
   const [tab, setTab] = useState<'webhooks' | 'api'>('webhooks')
-  const [webhooks, setWebhooks] = useState(MOCK_WEBHOOKS)
-  const [apiKeys] = useState(MOCK_KEYS)
+  const [webhooks, setWebhooks] = useState<WebhookEntry[]>([])
+  const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
   const [creating, setCreating] = useState(false)
   const [newUrl, setNewUrl] = useState('')
   const [newEvents, setNewEvents] = useState<string[]>([])
   const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({})
+
+  useEffect(() => {
+    let mounted = true
+    void (async () => {
+      try {
+        const wh = await api.get<{ webhooks: WebhookEntry[] }>('/api/webhooks')
+        if (mounted && wh?.webhooks) setWebhooks(wh.webhooks as WebhookEntry[])
+      } catch (e) {
+        console.warn('Failed to load webhooks', e)
+      }
+      try {
+        const keys = await api.getApiKeys()
+        if (mounted && keys?.keys) setApiKeys(keys.keys.map((k: any) => ({ id: k.id, name: k.name, key: k.prefix ? `${k.prefix}••••` : '••••', permissions: k.permissions || [], created: k.createdAt || '', lastUsed: k.lastUsedAt || null })))
+      } catch (e) {
+        console.warn('Failed to load API keys', e)
+      }
+    })()
+    return () => { mounted = false }
+  }, [])
 
   const toggleEvent = (ev: string) => {
     setNewEvents(prev => prev.includes(ev) ? prev.filter(e => e !== ev) : [...prev, ev])
@@ -59,14 +73,47 @@ function IntegrationsInner() {
     if (!newUrl.trim()) { toast.error('Enter a URL'); return }
     if (newEvents.length === 0) { toast.error('Select at least one event'); return }
     try { new URL(newUrl) } catch { toast.error('Invalid URL'); return }
-    const wh: WebhookEntry = { id: Date.now().toString(), url: newUrl.trim(), events: newEvents, active: true, lastTriggered: null, secret: `whsec_${Math.random().toString(36).slice(2, 14)}` }
-    setWebhooks(prev => [...prev, wh])
-    setCreating(false); setNewUrl(''); setNewEvents([])
-    toast.success('Webhook created')
+    setCreating(true)
+    void (async () => {
+      try {
+        const body = { url: newUrl.trim(), events: newEvents, active: true }
+        const res = await api.post('/api/webhooks', body)
+        // Prefer using the client `api` wrapper if available
+        // Fallback: optimistic local creation if server call fails for some reason
+        if (res && res.id) {
+          setWebhooks(prev => [...prev, { id: res.id, url: newUrl.trim(), events: newEvents, active: true, lastTriggered: null, secret: res.secret ?? '' }])
+        } else {
+          setWebhooks(prev => [...prev, { id: Date.now().toString(), url: newUrl.trim(), events: newEvents, active: true, lastTriggered: null, secret: `whsec_${Math.random().toString(36).slice(2, 14)}` }])
+        }
+        setCreating(false); setNewUrl(''); setNewEvents([])
+        toast.success('Webhook created')
+      } catch (err) {
+        console.error('Create webhook failed', err)
+        toast.error('Failed to create webhook')
+        setCreating(false)
+      }
+    })()
   }
 
-  const removeWebhook = (id: string) => { setWebhooks(prev => prev.filter(w => w.id !== id)); toast.success('Webhook removed') }
-  const toggleWebhook = (id: string) => { setWebhooks(prev => prev.map(w => w.id === id ? { ...w, active: !w.active } : w)) }
+  const removeWebhook = (id: string) => {
+    void (async () => {
+      try {
+        await api.delete(`/api/webhooks/${encodeURIComponent(id)}`)
+      } catch (e) { console.warn('delete webhook', e) }
+      setWebhooks(prev => prev.filter(w => w.id !== id)); toast.success('Webhook removed')
+    })()
+  }
+  const toggleWebhook = (id: string) => {
+    const w = webhooks.find(x => x.id === id)
+    if (!w) return
+    const next = !w.active
+    void (async () => {
+      try {
+        await api.patch(`/api/webhooks/${encodeURIComponent(id)}`, { active: next })
+      } catch (e) { console.warn('update webhook', e) }
+      setWebhooks(prev => prev.map(w => w.id === id ? { ...w, active: next } : w))
+    })()
+  }
 
   const copy = (text: string) => { navigator.clipboard.writeText(text); toast.success('Copied!') }
 

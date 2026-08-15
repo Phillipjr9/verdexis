@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { marketData } from '../lib/marketData'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, FlaskConical, TrendingUp, TrendingDown, RotateCcw, BookOpen } from 'lucide-react'
 import Navigation from '../components/Navigation'
@@ -31,16 +32,7 @@ interface PaperState {
 
 const INITIAL_BALANCE = 100_000
 
-const MOCK_PRICES: Record<string, { name: string; price: number; change: number }> = {
-  BTC: { name: 'Bitcoin', price: 62_450, change: 2.3 },
-  ETH: { name: 'Ethereum', price: 3_280, change: 1.8 },
-  SOL: { name: 'Solana', price: 178, change: -0.9 },
-  BNB: { name: 'BNB', price: 590, change: 0.5 },
-  XRP: { name: 'XRP', price: 0.54, change: 3.1 },
-  ADA: { name: 'Cardano', price: 0.44, change: -1.2 },
-  DOGE: { name: 'Dogecoin', price: 0.165, change: 5.4 },
-  AVAX: { name: 'Avalanche', price: 38.2, change: -2.1 },
-}
+const DEFAULT_PRICES: Record<string, { name: string; price: number; change: number }> = {}
 
 const STORAGE_KEY = 'verdexis_paper'
 
@@ -72,8 +64,29 @@ function PaperTradingInner() {
   const [symbol, setSymbol] = useState('BTC')
   const [side, setSide] = useState<'buy' | 'sell'>('buy')
   const [qty, setQty] = useState('')
+  const [prices, setPrices] = useState<Record<string, { name: string; price: number; change: number }>>(DEFAULT_PRICES)
 
-  const prices = MOCK_PRICES
+  useEffect(() => {
+    let mounted = true
+    void (async () => {
+      try {
+        const list = await marketData.getCryptoList()
+        if (!mounted) return
+        const map: Record<string, { name: string; price: number; change: number }> = {}
+        for (const c of list || []) {
+          const sym = (c.symbol || '').toUpperCase()
+          if (!sym) continue
+          map[sym] = { name: c.name || sym, price: c.current_price || 0, change: c.price_change_percentage_24h || 0 }
+        }
+        setPrices(map)
+      } catch (e) {
+        console.warn('Failed to load market list for paper trading', e)
+      }
+    })()
+    return () => { mounted = false }
+  }, [])
+
+  // `prices` state populated from marketData; falls back to empty map
   const currentPrice = prices[symbol]?.price ?? 0
   const totalCost = parseFloat(qty || '0') * currentPrice
 

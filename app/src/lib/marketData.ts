@@ -308,31 +308,10 @@ class MarketDataService {
   }
 
   private generateMockOhlc(coinId: string, range: OhlcRange): Candle[] {
-    // Generate realistic-looking OHLC data for demo
-    const coin = MOCK_CRYPTO_DATA.find(c => c.id === coinId) || MOCK_CRYPTO_DATA[0]
-    const basePrice = coin.current_price
-    const volatility = 0.02 // 2% moves
-    
-    const pointCount = range === '1H' ? 12 : range === '1D' ? 24 : range === '1W' ? 168 : range === '1M' ? 120 : 365
-    const interval = range === '1H' ? 5 * 60 * 1000 : range === '1D' ? 60 * 60 * 1000 : range === '1W' ? 60 * 60 * 1000 : range === '1M' ? 6 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000
-    
-    const candles: Candle[] = []
-    let currentPrice = basePrice
-    const now = Date.now()
-    
-    for (let i = 0; i < pointCount; i++) {
-      const time = now - (pointCount - i) * interval
-      const open = currentPrice
-      const change = (Math.random() - 0.5) * basePrice * volatility
-      const close = Math.max(open + change, basePrice * 0.8) // Don't go below 80% of base
-      const high = Math.max(open, close) * (1 + Math.random() * 0.01)
-      const low = Math.min(open, close) * (1 - Math.random() * 0.01)
-      
-      candles.push({ time, open, high, low, close })
-      currentPrice = close
-    }
-    
-    return candles
+    // Do not generate mock data. Return empty array to let UI handle unavailable data.
+    // Real OHLC data comes from CoinGecko server-side.
+    console.warn(`[marketData] OHLC data unavailable for ${coinId}. Will retry on next request.`)
+    return []
   }
 
   async getMarketNews(opts: { category?: string; force?: boolean } = {}): Promise<MarketNews[]> {
@@ -374,6 +353,22 @@ class MarketDataService {
     } catch {
       return []
     }
+  }
+
+  /**
+   * Get latest crypto quotes as a Map for efficient lookups.
+   * Used by stakingStore and other components needing live prices.
+   */
+  getLatestQuotes(): Map<string, number> {
+    const quotes = new Map<string, number>()
+    const cached = this.cache.get('crypto_list')?.data as CryptoQuote[] | undefined
+    if (cached && Array.isArray(cached)) {
+      for (const q of cached) {
+        quotes.set(q.id.toLowerCase(), q.current_price)
+        if (q.symbol) quotes.set(q.symbol.toLowerCase(), q.current_price)
+      }
+    }
+    return quotes
   }
 }
 

@@ -1,4 +1,6 @@
 import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { api } from '../lib/api'
 import { ArrowLeft, Gem, Zap, Star, Crown, CheckCircle } from 'lucide-react'
 import Navigation from '../components/Navigation'
 import RequireAuth from '../components/RequireAuth'
@@ -67,19 +69,34 @@ const TIERS: Tier[] = [
   },
 ]
 
-const MOCK_USER = {
-  tier: 'Silver',
-  volume30d: 34_200,
-  nextTierVolume: 100_000,
+interface LoyaltyStatus {
+  tier?: string
+  volume30d?: number
 }
 
 export default function Loyalty() { return <RequireAuth><LoyaltyInner /></RequireAuth> }
 
 function LoyaltyInner() {
-  const currentTierIdx = TIERS.findIndex(t => t.name === MOCK_USER.tier)
-  const currentTier = TIERS[currentTierIdx]
+  const [status, setStatus] = useState<LoyaltyStatus>({})
+
+  useEffect(() => {
+    let mounted = true
+    void (async () => {
+      try {
+        const res = await api.get<any>('/api/loyalty/me')
+        if (!mounted) return
+        if (res && typeof res.tier === 'string') setStatus({ tier: res.tier, volume30d: typeof res.volume30d === 'number' ? res.volume30d : 0 })
+      } catch (e) {
+        console.warn('No loyalty endpoint or failed to load loyalty', e)
+      }
+    })()
+    return () => { mounted = false }
+  }, [])
+
+  const currentTierIdx = TIERS.findIndex(t => t.name === (status.tier || ''))
+  const currentTier = TIERS[currentTierIdx] || TIERS[0]
   const nextTier = TIERS[currentTierIdx + 1]
-  const progress = nextTier ? (MOCK_USER.volume30d / nextTier.volumeRequired) * 100 : 100
+  const progress = nextTier ? ((status.volume30d || 0) / nextTier.volumeRequired) * 100 : 100
 
   return (
     <div className="min-h-screen bg-[#070C0E]">
@@ -104,7 +121,7 @@ function LoyaltyInner() {
               </div>
               <div className="text-right">
                 <p className="text-xs text-[#737373]">30-day volume</p>
-                <p className="text-2xl font-light text-[#E5E5E5]">${MOCK_USER.volume30d.toLocaleString()}</p>
+                <p className="text-2xl font-light text-[#E5E5E5]">${(status.volume30d || 0).toLocaleString()}</p>
               </div>
             </div>
 
@@ -117,7 +134,7 @@ function LoyaltyInner() {
                 <div className="w-full h-2 bg-[#ffffff10] rounded-full overflow-hidden">
                   <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(progress, 100)}%`, background: currentTier.color }} />
                 </div>
-                <p className="text-[11px] text-[#737373] mt-2">${(nextTier.volumeRequired - MOCK_USER.volume30d).toLocaleString()} more in trading volume to reach {nextTier.name}</p>
+                <p className="text-[11px] text-[#737373] mt-2">${Math.max(0, (nextTier.volumeRequired - (status.volume30d || 0))).toLocaleString()} more in trading volume to reach {nextTier.name}</p>
               </div>
             )}
           </div>
@@ -125,7 +142,7 @@ function LoyaltyInner() {
           {/* Tiers grid */}
           <div className="grid md:grid-cols-5 gap-3 mb-8">
             {TIERS.map((tier, i) => {
-              const isCurrent = tier.name === MOCK_USER.tier
+              const isCurrent = tier.name === status.tier
               const isPast = i < currentTierIdx
               return (
                 <div key={tier.name} className={`rounded-2xl border p-4 text-center transition-all ${isCurrent ? 'scale-105 shadow-lg' : ''}`} style={{ borderColor: isCurrent ? tier.color : '#ffffff10', background: isCurrent ? tier.bgColor : '#0f161950' }}>
@@ -154,7 +171,7 @@ function LoyaltyInner() {
                 </thead>
                 <tbody className="divide-y divide-[#ffffff05]">
                   {TIERS.map(tier => (
-                    <tr key={tier.name} className={`${tier.name === MOCK_USER.tier ? 'bg-[#0C8B44]/05' : ''}`}>
+                    <tr key={tier.name} className={`${tier.name === status.tier ? 'bg-[#0C8B44]/05' : ''}`}>
                       <td className="py-3 pr-4 font-medium" style={{ color: tier.color }}>{tier.name}</td>
                       <td className="py-3 pr-4 text-[#737373]">${tier.volumeRequired >= 1_000_000 ? `${tier.volumeRequired / 1_000_000}M+` : tier.volumeRequired >= 1000 ? `${tier.volumeRequired / 1000}K+` : tier.volumeRequired === 0 ? 'Any' : `${tier.volumeRequired}+`}</td>
                       <td className="py-3 pr-4 text-[#E5E5E5]">{tier.makerFee}%</td>
@@ -169,7 +186,7 @@ function LoyaltyInner() {
           {/* Perks */}
           <div className="grid md:grid-cols-2 gap-4">
             {TIERS.map(tier => {
-              const isCurrent = tier.name === MOCK_USER.tier
+              const isCurrent = tier.name === status.tier
               const isPast = TIERS.indexOf(tier) < currentTierIdx
               return (
                 <div key={tier.name} className={`rounded-2xl border p-5 ${isCurrent ? '' : ''}`} style={{ borderColor: isCurrent ? `${tier.color}40` : '#ffffff08', background: isCurrent ? tier.bgColor : '#0f161950' }}>

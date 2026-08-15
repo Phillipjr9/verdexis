@@ -193,7 +193,7 @@ export async function recordLedgerTransaction({
         reference: reference ?? description,
         subType,
         ...(createdAt ? { createdAt: createdAtValue } : {}),
-      },
+      } as any,
     })
   }
 

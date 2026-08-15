@@ -184,13 +184,14 @@ class RealTimePriceSystem {
   }
 
   /**
-   * Start polling for price updates (for testing/demo)
+   * Start polling for price updates (for testing/demo only - real prices come from liveTicker)
    */
   startPolling(interval: number = 5000): void {
     if (this.updateInterval) clearInterval(this.updateInterval)
 
     this.updateInterval = setInterval(() => {
-      // This is a placeholder - real prices come from liveTicker or WebSocket
+      // Real prices come from liveTicker or WebSocket subscriptions.
+      // This polling is only a fallback for testing/demo purposes.
       window.dispatchEvent(new Event(PRICE_UPDATE_EVENT))
     }, interval)
   }

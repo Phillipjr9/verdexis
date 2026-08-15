@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import Navigation from '../components/Navigation'
-import { adminApi, type AdminSessionStats } from '../lib/adminApi'
+import { adminApi, type AdminSessionStats, type AdminStats } from '../lib/adminApi'
 import { AdminDashboardCharts } from '../components/dashboard/AdminDashboardCharts'
 import {
   Users, ShieldCheck, Ban, ArrowLeftRight, Banknote, UserPlus, MegaphoneIcon, Settings as Cog, Activity, FileCheck2,
@@ -13,32 +13,38 @@ export default function AdminDashboard() {
   const [showCharts, setShowCharts] = useState(true)
   const [seedLoading, setSeedLoading] = useState(false)
   const [treasuryBalance, setTreasuryBalance] = useState<number | null>(null)
+  const [stats, setStats] = useState<AdminStats | null>(null)
   const [sessionStats, setSessionStats] = useState<AdminSessionStats | null>(null)
   const [pendingReviewCount, setPendingReviewCount] = useState<number | null>(null)
+  const [statsError, setStatsError] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
-    adminApi.getSessionStats()
-      .then((result) => {
-        if (!active) return
-        setSessionStats(result.stats)
-      })
-      .catch(() => {
-        if (!active) return
-      })
-    return () => { active = false }
-  }, [])
 
-  useEffect(() => {
-    let active = true
-    adminApi.listPendingReviews()
-      .then((result) => {
+    Promise.all([
+      adminApi.stats(),
+      adminApi.getSessionStats(),
+      adminApi.listPendingReviews(),
+    ])
+      .then(([statsResult, sessionResult, reviewResult]) => {
         if (!active) return
-        setPendingReviewCount(result.reviews.length)
+        setStats(statsResult)
+        setSessionStats(sessionResult.stats)
+        setPendingReviewCount(reviewResult.reviews.length)
+        setStatsError(null)
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (!active) return
+        const status = typeof err === 'object' && err !== null && 'status' in err ? Number((err as { status?: number }).status) : undefined
+        const isTransient = status === 401 || status === 403 || (typeof err === 'object' && err !== null && 'name' in err && (err as { name?: string }).name === 'AbortError')
+        if (isTransient) {
+          setStatsError(null)
+          return
+        }
+        const message = typeof err === 'object' && err !== null && 'error' in err ? String((err as { error?: string }).error) : 'Unable to load dashboard data'
+        setStatsError(message)
       })
+
     return () => { active = false }
   }, [])
 
@@ -56,6 +62,24 @@ export default function AdminDashboard() {
       setSeedLoading(false)
     }
   }
+
+  const statValues = stats?.stats ?? {
+    users: 0,
+    admins: 0,
+    suspended: 0,
+    holdings: 0,
+    trades: 0,
+    alerts: 0,
+    deposits24h: 0,
+    signups24h: 0,
+    holds: 0,
+    kycPending: 0,
+    withdraws24h: 0,
+    pendingDeposits: 0,
+  }
+
+  const recentSignups = stats?.recentSignups ?? []
+  const recentTx = stats?.recentTx ?? []
 
   return (
     <div className="min-h-screen bg-[#070C0E]">
@@ -82,6 +106,12 @@ export default function AdminDashboard() {
               </button>
             </div>
           </div>
+
+          {statsError && (
+            <div className="mb-8 rounded-2xl border border-[#f44336]/30 bg-[#f44336]/10 p-4 text-sm text-[#f44336]">
+              Unable to load admin data: {statsError}
+            </div>
+          )}
 
           {showCharts && (
             <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6 mb-8">
@@ -136,8 +166,8 @@ export default function AdminDashboard() {
                 <div className="rounded-2xl bg-[#FF9800]/10 border border-[#FF9800]/20 p-4 text-sm text-[#E5E5E5]">USER</div>
               </div>
               <div className="rounded-2xl bg-[#121a1f]/90 border border-[#ffffff08] p-5">
-                <p className="text-xs uppercase tracking-[0.25em] text-[#737373] mb-3">Settings Verification</p>
-                <p className="text-sm text-[#A0A0A0]">Monitor and verify all admin configurations</p>
+                <p className="text-xs uppercase tracking-[0.25em] text-[#737373] mb-3">Governance</p>
+                <p className="text-sm text-[#A0A0A0]">Platform settings now live in the dedicated admin settings page.</p>
               </div>
               <div className="rounded-2xl bg-[#121a1f]/90 border border-[#ffffff08] p-5">
                 <p className="text-xs uppercase tracking-[0.25em] text-[#737373] mb-3">Total Net Worth</p>
@@ -146,22 +176,42 @@ export default function AdminDashboard() {
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-              <StatBadge label="Signups (24h)" value="1" />
-              <StatBadge label="Holdings" value="1" />
-              <StatBadge label="Trades" value="1" />
-              <StatBadge label="Active Alerts" value="0" />
+              <StatBadge label="Signups (24h)" value={String(statValues.signups24h)} />
+              <StatBadge label="Holdings" value={String(statValues.holdings)} />
+              <StatBadge label="Trades" value={String(statValues.trades)} />
+              <StatBadge label="Active Alerts" value={String(statValues.alerts)} />
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mt-6">
-              <DashboardPanel title="Recent signups" subtitle="" emptyText="No recent signups." />
-              <DashboardPanel title="Recent transactions" subtitle="" emptyText="No activity yet." />
+              <DashboardPanel
+                title="Recent signups"
+                subtitle=""
+                emptyText={recentSignups.length ? '' : 'No recent signups.'}
+                items={recentSignups.slice(0, 4).map((signup) => ({
+                  title: signup.name || signup.email,
+                  subtitle: signup.email,
+                  meta: formatRelativeTime(signup.createdAt),
+                  badge: signup.role,
+                }))}
+              />
+              <DashboardPanel
+                title="Recent transactions"
+                subtitle=""
+                emptyText={recentTx.length ? '' : 'No activity yet.'}
+                items={recentTx.slice(0, 4).map((tx) => ({
+                  title: tx.kind.toUpperCase(),
+                  subtitle: tx.user?.email || 'System',
+                  meta: formatRelativeTime(tx.createdAt),
+                  badge: `${tx.kind === 'deposit' ? '+' : '-'}${formatCurrency(Math.abs(tx.amount))}`,
+                }))}
+              />
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mt-6">
               <DashboardPanel
                 title="Pending deposit approvals"
                 subtitle=""
-                emptyText="No pending deposit requests. New user deposits will appear here for approval before they affect balances."
+                emptyText={statValues.pendingDeposits > 0 ? `There are ${statValues.pendingDeposits} pending deposit requests.` : 'No pending deposit requests. New user deposits will appear here for approval before they affect balances.'}
               />
               <DashboardPanel
                 title="On-chain deposit approvals"
@@ -178,12 +228,12 @@ export default function AdminDashboard() {
 
           {/* Key Metrics Bar */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            <MetricBadge icon={<Users className="w-4 h-4" />} label="Users" value="1.2K" trend="+12" color="green" />
-            <MetricBadge icon={<ShieldCheck className="w-4 h-4" />} label="Admins" value="12" trend="+2" color="blue" />
-            <MetricBadge icon={<Ban className="w-4 h-4" />} label="Suspended" value="5" trend="+1" color="red" />
-            <MetricBadge icon={<Banknote className="w-4 h-4" />} label="Deposits (24h)" value="$45K" trend="+$12K" color="green" />
-            <MetricBadge icon={<ArrowDownToLine className="w-4 h-4" />} label="Withdrawals (24h)" value="$23K" trend="-$5K" color="orange" />
-            <MetricBadge icon={<AlertCircle className="w-4 h-4" />} label="Issues" value="28" trend="+5" color="red" />
+            <MetricBadge icon={<Users className="w-4 h-4" />} label="Users" value={formatCompactNumber(statValues.users)} trend={`+${statValues.signups24h}`} color="green" />
+            <MetricBadge icon={<ShieldCheck className="w-4 h-4" />} label="Admins" value={formatCompactNumber(statValues.admins)} trend="live" color="blue" />
+            <MetricBadge icon={<Ban className="w-4 h-4" />} label="Suspended" value={formatCompactNumber(statValues.suspended)} trend={statValues.suspended > 0 ? 'review' : 'clear'} color="red" />
+            <MetricBadge icon={<Banknote className="w-4 h-4" />} label="Deposits (24h)" value={formatCompactNumber(statValues.deposits24h)} trend={statValues.deposits24h > 0 ? 'live' : 'none'} color="green" />
+            <MetricBadge icon={<ArrowDownToLine className="w-4 h-4" />} label="Withdrawals (24h)" value={formatCompactNumber(statValues.withdraws24h)} trend={statValues.withdraws24h > 0 ? 'live' : 'none'} color="orange" />
+            <MetricBadge icon={<AlertCircle className="w-4 h-4" />} label="Issues" value={formatCompactNumber(statValues.kycPending + statValues.holds + statValues.pendingDeposits)} trend={statValues.pendingDeposits > 0 ? 'pending' : 'clear'} color="red" />
           </div>
         </div>
 
@@ -297,20 +347,22 @@ export default function AdminDashboard() {
           <ActivityCard
             title="Recent Signups"
             icon={<UserPlus className="w-4 h-4" />}
-            items={[
-              { name: 'John Doe', email: 'john@example.com', time: '5m ago', role: 'user' },
-              { name: 'Jane Smith', email: 'jane@example.com', time: '1h ago', role: 'user' },
-              { name: 'Bob Johnson', email: 'bob@example.com', time: '3h ago', role: 'admin' },
-            ]}
+            items={recentSignups.slice(0, 4).map((signup) => ({
+              name: signup.name || signup.email,
+              email: signup.email,
+              time: formatRelativeTime(signup.createdAt),
+              role: signup.role,
+            }))}
           />
           <ActivityCard
             title="Recent Transactions"
             icon={<ArrowLeftRight className="w-4 h-4" />}
-            items={[
-              { name: 'Deposit', email: 'alice@example.com', time: '10m ago', amount: '+$5,000' },
-              { name: 'Withdrawal', email: 'bob@example.com', time: '25m ago', amount: '-$2,500' },
-              { name: 'Transfer', email: 'charlie@example.com', time: '1h ago', amount: '+$1,200' },
-            ]}
+            items={recentTx.slice(0, 4).map((tx) => ({
+              name: tx.kind.toUpperCase(),
+              email: tx.user?.email || 'System',
+              time: formatRelativeTime(tx.createdAt),
+              amount: `${tx.kind === 'deposit' ? '+' : '-'}${formatCurrency(Math.abs(tx.amount))}`,
+            }))}
           />
         </div>
 
@@ -416,12 +468,29 @@ function StatBadge({ label, value }: { label: string; value: string }) {
   )
 }
 
-function DashboardPanel({ title, subtitle, emptyText }: { title: string; subtitle: string; emptyText: string }) {
+function DashboardPanel({ title, subtitle, emptyText, items }: { title: string; subtitle: string; emptyText: string; items?: Array<{ title: string; subtitle: string; meta: string; badge?: string }> }) {
   return (
     <div className="rounded-2xl bg-[#121a1f]/90 border border-[#ffffff08] p-5 h-full">
       <h3 className="text-sm font-semibold text-[#E5E5E5] mb-3">{title}</h3>
       {subtitle ? <p className="text-sm text-[#A0A0A0] mb-4">{subtitle}</p> : null}
-      <div className="rounded-2xl bg-[#0f1619]/80 border border-[#ffffff05] p-4 text-sm text-[#A0A0A0]">{emptyText}</div>
+      {items && items.length > 0 ? (
+        <div className="space-y-3">
+          {items.map((item, index) => (
+            <div key={`${title}-${index}`} className="flex items-center justify-between gap-3 rounded-xl border border-[#ffffff05] bg-[#0f1619]/80 p-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm text-[#E5E5E5]">{item.title}</p>
+                <p className="truncate text-xs text-[#737373]">{item.subtitle}</p>
+              </div>
+              <div className="text-right">
+                {item.badge && <span className="mb-1 block rounded-full bg-[#0C8B44]/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-[#0C8B44]">{item.badge}</span>}
+                <p className="text-xs text-[#737373]">{item.meta}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-2xl bg-[#0f1619]/80 border border-[#ffffff05] p-4 text-sm text-[#A0A0A0]">{emptyText}</div>
+      )}
     </div>
   )
 }
@@ -459,6 +528,35 @@ function OperationLink({ to, icon, label }: { to: string; icon: ReactNode; label
       <span className="text-xs font-medium text-[#E5E5E5] text-center">{label}</span>
     </Link>
   )
+}
+
+function formatCompactNumber(value: number): string {
+  if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}K`
+  return String(value)
+}
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
+function formatRelativeTime(value: string | Date): string {
+  const date = value instanceof Date ? value : new Date(value)
+  const diff = Date.now() - date.getTime()
+  const mins = Math.max(0, Math.round(diff / 60000))
+
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+
+  const hours = Math.round(mins / 60)
+  if (hours < 24) return `${hours}h ago`
+
+  const days = Math.round(hours / 24)
+  return `${days}d ago`
 }
 
 export function AdminConsoleContent({ onPendingDepositsLoaded }: { onPendingDepositsLoaded?: (n: number) => void } = {}) {

@@ -3,6 +3,8 @@
 // (principal * apy * elapsed / year). Default seed positions illustrate
 // realistic ETH / SOL / USDC yields so a brand-new account isn't empty.
 
+import { marketData } from './marketData'
+
 const STORAGE_KEY = 'verdexis_staking'
 const EVENT = 'verdexis:staking'
 
@@ -114,17 +116,19 @@ export function pendingRewardFor(p: StakingPosition): { rewardAsset: number; nex
   return { rewardAsset: Math.max(0, sinceLast), nextPayoutInDays }
 }
 
-// Mock price feed for staking assets. In production, this would query a real API.
+// Fetch real-time asset prices from live market data via CoinGecko
 export function priceForAsset(asset: string): number {
-  const prices: Record<string, number> = {
-    ETH: 2500,
-    SOL: 180,
-    USDC: 1,
-    BTC: 63000,
-    AVAX: 45,
-    POLYGON: 0.8,
+  const quotes = marketData.getLatestQuotes()
+  const key = asset.toLowerCase()
+  
+  // Return the price if available in the cached crypto list
+  if (quotes.has(key)) {
+    return quotes.get(key)!
   }
-  return prices[asset] || 0
+  
+  // If no price found, return 0 (will be available on next market update)
+  // This prevents stale/mock prices from being used
+  return 0
 }
 
 export const STAKING_EVENT = EVENT

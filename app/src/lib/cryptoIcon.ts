@@ -292,6 +292,5 @@ export function cryptoIconErrorFallback(initial: string, idOrSymbol?: string) {
     const cleanInitial = (initial || '?').charAt(0).toUpperCase()
     const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32'><circle cx='16' cy='16' r='16' fill='%230C8B44'/><text x='16' y='21' text-anchor='middle' font-family='system-ui,sans-serif' font-size='13' font-weight='700' fill='white'>${cleanInitial}</text></svg>`
     img.src = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
-    img.style.objectFit = 'contain'
   }
 }

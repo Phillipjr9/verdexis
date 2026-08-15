@@ -34,7 +34,8 @@ async function main() {
       console.log(`✅ Created USD wallet balance ${usdBalance}`)
     }
 
-    await prisma.transaction.create({ data: { userId: existing.id, kind: 'deposit', currency: 'USD', amount: usdBalance, status: 'completed', reference: 'Local test account funding' } })
+    const txnId = `TXN-${Date.now()}-${Math.floor(Math.random() * 90000) + 10000}`
+    await prisma.transaction.create({ data: { transactionId: txnId, userId: existing.id, kind: 'deposit', currency: 'USD', amount: usdBalance, status: 'completed', reference: 'Local test account funding' } })
     console.log(`✅ Created deposit transaction for ${usdBalance} USD`)
     return
   }
@@ -48,14 +49,13 @@ async function main() {
       role: 'user',
       emailVerified: true,
       emailVerifiedAt: new Date(),
-      walletBalances: {
-        create: [{ currency: 'USD', symbol: '$', balance: usdBalance, available: usdBalance }],
-      },
-      transactions: {
-        create: [{ kind: 'deposit', currency: 'USD', amount: usdBalance, status: 'completed', reference: 'Opening balance' }],
-      },
     },
   })
+
+  // Create wallet balance and opening transaction separately to satisfy schema constraints
+  await prisma.walletBalance.create({ data: { userId: user.id, currency: 'USD', symbol: '$', balance: usdBalance, available: usdBalance } })
+  const txnId = `TXN-${Date.now()}-${Math.floor(Math.random() * 90000) + 10000}`
+  await prisma.transaction.create({ data: { transactionId: txnId, userId: user.id, kind: 'deposit', currency: 'USD', amount: usdBalance, status: 'completed', reference: 'Opening balance' } })
 
   console.log(`✅ Created test user ${user.email}`)
   console.log(`   email: ${email}`)

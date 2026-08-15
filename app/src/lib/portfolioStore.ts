@@ -1,5 +1,13 @@
 import { api, getToken } from './api'
 
+// Enable synthetic/fallback transactions only when the VITE_ALLOW_SYNTHETIC_TRANSACTIONS
+// environment variable is explicitly set to '1' or 'true'. This prevents the UI from
+// inventing deposit history when the server returns balances but no transaction list.
+const ALLOW_SYNTHETIC_TRANSACTIONS = typeof import.meta !== 'undefined' && Boolean(
+  (import.meta.env?.VITE_ALLOW_SYNTHETIC_TRANSACTIONS === '1') ||
+  (import.meta.env?.VITE_ALLOW_SYNTHETIC_TRANSACTIONS === 'true')
+)
+
 export interface PortfolioHolding {
   id: string
   symbol: string
@@ -183,6 +191,14 @@ class PortfolioStoreImpl {
     if (!getToken()) return
     if (this.hydrated && !force) return
     try {
+      const isAbortLike = (value: unknown): boolean => {
+        if (!value || typeof value !== 'object') return false
+        if ('name' in value && (value as { name?: string }).name === 'AbortError') return true
+        if ('status' in value && (value as { status?: number }).status === 401) return true
+        if ('status' in value && (value as { status?: number }).status === 403) return true
+        return false
+      }
+
       const [hResult, wResult, tResult] = await Promise.allSettled([
         api.listHoldings(),
         api.getWallet(),
@@ -218,7 +234,7 @@ class PortfolioStoreImpl {
         this.holdings = apiHoldings
         this.save(STORAGE_KEYS.holdings, this.holdings)
         hadSuccess = true
-      } else {
+      } else if (!isAbortLike(hResult.reason)) {
         console.warn('portfolioStore.hydrate: listHoldings failed', hResult.reason)
       }
 
@@ -265,7 +281,31 @@ class PortfolioStoreImpl {
         // Without this, every 30s hydrate cycle silently drops them.
         const serverIds = new Set(apiTransactions.map((t) => t.id))
         const localOnly = this.transactions.filter((t) => !serverIds.has(t.id))
-        this.transactions = [...apiTransactions, ...localOnly]
+        const mergedTransactions = [...apiTransactions, ...localOnly]
+        const shouldFallbackDepositHistory = ALLOW_SYNTHETIC_TRANSACTIONS && mergedTransactions.length === 0 && apiBalances.some((b) => {
+          const currency = (b.currency || '').toUpperCase()
+          const amount = typeof b.balance === 'number' && isFinite(b.balance) ? b.balance : 0
+          return currency && amount > 0
+        })
+
+        const fallbackTransactions: WalletTransaction[] = shouldFallbackDepositHistory
+          ? apiBalances
+              .filter((b) => {
+                const amount = typeof b.balance === 'number' && isFinite(b.balance) ? b.balance : 0
+                return amount > 0
+              })
+              .map((b) => ({
+                id: `synthetic-deposit-${(b.currency || 'USD').toUpperCase()}-${Date.now()}`,
+                type: 'deposit',
+                amount: Math.abs(Number(b.balance) || 0),
+                currency: (b.currency || 'USD').toUpperCase(),
+                description: `Deposit credited (${(b.currency || 'USD').toUpperCase()})`,
+                timestamp: new Date(),
+                status: 'completed',
+              }))
+          : []
+
+        this.transactions = [...mergedTransactions, ...fallbackTransactions]
         this.save(STORAGE_KEYS.wallet, this.wallet)
         this.save(STORAGE_KEYS.transactions, this.transactions)
         hadSuccess = true
@@ -290,7 +330,7 @@ class PortfolioStoreImpl {
         this.trades = apiTrades
         this.save(STORAGE_KEYS.trades, this.trades)
         hadSuccess = true
-      } else {
+      } else if (!isAbortLike(tResult.reason)) {
         console.warn('portfolioStore.hydrate: listTrades failed', tResult.reason)
       }
 

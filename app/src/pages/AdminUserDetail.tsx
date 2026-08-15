@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useLocation } from 'react-router-dom'
 import { toast } from 'sonner'
 import Navigation from '../components/Navigation'
 import VerifiedBadge from '../components/VerifiedBadge'
@@ -156,6 +156,7 @@ export default function AdminUserDetail() {
   const [data, setData] = useState<AdminUserDetailResponse | null>(null)
   const [tab, setTab] = useState<Tab>('profile')
   const [loading, setLoading] = useState(true)
+  const location = useLocation()
 
   function reload() {
     if (!id) return
@@ -166,6 +167,26 @@ export default function AdminUserDetail() {
       .finally(() => setLoading(false))
   }
   useEffect(() => { reload()   }, [id])
+
+  // When the page load includes ?tab=transactions or ?tx=..., respect it
+  useEffect(() => {
+    if (!data) return
+    const params = new URLSearchParams(location.search)
+    const qTab = params.get('tab') as Tab | null
+    if (qTab) setTab(qTab)
+    const txParam = params.get('tx')
+    if (txParam) {
+      // Delay slightly until table renders
+      setTimeout(() => {
+        const el = document.getElementById(`tx-${txParam}`)
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          el.classList.add('ring-2', 'ring-[#0C8B44]')
+          setTimeout(() => el.classList.remove('ring-2', 'ring-[#0C8B44]'), 3000)
+        }
+      }, 200)
+    }
+  }, [data, location.search])
 
   if (loading || !data) {
     return (
@@ -807,7 +828,7 @@ function TransactionsTab({ userId, txs, onChange }: { userId: string; txs: Admin
           <tbody>
             {txs.length === 0 && <tr><td colSpan={6} className="text-center py-8 text-[#737373]">No transactions</td></tr>}
             {txs.map((t) => (
-              <tr key={t.id} className="border-t border-[#ffffff05]">
+              <tr id={`tx-${t.id}`} key={t.id} className="border-t border-[#ffffff05]">
                 <td className="px-4 py-3 text-[11px] text-[#737373]">
                   <input
                     type="date"

@@ -21,9 +21,10 @@ export default function AdminQuickPanel() {
   // Verify admin against the server (don't trust localStorage).
   useEffect(() => {
     let cancelled = false
-    api.me().then(({ user }) => {
+    api.me().then((me) => {
       if (cancelled) return
-      if (user.role === 'admin') {
+      const user = me?.user
+      if (user?.role === 'admin') {
         setIsAdmin(true)
         setAdminId(user.id)
       }

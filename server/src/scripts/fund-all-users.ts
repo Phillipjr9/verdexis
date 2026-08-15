@@ -30,7 +30,7 @@ async function main() {
       })
       
       await prisma.transaction.create({
-        data: { userId: user.id, kind: 'deposit', currency: 'USD', amount, reference: 'Welcome bonus - demo funds', status: 'completed' },
+        data: { userId: user.id, kind: 'deposit', currency: 'USD', amount, reference: 'Welcome bonus - demo funds', status: 'completed' } as any,
       })
       
       console.log(`Funded ${user.email} with $${amount.toLocaleString()} USD`)

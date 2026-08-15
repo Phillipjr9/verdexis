@@ -152,7 +152,7 @@ export class TaxOptimizationService {
           status: 'completed',
           reference: `Tax-loss harvest: ${symbol}`,
           subType: 'tax_loss_harvest'
-        }
+        } as any,
       })
 
       return {

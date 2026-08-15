@@ -556,9 +556,7 @@ model WalletBalance {
   currency  String
   symbol    String
   balance   Float    @default(0)
-  balanceMinorUnits BigInt @default(0)
   available Float    @default(0)
-  availableMinorUnits BigInt @default(0)
   updatedAt DateTime @updatedAt
 
   @@unique([userId, currency])
@@ -567,6 +565,7 @@ model WalletBalance {
 
 model Transaction {
   id             String   @id @default(cuid())
+  transactionId  String   @unique  // User-friendly ID like TXN-20260815-001 for easy searching
   userId         String
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   kind           String
@@ -580,6 +579,7 @@ model Transaction {
 
   @@index([userId, createdAt])
   @@index([reversedFromId])
+  @@index([transactionId])  // Index for fast transaction ID searches
 }
 
 model Trade {
