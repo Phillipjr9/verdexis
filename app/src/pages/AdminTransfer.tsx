@@ -36,10 +36,19 @@ export default function AdminTransfer() {
           createdAt: new Date().toISOString(),
         } as AdminUserSummary)
       })
-      .catch(() => {
+      .catch((err: any) => {
         if (cancelled) return
-        setFromError('Could not load your admin profile. Please re-login.')
-        toast.error('Could not load admin profile — please re-login')
+        const status = err && typeof err.status === 'number' ? err.status : undefined
+        if (status === 401) {
+          setFromError('Could not load your admin profile. Please re-login.')
+          toast.error('Could not load admin profile — please re-login')
+          return
+        }
+
+        // Transient/network error: inform the user but don't force re-login.
+        console.warn('Could not load admin profile (transient):', err)
+        setFromError('Network error while loading your profile. Try again shortly.')
+        toast.error('Network temporarily unavailable — please try again')
       })
     return () => { cancelled = true }
   }, [])

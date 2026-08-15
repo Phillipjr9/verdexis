@@ -24,13 +24,34 @@ export default function RequireAdmin({ children }: { children: React.ReactNode }
         const user = me?.user
         if (user?.role === 'admin') {
           setCheck('ok')
-        } else {
+          return
+        }
+        toast.error('Admin access required')
+        setCheck('redirect')
+        return
+      } catch (err: any) {
+        // If the server explicitly reports unauthorized, redirect.
+        const status = err && typeof err.status === 'number' ? err.status : undefined
+        if (status === 401) {
+          if (!cancelled) setCheck('redirect')
+          return
+        }
+
+        // For transient network or 5xx errors, retry once after a short delay
+        try {
+          await new Promise((res) => setTimeout(res, 700))
+          const me2 = await api.me()
+          if (cancelled) return
+          if (me2?.user?.role === 'admin') {
+            setCheck('ok')
+            return
+          }
           toast.error('Admin access required')
           setCheck('redirect')
+        } catch (err2) {
+          console.warn('Admin validation failed after retry:', err2)
+          if (!cancelled) setCheck('redirect')
         }
-      } catch (err) {
-        console.warn('Admin validation failed:', err)
-        if (!cancelled) setCheck('redirect')
       }
     }
 
