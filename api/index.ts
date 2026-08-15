@@ -40,11 +40,11 @@ export default async (req: VercelRequest, res: VercelResponse) => {
     res.status(response.status);
     
     // Copy response headers
-    Object.entries(response.headers.raw?.() || {}).forEach(([key, values]) => {
+    for (const [key, value] of response.headers.entries()) {
       if (key.toLowerCase() !== 'content-encoding') {
-        res.setHeader(key, Array.isArray(values) ? values[0] : values);
+        res.setHeader(key, value);
       }
-    });
+    }
     
     res.end(data);
   } catch (error) {

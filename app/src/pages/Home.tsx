@@ -6,7 +6,7 @@ import AuthModal from '../components/AuthModal'
 import Testimonials from '../components/Testimonials'
 import ScrambleText from '../components/ScrambleText'
 import TetrahedronCanvas from '../components/Tetrahedron'
-import { type CryptoQuote } from '../lib/marketData'
+import { type CryptoQuote, marketData } from '../lib/marketData'
 import { liveTicker } from '../lib/liveTicker'
 import { ArrowRight, Shield, ChevronRight, CheckCircle, Play, Lock, Fingerprint, Eye, Server, Globe, Sparkles, Wallet } from 'lucide-react'
 
@@ -18,13 +18,12 @@ const platformStats = [
 ]
 
 const trustedPartners = [
-  { name: 'CoinGecko', src: '/assets/logo-coingecko.png', white: true },
+  { name: 'CoinGecko', src: '/assets/logo-coingecko.png', white: false, className: 'max-w-[56px] md:max-w-[72px]' },
   { name: 'Binance', src: '/assets/logo-binance.png' },
   { name: 'Stripe', src: '/assets/logo-stripe.png' },
   { name: 'Plaid', src: '/assets/logo-plaid.png', white: true },
   { name: 'Finnhub', src: '/assets/logo-finnhub.png' },
   { name: 'Alpha Vantage', src: '/assets/logo-alphavantage.png' },
-  { name: 'Coinbase', src: '/assets/logo-btc.png' },
   { name: 'Chainlink', src: '/assets/logo-link.png' },
 ]
 
@@ -121,19 +120,8 @@ export default function Home() {
 
     const loadTicker = async () => {
       try {
-        const res = await fetch('/api/market/coingecko/markets?vs_currency=usd&order=market_cap_desc&per_page=8&page=1&sparkline=true', {
-          cache: 'no-store',
-          headers: { Accept: 'application/json' },
-        })
-
-        if (!res.ok) {
-          if (active) setTickerCoins([])
-          return
-        }
-
-        const data = await res.json()
-        const list = Array.isArray(data) ? data.filter(Boolean).slice(0, 8) : []
-        if (active) setTickerCoins(list)
+        const list = await marketData.getCryptoList()
+        if (active) setTickerCoins(list.slice(0, 8))
       } catch {
         if (active) setTickerCoins([])
       }
@@ -210,16 +198,21 @@ export default function Home() {
         <div className="max-w-[1280px] mx-auto px-6">
           <div className="flex flex-col items-center justify-center gap-4 md:gap-6 text-center">
             <p className="text-[10px] md:text-xs font-medium uppercase tracking-[0.18em] text-[#8B9AA3]">Trusted partners</p>
-            <div className="flex flex-wrap items-center justify-center gap-5 md:gap-8">
+            <div className="flex flex-wrap items-center justify-center gap-2.5 md:gap-4">
               {trustedPartners.map((partner) => (
                 <div
                   key={partner.name}
-                  className="flex h-14 md:h-16 items-center justify-center px-1 md:px-2"
+                  className="flex h-14 md:h-16 items-center justify-center px-0.5 md:px-1"
                 >
                   <img
                     src={partner.src}
                     alt={partner.name}
-                    className={partner.white ? 'partner-logo partner-logo--white h-8 md:h-10 w-auto max-w-[140px] object-contain' : 'partner-logo h-8 md:h-10 w-auto max-w-[140px] object-contain'}
+                    className={[
+                      'partner-logo',
+                      partner.white ? 'partner-logo--white' : '',
+                      'h-8 md:h-10 w-auto object-contain',
+                      partner.className ?? 'max-w-[140px]',
+                    ].join(' ')}
                     onError={(event) => {
                       const image = event.currentTarget as HTMLImageElement
                       image.style.display = 'none'
