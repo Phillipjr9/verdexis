@@ -203,11 +203,21 @@ export default function Dashboard() {
       .then(() => {
         if (!active) return
       })
-      .catch(() => {
+      .catch((err: any) => {
         if (!active) return
-        clearStoredAuth()
-        setIsAuthenticated(false)
-        setApiError('Your session expired. Please sign in again.')
+        const status = err && typeof err.status === 'number' ? err.status : undefined
+        if (status === 401) {
+          // Clear stored auth only on an explicit unauthorized response.
+          clearStoredAuth()
+          setIsAuthenticated(false)
+          setApiError('Your session expired. Please sign in again.')
+        } else {
+          // Transient network/server errors should not log the user out.
+          // Surface a console warning so developers can inspect.
+          // Keep the existing session intact and retry on the next hydrate.
+          // eslint-disable-next-line no-console
+          console.warn('Session validation failed (transient):', err)
+        }
       })
 
     return () => { active = false }
