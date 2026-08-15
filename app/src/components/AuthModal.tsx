@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { X, Mail, Lock, User, Eye, EyeOff, ArrowRight, Shield, Fingerprint, KeyRound, ArrowLeft, Phone } from 'lucide-react'
 import { toast } from 'sonner'
-import { api, setToken, setStoredUser, type ApiError } from '../lib/api'
+import { api, getFriendlyApiErrorMessage, setToken, setStoredUser, type ApiError } from '../lib/api'
 import { sanitizeDisplayText, sanitizeEmail, sanitizeText } from '../lib/sanitize'
 import { isSupabaseConfigured, signInWithEmail, signUpWithEmail } from '../lib/supabase'
 
@@ -198,14 +198,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
       return
     } catch (err) {
         const e = err as ApiError
-        // Friendly error mapping: server errors -> generic message; client/validation errors -> show server text
-        if (e && typeof e.status === 'number' && e.status >= 500) {
-          setError('Service temporarily unavailable. Please try again later.')
-        } else if (e && e.error) {
-          setError(e.error)
-        } else {
-          setError('Authentication failed')
-        }
+        setError(getFriendlyApiErrorMessage(e))
         setLoading(false)
         return
     }

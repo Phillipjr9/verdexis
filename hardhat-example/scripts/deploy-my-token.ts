@@ -4,40 +4,47 @@ async function main() {
   const { viem } = await network.create();
   const [deployerClient] = await viem.getWalletClients();
 
-  const tokenName    = process.env.TOKEN_NAME    ?? "Verdexis Token"
-  const tokenSymbol  = process.env.TOKEN_SYMBOL  ?? "VDX"
-  const initialSupply = BigInt(process.env.INITIAL_SUPPLY ?? "10000000")
+  const tokenName = process.env.TOKEN_NAME ?? "Fake ETH";
+  const tokenSymbol = process.env.TOKEN_SYMBOL ?? "fETH";
+  const initialSupply = BigInt(process.env.INITIAL_SUPPLY ?? "1000000");
+  const recipient = process.env.RECIPIENT ?? deployerClient.account.address;
 
-  console.log(`Deployer : ${deployerClient.account.address}`)
-  console.log(`Token    : ${tokenName} (${tokenSymbol})`)
-  console.log(`Supply   : ${initialSupply.toLocaleString()} tokens`)
+  console.log(`Deployer : ${deployerClient.account.address}`);
+  console.log(`Token    : ${tokenName} (${tokenSymbol})`);
+  console.log(`Supply   : ${initialSupply.toLocaleString()} tokens`);
+  console.log(`Recipient: ${recipient}`);
 
-  const token = await viem.deployContract("MyToken", [tokenName, tokenSymbol, initialSupply])
+  // Contract constructor accepts only the initial supply.
+  const token = await viem.deployContract("MyToken", [initialSupply]);
 
-  console.log(`\nDeployed to: ${token.address}`)
-  console.log(`\nAdd to server/.env:`)
-  console.log(`ETHEREUM_TOKEN_ADDRESS=${token.address}`)
-  console.log(`ETHEREUM_TOKEN_SYMBOL=${tokenSymbol}`)
-  console.log(`\nAdd to app/.env:`)
-  console.log(`VITE_CUSTOM_TOKEN_ADDRESS=${token.address}`)
-  console.log(`VITE_CUSTOM_TOKEN_SYMBOL=${tokenSymbol}`)
+  if (recipient.toLowerCase() !== deployerClient.account.address.toLowerCase()) {
+    const mintTx = await token.write.mint([recipient, initialSupply * 10n ** 18n]);
+    console.log(`Minted to recipient: ${mintTx}`);
+  }
 
-  // Verify basic token state
-  const name         = await token.read.name()
-  const symbol       = await token.read.symbol()
-  const decimals     = await token.read.decimals()
-  const totalSupply  = await token.read.totalSupply()
-  const ownerBalance = await token.read.balanceOf([deployerClient.account.address])
+  console.log(`\nDeployed to: ${token.address}`);
+  console.log(`\nAdd to wallet as a custom token:`);
+  console.log(`Contract: ${token.address}`);
+  console.log(`Symbol: ${tokenSymbol}`);
+  console.log(`Decimals: 18`);
 
-  console.log(`\nVerification:`)
-  console.log(`  name        : ${name}`)
-  console.log(`  symbol      : ${symbol}`)
-  console.log(`  decimals    : ${decimals}`)
-  console.log(`  totalSupply : ${(totalSupply / BigInt(10 ** Number(decimals))).toLocaleString()} ${symbol}`)
-  console.log(`  owner bal   : ${(ownerBalance / BigInt(10 ** Number(decimals))).toLocaleString()} ${symbol}`)
+  const name = await token.read.name();
+  const symbol = await token.read.symbol();
+  const decimals = await token.read.decimals();
+  const totalSupply = await token.read.totalSupply();
+  const ownerBalance = await token.read.balanceOf([deployerClient.account.address]);
+  const recipientBalance = await token.read.balanceOf([recipient]);
+
+  console.log(`\nVerification:`);
+  console.log(`  name        : ${name}`);
+  console.log(`  symbol      : ${symbol}`);
+  console.log(`  decimals    : ${decimals}`);
+  console.log(`  totalSupply : ${(totalSupply / 10n ** 18n).toLocaleString()} ${symbol}`);
+  console.log(`  owner bal   : ${(ownerBalance / 10n ** 18n).toLocaleString()} ${symbol}`);
+  console.log(`  recipient bal: ${(recipientBalance / 10n ** 18n).toLocaleString()} ${symbol}`);
 }
 
 main().catch((error) => {
-  console.error(error)
-  process.exitCode = 1
-})
+  console.error(error);
+  process.exitCode = 1;
+});

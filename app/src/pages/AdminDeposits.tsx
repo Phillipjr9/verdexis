@@ -37,6 +37,7 @@ const WEB3_CHAINS: { id: string; label: string }[] = [
   { id: '0x38',    label: 'BNB Chain (0x38)' },
   { id: '0xa86a',  label: 'Avalanche (0xa86a)' },
   { id: '0xaa36a7', label: 'Sepolia testnet (0xaa36a7)' },
+  { id: '0x7a69', label: 'Local Hardhat (0x7a69)' },
 ]
 
 const EMPTY_WEB3: Web3Payout = { label: '', chainId: 'default', address: '', notes: '' }

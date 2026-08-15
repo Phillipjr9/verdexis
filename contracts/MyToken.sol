@@ -1,16 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-// Verdexis Platform Token (VDX)
-// Full ERC-20 with mint, burn, and ownership transfer.
-// Deploy on Ethereum mainnet or BSC. The deployer wallet becomes the
-// owner and receives the entire initial supply. Fund the custody wallet
-// (ETHEREUM_WITHDRAWAL_PRIVATE_KEY) with VDX so the server can send
-// withdrawals automatically via cryptoWithdrawal.ts.
+// Simple ERC-20 token for testing wallet display support.
+// This contract exposes the metadata wallets look for: name, symbol,
+// decimals, totalSupply, balanceOf, transfer, approve, transferFrom.
 contract MyToken {
-    string public name;
-    string public symbol;
+    string public constant name = "Verdexis Fake Coin";
+    string public constant symbol = "VFC";
     uint8 public constant decimals = 18;
+
     uint256 public totalSupply;
     address public owner;
 
@@ -18,7 +16,7 @@ contract MyToken {
     mapping(address => mapping(address => uint256)) public allowance;
 
     event Transfer(address indexed from, address indexed to, uint256 value);
-    event Approval(address indexed owner, address indexed spender, uint256 value);
+    event Approval(address indexed owner_, address indexed spender, uint256 value);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     modifier onlyOwner() {
@@ -26,14 +24,10 @@ contract MyToken {
         _;
     }
 
-    constructor(string memory _name, string memory _symbol, uint256 _initialSupply) {
-        name = _name;
-        symbol = _symbol;
+    constructor(uint256 _initialSupply) {
         owner = msg.sender;
-        _mint(msg.sender, _initialSupply * 10 ** decimals);
+        _mint(msg.sender, _initialSupply * 10 ** uint256(decimals));
     }
-
-    // ── Internal ──────────────────────────────────────────────────────────
 
     function _mint(address to, uint256 amount) internal {
         require(to != address(0), "Zero address");
@@ -49,11 +43,10 @@ contract MyToken {
         emit Transfer(from, address(0), amount);
     }
 
-    // ── ERC-20 ────────────────────────────────────────────────────────────
-
     function transfer(address to, uint256 amount) external returns (bool) {
         require(to != address(0), "Zero address");
         require(balanceOf[msg.sender] >= amount, "Insufficient balance");
+
         balanceOf[msg.sender] -= amount;
         balanceOf[to] += amount;
         emit Transfer(msg.sender, to, amount);
@@ -71,14 +64,13 @@ contract MyToken {
         require(to != address(0), "Zero address");
         require(balanceOf[from] >= amount, "Insufficient balance");
         require(allowance[from][msg.sender] >= amount, "Allowance too low");
+
         allowance[from][msg.sender] -= amount;
         balanceOf[from] -= amount;
         balanceOf[to] += amount;
         emit Transfer(from, to, amount);
         return true;
     }
-
-    // ── Owner-only ────────────────────────────────────────────────────────
 
     function mint(address to, uint256 amount) external onlyOwner {
         _mint(to, amount);

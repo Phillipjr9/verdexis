@@ -139,4 +139,5 @@ export const SUPPORTED_CHAINS = {
   '0xaa36a7': { name: 'Sepolia', symbol: 'ETH' },
   '0x89': { name: 'Polygon', symbol: 'MATIC' },
   '0xa4b1': { name: 'Arbitrum', symbol: 'ETH' },
+  '0x7a69': { name: 'Local Hardhat', symbol: 'ETH' },
 }

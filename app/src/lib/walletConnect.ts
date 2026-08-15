@@ -46,10 +46,10 @@ export function getWalletConnectProvider(): Promise<Eip1193Provider | null> {
           projectId: WC_PROJECT_ID,
           // Chains we will optionally request to switch to. WalletConnect requires
           // at least one. Ethereum mainnet is the safe default.
-          chains: [1],
+          chains: [1, 31337],
           // Additional chains we support — wallets supporting EIP-5792 / chain
           // switching can hop to any of these without a fresh session.
-          optionalChains: [137, 42161, 10, 8453, 56, 43114, 11155111],
+          optionalChains: [137, 42161, 10, 8453, 56, 43114, 11155111, 31337],
           // Show WalletConnect's own modal everywhere — it has the rich
           // wallet list (MetaMask/Trust/Rainbow/OKX/Bitget/Binance + 300+).
           // On mobile it deep-links into the chosen wallet; on desktop it

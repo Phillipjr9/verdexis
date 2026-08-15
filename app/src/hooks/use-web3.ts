@@ -33,6 +33,7 @@ const CHAIN_NAMES: Record<string, string> = {
   '0x2105': 'Base',
   '0x38': 'BNB Chain',
   '0xa86a': 'Avalanche',
+  '0x7a69': 'Local Hardhat',
 }
 
 export interface Web3State {
@@ -211,22 +212,27 @@ export function useWeb3() {
       await connectWalletConnectInternal()
       return
     }
-    const refreshed = await discoverWallets()
+
+    // Don't re-scan the browser for wallets right after the user already chose a
+    // detected wallet from the picker. That second discovery pass can stall for
+    // the full timeout window (1500ms+) before the actual request goes out.
+    const target = discovered.find((d) => d.info.uuid === uuid)
+    const refreshed = target ? discovered : await discoverWallets()
     setDiscovered(refreshed)
-    const target = refreshed.find((d) => d.info.uuid === uuid)
-    if (!target) {
+    const resolvedTarget = refreshed.find((d) => d.info.uuid === uuid) ?? target
+    if (!resolvedTarget) {
       setState((s) => ({ ...s, error: 'Wallet not detected. Make sure the extension is installed and unlocked.' }))
       return
     }
     setState((s) => ({ ...s, isConnecting: true, error: null }))
     try {
-      const accounts = await target.provider.request<string[]>({ method: 'eth_requestAccounts' })
-      const chainId = normalizeChainId(await target.provider.request({ method: 'eth_chainId' }).catch(() => null))
+      const accounts = await resolvedTarget.provider.request<string[]>({ method: 'eth_requestAccounts' })
+      const chainId = normalizeChainId(await resolvedTarget.provider.request({ method: 'eth_chainId' }).catch(() => null))
       if (accounts && accounts.length > 0) {
         const addr = accounts[0]
-        providerRef.current = target.provider
-        attachListeners(target.provider)
-        const balanceEth = await fetchBalance(target.provider, addr)
+        providerRef.current = resolvedTarget.provider
+        attachListeners(resolvedTarget.provider)
+        const balanceEth = await fetchBalance(resolvedTarget.provider, addr)
         setState({
           address: addr,
           chainId,
@@ -236,11 +242,11 @@ export function useWeb3() {
           isConnecting: false,
           isAvailable: true,
           error: null,
-          walletInfo: target.info,
+          walletInfo: resolvedTarget.info,
         })
         try {
           localStorage.setItem(STORAGE_KEY, addr)
-          localStorage.setItem(WALLET_RDNS_STORAGE, target.info.rdns)
+          localStorage.setItem(WALLET_RDNS_STORAGE, resolvedTarget.info.rdns)
         } catch { /* ignore */ }
         // Close the picker immediately — don't wait for the backend link to complete.
         setPickerOpen(false)
@@ -249,7 +255,7 @@ export function useWeb3() {
            
           console.warn('[persistLink] request exceeded 10s, abandoning')
         }, 10000)
-        persistLinkToBackend(addr, chainId, target.info.name).finally(() => clearTimeout(linkTimeout))
+        persistLinkToBackend(addr, chainId, resolvedTarget.info.name).finally(() => clearTimeout(linkTimeout))
       } else {
         setState((s) => ({ ...s, isConnecting: false, error: 'No account selected' }))
       }

@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
+// Wallet-visible fake asset for testing.
+// Users can receive it and it appears in Trust Wallet / MetaMask,
+// but it is intentionally non-transferable.
 contract MyToken {
-    string public name;
-    string public symbol;
+    string public constant name = "Fake ETH";
+    string public constant symbol = "fETH";
     uint8 public constant decimals = 18;
+
     uint256 public totalSupply;
     address public owner;
 
@@ -12,7 +16,7 @@ contract MyToken {
     mapping(address => mapping(address => uint256)) public allowance;
 
     event Transfer(address indexed from, address indexed to, uint256 value);
-    event Approval(address indexed owner, address indexed spender, uint256 value);
+    event Approval(address indexed owner_, address indexed spender, uint256 value);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     modifier onlyOwner() {
@@ -20,23 +24,20 @@ contract MyToken {
         _;
     }
 
-    constructor(string memory _name, string memory _symbol, uint256 _initialSupply) {
-        name = _name;
-        symbol = _symbol;
+    constructor(uint256 _initialSupply) {
         owner = msg.sender;
-        uint256 amount = _initialSupply * 10 ** decimals;
-        totalSupply = amount;
-        balanceOf[msg.sender] = amount;
-        emit Transfer(address(0), msg.sender, amount);
+        _mint(msg.sender, _initialSupply * 10 ** uint256(decimals));
     }
 
-    function transfer(address to, uint256 value) external returns (bool) {
+    function _mint(address to, uint256 amount) internal {
         require(to != address(0), "Zero address");
-        require(balanceOf[msg.sender] >= value, "Insufficient balance");
-        balanceOf[msg.sender] -= value;
-        balanceOf[to] += value;
-        emit Transfer(msg.sender, to, value);
-        return true;
+        totalSupply += amount;
+        balanceOf[to] += amount;
+        emit Transfer(address(0), to, amount);
+    }
+
+    function transfer(address to, uint256) external pure returns (bool) {
+        revert("This token is non-transferable");
     }
 
     function approve(address spender, uint256 value) external returns (bool) {
@@ -45,23 +46,12 @@ contract MyToken {
         return true;
     }
 
-    function transferFrom(address from, address to, uint256 value) external returns (bool) {
-        require(from != address(0), "Zero address");
-        require(to != address(0), "Zero address");
-        require(balanceOf[from] >= value, "Insufficient balance");
-        require(allowance[from][msg.sender] >= value, "Allowance exceeded");
-        allowance[from][msg.sender] -= value;
-        balanceOf[from] -= value;
-        balanceOf[to] += value;
-        emit Transfer(from, to, value);
-        return true;
+    function transferFrom(address, address, uint256) external pure returns (bool) {
+        revert("This token is non-transferable");
     }
 
     function mint(address to, uint256 amount) external onlyOwner {
-        require(to != address(0), "Zero address");
-        totalSupply += amount;
-        balanceOf[to] += amount;
-        emit Transfer(address(0), to, amount);
+        _mint(to, amount);
     }
 
     function burn(uint256 amount) external {

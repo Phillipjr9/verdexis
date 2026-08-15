@@ -27,6 +27,40 @@ export interface ApiError {
   status: number
 }
 
+export function getFriendlyApiErrorMessage(err: Partial<ApiError> | unknown): string {
+  const e = (err ?? {}) as Partial<ApiError>
+  const status = typeof e.status === 'number' ? e.status : undefined
+  const message = typeof e.error === 'string' ? e.error : ''
+
+  const supportHint = ' If this keeps happening, contact support on WhatsApp or Telegram at +1 (719) 679-8790.'
+
+  if (status === 423 || /temporarily locked|repeated failed|too many failed/i.test(message)) {
+    return `Too many failed sign-in attempts. Your account is temporarily locked for 15 minutes. Please wait and try again.${supportHint}`
+  }
+
+  if (status === 401 || /invalid credentials|incorrect email|wrong password/i.test(message)) {
+    return `Incorrect email or password.${supportHint}`
+  }
+
+  if (status === 403 || /account on hold|bonus is locked|bonus locked|contact support/i.test(message)) {
+    return `Your account is currently restricted. Please contact support for assistance.${supportHint}`
+  }
+
+  if (status === 429 || /too many attempts|rate limit|too many requests/i.test(message)) {
+    return `Too many attempts. Please wait a moment and try again.${supportHint}`
+  }
+
+  if (status && status >= 500) {
+    return `Service temporarily unavailable. Please try again in a moment.${supportHint}`
+  }
+
+  if (message) {
+    return `${message}${supportHint}`
+  }
+
+  return `Something went wrong. Please try again.${supportHint}`
+}
+
 export function getToken(): string | null {
   try {
     return localStorage.getItem(TOKEN_KEY)

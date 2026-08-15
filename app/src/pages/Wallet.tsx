@@ -16,7 +16,7 @@ import { feeProofs } from '../lib/feeProofs'
 import { getProfile } from '../lib/userProfile'
 import { useWeb3 } from '../hooks/use-web3'
 import { cryptoIconFor, assetIconFor, cryptoIconErrorFallback } from '../lib/cryptoIcon'
-import { api, getToken, newIdempotencyKey } from '../lib/api'
+import { api, getFriendlyApiErrorMessage, getToken, newIdempotencyKey } from '../lib/api'
 import { headlineAmountClass } from '../lib/utils'
 import { detectWalletAddressType, type DetectedWalletType } from '../lib/walletUtils'
 import { Toaster, toast } from 'sonner'
@@ -618,6 +618,7 @@ export default function WalletPage() {
       '0x2105': 'https://basescan.org/tx/',
       '0x38': 'https://bscscan.com/tx/',
       '0xa86a': 'https://snowtrace.io/tx/',
+      '0x7a69': 'http://localhost:8545/tx/',
     }
     return (base[chainId?.toLowerCase() ?? ''] ?? 'https://etherscan.io/tx/') + hash
   }
@@ -699,7 +700,7 @@ export default function WalletPage() {
           : `Sent ${amt} ETH from your wallet — credited to your Verdexis dashboard. Tx ${short}.`,
       })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Transfer failed'
+      const msg = getFriendlyApiErrorMessage(err)
       setTransferStatus({ kind: 'error', title: 'Web3 transfer declined', message: msg })
     } finally {
       setWeb3Sending(false)
@@ -1251,7 +1252,7 @@ export default function WalletPage() {
         setTransactions(portfolioStore.getTransactions())
         setWallet(portfolioStore.getWallet())
       } catch (e) {
-        const err = e as { error?: string }
+        const err = e as { error?: string; status?: number }
         setCryptoWithdrawalStatus({
           status: 'failed',
           steps: [
@@ -1260,7 +1261,7 @@ export default function WalletPage() {
             { label: 'Step 3 · Transfer sent', detail: 'The transfer could not be finalized', done: false, active: false },
           ],
         })
-        setTransferStatus({ kind: 'error', title: 'Withdrawal failed', message: err.error || 'Server rejected the withdrawal.' })
+        setTransferStatus({ kind: 'error', title: 'Withdrawal failed', message: getFriendlyApiErrorMessage(err) })
       } finally {
         setWithdrawSubmitting(false)
       }
@@ -1373,13 +1374,13 @@ export default function WalletPage() {
         const e = err as { status?: number; error?: string; whatsapp?: string; telegram?: string }
         if (e.status === 423) {
           setBonusLockedModal({
-            message: e.error || 'Your signup bonus is locked. Please contact support before withdrawing.',
+            message: getFriendlyApiErrorMessage(e),
             whatsapp: e.whatsapp || 'https://wa.me/17196798790',
             telegram: e.telegram || 'https://t.me/+17196798790',
           })
           return
         }
-        setTransferStatus({ kind: 'error', title: 'Withdrawal declined', message: e.error || 'Server rejected the withdrawal.' })
+        setTransferStatus({ kind: 'error', title: 'Withdrawal declined', message: getFriendlyApiErrorMessage(e) })
         return
       }
       setWithdrawSubmitting(false)
