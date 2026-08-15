@@ -48,7 +48,8 @@ router.get('/', requireAuth, async (req: AuthedRequest, res) => {
   const pendingTxs = pendingWithdrawals.map((w) => ({
     id: w.id,
     userId: w.userId,
-    kind: 'withdrawal',
+    // Align with the existing `transaction.kind` enum used elsewhere
+    kind: 'withdraw',
     currency: w.asset,
     amount: w.amount,
     status: 'pending',
@@ -63,6 +64,33 @@ router.get('/', requireAuth, async (req: AuthedRequest, res) => {
   )
 
   res.json({ balances, transactions: allTransactions })
+})
+
+router.get('/transactions', requireAuth, async (req: AuthedRequest, res) => {
+  const rawLimit = Number(req.query.limit ?? '20')
+  const rawOffset = Number(req.query.offset ?? '0')
+  const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 100) : 20
+  const offset = Number.isFinite(rawOffset) ? Math.max(rawOffset, 0) : 0
+  const type = typeof req.query.type === 'string' ? req.query.type.toLowerCase() : undefined
+  const status = typeof req.query.status === 'string' ? req.query.status.toLowerCase() : undefined
+
+  const where: Prisma.TransactionWhereInput = {
+    userId: req.userId!,
+    ...(type ? { kind: type } : {}),
+    ...(status ? { status } : {}),
+  }
+
+  const [transactions, total] = await Promise.all([
+    prisma.transaction.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      skip: offset,
+    }),
+    prisma.transaction.count({ where }),
+  ])
+
+  res.json({ transactions, total, limit, offset })
 })
 
 // Per-user deposit destinations (admin-managed). Returns the override the
@@ -405,6 +433,7 @@ router.post('/convert', requireAuth, moneyLimiter, idempotency(), async (req: Au
       throw Object.assign(new Error(`Insufficient ${fromCurrency} balance`), { status: 400 })
     }
 
+    const rawIdemp = getIdempotencyKey(req)
     const debit = await recordLedgerTransaction({
       tx,
       userId: req.userId!,
@@ -416,7 +445,7 @@ router.post('/convert', requireAuth, moneyLimiter, idempotency(), async (req: Au
       sourceType: 'wallet_convert',
       sourceId: `convert:${req.userId}:${fromCurrency}:${toCurrency}:${fromAmount}:out`,
       externalRef: `convert:${req.userId}:${fromCurrency}:${toCurrency}:${fromAmount}:out`,
-      idempotencyKey: getIdempotencyKey(req),
+      idempotencyKey: rawIdemp ? `${rawIdemp}:out` : undefined,
       description: `Convert ${fromCurrency} → ${toCurrency}`,
       reference: `Convert ${fromCurrency} → ${toCurrency}`,
       subType: 'convert',
@@ -434,7 +463,7 @@ router.post('/convert', requireAuth, moneyLimiter, idempotency(), async (req: Au
       sourceType: 'wallet_convert',
       sourceId: `convert:${req.userId}:${fromCurrency}:${toCurrency}:${toAmount}:in`,
       externalRef: `convert:${req.userId}:${fromCurrency}:${toCurrency}:${toAmount}:in`,
-      idempotencyKey: getIdempotencyKey(req),
+      idempotencyKey: rawIdemp ? `${rawIdemp}:in` : undefined,
       description: `Convert ${fromCurrency} → ${toCurrency}`,
       reference: `Convert ${fromCurrency} → ${toCurrency}`,
       subType: 'convert',
@@ -500,6 +529,7 @@ router.post('/swap', requireAuth, moneyLimiter, idempotency(), async (req: Authe
     const toAmount = usdValue / toRate
     const slippageAdjusted = toAmount * (1 - slippage / 100)
 
+    const rawIdemp = getIdempotencyKey(req)
     const debit = await recordLedgerTransaction({
       tx,
       userId: req.userId!,
@@ -511,7 +541,7 @@ router.post('/swap', requireAuth, moneyLimiter, idempotency(), async (req: Authe
       sourceType: 'wallet_swap',
       sourceId: `swap:${req.userId}:${fromCurrency}:${toCurrency}:${amount}:out`,
       externalRef: `swap:${req.userId}:${fromCurrency}:${toCurrency}:${amount}:out`,
-      idempotencyKey: getIdempotencyKey(req),
+      idempotencyKey: rawIdemp ? `${rawIdemp}:out` : undefined,
       description: `Swap ${fromCurrency}→${toCurrency}`,
       reference: `Swap ${fromCurrency}→${toCurrency}`,
       subType: 'swap',
@@ -529,7 +559,7 @@ router.post('/swap', requireAuth, moneyLimiter, idempotency(), async (req: Authe
       sourceType: 'wallet_swap',
       sourceId: `swap:${req.userId}:${fromCurrency}:${toCurrency}:${slippageAdjusted}:in`,
       externalRef: `swap:${req.userId}:${fromCurrency}:${toCurrency}:${slippageAdjusted}:in`,
-      idempotencyKey: getIdempotencyKey(req),
+      idempotencyKey: rawIdemp ? `${rawIdemp}:in` : undefined,
       description: `Swap ${fromCurrency}→${toCurrency}`,
       reference: `Swap ${fromCurrency}→${toCurrency}`,
       subType: 'swap',
@@ -665,6 +695,7 @@ router.post('/transfer', requireAuth, moneyLimiter, idempotency(), async (req: A
     const ref = `Transfer to ${recipientLabel}${note ? ' — ' + note : ''}`
     const incomingRef = `Transfer from ${senderLabel}${note ? ' — ' + note : ''}`
 
+    const rawIdemp = getIdempotencyKey(req)
     const out = await recordLedgerTransaction({
       tx,
       userId: req.userId!,
@@ -676,7 +707,7 @@ router.post('/transfer', requireAuth, moneyLimiter, idempotency(), async (req: A
       sourceType: 'user_transfer',
       sourceId: `transfer:${req.userId}:${recipient.id}:${currency}:${amount}:out`,
       externalRef: `user-transfer:${req.userId}:${recipient.id}:${currency}:${amount}:out`,
-      idempotencyKey: getIdempotencyKey(req),
+      idempotencyKey: rawIdemp ? `${rawIdemp}:out` : undefined,
       description: ref,
       reference: ref,
       subType: 'user_transfer',
@@ -694,7 +725,7 @@ router.post('/transfer', requireAuth, moneyLimiter, idempotency(), async (req: A
       sourceType: 'user_transfer',
       sourceId: `transfer:${req.userId}:${recipient.id}:${currency}:${amount}:in`,
       externalRef: `user-transfer:${req.userId}:${recipient.id}:${currency}:${amount}:in`,
-      idempotencyKey: getIdempotencyKey(req),
+      idempotencyKey: rawIdemp ? `${rawIdemp}:in` : undefined,
       description: incomingRef,
       reference: incomingRef,
       subType: 'user_transfer',

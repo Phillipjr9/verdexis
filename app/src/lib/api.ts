@@ -1,5 +1,6 @@
 // Lightweight typed fetch wrapper for the Verdexis API.
 // Uses a JWT stored in localStorage and prefixes all requests with /api.
+import { sanitizeDisplayText, sanitizeEmail, sanitizeText, sanitizeUsername } from './sanitize'
 
 const TOKEN_KEY = 'verdexis_token'
 const USER_KEY = 'verdexis_auth' // existing key, now stores { id, email, name } from API
@@ -45,19 +46,21 @@ export function setToken(token: string | null) {
 
 export function setStoredUser(user: ApiUser) {
   try {
-    localStorage.setItem(USER_KEY, JSON.stringify({
-      id: user.id,
-      email: user.email,
-      username: user.username,
-      name: user.name,
+    const safeUser = {
+      id: sanitizeDisplayText(user.id, 64),
+      email: sanitizeEmail(user.email),
+      username: user.username ? sanitizeUsername(user.username) : null,
+      name: sanitizeDisplayText(user.name || 'User', 80),
       role: user.role,
-      suspended: user.suspended,
-      investmentId: user.investmentId,
+      suspended: !!user.suspended,
+      investmentId: user.investmentId ? sanitizeDisplayText(user.investmentId, 64) : null,
       kycStatus: user.kycStatus,
-      emailVerified: user.emailVerified,
+      emailVerified: !!user.emailVerified,
       emailVerifiedAt: user.emailVerifiedAt ?? null,
-    }))
-    if (user.avatar) localStorage.setItem('verdexis_avatar', user.avatar)
+    }
+
+    localStorage.setItem(USER_KEY, JSON.stringify(safeUser))
+    if (user.avatar) localStorage.setItem('verdexis_avatar', sanitizeText(user.avatar, ''))
     else localStorage.removeItem('verdexis_avatar')
     if (user.prefs && Object.keys(user.prefs).length) {
       localStorage.setItem('verdexis_prefs', JSON.stringify(user.prefs))
@@ -500,6 +503,39 @@ export const api = {
     request<{ revoked: boolean }>(`/api/api-keys/${encodeURIComponent(id)}/revoke`, { method: 'POST' }),
   deleteApiKey: (id: string) =>
     request<{ deleted: boolean }>(`/api/api-keys/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  // User Settings
+  userSettings: {
+    getNotifications: () => request<Record<string, unknown>>('/api/user-settings/notifications'),
+    patchNotifications: (data: Record<string, unknown>) => request<Record<string, unknown>>('/api/user-settings/notifications', { method: 'PATCH', body: JSON.stringify(data) }),
+    getPrivacy: () => request<Record<string, unknown>>('/api/user-settings/privacy'),
+    patchPrivacy: (data: Record<string, unknown>) => request<Record<string, unknown>>('/api/user-settings/privacy', { method: 'PATCH', body: JSON.stringify(data) }),
+    getWallet: () => request<Record<string, unknown>>('/api/user-settings/wallet'),
+    patchWallet: (data: Record<string, unknown>) => request<Record<string, unknown>>('/api/user-settings/wallet', { method: 'PATCH', body: JSON.stringify(data) }),
+    getAccessibility: () => request<Record<string, unknown>>('/api/user-settings/accessibility'),
+    patchAccessibility: (data: Record<string, unknown>) => request<Record<string, unknown>>('/api/user-settings/accessibility', { method: 'PATCH', body: JSON.stringify(data) }),
+    getSessions: () => request<unknown[]>('/api/user-settings/sessions'),
+    revokeSession: (id: string) => request<{ ok: boolean }>(`/api/user-settings/sessions/revoke/${id}`, { method: 'POST' }),
+    revokeAllSessions: () => request<{ ok: boolean }>('/api/user-settings/sessions/revoke-all', { method: 'POST' }),
+    getLoginHistory: () => request<unknown[]>('/api/user-settings/login-history'),
+    getIpRestrictions: () => request<unknown[]>('/api/user-settings/ip-restrictions'),
+    addIpRestriction: (data: { ipAddress: string; type: 'whitelist' | 'blacklist'; description?: string }) => request<unknown>('/api/user-settings/ip-restrictions', { method: 'POST', body: JSON.stringify(data) }),
+    deleteIpRestriction: (id: string) => request<{ ok: boolean }>(`/api/user-settings/ip-restrictions/${id}`, { method: 'DELETE' }),
+    getActivityLog: (limit?: number, category?: string) => request<unknown[]>(`/api/user-settings/activity-log?limit=${limit ?? 100}${category ? `&category=${category}` : ''}`),
+    getRiskTolerance: () => request<Record<string, unknown>>('/api/user-settings/risk-tolerance'),
+    patchRiskTolerance: (data: Record<string, unknown>) => request<Record<string, unknown>>('/api/user-settings/risk-tolerance', { method: 'PATCH', body: JSON.stringify(data) }),
+    getLinkedAccounts: () => request<unknown[]>('/api/user-settings/linked-accounts'),
+    deleteLinkedAccount: (id: string) => request<{ ok: boolean }>(`/api/user-settings/linked-accounts/${id}`, { method: 'DELETE' }),
+    getRecoveryOptions: () => request<unknown[]>('/api/user-settings/recovery-options'),
+    addRecoveryOption: (data: { type: string; value: string }) => request<unknown>('/api/user-settings/recovery-options', { method: 'POST', body: JSON.stringify(data) }),
+    deleteRecoveryOption: (id: string) => request<{ ok: boolean }>(`/api/user-settings/recovery-options/${id}`, { method: 'DELETE' }),
+    get2faRecoveryCodes: () => request<unknown[]>('/api/user-settings/2fa-recovery-codes'),
+    generate2faRecoveryCodes: () => request<{ codes: string[] }>('/api/user-settings/2fa-recovery-codes/generate', { method: 'POST' }),
+    requestDataExport: (format: 'json' | 'csv') => request<unknown>('/api/user-settings/export-data', { method: 'POST', body: JSON.stringify({ format }) }),
+    getDataExports: () => request<unknown[]>('/api/user-settings/export-data'),
+    getCookiePreferences: () => request<Record<string, unknown>>('/api/user-settings/cookie-preferences'),
+    patchCookiePreferences: (data: Record<string, unknown>) => request<Record<string, unknown>>('/api/user-settings/cookie-preferences', { method: 'PATCH', body: JSON.stringify(data) }),
+  },
 
   copyTrading: {
     getLeaderboard: (period: '30d' | '90d' | 'all' = '30d') =>

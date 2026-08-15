@@ -14,6 +14,7 @@ import { creditReferralBonus } from '../referrals.js'
 import { recordLedgerTransaction, recordLedgerBalanceReservation } from '../services/ledger.js'
 import { archiveUserDeletion } from '../services/accountDeletion.js'
 import { assignUserToAdmin, isSuperAdmin } from '../lib/adminHierarchy.js'
+import { normalizeQueryText } from '../lib/safeInput.js'
 
 const router = Router()
 
@@ -208,6 +209,7 @@ router.get('/users', async (req: AuthedRequest, res) => {
   const parsed = listSchema.safeParse(req.query)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid query' }); return }
   const { q, page, limit, role, suspended, kycStatus } = parsed.data
+  const safeQ = normalizeQueryText(q, 80)
   
   const superAdmin = await isSuperAdmin(req.userId!)
   let where: Record<string, unknown> = {}
@@ -226,12 +228,12 @@ router.get('/users', async (req: AuthedRequest, res) => {
     where.id = { in: userIds }
   }
   
-  if (q) {
+  if (safeQ) {
     where.OR = [
-      { email: { contains: q } },
-      { name: { contains: q } },
-      { id: { equals: q } },
-      { investmentId: { equals: q } },
+      { email: { contains: safeQ } },
+      { name: { contains: safeQ } },
+      { id: { equals: safeQ } },
+      { investmentId: { equals: safeQ } },
     ]
   }
   if (role !== 'all') where.role = role
@@ -1697,17 +1699,19 @@ router.get('/audit', async (req: AuthedRequest, res) => {
   const parsed = auditQuerySchema.safeParse(req.query)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid query' }); return }
   const { limit, actorId, targetUserId, action, since, until, q } = parsed.data
+  const safeAction = action ? normalizeQueryText(action, 120) : undefined
+  const safeQ = q ? normalizeQueryText(q, 120) : undefined
   const where: Record<string, unknown> = {}
   if (actorId) where.actorId = actorId
   if (targetUserId) where.targetUserId = targetUserId
-  if (action) where.action = { contains: action }
+  if (safeAction) where.action = { contains: safeAction }
   if (since || until) {
     const range: Record<string, Date> = {}
     if (since) { const d = new Date(since); if (!isNaN(d.getTime())) range.gte = d }
     if (until) { const d = new Date(until); if (!isNaN(d.getTime())) range.lte = d }
     if (Object.keys(range).length) where.createdAt = range
   }
-  if (q) where.payload = { contains: q }
+  if (safeQ) where.payload = { contains: safeQ }
   const logs = await prisma.adminAudit.findMany({
     where, orderBy: { createdAt: 'desc' }, take: limit,
     include: {
@@ -1729,17 +1733,19 @@ router.get('/audit.csv', async (req: AuthedRequest, res) => {
   const parsed = auditQuerySchema.safeParse(req.query)
   if (!parsed.success) { res.status(400).json({ error: 'Invalid query' }); return }
   const { limit, actorId, targetUserId, action, since, until, q } = parsed.data
+  const safeAction = action ? normalizeQueryText(action, 120) : undefined
+  const safeQ = q ? normalizeQueryText(q, 120) : undefined
   const where: Record<string, unknown> = {}
   if (actorId) where.actorId = actorId
   if (targetUserId) where.targetUserId = targetUserId
-  if (action) where.action = { contains: action }
+  if (safeAction) where.action = { contains: safeAction }
   if (since || until) {
     const range: Record<string, Date> = {}
     if (since) { const d = new Date(since); if (!isNaN(d.getTime())) range.gte = d }
     if (until) { const d = new Date(until); if (!isNaN(d.getTime())) range.lte = d }
     if (Object.keys(range).length) where.createdAt = range
   }
-  if (q) where.payload = { contains: q }
+  if (safeQ) where.payload = { contains: safeQ }
   const logs = await prisma.adminAudit.findMany({
     where, orderBy: { createdAt: 'desc' }, take: Math.min(limit, 5000),
     include: {

@@ -17,9 +17,10 @@ export function getCurrencyDecimals(currency: string): number {
 export function toMinorUnits(amount: number, currency: string): bigint {
   const decimals = getCurrencyDecimals(currency)
   const fixed = amount.toFixed(decimals)
-  const negative = fixed.startsWith('-')
+  // Always return the absolute minor-unit integer. The ledger stores
+  // `amountMinorUnits` as a positive integer; `entryType` determines direction.
   const normalized = fixed.replace('-', '').replace('.', '')
-  return BigInt(negative ? `-${normalized}` : normalized)
+  return BigInt(normalized)
 }
 
 const isSqlite = (process.env.DATABASE_PROVIDER || '').toLowerCase() === 'sqlite'
@@ -90,7 +91,10 @@ export async function recordLedgerTransaction({
 
   const createdAtValue = createdAt ?? new Date()
   const amountMinorUnits = toMinorUnits(amount, asset)
-  const balanceDeltaMinorUnits = entryType === 'debit' ? amountMinorUnits : -amountMinorUnits
+  // Do not change the settled balance for pending events - only adjust
+  // available/pending so the wallet reflects reserved funds. The actual
+  // balance change occurs when the event is completed (pending=false).
+  const balanceDeltaMinorUnits = pending ? 0n : (entryType === 'debit' ? amountMinorUnits : -amountMinorUnits)
   const availableDeltaMinorUnits = pending
     ? entryType === 'debit'
       ? 0n
@@ -107,7 +111,6 @@ export async function recordLedgerTransaction({
       details: metadata ? JSON.stringify(metadata) : undefined,
       externalRef,
       idempotencyKey: idempotencyKey ?? externalRef,
-      createdBy,
       completedAt: pending ? undefined : createdAtValue,
       createdAt: createdAtValue,
     },
@@ -166,10 +169,14 @@ export async function recordLedgerTransaction({
       symbol: asset === 'USD' ? '$' : asset,
       balance: fromMinorUnits(accountBalance.balanceMinorUnits, asset),
       available: fromMinorUnits(accountBalance.availableMinorUnits, asset),
+      balanceMinorUnits: accountBalance.balanceMinorUnits,
+      availableMinorUnits: accountBalance.availableMinorUnits,
     },
     update: {
       balance: fromMinorUnits(accountBalance.balanceMinorUnits, asset),
       available: fromMinorUnits(accountBalance.availableMinorUnits, asset),
+      balanceMinorUnits: accountBalance.balanceMinorUnits,
+      availableMinorUnits: accountBalance.availableMinorUnits,
       symbol: asset === 'USD' ? '$' : asset,
     },
   })
@@ -255,7 +262,6 @@ export async function recordLedgerBalanceReservation({
       details: metadata ? JSON.stringify(metadata) : undefined,
       externalRef,
       idempotencyKey: idempotencyKey ?? externalRef,
-      createdBy,
       completedAt: createdAtValue,
       createdAt: createdAtValue,
     },

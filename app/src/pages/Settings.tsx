@@ -8,6 +8,7 @@ import {
   TrendingUp, Plug, Lock, Fingerprint, Settings as SettingsIcon,
 } from 'lucide-react'
 import { fileToAvatarDataUrl, getAvatar, updateProfile } from '../lib/userProfile'
+import { sanitizeDisplayText, sanitizeEmail, sanitizeText, sanitizeUsername } from '../lib/sanitize'
 import { applyTheme } from '../lib/themeApplier'
 import { api, clearStoredAuth, getToken, setStoredUser, setToken } from '../lib/api'
 import { adminApi } from '../lib/adminApi'
@@ -81,7 +82,15 @@ function loadPrefs(): UserPrefs {
   try {
     const auth = JSON.parse(localStorage.getItem('verdexis_auth') || '{}')
     const stored = JSON.parse(localStorage.getItem('verdexis_prefs') || '{}')
-    return { ...DEFAULT_PREFS, ...stored, email: auth.email || '', username: auth.username || stored.username || '', name: auth.name || stored.name || 'User' }
+    return {
+      ...DEFAULT_PREFS,
+      ...stored,
+      email: sanitizeEmail(auth.email || stored.email || ''),
+      username: sanitizeUsername(auth.username || stored.username || ''),
+      name: sanitizeDisplayText(auth.name || stored.name || 'User', 80),
+      phone: sanitizeDisplayText(auth.phone || stored.phone || '', 32),
+      bio: sanitizeDisplayText(stored.bio || '', 300),
+    }
   } catch {
     return DEFAULT_PREFS
   }
@@ -112,6 +121,14 @@ export default function Settings() {
   const [sendingEmailVerification, setSendingEmailVerification] = useState(false)
   const [sendingPhoneVerification, setSendingPhoneVerification] = useState(false)
   const [verifyingPhoneCode, setVerifyingPhoneCode] = useState(false)
+  const [sessions, setSessions] = useState<Array<{ id: string; device: string; userAgent?: string; ipAddress?: string; lastActivityAt?: string; isActive?: boolean }>>([])
+  const [loginHistory, setLoginHistory] = useState<Array<{ id: string; createdAt: string; ipAddress?: string; userAgent?: string; location?: string; success?: boolean }>>([])
+  const [ipRestrictions, setIpRestrictions] = useState<Array<{ id: string; ipAddress: string; type: 'whitelist' | 'blacklist'; description?: string | null; createdAt?: string }>>([])
+  const [recoveryCodes, setRecoveryCodes] = useState<string[]>([])
+  const [cookiePrefs, setCookiePrefs] = useState({ essential: true, analytics: false, marketing: false, preferences: false })
+  const [dataExports, setDataExports] = useState<Array<{ id: string; format: string; status?: string; createdAt?: string }>>([])
+  const [newIpAddress, setNewIpAddress] = useState('')
+  const [newIpType, setNewIpType] = useState<'whitelist' | 'blacklist'>('whitelist')
 
   useEffect(() => {
     const auth = localStorage.getItem('verdexis_auth')
@@ -171,14 +188,55 @@ export default function Settings() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!isAuthed) return
+
+    const loadUserSettings = async () => {
+      try {
+        const [sessionResult, loginResult, restrictionResult, recoveryResult, cookieResult, exportResult] = await Promise.all([
+          api.userSettings.getSessions().catch(() => ({ items: [] })),
+          api.userSettings.getLoginHistory().catch(() => ({ items: [] })),
+          api.userSettings.getIpRestrictions().catch(() => ({ items: [] })),
+          api.userSettings.get2faRecoveryCodes().catch(() => ({ items: [] })),
+          api.userSettings.getCookiePreferences().catch(() => ({ essential: true, analytics: false, marketing: false, preferences: false })),
+          api.userSettings.getDataExports().catch(() => ({ items: [] })),
+        ])
+
+        setSessions(Array.isArray((sessionResult as any)?.sessions) ? (sessionResult as any).sessions : Array.isArray(sessionResult) ? sessionResult as any[] : [])
+        setLoginHistory(Array.isArray((loginResult as any)?.events) ? (loginResult as any).events : Array.isArray(loginResult) ? loginResult as any[] : [])
+        setIpRestrictions(Array.isArray((restrictionResult as any)?.items) ? (restrictionResult as any).items : Array.isArray(restrictionResult) ? restrictionResult as any[] : [])
+        setRecoveryCodes(Array.isArray((recoveryResult as any)?.codes) ? (recoveryResult as any).codes : Array.isArray(recoveryResult) ? recoveryResult as any[] : [])
+        setCookiePrefs({
+          essential: Boolean((cookieResult as any)?.essential ?? true),
+          analytics: Boolean((cookieResult as any)?.analytics ?? false),
+          marketing: Boolean((cookieResult as any)?.marketing ?? false),
+          preferences: Boolean((cookieResult as any)?.preferences ?? false),
+        })
+        setDataExports(Array.isArray((exportResult as any)?.items) ? (exportResult as any).items : Array.isArray(exportResult) ? exportResult as any[] : [])
+      } catch {
+        // Ignore load errors in the settings shell; individual actions can surface their own errors.
+      }
+    }
+
+    void loadUserSettings()
+  }, [isAuthed])
+
   const update = <K extends keyof UserPrefs>(key: K, value: UserPrefs[K]) => {
-    const next = { ...prefs, [key]: value }
+    const sanitizedValue =
+      key === 'name' ? sanitizeDisplayText(value, 80) :
+      key === 'email' ? sanitizeEmail(value) :
+      key === 'username' ? sanitizeUsername(value) :
+      key === 'phone' ? sanitizeDisplayText(value, 32) :
+      key === 'bio' ? sanitizeDisplayText(value, 300) :
+      value
+
+    const next = { ...prefs, [key]: sanitizedValue }
     setPrefs(next)
     localStorage.setItem('verdexis_prefs', JSON.stringify(next))
     
     if (key === 'name' || key === 'email' || key === 'username') {
       const auth = JSON.parse(localStorage.getItem('verdexis_auth') || '{}')
-      localStorage.setItem('verdexis_auth', JSON.stringify({ ...auth, [key]: value }))
+      localStorage.setItem('verdexis_auth', JSON.stringify({ ...auth, [key]: sanitizedValue }))
       window.dispatchEvent(new Event('verdexis:profile'))
     }
     if (key === 'theme') {
@@ -272,6 +330,115 @@ export default function Settings() {
       try { await api.patchProfile({ avatar: null }) } catch { }
     }
     toast.success('Avatar removed')
+  }
+
+  const refreshUserSettingsPanels = async () => {
+    try {
+      const [sessionResult, loginResult, restrictionResult, recoveryResult, cookieResult, exportResult] = await Promise.all([
+        api.userSettings.getSessions().catch(() => ({ items: [] })),
+        api.userSettings.getLoginHistory().catch(() => ({ items: [] })),
+        api.userSettings.getIpRestrictions().catch(() => ({ items: [] })),
+        api.userSettings.get2faRecoveryCodes().catch(() => ({ items: [] })),
+        api.userSettings.getCookiePreferences().catch(() => ({ essential: true, analytics: false, marketing: false, preferences: false })),
+        api.userSettings.getDataExports().catch(() => ({ items: [] })),
+      ])
+
+      setSessions(Array.isArray((sessionResult as any)?.sessions) ? (sessionResult as any).sessions : Array.isArray(sessionResult) ? sessionResult as any[] : [])
+      setLoginHistory(Array.isArray((loginResult as any)?.events) ? (loginResult as any).events : Array.isArray(loginResult) ? loginResult as any[] : [])
+      setIpRestrictions(Array.isArray((restrictionResult as any)?.items) ? (restrictionResult as any).items : Array.isArray(restrictionResult) ? restrictionResult as any[] : [])
+      setRecoveryCodes(Array.isArray((recoveryResult as any)?.codes) ? (recoveryResult as any).codes : Array.isArray(recoveryResult) ? recoveryResult as any[] : [])
+      setCookiePrefs({
+        essential: Boolean((cookieResult as any)?.essential ?? true),
+        analytics: Boolean((cookieResult as any)?.analytics ?? false),
+        marketing: Boolean((cookieResult as any)?.marketing ?? false),
+        preferences: Boolean((cookieResult as any)?.preferences ?? false),
+      })
+      setDataExports(Array.isArray((exportResult as any)?.items) ? (exportResult as any).items : Array.isArray(exportResult) ? exportResult as any[] : [])
+    } catch {
+      // no-op: reload is best-effort
+    }
+  }
+
+  const handleRevokeSession = async (id: string) => {
+    try {
+      await api.userSettings.revokeSession(id)
+      setSessions((current) => current.filter((session) => session.id !== id))
+      toast.success('Session revoked')
+    } catch (err) {
+      toast.error((err as { error?: string }).error || 'Failed to revoke session')
+    }
+  }
+
+  const handleRevokeAllSessions = async () => {
+    try {
+      await api.userSettings.revokeAllSessions()
+      setSessions([])
+      toast.success('All sessions revoked')
+    } catch (err) {
+      toast.error((err as { error?: string }).error || 'Failed to revoke sessions')
+    }
+  }
+
+  const handleGenerateRecoveryCodes = async () => {
+    try {
+      const result = await api.userSettings.generate2faRecoveryCodes()
+      const nextCodes = Array.isArray(result?.codes) ? result.codes : []
+      setRecoveryCodes(nextCodes)
+      toast.success('Recovery codes generated')
+    } catch (err) {
+      toast.error((err as { error?: string }).error || 'Failed to generate recovery codes')
+    }
+  }
+
+  const handleAddIpRestriction = async () => {
+    if (!newIpAddress.trim()) return
+    try {
+      const added = await api.userSettings.addIpRestriction({
+        ipAddress: newIpAddress.trim(),
+        type: newIpType,
+        description: 'User-managed restriction',
+      })
+      setIpRestrictions((current) => [added as any, ...current])
+      setNewIpAddress('')
+      toast.success('IP restriction added')
+    } catch (err) {
+      toast.error((err as { error?: string }).error || 'Failed to add restriction')
+    }
+  }
+
+  const handleDeleteIpRestriction = async (id: string) => {
+    try {
+      await api.userSettings.deleteIpRestriction(id)
+      setIpRestrictions((current) => current.filter((item) => item.id !== id))
+      toast.success('Restriction removed')
+    } catch (err) {
+      toast.error((err as { error?: string }).error || 'Failed to remove restriction')
+    }
+  }
+
+  const handleSaveCookiePrefs = async () => {
+    try {
+      const result = await api.userSettings.patchCookiePreferences(cookiePrefs)
+      setCookiePrefs({
+        essential: Boolean((result as any)?.essential ?? cookiePrefs.essential),
+        analytics: Boolean((result as any)?.analytics ?? cookiePrefs.analytics),
+        marketing: Boolean((result as any)?.marketing ?? cookiePrefs.marketing),
+        preferences: Boolean((result as any)?.preferences ?? cookiePrefs.preferences),
+      })
+      toast.success('Cookie preferences saved')
+    } catch (err) {
+      toast.error((err as { error?: string }).error || 'Failed to save preferences')
+    }
+  }
+
+  const handleRequestDataExport = async (format: 'json' | 'csv' = 'json') => {
+    try {
+      const result = await api.userSettings.requestDataExport(format)
+      setDataExports((current) => [result as any, ...current])
+      toast.success('Data export requested')
+    } catch (err) {
+      toast.error((err as { error?: string }).error || 'Failed to request data export')
+    }
   }
 
   const handleLogout = () => {
@@ -579,6 +746,7 @@ export default function Settings() {
               {section === 'security' && (
                 <div className="space-y-6">
                   <h2 className="text-xl font-light text-[#E5E5E5]">Security</h2>
+
                   <div className="space-y-4">
                     <h3 className="text-sm font-medium text-[#A0A0A0]">Change Password</h3>
                     <Field label="Current password">
@@ -594,6 +762,72 @@ export default function Settings() {
                       <Save className="w-4 h-4" />{changingPassword ? 'Saving…' : 'Update password'}
                     </button>
                   </div>
+
+                  <div className="border-t border-[#ffffff08] pt-6 space-y-4">
+                    <h3 className="text-sm font-medium text-[#A0A0A0]">Sessions</h3>
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs text-[#737373]">Manage active logins across your devices.</p>
+                      <button onClick={handleRevokeAllSessions} className="px-3 py-2 text-xs text-[#FF6B6B] bg-[#ff6b6b14] rounded-lg hover:bg-[#ff6b6b20]">Revoke all</button>
+                    </div>
+                    <div className="space-y-3">
+                      {sessions.length === 0 ? (
+                        <p className="text-xs text-[#737373]">No active sessions.</p>
+                      ) : sessions.map((session) => (
+                        <div key={session.id} className="rounded-2xl bg-[#0a0e10] border border-[#ffffff10] p-4 flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm text-[#E5E5E5]">{session.device || 'Unknown device'}</p>
+                            <p className="text-[11px] text-[#737373]">{session.ipAddress || 'Unknown IP'} • {session.lastActivityAt ? new Date(session.lastActivityAt).toLocaleString() : 'Recently active'}</p>
+                          </div>
+                          <button onClick={() => handleRevokeSession(session.id)} className="px-3 py-2 text-xs text-[#FF6B6B] bg-[#ff6b6b14] rounded-lg hover:bg-[#ff6b6b20]">Revoke</button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="border-t border-[#ffffff08] pt-6 space-y-4">
+                    <h3 className="text-sm font-medium text-[#A0A0A0]">Login history</h3>
+                    <div className="space-y-3">
+                      {loginHistory.length === 0 ? (
+                        <p className="text-xs text-[#737373]">No recent sign-ins recorded.</p>
+                      ) : loginHistory.slice(0, 6).map((event) => (
+                        <div key={event.id} className="rounded-2xl bg-[#0a0e10] border border-[#ffffff10] p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm text-[#E5E5E5]">{event.location || 'Unknown location'}</p>
+                            <span className={`rounded-full px-2 py-1 text-[10px] ${event.success === false ? 'bg-red-500/10 text-red-300' : 'bg-[#0C8B44]/10 text-[#0C8B44]'}`}>
+                              {event.success === false ? 'Failed' : 'Success'}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-[11px] text-[#737373]">{event.ipAddress || 'Unknown IP'} • {new Date(event.createdAt).toLocaleString()}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="border-t border-[#ffffff08] pt-6 space-y-4">
+                    <h3 className="text-sm font-medium text-[#A0A0A0]">IP restrictions</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-[1fr_120px_auto] gap-2">
+                      <input value={newIpAddress} onChange={(e) => setNewIpAddress(e.target.value)} placeholder="192.168.1.10" className="w-full bg-[#0a0e10] border border-[#ffffff10] rounded-lg px-4 py-3 text-[#E5E5E5] focus:border-[#0C8B44] focus:outline-none" />
+                      <select value={newIpType} onChange={(e) => setNewIpType(e.target.value as 'whitelist' | 'blacklist')} className="bg-[#0a0e10] border border-[#ffffff10] rounded-lg px-3 py-3 text-[#E5E5E5] focus:border-[#0C8B44] focus:outline-none">
+                        <option value="whitelist">Whitelist</option>
+                        <option value="blacklist">Blacklist</option>
+                      </select>
+                      <button onClick={handleAddIpRestriction} className="px-4 py-3 bg-[#0C8B44] text-white text-sm rounded-lg hover:bg-[#0a7539]">Add</button>
+                    </div>
+                    <div className="space-y-3">
+                      {ipRestrictions.length === 0 ? (
+                        <p className="text-xs text-[#737373]">No IP restrictions configured.</p>
+                      ) : ipRestrictions.map((item) => (
+                        <div key={item.id} className="rounded-2xl bg-[#0a0e10] border border-[#ffffff10] p-4 flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm text-[#E5E5E5]">{item.ipAddress}</p>
+                            <p className="text-[11px] text-[#737373]">{item.type} • {item.description || 'User-managed restriction'}</p>
+                          </div>
+                          <button onClick={() => handleDeleteIpRestriction(item.id)} className="px-3 py-2 text-xs text-[#FF6B6B] bg-[#ff6b6b14] rounded-lg hover:bg-[#ff6b6b20]">Remove</button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
                   <div className="border-t border-[#ffffff08] pt-6">
                     <h3 className="text-sm font-medium text-[#A0A0A0] mb-4">Passkeys</h3>
                     <p className="text-xs text-[#737373] mb-3">Use biometrics or a security key to sign in without a password.</p>
@@ -634,6 +868,21 @@ export default function Settings() {
                       <p className="text-xs text-[#FF9800]">Passkeys require HTTPS or a production domain to work reliably.</p>
                     </div>
                   </div>
+
+                  <div className="border-t border-[#ffffff08] pt-6 space-y-4">
+                    <h3 className="text-sm font-medium text-[#A0A0A0]">2FA recovery codes</h3>
+                    <button onClick={handleGenerateRecoveryCodes} className="px-4 py-2.5 bg-[#0a0e10] border border-[#ffffff10] text-[#E5E5E5] text-sm rounded-lg hover:border-[#0C8B44]/30">Generate recovery codes</button>
+                    {recoveryCodes.length > 0 && (
+                      <div className="rounded-2xl bg-[#0a0e10] border border-[#ffffff10] p-4">
+                        <div className="grid grid-cols-2 gap-2">
+                          {recoveryCodes.map((code) => (
+                            <div key={code} className="rounded-lg border border-[#ffffff10] bg-[#070C0E] px-3 py-2 text-center text-xs font-medium tracking-[0.2em] text-[#E5E5E5]">{code}</div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <Toggle icon={<Shield className="w-5 h-5 text-[#0C8B44]" />} title="Two-factor authentication"
                     description="Require a verification code on every login."
                     enabled={prefs.twoFactorEnabled} onChange={(v) => update('twoFactorEnabled', v)} />
@@ -698,6 +947,41 @@ export default function Settings() {
                   <Toggle icon={<Lock className="w-5 h-5 text-[#737373]" />} title="Analytics opt-out"
                     description="Disable anonymous usage analytics."
                     enabled={prefs.analyticsOptOut} onChange={(v) => update('analyticsOptOut', v)} />
+
+                  <div className="border-t border-[#ffffff08] pt-6 space-y-4">
+                    <h3 className="text-sm font-medium text-[#A0A0A0]">Cookie preferences</h3>
+                    <div className="space-y-3">
+                      {Object.entries(cookiePrefs).map(([key, value]) => (
+                        <label key={key} className="flex items-center justify-between rounded-xl border border-[#ffffff08] bg-[#0a0e10] px-4 py-3 text-sm text-[#E5E5E5]">
+                          <span className="capitalize">{key}</span>
+                          <input type="checkbox" checked={Boolean(value)} onChange={(e) => setCookiePrefs((prev) => ({ ...prev, [key]: e.target.checked }))} className="h-4 w-4 accent-[#0C8B44]" />
+                        </label>
+                      ))}
+                    </div>
+                    <button onClick={handleSaveCookiePrefs} className="px-4 py-2.5 bg-[#0C8B44] text-white text-sm rounded-lg hover:bg-[#0a7539]">Save cookie settings</button>
+                  </div>
+
+                  <div className="border-t border-[#ffffff08] pt-6 space-y-4">
+                    <h3 className="text-sm font-medium text-[#A0A0A0]">Data export</h3>
+                    <div className="flex gap-3">
+                      <button onClick={() => handleRequestDataExport('json')} className="px-4 py-2.5 bg-[#0a0e10] border border-[#ffffff10] text-[#E5E5E5] text-sm rounded-lg hover:border-[#0C8B44]/30">Request JSON export</button>
+                      <button onClick={() => handleRequestDataExport('csv')} className="px-4 py-2.5 bg-[#0a0e10] border border-[#ffffff10] text-[#E5E5E5] text-sm rounded-lg hover:border-[#0C8B44]/30">Request CSV export</button>
+                    </div>
+                    {dataExports.length > 0 && (
+                      <div className="space-y-3">
+                        {dataExports.slice(0, 5).map((item) => (
+                          <div key={item.id} className="rounded-2xl bg-[#0a0e10] border border-[#ffffff10] p-4 text-sm text-[#E5E5E5]">
+                            <div className="flex items-center justify-between gap-3">
+                              <span>{item.format?.toUpperCase() || 'DATA'}</span>
+                              <span className="text-[11px] text-[#737373]">{item.status || 'Requested'}</span>
+                            </div>
+                            <p className="mt-2 text-[11px] text-[#737373]">{item.createdAt ? new Date(item.createdAt).toLocaleString() : 'Just now'}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="border-t border-[#ffffff08] pt-6">
                     <button onClick={handleDeleteAccount} className="flex items-center gap-2 px-4 py-2.5 bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-lg hover:bg-red-500/20 transition-colors">
                       Delete account
@@ -709,22 +993,62 @@ export default function Settings() {
               {section === 'admin' && isAdmin && (
                 <div className="space-y-6">
                   <h2 className="text-xl font-light text-[#E5E5E5]">Admin Settings</h2>
-                  <div className="max-w-md rounded-xl bg-[#0a0e10] border border-[#ffffff08] p-6 space-y-4">
-                    <h3 className="text-sm font-medium text-[#E5E5E5]">Withdrawal Processing Fee</h3>
-                    <p className="text-xs text-[#737373]">Flat-rate fee charged on every withdrawal. Changes take effect immediately.</p>
-                    <Field label="Fee rate (%)">
-                      <div className="flex items-center gap-3">
-                        <input type="number" step="0.1" min="0" max="100" value={withdrawalFeeRate}
-                          onChange={(e) => setWithdrawalFeeRate(parseFloat(e.target.value))}
-                          className="w-32 bg-[#070C0E] border border-[#ffffff10] rounded-lg px-4 py-3 text-[#E5E5E5] focus:border-[#0C8B44] focus:outline-none" />
-                        <span className="text-sm text-[#737373]">%</span>
-                        <span className="text-xs text-[#A0A0A0]">e.g. $10,000 → fee = ${(10000 * (withdrawalFeeRate / 100)).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="rounded-2xl bg-[#0a0e10] border border-[#ffffff08] p-5 space-y-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <h3 className="text-sm font-medium text-[#E5E5E5]">Withdrawal processing fee</h3>
+                        <span className="rounded-full bg-[#0C8B44]/10 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-[#0C8B44]">Optional</span>
                       </div>
-                    </Field>
-                    <button onClick={handleSaveFeeRate} disabled={savingFee}
-                      className="flex items-center gap-2 px-5 py-2.5 bg-[#0C8B44] text-white text-sm rounded-lg hover:bg-[#0a7539] disabled:opacity-50">
-                      <Save className="w-4 h-4" />{savingFee ? 'Saving…' : 'Save fee rate'}
-                    </button>
+                      <p className="text-xs text-[#737373]">Flat-rate fee charged on every withdrawal. Changes take effect immediately.</p>
+                      <Field label="Fee rate (%)">
+                        <div className="flex items-center gap-3">
+                          <input type="number" step="0.1" min="0" max="100" value={withdrawalFeeRate}
+                            onChange={(e) => setWithdrawalFeeRate(parseFloat(e.target.value))}
+                            className="w-32 bg-[#070C0E] border border-[#ffffff10] rounded-lg px-4 py-3 text-[#E5E5E5] focus:border-[#0C8B44] focus:outline-none" />
+                          <span className="text-sm text-[#737373]">%</span>
+                        </div>
+                      </Field>
+                      <button onClick={handleSaveFeeRate} disabled={savingFee}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-[#0C8B44] text-white text-sm rounded-lg hover:bg-[#0a7539] disabled:opacity-50">
+                        <Save className="w-4 h-4" />{savingFee ? 'Saving…' : 'Save fee rate'}
+                      </button>
+                    </div>
+
+                    <div className="rounded-2xl bg-[#0a0e10] border border-[#ffffff08] p-5 space-y-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <h3 className="text-sm font-medium text-[#E5E5E5]">Signup bonus</h3>
+                        <span className="rounded-full bg-[#0C8B44]/10 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-[#0C8B44]">Optional</span>
+                      </div>
+                      <p className="text-xs text-[#737373]">Enable a welcome credit or keep the default onboarding flow disabled.</p>
+                      <Link to="/admin/signup-bonus" className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#070C0E] border border-[#ffffff10] rounded-lg text-sm text-[#E5E5E5] hover:border-[#0C8B44]/30">
+                        <Gift className="w-4 h-4 text-[#0C8B44]" /> Manage signup bonus
+                      </Link>
+                    </div>
+
+                    <div className="rounded-2xl bg-[#0a0e10] border border-[#ffffff08] p-5 space-y-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <h3 className="text-sm font-medium text-[#E5E5E5]">Security & compliance</h3>
+                        <span className="rounded-full bg-[#0C8B44]/10 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-[#0C8B44]">Optional</span>
+                      </div>
+                      <div className="space-y-2">
+                        <Link to="/admin/settings" className="block rounded-lg border border-[#ffffff08] bg-[#070C0E] px-3 py-2 text-sm text-[#E5E5E5] hover:border-[#0C8B44]/30">Platform settings</Link>
+                        <Link to="/admin/audit" className="block rounded-lg border border-[#ffffff08] bg-[#070C0E] px-3 py-2 text-sm text-[#E5E5E5] hover:border-[#0C8B44]/30">Audit log</Link>
+                        <Link to="/admin/security-events" className="block rounded-lg border border-[#ffffff08] bg-[#070C0E] px-3 py-2 text-sm text-[#E5E5E5] hover:border-[#0C8B44]/30">Security events</Link>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl bg-[#0a0e10] border border-[#ffffff08] p-5 space-y-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <h3 className="text-sm font-medium text-[#E5E5E5]">User operations</h3>
+                        <span className="rounded-full bg-[#0C8B44]/10 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-[#0C8B44]">Optional</span>
+                      </div>
+                      <div className="space-y-2">
+                        <Link to="/admin/users" className="block rounded-lg border border-[#ffffff08] bg-[#070C0E] px-3 py-2 text-sm text-[#E5E5E5] hover:border-[#0C8B44]/30">Manage users</Link>
+                        <Link to="/admin/deposits" className="block rounded-lg border border-[#ffffff08] bg-[#070C0E] px-3 py-2 text-sm text-[#E5E5E5] hover:border-[#0C8B44]/30">Deposit settings</Link>
+                        <Link to="/admin/broadcast" className="block rounded-lg border border-[#ffffff08] bg-[#070C0E] px-3 py-2 text-sm text-[#E5E5E5] hover:border-[#0C8B44]/30">Broadcast</Link>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

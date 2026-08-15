@@ -33,9 +33,10 @@ export class ProgressiveAuthMiddleware {
    * Create middleware for progressive authentication
    */
   static create(config: ProgressiveAuthConfig): (req: AuthedRequest, res: Response, next: NextFunction) => Promise<void | Response> {
-    return async (req: AuthedRequest, res: Response, next: NextFunction) => {
+    return async (req: AuthedRequest, res: Response, next: NextFunction): Promise<void | Response> => {
       if (!req.userId) {
-        return res.status(401).json({ error: 'Authentication required' })
+        res.status(401).json({ error: 'Authentication required' })
+        return
       }
 
       try {
@@ -58,22 +59,24 @@ export class ProgressiveAuthMiddleware {
 
         // Handle authentication result
         if (!authResult.allowed) {
-          return res.status(403).json({
+          res.status(403).json({
             error: 'Action blocked',
             reason: authResult.reason,
             riskScore: authResult.riskScore,
             requiresApproval: authResult.requiresApproval
           })
+          return
         }
 
         if (authResult.requiresStepUp) {
           const sessionId = req.headers['x-session-id'] as string
           if (!sessionId) {
-            return res.status(403).json({
+            res.status(403).json({
               error: 'Step-up authentication required',
               stepUpRequired: true,
               reason: authResult.reason
             })
+            return
           }
 
           const stepUpResult = await sessionManagementService.requiresStepUp(
@@ -83,13 +86,14 @@ export class ProgressiveAuthMiddleware {
           )
 
           if (stepUpResult.required) {
-            return res.status(403).json({
+            res.status(403).json({
               error: 'Step-up authentication required',
               stepUpRequired: true,
               level: stepUpResult.level,
               validFor: stepUpResult.validFor,
               reason: stepUpResult.reason
             })
+            return
           }
         }
 
@@ -97,12 +101,13 @@ export class ProgressiveAuthMiddleware {
           const otpVerified = req.headers['x-otp-verified'] === 'true'
           
           if (!otpVerified) {
-            return res.status(403).json({
+            res.status(403).json({
               error: 'OTP verification required',
               otpRequired: true,
               reason: authResult.reason,
               recommendations: authResult.recommendations
             })
+            return
           }
         }
 
@@ -112,7 +117,7 @@ export class ProgressiveAuthMiddleware {
         next()
       } catch (error) {
         console.error('[progressive-auth] Error:', error)
-        return res.status(500).json({ error: 'Authentication check failed' })
+        res.status(500).json({ error: 'Authentication check failed' })
       }
     }
   }

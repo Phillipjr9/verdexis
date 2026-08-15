@@ -10,8 +10,9 @@ export type AdminEmailActionPayload = {
 }
 
 export function createDepositActionToken(depositId: string, action: 'approve' | 'reject', adminEmail: string): string {
+  // Avoid duplicating the `aud` claim: pass audience via options only
   return jwt.sign(
-    { depositId, action, adminEmail: adminEmail.toLowerCase(), aud: ADMIN_EMAIL_ACTION_AUDIENCE },
+    { depositId, action, adminEmail: adminEmail.toLowerCase() },
     env.JWT_SECRET,
     { audience: ADMIN_EMAIL_ACTION_AUDIENCE, expiresIn: '48h' },
   )

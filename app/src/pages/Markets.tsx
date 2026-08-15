@@ -313,6 +313,10 @@ export default function Markets() {
     }
   }
 
+  const stableCoinIds = new Set([
+    'tether', 'usd-coin', 'dai', 'true-usd', 'first-digital-usd', 'pax-dollar', 'frax',
+  ])
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     let out = coins.filter((c) => c && typeof c.id === 'string')
@@ -329,7 +333,10 @@ export default function Markets() {
       out = out.filter((c) => categoriesFor(c).includes(category))
     }
     if (hideStables && category !== 'stablecoin') {
-      out = out.filter((c) => !categoriesFor(c).includes('stablecoin'))
+      out = out.filter((c) => !categoriesFor(c).includes('stablecoin') && !stableCoinIds.has(c.id))
+    }
+    if (category === 'stablecoin') {
+      out = out.filter((c) => categoriesFor(c).includes('stablecoin') || stableCoinIds.has(c.id))
     }
     const dir = sortDir === 'asc' ? 1 : -1
     const num = (n: unknown) => (typeof n === 'number' && isFinite(n) ? n : 0)

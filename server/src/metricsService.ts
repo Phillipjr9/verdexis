@@ -257,11 +257,11 @@ export async function calculateAssetCorrelations(userId: string): Promise<AssetC
     const symbolList = Object.keys(priceHistories)
     for (let i = 0; i < symbolList.length; i++) {
       for (let j = i + 1; j < symbolList.length; j++) {
-        const symbol1 = symbolList[i]
-        const symbol2 = symbolList[j]
+        const symbol1 = symbolList[i]!
+        const symbol2 = symbolList[j]!
 
-        const prices1 = priceHistories[symbol1] ?? []
-        const prices2 = priceHistories[symbol2] ?? []
+        const prices1 = priceHistories[symbol1]
+        const prices2 = priceHistories[symbol2]
 
         if (prices1.length > 1 && prices2.length > 1) {
           const minLength = Math.min(prices1.length, prices2.length)

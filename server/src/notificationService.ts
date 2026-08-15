@@ -510,6 +510,7 @@ export async function sendWithdrawalNotification(
     }
 
     const message = messages[status]
+    if (!message) return
 
     if (prefs.emailNotifications && prefs.transactionAlerts) {
       await sendEmailNotification(user.email, message.subject, message.body, undefined, {
@@ -560,6 +561,7 @@ export async function sendDepositNotification(
     }
 
     const message = messages[status]
+    if (!message) return
 
     if (prefs.emailNotifications && prefs.transactionAlerts) {
       await sendEmailNotification(user.email, message.subject, message.body, undefined, {

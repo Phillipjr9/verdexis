@@ -17,7 +17,7 @@ const pages: Record<PageKey, { eyebrow: string; title: string; intro: string; se
     ],
   },
   terms: {
-    eyebrow: 'Legal', title: 'Terms of Use', intro: 'These Terms of Use describe the rules for using the platform. If you have questions about these terms, contact Support.',
+    eyebrow: 'Legal', title: 'Terms of Service', intro: 'These Terms of Service describe the rules for using the platform. If you have questions about these terms, contact Support.',
     sections: [
       { title: 'Use of the platform', paragraphs: ['Users are responsible for accurate account information, protecting credentials, and using the platform lawfully. Do not share passwords, private keys, seed phrases, or authentication codes.'] },
       { title: 'Information and transactions', paragraphs: ['Market information and platform content may be incomplete, delayed, or unavailable. Transaction availability, fees, limits, reversals, and third-party dependencies depend on the applicable feature and current disclosures.'] },

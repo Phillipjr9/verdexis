@@ -26,7 +26,7 @@ export function setupSecurityHeaders(app: Express) {
         childSrc: ["'none'"],
         formAction: ["'self'"],
         frameAncestors: ["'none'"],
-        upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : undefined,
+        ...(process.env.NODE_ENV === 'production' ? { upgradeInsecureRequests: [] } : {}),
       },
       reportOnly: false,
     })

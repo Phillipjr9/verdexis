@@ -105,13 +105,24 @@ export default function AdminSettings() {
           </div>
           <div>
             <h1 className="text-2xl font-light text-[#E5E5E5]">Admin Settings</h1>
-            <p className="text-xs text-[#737373]">Configure platform-wide parameters</p>
+            <p className="text-xs text-[#737373]">Core platform controls and governance options</p>
           </div>
         </div>
 
+        <div className="mb-6 flex flex-wrap gap-2">
+          <Link to="/admin/users" className="rounded-lg border border-[#ffffff08] bg-[#0f1619]/50 px-3 py-2 text-xs text-[#A0A0A0] hover:border-[#0C8B44]/40 hover:text-[#0C8B44]">Users</Link>
+          <Link to="/admin/audit" className="rounded-lg border border-[#ffffff08] bg-[#0f1619]/50 px-3 py-2 text-xs text-[#A0A0A0] hover:border-[#0C8B44]/40 hover:text-[#0C8B44]">Audit</Link>
+          <Link to="/admin/broadcast" className="rounded-lg border border-[#ffffff08] bg-[#0f1619]/50 px-3 py-2 text-xs text-[#A0A0A0] hover:border-[#0C8B44]/40 hover:text-[#0C8B44]">Broadcast</Link>
+          <Link to="/admin/settings" className="rounded-lg border border-[#0C8B44]/30 bg-[#0C8B44]/10 px-3 py-2 text-xs text-[#0C8B44]">Active settings</Link>
+        </div>
+
         <div className="grid gap-6 lg:grid-cols-2">
-          {/* Withdrawal Processing Fee */}
-          <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
+          {/* Core platform controls */}
+          <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6 lg:col-span-2">
+            <h2 className="text-xs uppercase tracking-[0.2em] text-[#737373] mb-4">Core platform controls</h2>
+            <div className="grid gap-6 lg:grid-cols-2">
+              {/* Withdrawal Processing Fee */}
+              <div className="rounded-2xl bg-[#121a1f]/80 border border-[#ffffff08] p-5">
             <div className="flex items-center gap-2 mb-1">
               <Percent className="w-4 h-4 text-[#0C8B44]" />
               <h2 className="text-lg font-medium text-[#E5E5E5]">Withdrawal Processing Fee</h2>
@@ -160,69 +171,72 @@ export default function AdminSettings() {
             )}
           </div>
 
-          {/* Signup Bonus */}
-          <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
-            <div className="flex items-center gap-2 mb-1">
-              <Gift className="w-4 h-4 text-[#0C8B44]" />
-              <h2 className="text-lg font-medium text-[#E5E5E5]">Signup Bonus</h2>
-            </div>
-            <p className="text-xs text-[#737373] mb-5">
-              Automatically credit new users with a USD bonus when they register.
-              Set amount to 0 or disable to turn off.
-            </p>
+              {/* Signup Bonus */}
+              <div className="rounded-2xl bg-[#121a1f]/80 border border-[#ffffff08] p-5">
+                <div className="flex items-center gap-2 mb-1">
+                  <Gift className="w-4 h-4 text-[#0C8B44]" />
+                  <h2 className="text-lg font-medium text-[#E5E5E5]">Signup Bonus</h2>
+                </div>
+                <p className="text-xs text-[#737373] mb-5">
+                  Automatically credit new users with a USD bonus when they register.
+                  Set amount to 0 or disable to turn off.
+                </p>
 
-            {bonusLoading ? (
-              <p className="text-xs text-[#737373]">Loading…</p>
-            ) : (
-              <div className="space-y-4">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <div
-                    onClick={() => setBonusEnabled(!bonusEnabled)}
-                    className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${bonusEnabled ? 'bg-[#0C8B44]' : 'bg-[#2a2a2a]'}`}
-                  >
-                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${bonusEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                {bonusLoading ? (
+                  <p className="text-xs text-[#737373]">Loading…</p>
+                ) : (
+                  <div className="space-y-4">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <div
+                        onClick={() => setBonusEnabled(!bonusEnabled)}
+                        className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${bonusEnabled ? 'bg-[#0C8B44]' : 'bg-[#2a2a2a]'}`}
+                      >
+                        <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${bonusEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                      </div>
+                      <span className="text-sm text-[#E5E5E5]">{bonusEnabled ? 'Enabled' : 'Disabled'}</span>
+                    </label>
+
+                    <div>
+                      <label className="text-xs uppercase tracking-wider text-[#737373] mb-2 block">Bonus amount (USD)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={bonusAmount}
+                        onChange={(e) => setBonusAmount(parseFloat(e.target.value) || 0)}
+                        className="w-36 px-3 py-2 bg-[#0a0f11] border border-[#ffffff10] rounded-lg text-sm text-[#E5E5E5] focus:outline-none focus:border-[#0C8B44]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs uppercase tracking-wider text-[#737373] mb-2 block">Internal note (optional)</label>
+                      <input
+                        type="text"
+                        maxLength={300}
+                        value={bonusNote}
+                        onChange={(e) => setBonusNote(e.target.value)}
+                        placeholder="e.g. Q3 promo campaign"
+                        className="w-full px-3 py-2 bg-[#0a0f11] border border-[#ffffff10] rounded-lg text-sm text-[#E5E5E5] focus:outline-none focus:border-[#0C8B44]"
+                      />
+                    </div>
+
+                    <button
+                      onClick={saveBonus}
+                      disabled={bonusSaving}
+                      className="flex items-center justify-center gap-2 px-5 py-2.5 bg-[#0C8B44] text-white text-sm font-medium rounded-lg hover:bg-[#0a7539] transition-colors disabled:opacity-50"
+                    >
+                      <Save className="w-4 h-4" />
+                      {bonusSaving ? 'Saving…' : 'Save bonus settings'}
+                    </button>
                   </div>
-                  <span className="text-sm text-[#E5E5E5]">{bonusEnabled ? 'Enabled' : 'Disabled'}</span>
-                </label>
-
-                <div>
-                  <label className="text-xs uppercase tracking-wider text-[#737373] mb-2 block">Bonus amount (USD)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={bonusAmount}
-                    onChange={(e) => setBonusAmount(parseFloat(e.target.value) || 0)}
-                    className="w-36 px-3 py-2 bg-[#0a0f11] border border-[#ffffff10] rounded-lg text-sm text-[#E5E5E5] focus:outline-none focus:border-[#0C8B44]"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs uppercase tracking-wider text-[#737373] mb-2 block">Internal note (optional)</label>
-                  <input
-                    type="text"
-                    maxLength={300}
-                    value={bonusNote}
-                    onChange={(e) => setBonusNote(e.target.value)}
-                    placeholder="e.g. Q3 promo campaign"
-                    className="w-full px-3 py-2 bg-[#0a0f11] border border-[#ffffff10] rounded-lg text-sm text-[#E5E5E5] focus:outline-none focus:border-[#0C8B44]"
-                  />
-                </div>
-
-                <button
-                  onClick={saveBonus}
-                  disabled={bonusSaving}
-                  className="flex items-center justify-center gap-2 px-5 py-2.5 bg-[#0C8B44] text-white text-sm font-medium rounded-lg hover:bg-[#0a7539] transition-colors disabled:opacity-50"
-                >
-                  <Save className="w-4 h-4" />
-                  {bonusSaving ? 'Saving…' : 'Save bonus settings'}
-                </button>
+                )}
               </div>
-            )}
+            </div>
           </div>
 
-          {/* OTP Analytics */}
+          {/* Monitoring & compliance */}
           <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6 lg:col-span-2">
+            <h2 className="text-xs uppercase tracking-[0.2em] text-[#737373] mb-4">Monitoring & compliance</h2>
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-2">
                 <Shield className="w-4 h-4 text-[#0C8B44]" />

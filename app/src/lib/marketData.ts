@@ -1,7 +1,5 @@
-import { MOCK_CRYPTO_DATA } from './mockCryptoData'
-
-const ALPHA_VANTAGE_KEY = import.meta.env.VITE_ALPHA_VANTAGE_KEY || ''
-const FINNHUB_KEY = import.meta.env.VITE_FINNHUB_KEY || ''
+// Frontend must never hold admin or full-privilege API credentials.
+// It only talks to our backend proxy, which owns the server-side keys.
 // CoinGecko is blocked by CORS for browser clients. We proxy through our own
 // API which fetches server-side and caches. Vite dev proxies /api -> :4000.
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined) || ''
@@ -139,35 +137,20 @@ class MarketDataService {
   }
 
   async getStockQuote(symbol: string): Promise<StockQuote | null> {
-    if (!ALPHA_VANTAGE_KEY) return null
-
     const cacheKey = `stock_${symbol}`
     const cached = this.getCached<StockQuote>(cacheKey)
     if (cached) return cached
 
     try {
-      const response = await fetch(
-        `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${ALPHA_VANTAGE_KEY}`
-      )
-      const data = await response.json()
-      if (data['Global Quote']) {
-        const quote = data['Global Quote']
-        const result: StockQuote = {
-          symbol: quote['01. symbol'],
-          price: parseFloat(quote['05. price']),
-          change: parseFloat(quote['09. change']),
-          changePercent: parseFloat(quote['10. change percent'].replace('%', '')),
-          volume: parseInt(quote['06. volume']),
-          high: parseFloat(quote['03. high']),
-          low: parseFloat(quote['04. low']),
-          open: parseFloat(quote['02. open']),
-          previousClose: parseFloat(quote['08. previous close']),
-          timestamp: quote['07. latest trading day'],
-        }
-        this.setCache(cacheKey, result)
-        return result
-      }
-      return null
+      const response = await fetch(`${API_BASE}/api/market/stock-quote?symbol=${encodeURIComponent(symbol)}`, {
+        signal: AbortSignal.timeout(6000),
+        cache: 'no-store',
+      })
+      if (!response.ok) return null
+      const data = await response.json() as StockQuote | { error?: string }
+      if (!data || typeof data !== 'object' || 'error' in data) return null
+      this.setCache(cacheKey, data)
+      return data
     } catch {
       return null
     }
@@ -214,7 +197,7 @@ class MarketDataService {
       if (stale && stale.length > 0) {
         return stale
       }
-      return MOCK_CRYPTO_DATA
+      return []
     }
   }
 
@@ -261,8 +244,7 @@ class MarketDataService {
     } catch {
       const stale = this.cache.get(cacheKey)?.data as CryptoQuote[] | undefined
       if (!stale || stale.length === 0) {
-        const filtered = MOCK_CRYPTO_DATA.filter(c => ids.includes(c.id))
-        return filtered.length > 0 ? filtered : MOCK_CRYPTO_DATA
+        return []
       }
       return stale
     }
@@ -360,9 +342,6 @@ class MarketDataService {
       const cached = this.getCached<MarketNews[]>(cacheKey, 60_000)
       if (cached) return cached
     }
-    // Prefer our own /api/market/news (NewsAPI primary, Finnhub fallback,
-    // both keys server-side). Fall back to direct Finnhub from the browser
-    // only if VITE_FINNHUB_KEY is set and the proxy fails.
     try {
       const res = await fetch(
         `${API_BASE}/api/market/news?category=${encodeURIComponent(category)}`,
@@ -377,37 +356,21 @@ class MarketDataService {
         }
       }
     } catch {
-      /* fall through to direct Finnhub */
+      /* backend proxy is the only allowed browser path */
     }
-    if (!FINNHUB_KEY) return this.getCached<MarketNews[]>(cacheKey, 10 * 60_000) ?? []
-    const finnhubCategory =
-      category === 'stocks' ? 'general'
-      : category === 'macro' ? 'forex'
-      : category === 'defi' ? 'crypto'
-      : category === 'all' ? 'general'
-      : category
-    try {
-      const response = await fetch(
-        `https://finnhub.io/api/v1/news?category=${encodeURIComponent(finnhubCategory)}&token=${FINNHUB_KEY}&_=${Date.now()}`,
-        { signal: AbortSignal.timeout(5000), cache: 'no-store' }
-      )
-      const data: MarketNews[] = await response.json()
-      const result = (Array.isArray(data) ? data : []).slice(0, 30)
-      this.setCache(cacheKey, result)
-      return result
-    } catch {
-      return this.getCached<MarketNews[]>(cacheKey, 10 * 60_000) ?? []
-    }
+    return this.getCached<MarketNews[]>(cacheKey, 10 * 60_000) ?? []
   }
 
   async searchStocks(query: string): Promise<unknown[]> {
-    if (!ALPHA_VANTAGE_KEY) return []
+    if (!query.trim()) return []
     try {
-      const response = await fetch(
-        `https://www.alphavantage.co/query?function=SYMBOL_SEARCH&keywords=${query}&apikey=${ALPHA_VANTAGE_KEY}`
-      )
-      const data = await response.json()
-      return data.bestMatches || []
+      const response = await fetch(`${API_BASE}/api/market/search?q=${encodeURIComponent(query)}`, {
+        signal: AbortSignal.timeout(6000),
+        cache: 'no-store',
+      })
+      if (!response.ok) return []
+      const data = await response.json() as { results?: unknown[] }
+      return Array.isArray(data.results) ? data.results : []
     } catch {
       return []
     }

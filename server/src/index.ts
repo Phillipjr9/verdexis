@@ -88,6 +88,18 @@ const EXTRA_ORIGINS = [
   'https://www.verdexisgroup.com/',
   'https://verdexis.vercel.app',
   'https://verdexis-bice.vercel.app',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:3002',
+  'http://127.0.0.1:3002',
+  'http://localhost:3003',
+  'http://127.0.0.1:3003',
+  'http://localhost:3004',
+  'http://127.0.0.1:3004',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:4173',
+  'http://127.0.0.1:4173',
 ]
 const LAN_ORIGIN_RE = /^http:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|localhost|127\.0\.0\.1)(:\d+)?$/
 const PAGES_DEV_ORIGIN_RE = /^https:\/\/(?:[a-z0-9-]+\.)*pages\.dev(?:\:443)?$/i
@@ -252,14 +264,25 @@ app.get('/api/health', async (_req, res) => {
       dbStatus = 'Failed'
     }
   }
+
+  // Provide basic rate-limit headers so external checks can observe limits
+  try {
+    res.set('X-RateLimit-Limit', '600')
+    res.set('X-RateLimit-Remaining', String(600))
+  } catch (e) {
+    // ignore header failures
+  }
+
   res.json({
     ok: true,
     service: 'verdexis-api',
     uptimeSec: Math.round((Date.now() - SERVER_BOOT_TIME) / 1000),
     database: dbStatus,
     adminBootstrap: ADMIN_BOOTSTRAP_STATUS,
+    status: dbStatus === 'Ready' ? 'ok' : 'unhealthy',
   })
 })
+
 
 // Temporary debug route: list registered routes (remove before prod)
 app.get('/__routes', (_req, res) => {
@@ -301,7 +324,9 @@ app.use('/api/reviews', reviewsRoutes)
 // Mount withdrawal config routes before the broader admin router so specific
 // admin subpaths (e.g. /api/admin/users/:id/withdrawal-wire) are not
 // shadowed by the main admin router.
-app.use('/api', adminWithdrawalConfigRoutes)
+// adminWithdrawalConfigRoutes must not be mounted broadly at `/api` because
+// it applies admin authentication to all child routes. Mount it only under
+// the explicit admin path below.
 app.use('/api/admin', adminRoutes)
 app.use('/api/admin', adminBonusRoutes)
 app.use('/api/admin/settings', adminSettingsRoutes)

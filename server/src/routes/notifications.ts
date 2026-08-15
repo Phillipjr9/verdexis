@@ -75,9 +75,15 @@ router.delete('/:id', requireAuth, async (req: AuthedRequest, res) => {
     return
   }
   try {
-    const n = await prisma.notification.findUnique({ where: { id: req.params.id } })
-    if (!n || n.userId !== userId) { res.status(404).json({ error: 'Not found' }); return }
-    await prisma.notification.delete({ where: { id: req.params.id } })
+    const notification = await prisma.notification.findFirst({
+      where: { id: req.params.id, userId },
+      select: { id: true },
+    })
+    if (!notification) {
+      res.status(404).json({ error: 'Not found' })
+      return
+    }
+    await prisma.notification.delete({ where: { id: notification.id } })
     res.json({ ok: true })
   } catch {
     res.status(404).json({ error: 'Not found' })

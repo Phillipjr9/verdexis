@@ -184,7 +184,7 @@ function createPrismaOperationProxy<T extends object>(target: T): T {
         const fn = value as (...args: unknown[]) => unknown
         return async (...args: unknown[]) => {
           await waitForDatabaseInitialization()
-          return fn(...args)
+          return (fn as Function).apply(innerTarget, args)
         }
       }
       if (value && typeof value === 'object') {
@@ -209,7 +209,7 @@ export const prisma = new Proxy({} as PrismaClient, {
       const fn = value as (...args: unknown[]) => unknown
       return async (...args: unknown[]) => {
         await waitForDatabaseInitialization()
-        return fn(...args)
+        return (fn as Function).apply(currentPrismaClient, args)
       }
     }
     if (value && typeof value === 'object') {

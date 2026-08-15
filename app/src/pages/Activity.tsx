@@ -242,8 +242,10 @@ export default function Activity() {
             {rows.map((r) => {
               const Icon = rowIcon(r)
               const color = rowColor(r)
-              const amount = r.kind === 'tx' ? txAmount(r.data) : (r.data.side === 'buy' ? -r.data.total : r.data.total)
-              const currency = r.kind === 'tx' ? r.data.currency : 'USD'
+              const amount = r.kind === 'tx'
+                ? txAmount(r.data)
+                : (typeof r.data.quantity === 'number' ? (r.data.side === 'buy' ? r.data.quantity : -r.data.quantity) : 0)
+              const currency = r.kind === 'tx' ? r.data.currency : (r.data.symbol || 'ASSET').toUpperCase()
               const status = r.kind === 'tx' ? r.data.status : 'completed'
               return (
                 <button
@@ -269,9 +271,17 @@ export default function Activity() {
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <p className={`text-sm tabular-nums ${amount >= 0 ? 'text-[#4CAF50]' : 'text-[#f44336]'}`}>
-                      {amount >= 0 ? '+' : ''}{fmtAmount(amount, currency)} {currency}
-                    </p>
+                    {r.kind === 'trade' ? (
+                      // Show trades as asset quantity/symbol (e.g. "-0.500 BTC")
+                      <p className={`text-sm tabular-nums ${amount >= 0 ? 'text-[#4CAF50]' : 'text-[#f44336]'}`}>
+                        {amount >= 0 ? '+' : ''}{fmtAmount(amount, currency)} {currency}
+                      </p>
+                    ) : (
+                      // Wallet transactions keep their currency (USD, USDC, etc.)
+                      <p className={`text-sm tabular-nums ${amount >= 0 ? 'text-[#4CAF50]' : 'text-[#f44336]'}`}>
+                        {amount >= 0 ? '+' : ''}{fmtAmount(amount, currency)} {currency}
+                      </p>
+                    )}
                   </div>
                 </button>
               )

@@ -39,10 +39,23 @@ router.post('/', requireAuth, async (req: AuthedRequest, res) => {
 })
 
 router.delete('/:id', requireAuth, async (req: AuthedRequest, res) => {
+  const userId = req.userId
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
+
   try {
-    const a = await prisma.priceAlert.findUnique({ where: { id: req.params.id } })
-    if (!a || a.userId !== req.userId) { res.status(404).json({ error: 'Not found' }); return }
-    await prisma.priceAlert.delete({ where: { id: req.params.id } })
+    const alert = await prisma.priceAlert.findFirst({
+      where: { id: req.params.id, userId },
+      select: { id: true },
+    })
+    if (!alert) {
+      res.status(404).json({ error: 'Not found' })
+      return
+    }
+
+    await prisma.priceAlert.delete({ where: { id: alert.id } })
     res.json({ ok: true })
   } catch {
     res.status(404).json({ error: 'Not found' })

@@ -127,6 +127,18 @@ class PortfolioStoreImpl {
     this.trades = this.load(STORAGE_KEYS.trades, DEFAULT_TRADES)
     this.wallet = this.load(STORAGE_KEYS.wallet, DEFAULT_WALLET)
     this.transactions = this.load(STORAGE_KEYS.transactions, DEFAULT_TRANSACTIONS)
+    // Normalize any timestamp strings that may have been persisted by
+    // earlier runs so consumers can safely call `timestamp.getTime()`.
+    this.ensureTimestamps()
+  }
+
+  private ensureTimestamps() {
+    try {
+      this.trades = (this.trades || []).map((t: any) => ({ ...t, timestamp: typeof t?.timestamp === 'string' ? new Date(t.timestamp) : t?.timestamp }))
+      this.transactions = (this.transactions || []).map((tx: any) => ({ ...tx, timestamp: typeof tx?.timestamp === 'string' ? new Date(tx.timestamp) : tx?.timestamp }))
+    } catch {
+      /* ignore */
+    }
   }
 
   private load<T>(key: string, fallback: T): T {
@@ -248,7 +260,12 @@ class PortfolioStoreImpl {
           })
 
         this.wallet = this.mergeWalletBalances(apiBalances)
-        this.transactions = apiTransactions
+        // Merge: keep any local-only pending transactions (e.g. deposits
+        // awaiting admin approval) that the server doesn't know about yet.
+        // Without this, every 30s hydrate cycle silently drops them.
+        const serverIds = new Set(apiTransactions.map((t) => t.id))
+        const localOnly = this.transactions.filter((t) => !serverIds.has(t.id))
+        this.transactions = [...apiTransactions, ...localOnly]
         this.save(STORAGE_KEYS.wallet, this.wallet)
         this.save(STORAGE_KEYS.transactions, this.transactions)
         hadSuccess = true
@@ -408,6 +425,13 @@ class PortfolioStoreImpl {
           pnl: 0, pnlPercent: 0, allocation: 0,
         })
       }
+      // Debit the USD wallet so cash + holdings don't both count the same funds.
+      const usdWallet = this.wallet.find((w) => w.currency === 'USD')
+      if (usdWallet) {
+        usdWallet.balance = Math.max(0, usdWallet.balance - total)
+        usdWallet.available = Math.max(0, usdWallet.available - total)
+        this.save(STORAGE_KEYS.wallet, this.wallet)
+      }
     } else if (existingIdx >= 0) {
       const h = this.holdings[existingIdx]
       h.quantity = Math.max(0, h.quantity - quantity)
@@ -419,6 +443,13 @@ class PortfolioStoreImpl {
       h.pnl = h.value - cost
       h.pnlPercent = cost > 0 ? (h.pnl / cost) * 100 : 0
       if (h.quantity === 0) this.holdings.splice(existingIdx, 1)
+      // Credit the USD wallet with the sale proceeds.
+      const usdWallet = this.wallet.find((w) => w.currency === 'USD')
+      if (usdWallet) {
+        usdWallet.balance += total
+        usdWallet.available += total
+        this.save(STORAGE_KEYS.wallet, this.wallet)
+      }
     }
 
     const totalValue = this.holdings.reduce((s, h) => s + h.value, 0)

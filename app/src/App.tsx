@@ -46,6 +46,7 @@ const News = withLazyErrorBoundary(() => import('./pages/News'), 'News')
 const Settings = withLazyErrorBoundary(() => import('./pages/Settings'), 'Settings')
 const Legal = withLazyErrorBoundary(() => import('./pages/Legal'), 'Legal')
 const About = withLazyErrorBoundary(() => import('./pages/About'), 'About')
+const Products = withLazyErrorBoundary(() => import('./pages/Products'), 'Products')
 const NotFound = withLazyErrorBoundary(() => import('./pages/NotFound'), '404')
 const ResetPassword = withLazyErrorBoundary(() => import('./pages/ResetPassword'), 'Reset Password')
 const Alerts = withLazyErrorBoundary(() => import('./pages/Alerts'), 'Alerts')
@@ -204,6 +205,7 @@ function RoutedPages() {
           <Route path="/faq" element={<PublicInformation />} />
           <Route path="/admin/status" element={<RequireAdmin><StatusPage /></RequireAdmin>} />
           <Route path="/disclosures" element={<Disclosures />} />
+          <Route path="/products" element={<Products />} />
           <Route path="/help" element={<Help />} />
           <Route path="/asset/:id" element={<AssetDetail />} />
           <Route path="/coin/:id" element={<AssetDetail />} />

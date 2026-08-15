@@ -226,7 +226,11 @@ export class DCAService {
     const results: DCAExecutionResult[] = []
 
     for (const schedule of schedules) {
-      const result = await this.executeDCAPurchase(schedule as any)
+      const typedSchedule: DCAScheduleRecord = {
+        ...schedule,
+        frequency: schedule.frequency as 'daily' | 'weekly' | 'biweekly' | 'monthly',
+      }
+      const result = await this.executeDCAPurchase(typedSchedule)
       results.push(result)
     }
 

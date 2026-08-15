@@ -149,7 +149,7 @@ export class TradeExecutor {
     amount: number,
     limitPrice: number,
     currentPrice: number,
-  ): Promise<{ orderId: string; executed: boolean; message: string }> {
+  ): Promise<{ orderId: string; executed: boolean; message: string; executedAmount?: number; executedPrice?: number; total?: number }> {
     const shouldFill =
       (side === 'buy' && currentPrice <= limitPrice) ||
       (side === 'sell' && currentPrice >= limitPrice)
@@ -178,7 +178,7 @@ export class TradeExecutor {
     trailType: 'amount' | 'percent',
     currentPrice: number,
     highPrice: number,
-  ): Promise<{ orderId: string; executed: boolean; message: string }> {
+  ): Promise<{ orderId: string; executed: boolean; message: string; executedAmount?: number; executedPrice?: number; total?: number }> {
     const shouldTrigger = OrderEvaluator.evaluateTrailingStop(
       {
         id: '',

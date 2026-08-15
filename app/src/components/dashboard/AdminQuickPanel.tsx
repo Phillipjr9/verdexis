@@ -67,6 +67,9 @@ export default function AdminQuickPanel() {
           <Link to="/admin" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-[#A0A0A0] hover:text-[#0C8B44] border border-[#ffffff10] hover:border-[#0C8B44]/40 rounded-lg transition-colors">
             Full console <ExternalLink className="w-3 h-3" />
           </Link>
+          <Link to="/admin/settings" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-[#A0A0A0] hover:text-[#0C8B44] border border-[#ffffff10] hover:border-[#0C8B44]/40 rounded-lg transition-colors">
+            Settings
+          </Link>
           <Link to="/admin/users" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-[#A0A0A0] hover:text-[#0C8B44] border border-[#ffffff10] hover:border-[#0C8B44]/40 rounded-lg transition-colors">
             Users
           </Link>

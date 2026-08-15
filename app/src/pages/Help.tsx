@@ -197,16 +197,24 @@ export default function Help() {
 
         {/* Section nav */}
         {!query && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-10">
-            {SECTIONS.map((s) => {
-              const Icon = s.icon
-              return (
-                <a key={s.id} href={`#${s.id}`} className="p-3 rounded-xl bg-[#0f1619]/50 border border-[#ffffff05] hover:border-[#0C8B44]/30 transition-colors text-center">
-                  <Icon className="w-4 h-4 text-[#0C8B44] mx-auto mb-2" />
-                  <p className="text-xs text-[#E5E5E5]">{s.title}</p>
-                </a>
-              )
-            })}
+          <div className="mb-10">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
+              {SECTIONS.map((s) => {
+                const Icon = s.icon
+                return (
+                  <a key={s.id} href={`#${s.id}`} className="p-3 rounded-xl bg-[#0f1619]/50 border border-[#ffffff05] hover:border-[#0C8B44]/30 transition-colors text-center">
+                    <Icon className="w-4 h-4 text-[#0C8B44] mx-auto mb-2" />
+                    <p className="text-xs text-[#E5E5E5]">{s.title}</p>
+                  </a>
+                )
+              })}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <a href="#getting-started" className="px-3 py-1.5 rounded-full bg-[#0C8B44]/10 border border-[#0C8B44]/20 text-xs text-[#0C8B44] hover:bg-[#0C8B44]/15 transition-colors">Getting started</a>
+              <a href="#deposits" className="px-3 py-1.5 rounded-full bg-[#0C8B44]/10 border border-[#0C8B44]/20 text-xs text-[#0C8B44] hover:bg-[#0C8B44]/15 transition-colors">Deposits & withdrawals</a>
+              <a href="#fees" className="px-3 py-1.5 rounded-full bg-[#0C8B44]/10 border border-[#0C8B44]/20 text-xs text-[#0C8B44] hover:bg-[#0C8B44]/15 transition-colors">Fees & charges</a>
+              <a href="#security" className="px-3 py-1.5 rounded-full bg-[#0C8B44]/10 border border-[#0C8B44]/20 text-xs text-[#0C8B44] hover:bg-[#0C8B44]/15 transition-colors">Security & 2FA</a>
+            </div>
           </div>
         )}
 
@@ -228,13 +236,13 @@ export default function Help() {
                   </div>
                   <div className="space-y-2">
                     {section.items.map((item) => (
-                      <details key={item.q} className="group p-4 rounded-xl bg-[#0f1619]/50 border border-[#ffffff05] hover:border-[#0C8B44]/20 transition-colors">
-                        <summary className="flex items-center justify-between cursor-pointer text-sm font-medium text-[#E5E5E5] list-none">
-                          <span>{item.q}</span>
-                          <ChevronRight className="w-4 h-4 text-[#0C8B44] transition-transform group-open:rotate-90 flex-shrink-0 ml-3" />
-                        </summary>
+                      <article key={item.q} className="p-4 rounded-xl bg-[#0f1619]/50 border border-[#ffffff05] hover:border-[#0C8B44]/20 transition-colors">
+                        <div className="flex items-start justify-between gap-3">
+                          <h3 className="text-sm font-medium text-[#E5E5E5]">{item.q}</h3>
+                          <ChevronRight className="w-4 h-4 text-[#0C8B44] flex-shrink-0 mt-0.5" />
+                        </div>
                         <p className="text-sm text-[#A0A0A0] mt-3 leading-relaxed">{item.a}</p>
-                      </details>
+                      </article>
                     ))}
                   </div>
                 </section>

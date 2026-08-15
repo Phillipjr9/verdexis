@@ -155,6 +155,22 @@ model User {
   ledgerEntries   LedgerEntry[]    @relation("LedgerEntries")
   accountBalances AccountBalance[] @relation("AccountBalances")
   financialEvents FinancialEvent[] @relation("FinancialEvents")
+
+  // Comprehensive User Settings
+  sessions                UserSession[]
+  notificationPreference  NotificationPreference?
+  privacySetting          PrivacySetting?
+  walletPreference        WalletPreference?
+  accessibilitySetting    AccessibilitySetting?
+  linkedAccounts          LinkedAccount[]
+  recoveryOptions         AccountRecoveryOption[]
+  loginHistory            LoginHistory[]
+  ipRestrictions          IpRestriction[]
+  activityLogs            ActivityLog[]
+  dataExportRequests      DataExportRequest[]
+  cookiePreference        CookiePreference?
+  riskTolerance           RiskTolerance?
+  twoFactorRecoveryCodes  TwoFactorRecoveryCode[]
 }
 
 // KYC & Compliance Models
@@ -540,7 +556,9 @@ model WalletBalance {
   currency  String
   symbol    String
   balance   Float    @default(0)
+  balanceMinorUnits BigInt @default(0)
   available Float    @default(0)
+  availableMinorUnits BigInt @default(0)
   updatedAt DateTime @updatedAt
 
   @@unique([userId, currency])
@@ -1259,4 +1277,230 @@ model FinancialEvent {
 
   @@index([eventType, eventStatus])
   @@index([userId, eventType])
+}
+
+// ============================================================================
+// COMPREHENSIVE USER SETTINGS
+// ============================================================================
+
+// Session Management
+model UserSession {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceName    String?
+  deviceType    String?
+  ipAddress     String?
+  userAgent     String?
+  location      String?
+  lastActivityAt DateTime @default(now())
+  expiresAt     DateTime
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([isActive])
+}
+
+// Notification Preferences
+model NotificationPreference {
+  id                      String   @id @default(cuid())
+  userId                  String   @unique
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailFrequency          String   @default("daily")
+  emailPriceAlerts        Boolean  @default(true)
+  emailTradeConfirmations Boolean  @default(true)
+  emailSecurityAlerts     Boolean  @default(true)
+  emailSystemUpdates      Boolean  @default(false)
+  emailMarketingNews      Boolean  @default(false)
+  smsPriceAlerts          Boolean  @default(false)
+  smsSecurityAlerts       Boolean  @default(true)
+  pushNotificationsEnabled Boolean @default(true)
+  quietHoursStart         String?
+  quietHoursEnd           String?
+  quietHoursEnabled       Boolean  @default(false)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+// Privacy Settings
+model PrivacySetting {
+  id                      String   @id @default(cuid())
+  userId                  String   @unique
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profileVisibility       String   @default("private")
+  showPortfolioValue      Boolean  @default(false)
+  showTradeHistory        Boolean  @default(false)
+  allowMessagesFromStrangers Boolean @default(false)
+  dataCollectionOptOut    Boolean  @default(false)
+  analyticsOptOut         Boolean  @default(false)
+  thirdPartyDataSharing   Boolean  @default(false)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+// Wallet Preferences
+model WalletPreference {
+  id                      String   @id @default(cuid())
+  userId                  String   @unique
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  defaultWithdrawalAddress String?
+  defaultNetwork          String?
+  autoCompoundStaking     Boolean  @default(true)
+  stakingFrequency        String   @default("daily")
+  gasOptimization         String   @default("standard")
+  showSmallBalances       Boolean  @default(true)
+  minimumBalanceThreshold Float    @default(0.01)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+// Accessibility Settings
+model AccessibilitySetting {
+  id                      String   @id @default(cuid())
+  userId                  String   @unique
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fontSize                String   @default("medium")
+  highContrast            Boolean  @default(false)
+  screenReaderOptimized   Boolean  @default(false)
+  keyboardNavigationEnabled Boolean @default(false)
+  reducedMotion           Boolean  @default(false)
+  colorBlindMode          String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+// Linked Social Accounts
+model LinkedAccount {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider       String
+  providerUserId String
+  email          String?
+  displayName    String?
+  linkedAt       DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
+}
+
+// Account Recovery Options
+model AccountRecoveryOption {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       String
+  value      String
+  verified   Boolean   @default(false)
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// Login History (enhanced)
+model LoginHistory {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ipAddress        String?
+  userAgent        String?
+  location         String?
+  country          String?
+  city             String?
+  latitude         Float?
+  longitude        Float?
+  deviceFingerprint String?
+  success          Boolean  @default(true)
+  failureReason    String?
+  createdAt        DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+// IP Whitelist/Blacklist
+model IpRestriction {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ipAddress   String
+  type        String
+  description String?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// Activity Log
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String
+  category  String
+  details   String?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([category])
+}
+
+// Data Export Request
+model DataExportRequest {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  format        String    @default("json")
+  status        String    @default("pending")
+  fileUrl       String?
+  expiresAt     DateTime?
+  downloadCount Int       @default(0)
+  createdAt     DateTime  @default(now())
+  completedAt   DateTime?
+
+  @@index([userId, status])
+}
+
+// Cookie Preferences
+model CookiePreference {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  essential   Boolean  @default(true)
+  analytics   Boolean  @default(false)
+  marketing   Boolean  @default(false)
+  preferences Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Risk Tolerance
+model RiskTolerance {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  level                 String   @default("moderate")
+  maxDrawdown           Float    @default(20)
+  maxSingleTradePercent Float    @default(5)
+  maxLeverageMultiplier Float    @default(1)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+// Recovery Codes (for 2FA backup)
+model TwoFactorRecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code      String
+  used      Boolean   @default(false)
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }

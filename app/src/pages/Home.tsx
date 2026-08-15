@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import Navigation from '../components/Navigation'
 import Footer from '../components/Footer'
@@ -6,6 +6,8 @@ import AuthModal from '../components/AuthModal'
 import Testimonials from '../components/Testimonials'
 import ScrambleText from '../components/ScrambleText'
 import TetrahedronCanvas from '../components/Tetrahedron'
+import { type CryptoQuote } from '../lib/marketData'
+import { liveTicker } from '../lib/liveTicker'
 import { ArrowRight, Shield, ChevronRight, CheckCircle, Play, Lock, Fingerprint, Eye, Server, Globe, Sparkles, Wallet } from 'lucide-react'
 
 const platformStats = [
@@ -13,6 +15,17 @@ const platformStats = [
   { value: 'Secure', label: 'Encryption first', icon: Shield },
   { value: 'Clear', label: 'Performance signals', icon: Sparkles },
   { value: 'Accessible', label: 'Desktop & mobile', icon: Wallet },
+]
+
+const trustedPartners = [
+  { name: 'CoinGecko', src: '/assets/logo-coingecko.png', white: true },
+  { name: 'Binance', src: '/assets/logo-binance.png' },
+  { name: 'Stripe', src: '/assets/logo-stripe.png' },
+  { name: 'Plaid', src: '/assets/logo-plaid.png', white: true },
+  { name: 'Finnhub', src: '/assets/logo-finnhub.png' },
+  { name: 'Alpha Vantage', src: '/assets/logo-alphavantage.png' },
+  { name: 'Coinbase', src: '/assets/logo-btc.png' },
+  { name: 'Chainlink', src: '/assets/logo-link.png' },
 ]
 
 const featureItems = [
@@ -31,13 +44,64 @@ const securityItems = [
   { icon: Server, title: 'Audit logging', desc: 'Actions are logged so you always have a clear record of activity.' },
 ]
 
+const audienceItems = [
+  { title: 'For self-directed investors', desc: 'Track portfolios, compare market moves, and keep your decisions grounded in clean, readable data.' },
+  { title: 'For people planning ahead', desc: 'Set goals, review your accounts, and keep the long view in focus without losing the short-term details.' },
+  { title: 'For anyone who wants clarity', desc: 'Verdexis is designed to simplify complicated financial work into one view that is easier to understand.' },
+]
+
 const faqItems = [
+  { q: 'Who is Verdexis for?', a: 'Verdexis is built for self-directed investors, long-term savers, and anyone who wants a clearer, more secure view of their finances.' },
   { q: 'Is Verdexis free?', a: 'Yes. Verdexis is free to sign up and use, with optional premium upgrades for advanced planning tools.' },
   { q: 'How is my data protected?', a: 'All information is encrypted with AES-256 at rest and TLS 1.3 in transit, and we support two-factor authentication for every account.' },
   { q: 'Can I use Verdexis on mobile?', a: 'Yes. Verdexis is designed to work across desktop and mobile so you can check your finances wherever you are.' },
-  { q: 'What support is available?', a: 'Our support team is available through the in-app help center and live chat for account questions and setup assistance.' },
+  { q: 'What support is available?', a: 'Our support team is available through the in-app help center and live chat for account questions and setup assistance. We never ask for passwords, private keys, or one-time security codes.' },
   { q: 'Is Verdexis financial advice?', a: 'No. Verdexis provides insights and analysis to help you make decisions, but it is not a registered investment adviser.' },
 ]
+
+function formatTickerPrice(value: number) {
+  if (!Number.isFinite(value)) return '$0.00'
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: value >= 100 ? 2 : value >= 1 ? 3 : 4,
+  }).format(value)
+}
+
+function TickerItem({ coin }: { coin: CryptoQuote }) {
+  const [price, setPrice] = useState<number>(coin.current_price || 0)
+
+  useEffect(() => {
+    const current = liveTicker.getPrice(coin.id) ?? coin.current_price ?? 0
+    setPrice(current)
+    return liveTicker.subscribe(coin.id, (nextPrice) => setPrice(nextPrice))
+  }, [coin.id, coin.current_price])
+
+  const change = Number.isFinite(coin.price_change_percentage_24h) ? coin.price_change_percentage_24h : 0
+  const up = change >= 0
+
+  return (
+    <div className="flex items-center gap-3 shrink-0 px-2 py-1 text-sm text-[#E5E5E5]">
+      {coin.image ? (
+        <img
+          src={coin.image}
+          alt={coin.name}
+          className="h-4 w-4 object-contain shrink-0"
+          onError={(event) => {
+            const image = event.currentTarget as HTMLImageElement
+            image.style.display = 'none'
+          }}
+        />
+      ) : (
+        <span className="flex h-4 w-4 items-center justify-center text-[8px] font-semibold text-[#0C8B44]">
+          {coin.symbol.slice(0, 1).toUpperCase()}
+        </span>
+      )}
+      <span className="text-[#F3F4F6]">{formatTickerPrice(price)}</span>
+      <span className={up ? 'font-medium text-[#4CAF50]' : 'font-medium text-[#f44336]'}>{up ? '+' : ''}{change.toFixed(2)}%</span>
+    </div>
+  )
+}
 
 export default function Home() {
   const isAuthed = (() => {
@@ -50,6 +114,38 @@ export default function Home() {
 
   const [authOpen, setAuthOpen] = useState(false)
   const [authMode, setAuthMode] = useState<'signup' | 'login'>('signup')
+  const [tickerCoins, setTickerCoins] = useState<CryptoQuote[]>([])
+
+  useEffect(() => {
+    let active = true
+
+    const loadTicker = async () => {
+      try {
+        const res = await fetch('/api/market/coingecko/markets?vs_currency=usd&order=market_cap_desc&per_page=8&page=1&sparkline=true', {
+          cache: 'no-store',
+          headers: { Accept: 'application/json' },
+        })
+
+        if (!res.ok) {
+          if (active) setTickerCoins([])
+          return
+        }
+
+        const data = await res.json()
+        const list = Array.isArray(data) ? data.filter(Boolean).slice(0, 8) : []
+        if (active) setTickerCoins(list)
+      } catch {
+        if (active) setTickerCoins([])
+      }
+    }
+
+    void loadTicker()
+    const id = window.setInterval(() => { void loadTicker() }, 30000)
+    return () => {
+      active = false
+      window.clearInterval(id)
+    }
+  }, [])
 
   const openSignup = () => { setAuthMode('signup'); setAuthOpen(true) }
   const openLogin = () => { setAuthMode('login'); setAuthOpen(true) }
@@ -72,7 +168,7 @@ export default function Home() {
           <p className="text-base md:text-lg text-[#A0A0A0] max-w-lg mx-auto mb-10 leading-relaxed">Securely connect your accounts, track progress, and keep your finances organized without the noise.</p>
           <div className="flex items-center justify-center gap-4 flex-wrap">
             <button onClick={openSignup} className="px-8 py-3.5 bg-[#0C8B44] text-white text-sm font-medium tracking-[0.04em] uppercase rounded-lg hover:bg-[#0a7539] transition-colors glow-accent">Start Free</button>
-            <a href="#features" className="flex items-center gap-2 px-8 py-3.5 text-[#E5E5E5] text-sm font-medium tracking-[0.04em] uppercase border border-[#ffffff15] rounded-lg hover:border-[#0C8B44]/30 transition-colors"><Play className="w-4 h-4" />See the platform</a>
+            <Link to="/markets" className="flex items-center gap-2 px-8 py-3.5 text-[#E5E5E5] text-sm font-medium tracking-[0.04em] uppercase border border-[#ffffff15] rounded-lg hover:border-[#0C8B44]/30 transition-colors"><Play className="w-4 h-4" />Market</Link>
           </div>
           <p className="text-xs text-[#737373] mt-4">No credit card required. Free forever plan available. <button onClick={openLogin} className="text-[#0C8B44] hover:text-[#00E676] underline-offset-4 hover:underline transition-colors">Already have an account? Sign in</button></p>
         </div>
@@ -92,6 +188,50 @@ export default function Home() {
         </div>
       </section>
 
+      {tickerCoins.length > 0 && (
+        <section className="border-b border-[#ffffff08] bg-[#0a0f11] py-4">
+          <style>{`
+            @keyframes marquee {
+              0% { transform: translateX(0); }
+              100% { transform: translateX(-50%); }
+            }
+          `}</style>
+          <div className="overflow-hidden">
+            <div className="flex min-w-max animate-[marquee_30s_linear_infinite] items-center gap-4 px-5 py-3">
+              {[...tickerCoins, ...tickerCoins].map((coin, index) => (
+                <TickerItem key={`${coin.id}-${index}`} coin={coin} />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section className="border-b border-[#ffffff08] bg-[#091113] py-8 md:py-10">
+        <div className="max-w-[1280px] mx-auto px-6">
+          <div className="flex flex-col items-center justify-center gap-4 md:gap-6 text-center">
+            <p className="text-[10px] md:text-xs font-medium uppercase tracking-[0.18em] text-[#8B9AA3]">Trusted partners</p>
+            <div className="flex flex-wrap items-center justify-center gap-5 md:gap-8">
+              {trustedPartners.map((partner) => (
+                <div
+                  key={partner.name}
+                  className="flex h-14 md:h-16 items-center justify-center px-1 md:px-2"
+                >
+                  <img
+                    src={partner.src}
+                    alt={partner.name}
+                    className={partner.white ? 'partner-logo partner-logo--white h-8 md:h-10 w-auto max-w-[140px] object-contain' : 'partner-logo h-8 md:h-10 w-auto max-w-[140px] object-contain'}
+                    onError={(event) => {
+                      const image = event.currentTarget as HTMLImageElement
+                      image.style.display = 'none'
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section id="features" className="py-16 md:py-24 px-6 bg-[#0a0f11]">
         <div className="max-w-[1280px] mx-auto">
           <div className="text-center mb-10 md:mb-16">
@@ -99,6 +239,16 @@ export default function Home() {
             <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-4">Built for modern investors who want control and clarity.</h2>
             <p className="text-[#A0A0A0] max-w-lg mx-auto">Everything you need to monitor progress, set goals, and keep your finances under one roof.</p>
           </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+            {audienceItems.map((item) => (
+              <div key={item.title} className="p-6 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff05]">
+                <h3 className="text-lg font-medium text-[#E5E5E5] mb-2">{item.title}</h3>
+                <p className="text-sm text-[#A0A0A0] leading-relaxed">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {featureItems.map((feature) => (
               <div key={feature.title} className="p-8 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff05] hover:border-[#0C8B44]/30 transition-all duration-300 group">
@@ -145,13 +295,13 @@ export default function Home() {
           </div>
           <div className="space-y-3">
             {faqItems.map((item) => (
-              <details key={item.q} className="group p-5 rounded-xl bg-[#0f1619]/50 border border-[#ffffff05] hover:border-[#0C8B44]/30 transition-colors">
-                <summary className="flex items-center justify-between cursor-pointer text-sm font-medium text-[#E5E5E5] list-none">
-                  <span>{item.q}</span>
-                  <ChevronRight className="w-4 h-4 text-[#0C8B44] transition-transform group-open:rotate-90" />
-                </summary>
+              <article key={item.q} className="p-5 rounded-xl bg-[#0f1619]/50 border border-[#ffffff05] hover:border-[#0C8B44]/30 transition-colors">
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="text-sm font-medium text-[#E5E5E5]">{item.q}</h3>
+                  <ChevronRight className="w-4 h-4 text-[#0C8B44] flex-shrink-0 mt-0.5" />
+                </div>
                 <p className="text-sm text-[#A0A0A0] mt-3 leading-relaxed">{item.a}</p>
-              </details>
+              </article>
             ))}
           </div>
         </div>

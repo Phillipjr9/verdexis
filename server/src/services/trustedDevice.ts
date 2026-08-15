@@ -22,7 +22,7 @@ interface TrustedDevice {
   deviceHash: string
   deviceName: string
   fingerprint: DeviceFingerprint
-  ipAddress: string
+  ipAddress: string | null
   location?: {
     country: string
     city: string

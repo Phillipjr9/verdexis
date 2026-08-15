@@ -47,14 +47,18 @@ export default function Footer() {
         {/* Link columns */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 md:gap-8 mb-10">
           {groups.map((group) => (
-            <details key={group.title} className="group border-b border-[#ffffff08] md:border-0 pb-3 md:pb-0">
-              <summary className="flex items-center justify-between list-none cursor-pointer md:cursor-default text-xs font-medium text-[#E5E5E5] uppercase tracking-[0.05em] mb-3">
-                {group.title}<ChevronDown className="w-3.5 h-3.5 md:hidden group-open:rotate-180 transition-transform" />
-              </summary>
+            <div key={group.title} className="border-b border-[#ffffff08] md:border-0 pb-3 md:pb-0">
+              <p className="text-xs font-medium text-[#E5E5E5] uppercase tracking-[0.05em] mb-3">
+                {group.title}
+              </p>
               <ul className="space-y-2 text-xs text-[#A0A0A0]">
-                {group.links.map(([label, path]) => <li key={`${group.title}-${path}`}><Link to={path} className="hover:text-[#0C8B44] transition-colors">{label}</Link></li>)}
+                {group.links.map(([label, path]) => (
+                  <li key={`${group.title}-${label}-${path}`}>
+                    <Link to={path} className="hover:text-[#0C8B44] transition-colors">{label}</Link>
+                  </li>
+                ))}
               </ul>
-            </details>
+            </div>
           ))}
         </div>
 

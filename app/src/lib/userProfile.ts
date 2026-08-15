@@ -1,4 +1,6 @@
 // Lightweight user-profile helpers backed by localStorage
+import { sanitizeDisplayText, sanitizeEmail, sanitizeText } from './sanitize'
+
 const AUTH_KEY = 'verdexis_auth'
 const AVATAR_KEY = 'verdexis_avatar'
 
@@ -15,9 +17,9 @@ export function getProfile(): UserProfile | null {
     if (!raw) return null
     const auth = JSON.parse(raw)
     return {
-      email: auth.email || '',
-      name: auth.name || 'User',
-      avatar: localStorage.getItem(AVATAR_KEY) || null,
+      email: sanitizeEmail(auth.email || ''),
+      name: sanitizeDisplayText(auth.name || 'User', 80),
+      avatar: localStorage.getItem(AVATAR_KEY) ? sanitizeText(localStorage.getItem(AVATAR_KEY), '') : null,
       kycStatus: auth.kycStatus || 'none',
     }
   } catch {
@@ -28,10 +30,15 @@ export function getProfile(): UserProfile | null {
 export function updateProfile(patch: Partial<UserProfile>): UserProfile | null {
   try {
     const current = getProfile() || { email: '', name: 'User', avatar: null, kycStatus: 'none' }
-    const next = { ...current, ...patch }
+    const next = {
+      ...current,
+      ...patch,
+      email: patch.email ? sanitizeEmail(patch.email) : current.email,
+      name: patch.name ? sanitizeDisplayText(patch.name, 80) : current.name,
+    }
     localStorage.setItem(AUTH_KEY, JSON.stringify({ email: next.email, name: next.name }))
     if (patch.avatar !== undefined) {
-      if (patch.avatar) localStorage.setItem(AVATAR_KEY, patch.avatar)
+      if (patch.avatar) localStorage.setItem(AVATAR_KEY, sanitizeText(patch.avatar, ''))
       else localStorage.removeItem(AVATAR_KEY)
     }
     window.dispatchEvent(new Event('verdexis:profile'))

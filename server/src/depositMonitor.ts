@@ -35,6 +35,19 @@ const BLOCKCHAIN_NODES: Record<string, BlockchainNode> = {
   },
 }
 
+function resolveNodeKey(currency: string): string | undefined {
+  const c = (currency || '').toLowerCase()
+  const symbolMap: Record<string, string> = {
+    eth: 'ethereum',
+    ethereum: 'ethereum',
+    btc: 'bitcoin',
+    bitcoin: 'bitcoin',
+    sol: 'solana',
+    solana: 'solana',
+  }
+  return symbolMap[c]
+}
+
 class DepositMonitor {
   private monitoredAddresses: Map<string, { userId: string; currency: string; depositId: string }> = new Map()
   private isRunning = false
@@ -100,18 +113,19 @@ class DepositMonitor {
   }
 
   private async checkAddress(address: string, userId: string, currency: string, depositId: string): Promise<void> {
-    const node = BLOCKCHAIN_NODES[currency.toLowerCase()]
-    if (!node) {
+    const nodeKey = resolveNodeKey(currency)
+    if (!nodeKey) {
       console.warn(`[deposit-monitor] unsupported currency: ${currency}`)
       return
     }
 
+    const node = BLOCKCHAIN_NODES[nodeKey]
     try {
-      if (currency.toLowerCase() === 'bitcoin') {
+      if (nodeKey === 'bitcoin') {
         await this.checkBitcoinAddress(address, userId, currency, depositId, node)
-      } else if (currency.toLowerCase() === 'ethereum') {
+      } else if (nodeKey === 'ethereum') {
         await this.checkEthereumAddress(address, userId, currency, depositId, node)
-      } else if (currency.toLowerCase() === 'solana') {
+      } else if (nodeKey === 'solana') {
         await this.checkSolanaAddress(address, userId, currency, depositId, node)
       }
     } catch (err) {

@@ -2,29 +2,18 @@ import { Link } from 'react-router-dom'
 import Navigation from '../components/Navigation'
 import { ArrowRight, BarChart3, LockKeyhole, ShieldCheck, Sparkles } from 'lucide-react'
 
-const products = [
-  {
-    name: 'Liquid ETH staking',
-    asset: 'ETH',
-    provider: 'Lido / Rocket Pool',
-    detail: 'Stake ETH while retaining a liquid position for portfolio management.',
-    risk: 'Low',
-  },
-  {
-    name: 'SOL staking',
-    asset: 'SOL',
-    provider: 'Marinade',
-    detail: 'Access delegated Solana staking with epoch-based reward distribution.',
-    risk: 'Low',
-  },
-  {
-    name: 'Stablecoin lending',
-    asset: 'USDC / USDT',
-    provider: 'Aave v3 / Compound v3',
-    detail: 'Supply supported stablecoins to lending markets with variable rates.',
-    risk: 'Medium',
-  },
-]
+const product = {
+  name: 'Liquid ETH staking',
+  asset: 'ETH',
+  provider: 'Lido / Rocket Pool',
+  detail: 'Stake ETH while retaining a liquid position for portfolio management.',
+  risk: 'Low',
+  highlights: [
+    'Live rate and position visibility',
+    'Risk disclosures and yield context',
+    'Ledger-backed balances and account controls',
+  ],
+}
 
 export default function Products() {
   return (
@@ -44,23 +33,28 @@ export default function Products() {
             </p>
           </div>
 
-          <div className="mb-14 grid gap-4 md:grid-cols-3">
-            {products.map((product) => (
-              <article key={product.name} className="glass-card flex flex-col p-6">
-                <div className="mb-6 flex items-center justify-between">
-                  <span className="rounded-full border border-[#0C8B44]/30 px-3 py-1 text-xs text-[#69D391]">
-                    {product.asset}
-                  </span>
-                  <span className="text-xs text-[#737373]">{product.risk} risk profile</span>
+          <article id="liquid-eth-staking" className="glass-card flex flex-col p-6 md:p-8 mb-14">
+            <div className="mb-6 flex items-center justify-between">
+              <span className="rounded-full border border-[#0C8B44]/30 px-3 py-1 text-xs text-[#69D391]">
+                {product.asset}
+              </span>
+              <span className="text-xs text-[#737373]">{product.risk} risk profile</span>
+            </div>
+            <h2 className="mb-2 text-2xl font-medium">{product.name}</h2>
+            <p className="mb-6 text-sm leading-relaxed text-[#A0A0A0]">{product.detail}</p>
+
+            <div className="grid gap-3 md:grid-cols-3 mb-6">
+              {product.highlights.map((item) => (
+                <div key={item} className="rounded-xl border border-[#ffffff08] bg-[#0a0e10] p-4 text-sm text-[#A0A0A0]">
+                  {item}
                 </div>
-                <h2 className="mb-2 text-xl font-medium">{product.name}</h2>
-                <p className="mb-4 text-sm leading-relaxed text-[#A0A0A0]">{product.detail}</p>
-                <p className="mt-auto border-t border-[#ffffff10] pt-4 text-xs text-[#737373]">
-                  Available through {product.provider}
-                </p>
-              </article>
-            ))}
-          </div>
+              ))}
+            </div>
+
+            <p className="mt-auto border-t border-[#ffffff10] pt-4 text-xs text-[#737373]">
+              Available through {product.provider}
+            </p>
+          </article>
 
           <section className="liquid-card grid gap-8 p-8 md:grid-cols-[1fr_auto] md:items-center md:p-10" style={{ '--fill-color': 'rgba(12,139,68,0.1)' } as React.CSSProperties}>
             <div>

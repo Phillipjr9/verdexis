@@ -710,6 +710,11 @@ export default function WalletPage() {
   // (mark-to-market price moves, holdings updates, etc.) even when the
   // wallet array itself didn't change.
   const [, setTick] = useState(0)
+  // True once at least one markToMarket call has been received so the
+  // Total Balance shows live market prices rather than avgBuyPrice.
+  const [isMarketReady, setIsMarketReady] = useState(
+    () => portfolioStore.getHoldings().every((h) => h.currentPrice === h.avgBuyPrice) === false
+  )
   useEffect(() => {
     // Snapshot-based refresh: only push new state into React when the
     // wallet/transactions slice has actually changed, so the 1-second
@@ -746,6 +751,10 @@ export default function WalletPage() {
     const onEvent = () => {
       refresh()
       setTick((n) => (n + 1) % 1_000_000)
+      // Mark market as ready once holdings have live prices (currentPrice !== avgBuyPrice).
+      if (portfolioStore.getHoldings().some((h) => h.currentPrice !== h.avgBuyPrice)) {
+        setIsMarketReady(true)
+      }
     }
     window.addEventListener('verdexis:portfolio', onEvent)
     // Lightweight 1-second tick so any background mark-to-market or
@@ -1806,7 +1815,10 @@ export default function WalletPage() {
                 <p className="text-sm text-[#A0A0A0] mb-2">Total Balance</p>
                 <div className="flex items-center gap-3 flex-wrap">
                   {(() => {
-                    const formatted = `$${totalBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    const hasUnpricedHoldings = holdings.length > 0 && !isMarketReady
+                    const formatted = hasUnpricedHoldings
+                      ? 'Loading…'
+                      : `$${totalBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                     const display = showBalance ? formatted : formatted.replace(/\d/g, '*')
                     const sizeClass = headlineAmountClass(display)
                     return (

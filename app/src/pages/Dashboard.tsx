@@ -432,7 +432,9 @@ export default function Dashboard() {
     if (chartRange === '1M' || chartRange === '1Y' || chartRange === 'ALL') {
       const N = HISTORY_POINTS
       const series2 = new Array(N).fill(0)
-      const sorted = [...allTxs].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+      const sorted = [...allTxs]
+        .filter((t) => !(t.type === 'deposit' && t.status === 'pending'))
+        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
       const span = Math.max(1, nowMs - chartStartMs)
       for (let i = 0; i < N; i++) {
         const tBucket = chartStartMs + (span * (i / Math.max(1, N - 1)))
@@ -832,28 +834,33 @@ export default function Dashboard() {
 
                   <div className="grid gap-3 sm:grid-cols-3 mb-6">
                     {[
-                      {
-                        label: 'Net Worth',
-                        value: showNetWorth ? fmtMoney(totalValue) : maskMoney(fmtMoney(totalValue)),
-                        detail: 'Live balance',
-                      },
-                      {
-                        label: 'Today',
-                        value: fmtMoney(totalPnl, { sign: true }),
-                        detail: 'Unrealized P&L',
-                      },
-                      {
-                        label: 'Cash',
-                        value: showNetWorth ? fmtMoney(walletValueUsd) : maskMoney(fmtMoney(walletValueUsd)),
-                        detail: 'Available liquidity',
-                      },
-                    ].map((item, i) => (
-                      <div key={`${item.label}-${i}`} className="rounded-2xl border border-[#ffffff08] bg-[#0f1619]/60 p-3">
-                        <p className="text-[11px] uppercase tracking-[0.16em] text-[#737373]">{item.label}</p>
-                        <p className="mt-1 text-sm font-medium text-[#E5E5E5] tabular-nums truncate">{item.value}</p>
-                        <p className="text-[11px] text-[#8EA39B]">{item.detail}</p>
-                      </div>
-                    ))}
+                        {
+                          label: 'Net Worth',
+                          value: showNetWorth ? fmtMoney(totalValue) : maskMoney(fmtMoney(totalValue)),
+                          detail: 'Live balance',
+                        },
+                        {
+                          label: 'Today',
+                          value: fmtMoney(totalPnl, { sign: true }),
+                          detail: 'Unrealized P&L (all-time)',
+                        },
+                        {
+                          label: 'Cash (wallet)',
+                          value: showNetWorth ? fmtMoney(walletValueUsd) : maskMoney(fmtMoney(walletValueUsd)),
+                          detail: 'Available liquidity',
+                        },
+                      ].map((item, i) => (
+                        <div key={`${item.label}-${i}`} className="rounded-2xl border border-[#ffffff08] bg-[#0f1619]/60 p-3">
+                          <p className="text-[11px] uppercase tracking-[0.16em] text-[#737373]">
+                            {item.label}
+                            {item.label === 'Cash (wallet)' && (
+                              <span title="Includes cash and stablecoins; buys consume USD from your wallet" className="ml-1 text-xs text-[#737373]">?</span>
+                            )}
+                          </p>
+                          <p className={`mt-1 text-sm font-medium tabular-nums truncate ${item.label === 'Cash (wallet)' ? (walletValueUsd >= 0 ? 'text-[#4CAF50]' : 'text-[#f44336]') : 'text-[#E5E5E5]'}`}>{item.value}</p>
+                          <p className="text-[11px] text-[#8EA39B]">{item.detail}</p>
+                        </div>
+                      ))}
                   </div>
 
                   {transactions.length > 0 && (

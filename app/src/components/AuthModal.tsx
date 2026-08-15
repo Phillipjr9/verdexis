@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { X, Mail, Lock, User, Eye, EyeOff, ArrowRight, Shield, Fingerprint, KeyRound, ArrowLeft, Phone } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, setToken, setStoredUser, type ApiError } from '../lib/api'
+import { sanitizeDisplayText, sanitizeEmail, sanitizeText } from '../lib/sanitize'
 import { isSupabaseConfigured, signInWithEmail, signUpWithEmail } from '../lib/supabase'
 
 interface AuthModalProps {
@@ -53,15 +54,16 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
     setError('')
 
     if (mode === 'forgot') {
-      if (!form.email) {
+      const safeEmail = sanitizeEmail(form.email)
+      if (!safeEmail) {
         setError('Enter your email')
         return
       }
       setLoading(true)
       try {
-        await api.forgot(form.email)
+        await api.forgot(safeEmail)
         setResetSent(true)
-        toast.success('Reset link sent', { description: `If that email exists, a reset link has been sent to ${form.email}.` })
+        toast.success('Reset link sent', { description: `If that email exists, a reset link has been sent to ${safeEmail}.` })
       } catch (err) {
         console.warn('Password reset error:', err)
         setResetSent(true)
@@ -96,8 +98,14 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
       }
 
       if (mode === 'signup') {
+        const safeEmail = sanitizeEmail(form.email)
+        const safePhone = sanitizeText(form.phone, '').replace(/[^\d+()\-\s.]/g, '')
+        const safeFirstName = sanitizeDisplayText(form.firstName, 40)
+        const safeLastName = sanitizeDisplayText(form.lastName, 40)
+        setForm((current) => ({ ...current, email: safeEmail, phone: safePhone, firstName: safeFirstName, lastName: safeLastName }))
+
         // basic client-side validations
-        if (!form.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+        if (!safeEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(safeEmail)) {
           setError('Enter a valid email address')
           setLoading(false)
           return
@@ -112,7 +120,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
           setLoading(false)
           return
         }
-        const trimmedPhone = form.phone.trim()
+        const trimmedPhone = safePhone.trim()
         if (trimmedPhone) {
           const digitCount = (trimmedPhone.match(/\d/g) || []).length
           if (digitCount < 7) {
@@ -156,12 +164,16 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
         return
       }
 
-      const name = `${form.firstName} ${form.lastName}`.trim()
+      const safeEmail = sanitizeEmail(form.email)
+      const safeFirstName = sanitizeDisplayText(form.firstName, 40)
+      const safeLastName = sanitizeDisplayText(form.lastName, 40)
+      const safePhone = sanitizeText(form.phone, '').replace(/[^\d+()\-\s.]/g, '')
+      const name = `${safeFirstName} ${safeLastName}`.trim()
       let result
       if (mode === 'signup') {
-        result = await api.signup(form.email, form.password, name, form.phone.trim())
+        result = await api.signup(safeEmail, form.password, name, safePhone.trim())
       } else {
-        result = await api.login(form.email, form.password)
+        result = await api.login(safeEmail, form.password)
       }
 
       if ('otpRequired' in result || 'pendingToken' in result) {
@@ -423,7 +435,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
                     <input
                       type="text"
                       value={form.firstName}
-                      onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+                      onChange={(e) => setForm({ ...form, firstName: sanitizeDisplayText(e.target.value, 40) })}
                       className="w-full pl-10 pr-4 py-3 bg-[#1a1a1a] border border-[#ffffff08] rounded-xl text-sm text-[#E5E5E5] placeholder-[#737373] focus:outline-none focus:border-[#0C8B44] transition-colors"
                       placeholder="John"
                       required
@@ -437,7 +449,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
                     <input
                       type="text"
                       value={form.lastName}
-                      onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+                      onChange={(e) => setForm({ ...form, lastName: sanitizeDisplayText(e.target.value, 40) })}
                       className="w-full pl-10 pr-4 py-3 bg-[#1a1a1a] border border-[#ffffff08] rounded-xl text-sm text-[#E5E5E5] placeholder-[#737373] focus:outline-none focus:border-[#0C8B44] transition-colors"
                       placeholder="Doe"
                       required
@@ -454,7 +466,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
                 <input
                   type={mode === 'login' ? 'text' : 'email'}
                   value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  onChange={(e) => setForm({ ...form, email: sanitizeEmail(e.target.value) })}
                   className="w-full pl-10 pr-4 py-3 bg-[#1a1a1a] border border-[#ffffff08] rounded-xl text-sm text-[#E5E5E5] placeholder-[#737373] focus:outline-none focus:border-[#0C8B44] transition-colors"
                   placeholder={mode === 'login' ? 'you@example.com or janedoe' : 'you@example.com'}
                   required
@@ -478,7 +490,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
                   <input
                     type="tel"
                     value={form.phone}
-                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                    onChange={(e) => setForm({ ...form, phone: sanitizeText(e.target.value, '').replace(/[^\d+()\-\s.]/g, '') })}
                     className="w-full pl-10 pr-4 py-3 bg-[#1a1a1a] border border-[#ffffff08] rounded-xl text-sm text-[#E5E5E5] placeholder-[#737373] focus:outline-none focus:border-[#0C8B44] transition-colors"
                     placeholder="+1 555 123 4567"
                     autoComplete="tel"

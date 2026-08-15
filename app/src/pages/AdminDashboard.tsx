@@ -65,8 +65,8 @@ export default function AdminDashboard() {
         <div className="mb-8">
           <div className="flex items-end justify-between mb-6">
             <div>
-              <h1 className="text-4xl font-light text-[#E5E5E5] mb-2">Admin Dashboard</h1>
-              <p className="text-sm text-[#737373]">Platform operations & real-time monitoring</p>
+              <h1 className="text-4xl font-light text-[#E5E5E5] mb-2">Super Admin / Admin Dashboard</h1>
+              <p className="text-sm text-[#737373]">Platform operations, governance, and real-time monitoring</p>
             </div>
             <div className="flex items-center gap-3">
               <Link to="/admin/analytics" className="px-4 py-2.5 bg-[#2196F3]/10 border border-[#2196F3]/30 text-[#2196F3] text-sm font-medium rounded-lg hover:bg-[#2196F3]/20 transition-colors flex items-center gap-2">
@@ -188,25 +188,40 @@ export default function AdminDashboard() {
         </div>
 
         {/* Quick Actions & Operations */}
-        <div className="grid grid-cols-1 lg:grid-cols-1 gap-6 mb-8">
+        <div className="grid grid-cols-1 xl:grid-cols-[1.25fr_0.75fr] gap-6 mb-8">
           <div className="space-y-6">
-            {/* Quick Actions */}
             <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
               <h2 className="text-sm font-semibold text-[#E5E5E5] mb-4 flex items-center gap-2">
                 <Zap className="w-4 h-4 text-[#0C8B44]" />
-                Quick Actions
+                Core Operations
               </h2>
-              <div className="space-y-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <ActionButton to="/admin/users" icon={<Users className="w-4 h-4" />} label="Manage Users" />
-                <ActionButton to="/admin/reviews" icon={<FileCheck2 className="w-4 h-4" />} label="Review Testimonials" />
-                <ActionButton to="/admin/deposits" icon={<Banknote className="w-4 h-4" />} label="Deposit Settings" />
                 <ActionButton to="/admin/transfer" icon={<ArrowLeftRight className="w-4 h-4" />} label="Transfer Funds" />
+                <ActionButton to="/admin/deposits" icon={<Banknote className="w-4 h-4" />} label="Deposit Settings" />
+                <ActionButton to="/admin/reviews" icon={<FileCheck2 className="w-4 h-4" />} label="Review Testimonials" />
                 <ActionButton to="/admin/broadcast" icon={<MegaphoneIcon className="w-4 h-4" />} label="Send Broadcast" />
                 <ActionButton to="/admin/audit" icon={<Activity className="w-4 h-4" />} label="View Audit Log" />
               </div>
             </div>
 
-            {/* Treasury Card */}
+            <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
+              <h2 className="text-sm font-semibold text-[#E5E5E5] mb-4 flex items-center gap-2">
+                <Cog className="w-4 h-4 text-[#A0A0A0]" />
+                Settings & Governance
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <ActionButton to="/admin/settings" icon={<Cog className="w-4 h-4" />} label="Platform Settings" />
+                <ActionButton to="/admin/signup-bonus" icon={<Gift className="w-4 h-4" />} label="Signup Bonus" />
+                <ActionButton to="/admin/referrals" icon={<Gift className="w-4 h-4" />} label="Referrals" />
+                <ActionButton to="/admin/deposit-addresses" icon={<LinkIcon className="w-4 h-4" />} label="Deposit Addresses" />
+                <ActionButton to="/admin/security-events" icon={<ShieldCheck className="w-4 h-4" />} label="Security Events" />
+                <ActionButton to="/admin/analytics" icon={<BarChart3 className="w-4 h-4" />} label="Analytics" />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-6">
             <div className="rounded-2xl bg-gradient-to-br from-[#0C8B44]/20 to-[#0C8B44]/5 border border-[#0C8B44]/30 p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold text-[#E5E5E5]">Admin Treasury</h3>
@@ -222,7 +237,6 @@ export default function AdminDashboard() {
               </button>
             </div>
 
-            {/* System Status */}
             <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
               <h3 className="text-sm font-semibold text-[#E5E5E5] mb-4 flex items-center gap-2">
                 <Activity className="w-4 h-4 text-[#2196F3]" />
@@ -304,20 +318,22 @@ export default function AdminDashboard() {
         <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
           <h2 className="text-sm font-semibold text-[#E5E5E5] mb-6 flex items-center gap-2">
             <Cog className="w-4 h-4 text-[#737373]" />
-            All Operations
+            All Admin Actions
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             <OperationLink to="/admin/users" icon={<Users className="w-5 h-5" />} label="Users" />
-            <OperationLink to="/admin/reviews" icon={<FileCheck2 className="w-5 h-5" />} label="Reviews" />
             <OperationLink to="/admin/transfer" icon={<ArrowLeftRight className="w-5 h-5" />} label="Transfer" />
             <OperationLink to="/admin/deposits" icon={<Banknote className="w-5 h-5" />} label="Deposits" />
-            <OperationLink to="/admin/deposit-addresses" icon={<MapPin className="w-5 h-5" />} label="Addresses" />
             <OperationLink to="/admin/broadcast" icon={<MegaphoneIcon className="w-5 h-5" />} label="Broadcast" />
-            <OperationLink to="/admin/referrals" icon={<Gift className="w-5 h-5" />} label="Referrals" />
-            <OperationLink to="/admin/signup-bonus" icon={<Gift className="w-5 h-5" />} label="Bonus" />
             <OperationLink to="/admin/audit" icon={<Activity className="w-5 h-5" />} label="Audit" />
-            <OperationLink to="/admin/status" icon={<Activity className="w-5 h-5" />} label="Status" />
             <OperationLink to="/admin/settings" icon={<Cog className="w-5 h-5" />} label="Settings" />
+            <OperationLink to="/admin/signup-bonus" icon={<Gift className="w-5 h-5" />} label="Bonus" />
+            <OperationLink to="/admin/referrals" icon={<Gift className="w-5 h-5" />} label="Referrals" />
+            <OperationLink to="/admin/deposit-addresses" icon={<MapPin className="w-5 h-5" />} label="Addresses" />
+            <OperationLink to="/admin/security-events" icon={<ShieldCheck className="w-5 h-5" />} label="Security" />
+            <OperationLink to="/admin/analytics" icon={<BarChart3 className="w-5 h-5" />} label="Analytics" />
+            <OperationLink to="/admin/reviews" icon={<FileCheck2 className="w-5 h-5" />} label="Reviews" />
+            <OperationLink to="/admin/status" icon={<Activity className="w-5 h-5" />} label="Status" />
           </div>
         </div>
       </div>

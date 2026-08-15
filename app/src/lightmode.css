@@ -16,7 +16,9 @@
 
 /* ── Page backgrounds ───────────────────────────────────── */
 [data-theme="light"] .bg-\[\#070C0E\],
+[data-theme="light"] .bg-\[\#091113\],
 [data-theme="light"] .bg-\[\#0a0e10\],
+[data-theme="light"] .bg-\[\#0a0f11\],
 [data-theme="light"] .bg-\[\#0f1619\],
 [data-theme="light"] .bg-\[\#1a1a1a\] {
   background-color: #f4f6f8 !important;
@@ -71,9 +73,11 @@
 
 /* ── Text ───────────────────────────────────────────────── */
 [data-theme="light"] .text-\[\#E5E5E5\] { color: #111827 !important; }
+[data-theme="light"] .text-\[\#8B9AA3\] { color: #4b5563 !important; }
 [data-theme="light"] .text-\[\#A0A0A0\] { color: #4b5563 !important; }
 [data-theme="light"] .text-\[\#737373\] { color: #6b7280 !important; }
 [data-theme="light"] .text-\[\#555\]    { color: #6b7280 !important; }
+[data-theme="light"] .text-\[\#dfe9ee\] { color: #1f2937 !important; }
 
 /* hover text */
 [data-theme="light"] .hover\:text-\[\#E5E5E5\]:hover { color: #111827 !important; }
@@ -150,6 +154,19 @@
 /* ── Donut chart text ───────────────────────────────────── */
 [data-theme="light"] svg text[fill="#E5E5E5"] { fill: #111827 !important; }
 [data-theme="light"] svg text[fill="#737373"] { fill: #6b7280 !important; }
+
+[data-theme="light"] .partner-logo {
+  filter: none !important;
+  opacity: 1 !important;
+}
+
+[data-theme="light"] .partner-logo--white {
+  filter: brightness(0) saturate(0) contrast(1.2) !important;
+}
+
+[data-theme="dark"] .partner-logo--white {
+  filter: brightness(0) invert(1) contrast(1.2) !important;
+}
 
 /* ── Shimmer skeleton ───────────────────────────────────── */
 [data-theme="light"] .shimmer {
