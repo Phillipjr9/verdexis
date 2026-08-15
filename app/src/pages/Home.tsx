@@ -128,7 +128,7 @@ export default function Home() {
     }
 
     void loadTicker()
-    const id = window.setInterval(() => { void loadTicker() }, 30000)
+    const id = window.setInterval(() => { void loadTicker() }, 3000)
     return () => {
       active = false
       window.clearInterval(id)
@@ -177,15 +177,29 @@ export default function Home() {
       </section>
 
       {tickerCoins.length > 0 && (
-        <section className="border-b border-[#ffffff08] bg-[#0a0f11] py-4">
+        <section className="border-b border-[#ffffff08] bg-[#0a0f11] py-3 sm:py-4">
           <style>{`
-            @keyframes marquee {
+            @keyframes marketMarquee {
               0% { transform: translateX(0); }
               100% { transform: translateX(-50%); }
             }
+            .market-marquee-track {
+              min-width: max-content;
+              width: max-content;
+              animation: marketMarquee 26s linear infinite;
+              will-change: transform;
+            }
+            @media (max-width: 767px) {
+              .market-marquee-track {
+                animation-duration: 22s;
+              }
+            }
           `}</style>
-          <div className="overflow-hidden">
-            <div className="flex min-w-max animate-[marquee_30s_linear_infinite] items-center gap-4 px-5 py-3">
+          <div
+            className="overflow-x-auto overflow-y-hidden"
+            style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
+            <div className="market-marquee-track flex items-center gap-4 px-4 py-3 sm:px-5">
               {[...tickerCoins, ...tickerCoins].map((coin, index) => (
                 <TickerItem key={`${coin.id}-${index}`} coin={coin} />
               ))}

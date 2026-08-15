@@ -37,12 +37,13 @@ export default function AdminQuickPanel() {
     let cancelled = false
     adminApi.getUser(adminId).then((d) => {
       if (cancelled) return
-      const usd = d.walletBalances.find((b) => b.currency === 'USD')
+      const walletBalances = Array.isArray(d?.walletBalances) ? d.walletBalances : []
+      const usd = walletBalances.find((b) => b.currency === 'USD')
       setTreasury(usd?.balance ?? 0)
     }).catch(() => {})
     adminApi.stats().then((s) => {
       if (cancelled) return
-      setRecent(s.recentSignups || [])
+      setRecent(Array.isArray(s?.recentSignups) ? s.recentSignups : [])
     }).catch(() => {})
     return () => { cancelled = true }
   }, [isAdmin, adminId])
@@ -251,14 +252,20 @@ function UserPicker({ label, value, onChange }: { label: string; value: AdminUse
   function loadAll() {
     if (loaded || value) return
     adminApi.listUsers({ page: 1, limit: 200 })
-      .then((r) => { setOptions(r.users); setLoaded(true) })
+      .then((r) => {
+        const next = Array.isArray(r?.users) ? r.users : []
+        setOptions(next)
+        setLoaded(true)
+      })
       .catch(() => {})
   }
 
   useEffect(() => {
     if (!q || value) return
     const t = setTimeout(() => {
-      adminApi.listUsers({ q, page: 1, limit: 50 }).then((r) => setOptions(r.users)).catch(() => {})
+      adminApi.listUsers({ q, page: 1, limit: 50 })
+        .then((r) => setOptions(Array.isArray(r?.users) ? r.users : []))
+        .catch(() => {})
     }, 200)
     return () => clearTimeout(t)
   }, [q, value])

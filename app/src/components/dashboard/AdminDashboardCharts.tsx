@@ -37,7 +37,7 @@ export function AdminDashboardCharts() {
     )
   }
 
-  if (data.error || !data.stats) {
+  if (data.error || !data.stats || !data.stats.stats) {
     return (
       <div className="p-4 rounded-xl bg-[#f44336]/10 border border-[#f44336]/30 text-sm text-[#f44336] mb-8">
         <AlertCircle className="w-4 h-4 inline mr-2" />
@@ -46,7 +46,20 @@ export function AdminDashboardCharts() {
     )
   }
 
-  const stats = data.stats.stats
+  const stats = data.stats.stats ?? {
+    users: 0,
+    admins: 0,
+    suspended: 0,
+    holdings: 0,
+    trades: 0,
+    alerts: 0,
+    deposits24h: 0,
+    signups24h: 0,
+    holds: 0,
+    kycPending: 0,
+    withdraws24h: 0,
+    pendingDeposits: 0,
+  }
 
   // Prepare chart data
   const userGrowthData = [

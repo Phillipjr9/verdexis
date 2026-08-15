@@ -403,6 +403,17 @@ export function useWeb3() {
     setState((s) => ({ ...s, balanceEth: bal }))
   }, [state.address])
 
+  useEffect(() => {
+    if (!state.isConnected || !state.address) return
+
+    void refreshBalance()
+    const interval = window.setInterval(() => {
+      void refreshBalance()
+    }, 2000)
+
+    return () => window.clearInterval(interval)
+  }, [state.isConnected, state.address, refreshBalance])
+
   const sendTransaction = useCallback(async (params: { to?: string; valueEth: number | string }): Promise<string> => {
     const provider = providerRef.current
     if (!provider) throw new Error('No Web3 wallet connected')

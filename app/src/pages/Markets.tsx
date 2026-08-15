@@ -289,7 +289,7 @@ export default function Markets() {
       setLoading(false)
     }
     load(false)
-    const id = setInterval(() => load(true), 30_000)
+    const id = setInterval(() => load(true), 5_000)
     return () => { cancelled = true; clearInterval(id) }
   }, [])
 
