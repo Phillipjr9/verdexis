@@ -41,8 +41,20 @@ export async function resolvePrismaGenerationConfig({ env, cwd, logger = () => {
   }
 
   const normalizedDatabaseUrl = normalizeEnvValue(envs.DATABASE_URL)
-  if (!normalizedDatabaseUrl || !isPostgresUrl(normalizedDatabaseUrl)) {
-    logger('[generate-prisma-client] DATABASE_URL is not set or invalid for Postgres; defaulting to local SQLite for build')
+
+  // If a Postgres provider is requested but DATABASE_URL is empty at
+  // build-time, preserve the Postgres provider and do not switch to
+  // SQLite. However, if a non-empty DATABASE_URL is present but is not a
+  // valid Postgres URL, fall back to SQLite (this covers malformed values).
+  if (!normalizedDatabaseUrl) {
+    logger('[generate-prisma-client] DATABASE_URL is empty at build time; preserving Postgres provider for build')
+    envs.DATABASE_URL = ''
+    envs.DIRECT_URL = envs.DIRECT_URL || envs.DATABASE_URL
+    return { provider, shouldUseSqlite, envs, schemaFile }
+  }
+
+  if (!isPostgresUrl(normalizedDatabaseUrl)) {
+    logger('[generate-prisma-client] DATABASE_URL is not a valid Postgres URL; defaulting to local SQLite for build')
     envs.DATABASE_URL = 'file:./dev.db'
     envs.DATABASE_PROVIDER = 'sqlite'
     shouldUseSqlite = true
