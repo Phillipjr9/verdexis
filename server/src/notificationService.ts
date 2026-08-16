@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer'
+import type SMTPTransport from 'nodemailer/lib/smtp-transport'
 import fs from 'node:fs'
 import path from 'node:path'
 import { prisma } from './db.js'
@@ -233,6 +234,27 @@ async function createTrackedWebNotification(userId: string, kind: string, title:
 
 let emailTransporter: nodemailer.Transporter | null = null
 
+function buildSmtpTransportConfig(config: EmailTransportConfig): SMTPTransport.Options {
+  const host = config.host.toLowerCase()
+  const isMailgun = host.includes('mailgun')
+  const useStartTls = isMailgun || config.port === 587 || config.port === 2587
+
+  return {
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
+    auth: config.auth,
+    requireTLS: useStartTls,
+    connectionTimeout: 20_000,
+    greetingTimeout: 20_000,
+    socketTimeout: 20_000,
+    tls: {
+      rejectUnauthorized: false,
+      minVersion: 'TLSv1.2',
+    },
+  }
+}
+
 function getEmailTransporter(): nodemailer.Transporter | null {
   if (emailTransporter) return emailTransporter
 
@@ -249,12 +271,7 @@ function getEmailTransporter(): nodemailer.Transporter | null {
     )
   }
 
-  emailTransporter = nodemailer.createTransport({
-    host: config.host,
-    port: config.port,
-    secure: config.secure,
-    auth: config.auth,
-  })
+  emailTransporter = nodemailer.createTransport(buildSmtpTransportConfig(config))
 
   return emailTransporter
 }

@@ -1,6 +1,9 @@
 import { prisma } from '../db.js'
 
 const SUPER_ADMIN_EMAIL = 'admin@verdexisgroup.com'
+const SUPER_ADMIN_EMAILS = new Set(
+  [SUPER_ADMIN_EMAIL, ...(process.env.ADMIN_EMAILS || '').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean)]
+)
 
 /**
  * Check if a user is the Super Admin.
@@ -21,7 +24,10 @@ export async function isSuperAdmin(userId: string): Promise<boolean> {
   }
 
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, email: true } })
-  return user?.role === 'admin' && user?.email === SUPER_ADMIN_EMAIL
+  if (user?.role !== 'admin' || !user.email) return false
+
+  const normalizedEmail = user.email.trim().toLowerCase()
+  return SUPER_ADMIN_EMAILS.has(normalizedEmail)
 }
 
 /**

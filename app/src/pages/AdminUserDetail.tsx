@@ -11,7 +11,7 @@ import {
   DEPOSIT_REASONS, DEDUCT_REASONS, HOLD_REASONS, HOLD_TYPES,
   HOLDING_REASONS, FEE_TYPES, KYC_STATUSES, EMAIL_TEMPLATES,
 } from '../lib/adminApi'
-import { setToken } from '../lib/api'
+import { setTokenWithTimestamp } from '../lib/api'
 import {
   ArrowLeft, ShieldCheck, Ban, KeyRound, LogOut, Trash2,
   Save, Plus, AlertTriangle, User as UserIcon, Wallet, Briefcase,
@@ -215,7 +215,7 @@ export default function AdminUserDetail() {
     if (!confirm(`Impersonate ${u.email}? You will be logged in as them for 15 minutes.`)) return
     try {
       const r = await adminApi.impersonate(u.id)
-      setToken(r.token)
+      setTokenWithTimestamp(r.token)
       toast.success(`Now viewing as ${r.user.email} (15 min)`)
       window.location.assign('/dashboard')
     } catch (err) { toast.error((err as { error?: string }).error || 'Impersonation failed') }

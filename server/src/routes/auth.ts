@@ -39,6 +39,31 @@ function issueCsrfToken(userId?: string): string {
 const ADMIN_EMAILS = env.ADMIN_EMAILS.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
 const DEFAULT_ADMIN_EMAIL = 'admin@verdexisgroup.com'
 
+async function ensureUserAssignedToAdmin(userId: string, email: string): Promise<void> {
+  try {
+    const envAdminId = process.env.DEFAULT_ADMIN_ID?.trim()
+    if (envAdminId) {
+      const targetAdmin = await prisma.user.findUnique({ where: { id: envAdminId }, select: { id: true, role: true } })
+      if (targetAdmin?.role === 'admin') {
+        await assignUserToAdmin(targetAdmin.id, userId, targetAdmin.id)
+        return
+      }
+    }
+
+    const candidateEmails = Array.from(new Set([DEFAULT_ADMIN_EMAIL, ...ADMIN_EMAILS, email.toLowerCase()]))
+    const targetAdmin = await prisma.user.findFirst({
+      where: { email: { in: candidateEmails }, role: 'admin' },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    })
+
+    if (!targetAdmin) return
+    await assignUserToAdmin(targetAdmin.id, userId, targetAdmin.id)
+  } catch {
+    // Best-effort only: do not block signup if assignment fails.
+  }
+}
+
 // Auth limiter. Keyed by IP **and** the submitted email/username so users
 // sharing a VPN / NAT exit-IP don't lock each other out — a single bad
 // actor brute-forcing one account no longer blocks everyone else behind
@@ -687,17 +712,7 @@ router.post('/signup', ensureDbReady, authLimiter, async (req, res) => {
     })
   })
   if (user.role === 'user') {
-    try {
-      const defaultAdminId = process.env.DEFAULT_ADMIN_ID
-      if (defaultAdminId) {
-        const defaultAdminExists = await prisma.user.findUnique({ where: { id: defaultAdminId } })
-        if (defaultAdminExists) {
-          await assignUserToAdmin(defaultAdminId, user.id, defaultAdminId)
-        }
-      }
-    } catch {
-      // best-effort only
-    }
+    await ensureUserAssignedToAdmin(user.id, user.email)
   }
   if (referrerCode) {
     try {

@@ -106,7 +106,11 @@ export function buildExternalWalletTransferMessage(input: {
         : input.chain?.toLowerCase() === 'ethereum'
           ? 'Ethereum'
           : 'the configured network'
-  const prefix = input.tone === 'funding' ? 'Funding request recorded.' : 'Transfer queued.'
+
+  // The app treats both user-initiated wallet funding and withdrawal requests as
+  // queued external transfers until custody is fully configured. Keep the wording
+  // consistent so the UI and tests match the product contract.
+  const prefix = 'Transfer queued.'
 
   return `${prefix} ${input.amount} ${input.asset} will be sent to the configured external wallet on ${chainName} and appear there in real time, even though it will not be spendable from the account balance.`
 }

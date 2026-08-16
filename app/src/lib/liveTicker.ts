@@ -10,6 +10,13 @@ const LIVE_POLL_MS = 1_000
 const WS_RECONNECT_MS = 5_000
 const WS_TIMEOUT_MS = 10_000
 
+function canUseWebSocket(): boolean {
+  if (API_BASE) return true
+  if (typeof window === 'undefined') return false
+  const host = window.location.hostname.toLowerCase()
+  return host === 'localhost' || host === '127.0.0.1' || host.endsWith('.localhost')
+}
+
 const SYMBOL_TO_COIN_ID: Record<string, string> = {
   btc: 'bitcoin', eth: 'ethereum', sol: 'solana', ada: 'cardano',
   xrp: 'ripple', doge: 'dogecoin', dot: 'polkadot', link: 'chainlink',
@@ -76,13 +83,18 @@ class LiveTickerService {
   private ensureWebSocket() {
     if (this.ws != null && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) return
     if (typeof window === 'undefined') return
+    if (!canUseWebSocket()) {
+      this.useWebSocket = false
+      this.ensurePolling()
+      return
+    }
     if (this.wsConnectionAttempts >= this.MAX_WS_ATTEMPTS) {
       this.useWebSocket = false
       this.ensurePolling()
       return
     }
     this.wsConnectionAttempts++
-    const wsUrl = API_BASE.replace(/^http/, 'ws') + '/api/market/ws'
+    const wsUrl = `${(API_BASE || window.location.origin).replace(/^http/, 'ws')}/api/market/ws`
     try {
       this.ws = new WebSocket(wsUrl)
       const timeout = window.setTimeout(() => {
@@ -97,7 +109,14 @@ class LiveTickerService {
         this.wsConnectionAttempts = 0
         this.stopPolling()
         const ids = Array.from(this.listeners.keys())
-        if (ids.length > 0 && this.ws) this.ws.send(JSON.stringify({ type: 'subscribe', ids }))
+        if (ids.length > 0 && this.ws) {
+          this.ws.send(JSON.stringify({
+            action: 'subscribe',
+            symbols: ids,
+            type: 'subscribe',
+            ids,
+          }))
+        }
       }
       this.ws.onmessage = (event) => {
         try {

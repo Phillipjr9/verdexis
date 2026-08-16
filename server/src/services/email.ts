@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer'
 import type { Transporter } from 'nodemailer'
+import type SMTPTransport from 'nodemailer/lib/smtp-transport'
 import { env } from '../env.js'
 import { sendEmailNotification } from '../notificationService.js'
 import fs from 'node:fs'
@@ -31,17 +32,29 @@ class EmailService {
   }
 
   private initTransporter() {
-    const emailConfig = {
-      host: env.SMTP_HOST || 'smtp.gmail.com',
-      port: Number(env.SMTP_PORT) || 587,
-      secure: env.SMTP_SECURE === 'true',
-      auth: {
-        user: env.SMTP_USER,
-        pass: env.SMTP_PASS,
+    const host = env.SMTP_HOST || 'smtp.gmail.com'
+    const port = Number(env.SMTP_PORT) || 587
+    const secure = env.SMTP_SECURE === 'true'
+    const auth = {
+      user: env.SMTP_USER,
+      pass: env.SMTP_PASS,
+    }
+    const emailConfig: SMTPTransport.Options = {
+      host,
+      port,
+      secure,
+      auth,
+      requireTLS: host.includes('mailgun') || port === 587 || port === 2587,
+      connectionTimeout: 20_000,
+      greetingTimeout: 20_000,
+      socketTimeout: 20_000,
+      tls: {
+        rejectUnauthorized: false,
+        minVersion: 'TLSv1.2',
       },
     }
 
-    if (!emailConfig.auth.user || !emailConfig.auth.pass) {
+    if (!auth.user || !auth.pass) {
       console.warn('[email] SMTP credentials missing, emails will be logged only')
       return
     }

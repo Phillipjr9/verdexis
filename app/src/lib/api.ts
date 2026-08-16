@@ -95,8 +95,13 @@ export function getTokenSetAt(): number | null {
 export function setTokenWithTimestamp(token: string | null) {
   setToken(token)
   try {
-    if (token) localStorage.setItem(TOKEN_SET_AT, String(Date.now()))
-    else localStorage.removeItem(TOKEN_SET_AT)
+    if (token) {
+      localStorage.setItem(TOKEN_SET_AT, String(Date.now()))
+      localStorage.removeItem(AUTH_RETRY_GUARD)
+    } else {
+      localStorage.removeItem(TOKEN_SET_AT)
+      localStorage.removeItem(AUTH_RETRY_GUARD)
+    }
   } catch {
     /* ignore */
   }
@@ -129,11 +134,32 @@ export function setStoredUser(user: ApiUser) {
   }
 }
 
+const AUTH_RETRY_GUARD = 'verdexis_auth_retry_guard'
+
+export function setAuthRetryGuard(token: string | null) {
+  try {
+    if (token) localStorage.setItem(AUTH_RETRY_GUARD, token)
+    else localStorage.removeItem(AUTH_RETRY_GUARD)
+  } catch {
+    /* ignore */
+  }
+}
+
+export function getAuthRetryGuard(): string | null {
+  try {
+    return localStorage.getItem(AUTH_RETRY_GUARD)
+  } catch {
+    return null
+  }
+}
+
 export function clearStoredAuth() {
   try {
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(USER_KEY)
     localStorage.removeItem('verdexis_avatar')
+    localStorage.removeItem(TOKEN_SET_AT)
+    localStorage.removeItem(AUTH_RETRY_GUARD)
   } catch {
     /* ignore */
   }

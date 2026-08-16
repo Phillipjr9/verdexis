@@ -80,7 +80,7 @@ class MarketStreamClient {
 
   public subscribe(symbols: string[], listener: PriceListener) {
     const newSymbols = symbols.filter((s) => !this.subscriptions.has(s))
-    
+
     for (const symbol of symbols) {
       if (!this.listeners.has(symbol)) {
         this.listeners.set(symbol, new Set())
@@ -93,6 +93,8 @@ class MarketStreamClient {
       this.ws.send(JSON.stringify({
         action: 'subscribe',
         symbols: newSymbols,
+        type: 'subscribe',
+        ids: newSymbols,
       }))
     }
   }
@@ -134,9 +136,12 @@ export function useMarketStream(symbols: string[]): Record<string, number | null
   useEffect(() => {
     const getWsUrl = () => {
       if (typeof window === 'undefined') return null
-      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
-      const host = window.location.host
-      return `${protocol}://${host}`
+      const host = window.location.hostname.toLowerCase()
+      const isLocal = host === 'localhost' || host === '127.0.0.1' || host.endsWith('.localhost')
+      const base = (import.meta.env.VITE_API_URL as string | undefined) || (isLocal ? window.location.origin : '')
+      if (!base) return null
+      const protocol = base.startsWith('https://') ? 'wss://' : 'ws://'
+      return `${protocol}${base.replace(/^https?:\/\//, '')}/api/market/ws`
     }
 
     const wsUrl = getWsUrl()

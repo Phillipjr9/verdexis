@@ -274,11 +274,25 @@ router.get('/users', async (req: AuthedRequest, res) => {
     res.status(500).json({ error: 'Invalid database response' })
     return
   }
+
+  const userIds = users.map((u) => u.id)
+  const assignments = userIds.length > 0
+    ? await prisma.userAdminAssignment.findMany({
+        where: { userId: { in: userIds } },
+        include: {
+          admin: { select: { id: true, email: true, name: true, role: true } },
+        },
+      })
+    : []
+  const assignmentByUserId = new Map(assignments.map((a) => [a.userId, a.admin]))
+
   const hydrated = users.map((u) => {
     const { lastLoginAt, lastLoginIp, lastLoginGeo } = readLastLoginMeta(u.prefs)
     const { prefs: _prefs, ...rest } = u
+    const assignedAdmin = assignmentByUserId.get(u.id) ?? null
     return {
       ...rest,
+      assignedAdmin,
       lastLoginAt,
       lastLoginIp,
       lastLoginGeo,

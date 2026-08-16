@@ -10,7 +10,7 @@ import {
 import { fileToAvatarDataUrl, getAvatar, updateProfile } from '../lib/userProfile'
 import { sanitizeDisplayText, sanitizeEmail, sanitizeText, sanitizeUsername } from '../lib/sanitize'
 import { applyTheme } from '../lib/themeApplier'
-import { api, clearStoredAuth, getToken, setStoredUser, setToken } from '../lib/api'
+import { api, clearStoredAuth, getToken, setStoredUser, setTokenWithTimestamp } from '../lib/api'
 import { adminApi } from '../lib/adminApi'
 import { deletePasskey, listPasskeys, registerPasskey, type Passkey } from '../lib/passkeys'
 
@@ -558,7 +558,7 @@ export default function Settings() {
     setChangingPassword(true)
     try {
       const res = await api.changePassword(currentPassword, newPassword)
-      setToken(res.token)
+      setTokenWithTimestamp(res.token)
       toast.success('Password changed successfully')
       setCurrentPassword('')
       setNewPassword('')

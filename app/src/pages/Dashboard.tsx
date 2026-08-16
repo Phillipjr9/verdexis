@@ -31,7 +31,7 @@ import { marketData, type CryptoQuote } from '../lib/marketData'
 import { liveTicker } from '../lib/liveTicker'
 import { realTimePrice } from '../lib/realTimePrice'
 import { aiService, type AIInsight } from '../lib/aiService'
-import { api, clearStoredAuth, getToken, getFriendlyApiErrorMessage, getTokenSetAt } from '../lib/api'
+import { api, clearStoredAuth, getToken, getFriendlyApiErrorMessage, getTokenSetAt, setAuthRetryGuard, getAuthRetryGuard } from '../lib/api'
 import { portfolioStore, type PortfolioHolding, type Trade, type WalletBalance, type WalletTransaction } from '../lib/portfolioStore'
 import { assetIconFor, cryptoIconErrorFallback } from '../lib/cryptoIcon'
 import { useCurrency } from '../lib/currencyContext'
@@ -199,43 +199,72 @@ export default function Dashboard() {
   useEffect(() => {
     if (!isAuthenticated) return
     let active = true
+
+    const retryFreshSession = (token: string | null, reason: string, status?: number) => {
+      const ts = getTokenSetAt ? getTokenSetAt() : null
+      if (!ts || !token || Date.now() - ts >= 8000) return false
+
+      const retryGuard = getAuthRetryGuard()
+      if (retryGuard === token) {
+        return true
+      }
+      setAuthRetryGuard(token)
+      setTimeout(() => {
+        api.me()
+          .then(() => {
+            setAuthRetryGuard(null)
+            setApiError(null)
+          })
+          .catch((retryErr: any) => {
+            setAuthRetryGuard(null)
+            const retryStatus = retryErr && typeof retryErr.status === 'number' ? retryErr.status : undefined
+            if (retryStatus === 401) {
+              clearStoredAuth()
+              setIsAuthenticated(false)
+              setApiError('Your session expired. Please sign in again.')
+              return
+            }
+            // Keep the session alive and retry quietly for short-lived backend
+            // startup or database warm-up issues after login.
+            console.warn(`Session retry after ${reason} failed:`, retryErr)
+          })
+      }, 1500)
+      return true
+    }
+
     api.me()
       .then(() => {
         if (!active) return
+        setApiError(null)
       })
       .catch((err: any) => {
         if (!active) return
         const status = err && typeof err.status === 'number' ? err.status : undefined
         const friendly = getFriendlyApiErrorMessage(err)
+        const token = getToken()
+
         if (status === 401) {
           // Avoid immediately clearing auth if the token was just set
-          // (race where backend hasn't activated the token yet). If the
-          // token was set very recently, schedule a short retry instead of
-          // logging the user out immediately.
-          const ts = getTokenSetAt ? getTokenSetAt() : null
-          if (ts && Date.now() - ts < 5000) {
-            // Retry once after a short delay
-            setTimeout(() => {
-              api.me().catch(() => {
-                clearStoredAuth()
-                setIsAuthenticated(false)
-                setApiError('Your session expired. Please sign in again.')
-              })
-            }, 1500)
+          // (race where backend hasn't activated the token yet).
+          if (retryFreshSession(token, 'unauthorized', status)) {
             return
           }
-          // Clear stored auth only on an explicit unauthorized response.
           clearStoredAuth()
           setIsAuthenticated(false)
           setApiError('Your session expired. Please sign in again.')
-        } else {
-          // Transient network/server errors should not log the user out.
-          // Surface a user-friendly message in the dashboard UI.
-          // eslint-disable-next-line no-console
-          console.warn('Session validation failed (transient):', err)
-          setApiError(friendly)
-          toast.error(friendly)
+          return
         }
+
+        // For transient backend issues right after successful login, retry once
+        // rather than showing a false "Connection Issue" banner.
+        if ((status === 0 || status === 408 || status >= 500) && retryFreshSession(token, 'transient', status)) {
+          return
+        }
+
+        // Transient network/server errors should not log the user out.
+        console.warn('Session validation failed (transient):', err)
+        setApiError(friendly)
+        toast.error(friendly)
       })
 
     return () => { active = false }

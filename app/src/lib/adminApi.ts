@@ -33,6 +33,12 @@ export interface AdminUserSummary {
   holdType: 'all' | 'withdraw' | 'transfer' | null
   twoFactor: boolean
   investmentId: string | null
+  assignedAdmin: {
+    id: string
+    email: string
+    name: string
+    role: 'user' | 'admin'
+  } | null
   lastLoginAt: string | null
   lastLoginIp: string | null
   lastLoginGeo: {

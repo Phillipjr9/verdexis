@@ -56,9 +56,10 @@ class PriceStreamManager {
   }
 
   private handleClientMessage(ws: WebSocket, msg: unknown) {
-    const m = msg as { action?: string; symbols?: string[] }
-    if (m.action === 'subscribe') {
-      const symbols = m.symbols || []
+    const m = msg as { action?: string; type?: string; symbols?: string[]; ids?: string[] }
+    const action = m.action ?? m.type
+    const symbols = m.symbols ?? m.ids ?? []
+    if (action === 'subscribe') {
       const sub = this.clients.get(ws)
       if (!sub) return
 
@@ -68,7 +69,7 @@ class PriceStreamManager {
           this.subscriptions.set(symbol, new Set())
         }
         this.subscriptions.get(symbol)!.add(ws)
-        
+
         // Send cached price if available
         const cached = this.priceCache.get(symbol)
         if (cached) {
@@ -77,10 +78,9 @@ class PriceStreamManager {
           })
         }
       }
-      
+
       this.ensureUpstreamConnections()
-    } else if (m.action === 'unsubscribe') {
-      const symbols = m.symbols || []
+    } else if (action === 'unsubscribe') {
       const sub = this.clients.get(ws)
       if (!sub) return
 
