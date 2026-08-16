@@ -1194,6 +1194,12 @@ router.get('/me', requireAuth, async (req: AuthedRequest, res) => {
       res.status(503).json({ error: 'Database unavailable' })
       return
     }
+    // Log full error for operators to diagnose production failures
+    try {
+      console.error('[auth] /me failure:', err instanceof Error ? err.stack || err.message : String(err))
+    } catch (e) {
+      console.error('[auth] /me failure: (failed to stringify error)')
+    }
     res.status(500).json({ error: 'Unable to load profile' })
   }
 })
