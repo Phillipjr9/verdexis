@@ -259,19 +259,11 @@ async function ensureConnection() {
       console.warn(`[verdexis-api] ⚠️ Connection attempt ${connectionAttempts}/${MAX_RETRIES} failed: ${errorMsg}`)
 
       if (provider !== 'sqlite' && process.env.NODE_ENV === 'production') {
-        console.warn(`[verdexis-api] Falling back to SQLite because the configured database could not be reached: ${databaseUrl}`)
-        provider = 'sqlite'
-        databaseUrl = normalizeSqliteUrl(process.env.RENDER ? RENDER_SQLITE_FILE : FALLBACK_SQLITE_FILE)
-        process.env.DATABASE_URL = databaseUrl
-        process.env.DATABASE_PROVIDER = 'sqlite'
-        process.env.DIRECT_URL = databaseUrl
-        prismaClientOptions.datasources.db.url = databaseUrl
-        currentPrismaClient = new PrismaClient(prismaClientOptions)
-        if (process.env.NODE_ENV !== 'production') {
-          global.__prisma = currentPrismaClient
-        }
-        console.log('[verdexis-api] Retrying connection with SQLite fallback database at /tmp/verdexis.db')
-        continue
+        dbUnavailable = true
+        console.error('[verdexis-api] Production database connection failed. Refusing to fall back to SQLite so the app does not silently use the wrong database.')
+        console.error('[verdexis-api] Check DATABASE_URL, Render networking, SSL settings, and the Postgres service status.')
+        console.error('[verdexis-api] Current database target:', maskDatabaseUrl(databaseUrl))
+        return
       }
 
       if (connectionAttempts < MAX_RETRIES) {

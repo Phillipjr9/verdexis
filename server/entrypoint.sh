@@ -5,14 +5,11 @@ echo "DATABASE_URL set: $(test -n "$DATABASE_URL" && echo 'yes' || echo 'NO - MI
 echo "NODE_ENV: $NODE_ENV"
 echo "PORT: ${PORT:-4000}"
 
-# Normalize DATABASE_URL for SQLite fallback in Render runtime so Prisma
-# validation sees a proper `file:` URL. This ensures the generated Prisma
-# client will not fail schema validation when the app runs with SQLite.
-if [ -n "$RENDER" ] || [ "$DATABASE_PROVIDER" = "sqlite" ]; then
-  if [ -z "$DATABASE_URL" ] || ! printf "%s" "$DATABASE_URL" | grep -qE '^file:'; then
-    export DATABASE_URL="file:/tmp/verdexis-render.db"
-    echo "Normalized DATABASE_URL to $DATABASE_URL"
-  fi
+# Only use SQLite if the service is explicitly configured for SQLite.
+# Never override a valid Postgres DATABASE_URL on Render.
+if [ "${DATABASE_PROVIDER:-postgresql}" = "sqlite" ] && [ -z "$DATABASE_URL" ]; then
+  export DATABASE_URL="file:/tmp/verdexis-render.db"
+  echo "SQLite fallback enabled: $DATABASE_URL"
 fi
 
 # Attempt to resolve failed migrations (with timeout, non-blocking)
