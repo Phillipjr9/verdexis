@@ -227,7 +227,7 @@ export default function Navigation() {
                   {isVerified && <VerifiedBadge />}
                 </span>
                 <NotificationBell />
-                <Link to="/dashboard" className="w-9 h-9 rounded-full bg-[#0C8B44]/20 flex items-center justify-center text-sm font-bold text-[#0C8B44] hover:bg-[#0C8B44]/30 transition-colors overflow-hidden" title="Dashboard">
+                <Link to={isAdmin ? '/admin/users' : '/dashboard'} className="w-9 h-9 rounded-full bg-[#0C8B44]/20 flex items-center justify-center text-sm font-bold text-[#0C8B44] hover:bg-[#0C8B44]/30 transition-colors overflow-hidden" title={isAdmin ? 'Users' : 'Dashboard'}>
                   {avatar ? (
                     <img src={avatar} alt="Your avatar" className="w-full h-full object-cover" />
                   ) : (
