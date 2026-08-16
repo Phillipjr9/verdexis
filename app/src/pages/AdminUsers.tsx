@@ -113,6 +113,11 @@ export default function AdminUsers() {
     return 'Unknown'
   }
 
+  function assignedAdminLabel(u: AdminUserSummary): string {
+    if (!u.assignedAdmin) return '—'
+    return u.assignedAdmin.name || u.assignedAdmin.email || 'Admin'
+  }
+
   async function lockTransfer(u: AdminUserSummary) {
     const catalogue = HOLD_REASONS.map((r) => `${r.value} = ${r.label}`).join('\n')
     const selected = (window.prompt(
@@ -240,6 +245,7 @@ export default function AdminUsers() {
                   <th className="text-left px-3 py-3 font-normal w-8"><input type="checkbox" aria-label="Select all on page" checked={allChecked} onChange={toggleAll} className="accent-[#0C8B44]" /></th>
                   <th className="text-left px-4 py-3 font-normal">User</th>
                   <th className="text-left px-4 py-3 font-normal">Investment ID</th>
+                  <th className="text-left px-4 py-3 font-normal">Assigned admin</th>
                   <th className="text-left px-4 py-3 font-normal">Role</th>
                   <th className="text-left px-4 py-3 font-normal">Status</th>
                   <th className="text-left px-4 py-3 font-normal">Last login location</th>
@@ -267,6 +273,16 @@ export default function AdminUsers() {
                         <span className="font-mono text-[11px] text-[#0C8B44] bg-[#0C8B44]/10 px-2 py-0.5 rounded">{u.investmentId}</span>
                       ) : (
                         <span className="text-[11px] text-[#737373]">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {u.assignedAdmin ? (
+                        <div className="text-[11px] text-[#E5E5E5]">
+                          <div className="font-medium">{assignedAdminLabel(u)}</div>
+                          <div className="text-[#737373]">{u.assignedAdmin.email}</div>
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-[#737373]">Unassigned</span>
                       )}
                     </td>
                     <td className="px-4 py-3">
