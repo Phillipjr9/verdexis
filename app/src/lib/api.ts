@@ -201,7 +201,7 @@ async function request<T>(path: string, init: RequestOpts = {}): Promise<T> {
     const apiErr: ApiError = { error: msg, status: 0, details: err }
     throw apiErr
   }
-
+}
 export const api = {
   get: <T>(path: string, init: Omit<RequestOpts, 'method'> = {}) => request<T>(path, { ...init, method: 'GET' }),
   post: <T>(path: string, body?: unknown, init: Omit<RequestOpts, 'method' | 'body'> = {}) => request<T>(path, { ...init, method: 'POST', body: body !== undefined ? JSON.stringify(body) : undefined }),
