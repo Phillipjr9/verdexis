@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { X, Mail, Lock, User, Eye, EyeOff, ArrowRight, Shield, Fingerprint, KeyRound, ArrowLeft, Phone } from 'lucide-react'
 import { toast } from 'sonner'
-import { api, getFriendlyApiErrorMessage, setToken, setStoredUser, type ApiError } from '../lib/api'
+import { api, getFriendlyApiErrorMessage, setTokenWithTimestamp, setStoredUser, type ApiError } from '../lib/api'
 import { sanitizeDisplayText, sanitizeEmail, sanitizeText } from '../lib/sanitize'
 import { isSupabaseConfigured, signInWithEmail, signUpWithEmail } from '../lib/supabase'
 
@@ -86,7 +86,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
         const res = pendingFlow === 'signup'
           ? await api.signupVerifyOtp(pendingToken, otpCode)
           : await api.loginVerifyOtp(pendingToken, otpCode)
-        setToken(res.token)
+        setTokenWithTimestamp(res.token)
         setStoredUser(res.user)
         toast.success(pendingFlow === 'signup' ? 'Email verified and account created' : 'Welcome back')
         setLoading(false)
@@ -153,7 +153,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
         }
 
         const result = await api.supabaseAuth(sessionData.access_token)
-        setToken(result.token)
+        setTokenWithTimestamp(result.token)
         setStoredUser(result.user)
         toast.success(mode === 'signup' ? 'Account created' : 'Welcome back')
         setLoading(false)
@@ -187,7 +187,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
       }
 
       const r = result as { token: string; user: import('../lib/api').ApiUser }
-      setToken(r.token)
+      setTokenWithTimestamp(r.token)
       setStoredUser(r.user)
       toast.success(mode === 'signup' ? 'Account created' : 'Welcome back')
       setLoading(false)
@@ -245,7 +245,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
       toast.info('Touch your security key or use biometrics...')
       
       const { token, user } = await authenticateWithPasskey(form.email || undefined)
-      setToken(token)
+      setTokenWithTimestamp(token)
       setStoredUser(user)
       toast.success('Welcome back')
       setLoading(false)

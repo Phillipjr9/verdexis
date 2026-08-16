@@ -78,6 +78,30 @@ export function setToken(token: string | null) {
   }
 }
 
+// Record when the token was last set to avoid immediate logout due to
+// racey backend token activation. Stored as ms since epoch.
+const TOKEN_SET_AT = 'verdexis_token_set_at'
+export function getTokenSetAt(): number | null {
+  try {
+    const v = localStorage.getItem(TOKEN_SET_AT)
+    if (!v) return null
+    const n = Number(v)
+    return Number.isFinite(n) ? n : null
+  } catch {
+    return null
+  }
+}
+
+export function setTokenWithTimestamp(token: string | null) {
+  setToken(token)
+  try {
+    if (token) localStorage.setItem(TOKEN_SET_AT, String(Date.now()))
+    else localStorage.removeItem(TOKEN_SET_AT)
+  } catch {
+    /* ignore */
+  }
+}
+
 export function setStoredUser(user: ApiUser) {
   try {
     const safeUser = {

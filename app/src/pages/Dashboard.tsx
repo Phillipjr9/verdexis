@@ -31,7 +31,7 @@ import { marketData, type CryptoQuote } from '../lib/marketData'
 import { liveTicker } from '../lib/liveTicker'
 import { realTimePrice } from '../lib/realTimePrice'
 import { aiService, type AIInsight } from '../lib/aiService'
-import { api, clearStoredAuth, getToken, getFriendlyApiErrorMessage } from '../lib/api'
+import { api, clearStoredAuth, getToken, getFriendlyApiErrorMessage, getTokenSetAt } from '../lib/api'
 import { portfolioStore, type PortfolioHolding, type Trade, type WalletBalance, type WalletTransaction } from '../lib/portfolioStore'
 import { assetIconFor, cryptoIconErrorFallback } from '../lib/cryptoIcon'
 import { useCurrency } from '../lib/currencyContext'
@@ -208,6 +208,22 @@ export default function Dashboard() {
         const status = err && typeof err.status === 'number' ? err.status : undefined
         const friendly = getFriendlyApiErrorMessage(err)
         if (status === 401) {
+          // Avoid immediately clearing auth if the token was just set
+          // (race where backend hasn't activated the token yet). If the
+          // token was set very recently, schedule a short retry instead of
+          // logging the user out immediately.
+          const ts = getTokenSetAt ? getTokenSetAt() : null
+          if (ts && Date.now() - ts < 5000) {
+            // Retry once after a short delay
+            setTimeout(() => {
+              api.me().catch(() => {
+                clearStoredAuth()
+                setIsAuthenticated(false)
+                setApiError('Your session expired. Please sign in again.')
+              })
+            }, 1500)
+            return
+          }
           // Clear stored auth only on an explicit unauthorized response.
           clearStoredAuth()
           setIsAuthenticated(false)
