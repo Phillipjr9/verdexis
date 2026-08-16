@@ -176,12 +176,29 @@ async function request<T>(path: string, init: RequestOpts = {}): Promise<T> {
       throw apiErr
     }
     return body as T
-  } catch (err) {
-    throw err
-  } finally {
-    clearTimeout(timeout)
+  } catch (err: any) {
+    // Normalize common network/timeout failures into ApiError so callers
+    // can render friendly messages via `getFriendlyApiErrorMessage`.
+    try {
+      if (err && err.name === 'AbortError') {
+        const apiErr: ApiError = { error: 'Request timed out', status: 408 }
+        throw apiErr
+      }
+      const msg = (err && (err.message || String(err))) || 'Network error'
+      // Typical fetch network error appears as a TypeError in browsers.
+      if (err instanceof TypeError || /failed to fetch|network request failed/i.test(msg)) {
+        const apiErr: ApiError = { error: 'Network error: unable to reach the server', status: 0, details: err }
+        throw apiErr
+      }
+      // If the error already looks like an ApiError with a status, rethrow.
+      if (err && typeof err.status === 'number') throw err
+      // Fallback: wrap unknown errors.
+      const apiErr: ApiError = { error: msg, status: 0, details: err }
+      throw apiErr
+    } finally {
+      clearTimeout(timeout)
+    }
   }
-}
 
 export const api = {
   get: <T>(path: string, init: Omit<RequestOpts, 'method'> = {}) => request<T>(path, { ...init, method: 'GET' }),
