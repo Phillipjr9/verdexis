@@ -31,7 +31,7 @@ import { marketData, type CryptoQuote } from '../lib/marketData'
 import { liveTicker } from '../lib/liveTicker'
 import { realTimePrice } from '../lib/realTimePrice'
 import { aiService, type AIInsight } from '../lib/aiService'
-import { api, clearStoredAuth, getToken } from '../lib/api'
+import { api, clearStoredAuth, getToken, getFriendlyApiErrorMessage } from '../lib/api'
 import { portfolioStore, type PortfolioHolding, type Trade, type WalletBalance, type WalletTransaction } from '../lib/portfolioStore'
 import { assetIconFor, cryptoIconErrorFallback } from '../lib/cryptoIcon'
 import { useCurrency } from '../lib/currencyContext'
@@ -206,6 +206,7 @@ export default function Dashboard() {
       .catch((err: any) => {
         if (!active) return
         const status = err && typeof err.status === 'number' ? err.status : undefined
+        const friendly = getFriendlyApiErrorMessage(err)
         if (status === 401) {
           // Clear stored auth only on an explicit unauthorized response.
           clearStoredAuth()
@@ -213,10 +214,11 @@ export default function Dashboard() {
           setApiError('Your session expired. Please sign in again.')
         } else {
           // Transient network/server errors should not log the user out.
-          // Surface a console warning so developers can inspect.
-          // Keep the existing session intact and retry on the next hydrate.
+          // Surface a user-friendly message in the dashboard UI.
           // eslint-disable-next-line no-console
           console.warn('Session validation failed (transient):', err)
+          setApiError(friendly)
+          toast.error(friendly)
         }
       })
 

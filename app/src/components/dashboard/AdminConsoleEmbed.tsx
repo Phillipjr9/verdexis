@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { api } from '../../lib/api'
+import { api, getFriendlyApiErrorMessage } from '../../lib/api'
+import { toast } from 'sonner'
 import { AdminConsoleContent } from '../../pages/AdminDashboard'
 
 /**
@@ -14,7 +15,14 @@ export default function AdminConsoleEmbed() {
     let cancelled = false
     api.me()
       .then((r) => { if (!cancelled) setIsAdmin(r.user.role === 'admin') })
-      .catch(() => { /* not signed in / non-admin */ })
+      .catch((err: any) => {
+        if (cancelled) return
+        const friendly = getFriendlyApiErrorMessage(err)
+        console.warn('AdminConsoleEmbed: api.me failed', err)
+        if (!(err && typeof err.status === 'number' && err.status === 401)) {
+          toast.error(friendly)
+        }
+      })
     return () => { cancelled = true }
   }, [])
   if (!isAdmin) return null

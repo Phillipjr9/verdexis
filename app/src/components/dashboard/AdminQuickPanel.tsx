@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ShieldCheck, ArrowRightLeft, ArrowDownToLine, UserPlus, Search, ExternalLink, Pencil } from 'lucide-react'
 import { adminApi, type AdminUserSummary } from '../../lib/adminApi'
-import { api } from '../../lib/api'
+import { api, getFriendlyApiErrorMessage } from '../../lib/api'
 
 /**
  * Inline admin console embedded in the Dashboard. Visible only when the
@@ -28,7 +28,15 @@ export default function AdminQuickPanel() {
         setIsAdmin(true)
         setAdminId(user.id)
       }
-    }).catch(() => { /* not signed in / network */ })
+    }).catch((err: any) => {
+      if (cancelled) return
+      const friendly = getFriendlyApiErrorMessage(err)
+      console.warn('AdminQuickPanel: api.me failed', err)
+      // Only surface network/other issues to admins; silent if unauthorized.
+      if (!(err && typeof err.status === 'number' && err.status === 401)) {
+        toast.error(friendly)
+      }
+    })
     return () => { cancelled = true }
   }, [])
 

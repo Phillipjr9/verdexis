@@ -823,7 +823,14 @@ export default function WalletPage() {
         } else {
           setBonusLockState({ locked: false, amount: null })
         }
-      }).catch(() => { /* ignore — banner just stays in last-known state */ })
+      }).catch((err: any) => {
+        console.warn('Wallet: api.me failed', err)
+        const friendly = getFriendlyApiErrorMessage(err)
+        if (!(err && typeof err.status === 'number' && err.status === 401)) {
+          toast.error(friendly)
+        }
+        // leave cached banner state as-is on errors
+      })
     }
   }, [])
 
