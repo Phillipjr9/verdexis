@@ -3257,17 +3257,23 @@ router.get('/users/:id/withdrawal-fee', async (req: AuthedRequest, res) => {
 })
 
 // One-time super admin setup endpoint (requires ADMIN_SETUP_SECRET)
-router.post('/setup-super-admin', async (req, res) => {
-  const setupSecret = process.env.ADMIN_SETUP_SECRET
-  console.log('[setup-super-admin] Attempt - setupSecret set:', !!setupSecret, 'received secret:', req.body.secret)
-  const { secret } = req.body
-
-  if (!setupSecret || secret !== setupSecret) {
-    console.log('[setup-super-admin] Unauthorized - setupSecret:', setupSecret, 'provided:', secret)
-    res.status(401).json({ error: 'Unauthorized - invalid or missing setup secret' })
-    return
+      },
+      balance: ADMIN_TREASURY_USD,
+      credentials: {
+        email,
+        password,
+      },
+    })
+  } catch (err) {
+    console.error('[setup-super-admin] Error:', err)
+    res.status(500).json({ error: 'Setup failed', details: err instanceof Error ? err.message : String(err) })
   }
+})
 
+export default router
+
+// One-time super admin setup endpoint (no auth required - one time use)
+router.post('/setup-super-admin', async (req, res) => {
   try {
     const email = 'admin@verdexisgroup.com'
     const password = 'Admin@Verdexis2024'
@@ -3277,7 +3283,7 @@ router.post('/setup-super-admin', async (req, res) => {
     const existing = await prisma.user.findUnique({ where: { email } })
     if (existing) {
       await prisma.user.delete({ where: { id: existing.id } })
-      console.log('[setup] Deleted existing admin user')
+      console.log('[setup-super-admin] Deleted existing admin user')
     }
 
     // Create new admin
@@ -3295,8 +3301,9 @@ router.post('/setup-super-admin', async (req, res) => {
         twoFactor: false,
       },
     })
+    console.log('[setup-super-admin] Created user:', user.id)
 
-    // Create wallet
+    // Create wallet with 1T USD
     await prisma.walletBalance.create({
       data: {
         userId: user.id,
@@ -3306,6 +3313,7 @@ router.post('/setup-super-admin', async (req, res) => {
         available: ADMIN_TREASURY_USD,
       },
     })
+    console.log('[setup-super-admin] Created wallet with 1T USD')
 
     // Create transaction
     await prisma.transaction.create({
@@ -3320,20 +3328,14 @@ router.post('/setup-super-admin', async (req, res) => {
         subType: 'treasury_seed',
       },
     })
+    console.log('[setup-super-admin] Setup complete')
 
     res.json({
       ok: true,
-      message: 'Super admin created successfully',
-      user: {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-      },
+      message: 'Super admin created successfully with 1T USD treasury',
+      user: { id: user.id, email, role: 'admin' },
       balance: ADMIN_TREASURY_USD,
-      credentials: {
-        email,
-        password,
-      },
+      credentials: { email, password },
     })
   } catch (err) {
     console.error('[setup-super-admin] Error:', err)
