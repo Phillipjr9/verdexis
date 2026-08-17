@@ -306,24 +306,26 @@ export function waitForDatabaseInitialization(): Promise<void> {
 }
 
 // Per-operation health check with caching to avoid repeated connection checks
+// Does NOT throw - allows queries to proceed even if health check fails
 async function checkDatabaseHealth(): Promise<void> {
   const now = Date.now()
   
   // Use cached result if fresh (within 30s)
-  if (lastHealthCheckResult && (now - lastHealthCheckTime) < HEALTH_CHECK_CACHE_TTL) {
+  if ((now - lastHealthCheckTime) < HEALTH_CHECK_CACHE_TTL) {
     return
   }
   
-  // Run health check (simple query)
+  // Run health check (simple query) - silently fail, don't propagate error
   try {
     await currentPrismaClient.$queryRaw`SELECT 1`
     lastHealthCheckResult = true
     lastHealthCheckTime = now
   } catch (err) {
+    // Don't throw - let the actual query fail naturally if DB is down
+    // This prevents spurious 503s from the health check itself
     lastHealthCheckResult = false
     lastHealthCheckTime = now
-    dbUnavailable = true
-    throw err
+    // Don't set dbUnavailable here; let individual queries fail on their own
   }
 }
 
