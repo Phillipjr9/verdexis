@@ -1,0 +1,22 @@
+  useEffect(() => {
+    let active = true
+
+    Promise.all([
+      adminApi.stats(),
+      adminApi.getSessionStats(),
+      adminApi.listPendingReviews(),
+    ])
+      .then(async ([statsResult, sessionResult, reviewResult]) => {
+        if (!active) return
+        setStats(statsResult)
+        setSessionStats(sessionResult.stats)
+        setPendingReviewCount(reviewResult.reviews.length)
+        setStatsError(null)
+        try {
+          const walletData = await (await fetch('/api/wallet')).json()
+          const usdBalance = walletData.balances?.find((b: any) => b.currency === 'USD')
+          if (usdBalance) setTreasuryBalance(usdBalance.balance)
+        } catch (err) {
+          console.warn('Failed to load treasury balance:', err)
+        }
+      })

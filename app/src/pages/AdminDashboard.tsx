@@ -26,12 +26,19 @@ export default function AdminDashboard() {
       adminApi.getSessionStats(),
       adminApi.listPendingReviews(),
     ])
-      .then(([statsResult, sessionResult, reviewResult]) => {
+      .then(async ([statsResult, sessionResult, reviewResult]) => {
         if (!active) return
         setStats(statsResult)
         setSessionStats(sessionResult.stats)
         setPendingReviewCount(reviewResult.reviews.length)
         setStatsError(null)
+        try {
+          const w = await (await fetch('/api/wallet')).json()
+          const usd = w.balances?.find((b: any) => b.currency === 'USD')
+          if (usd) setTreasuryBalance(usd.balance)
+        } catch (e) {
+          console.warn('Treasury balance load failed:', e)
+        }
       })
       .catch((err: unknown) => {
         if (!active) return
