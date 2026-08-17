@@ -1220,10 +1220,10 @@ router.get('/me', requireAuth, async (req: AuthedRequest, res) => {
       res.status(404).json({ error: 'Not found' })
       return
     }
-    console.log('[/me] Checking user:', user.email, 'current role:', user.role, 'admin emails:', ADMIN_EMAILS)
+    console.log('[/me] User:', user.email, '| DB role:', user.role, '| ADMIN_EMAILS:', ADMIN_EMAILS, '| match:', ADMIN_EMAILS.includes(user.email.toLowerCase()))
     const role = await autoPromoteIfAdminEmail(user.id, user.email, user.role)
-    console.log('[/me] After promotion, role:', role)
-    res.json(publicUser({ ...user, role }))
+    console.log('[/me] After promotion:', role)
+    res.json(publicUser({ ...user, role })))
   } catch (err) {
     if (isDbUnavailableError(err)) {
       res.status(503).json({ error: 'Database unavailable' })
