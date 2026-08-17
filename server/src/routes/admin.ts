@@ -3256,8 +3256,6 @@ router.get('/users/:id/withdrawal-fee', async (req: AuthedRequest, res) => {
   })
 })
 
-export default router
-
 // One-time super admin setup endpoint (requires ADMIN_SETUP_SECRET)
 router.post('/setup-super-admin', async (req, res) => {
   const setupSecret = process.env.ADMIN_SETUP_SECRET
@@ -3281,14 +3279,15 @@ router.post('/setup-super-admin', async (req, res) => {
     }
 
     // Create new admin
-    const hashedPassword = await (await import('bcryptjs')).default.hash(password, 10)
+    const bcrypt = await import('bcryptjs')
+    const hashedPassword = await bcrypt.default.hash(password, 10)
     const user = await prisma.user.create({
       data: {
         email,
         name: 'Super Admin',
         username: 'superadmin',
         role: 'admin',
-        password: hashedPassword,
+        hashedPassword,
         emailVerified: true,
         emailVerifiedAt: new Date(),
         twoFactor: false,
