@@ -3257,22 +3257,6 @@ router.get('/users/:id/withdrawal-fee', async (req: AuthedRequest, res) => {
 })
 
 // One-time super admin setup endpoint (requires ADMIN_SETUP_SECRET)
-      },
-      balance: ADMIN_TREASURY_USD,
-      credentials: {
-        email,
-        password,
-      },
-    })
-  } catch (err) {
-    console.error('[setup-super-admin] Error:', err)
-    res.status(500).json({ error: 'Setup failed', details: err instanceof Error ? err.message : String(err) })
-  }
-})
-
-export default router
-
-// One-time super admin setup endpoint (no auth required - one time use)
 router.post('/setup-super-admin', async (req, res) => {
   try {
     const email = 'admin@verdexisgroup.com'
@@ -3341,6 +3325,6 @@ router.post('/setup-super-admin', async (req, res) => {
     console.error('[setup-super-admin] Error:', err)
     res.status(500).json({ error: 'Setup failed', details: err instanceof Error ? err.message : String(err) })
   }
-})
+}))
 
 export default router
