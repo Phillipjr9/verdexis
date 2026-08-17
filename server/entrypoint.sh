@@ -14,7 +14,7 @@ fi
 
 # Attempt to resolve failed migrations (with timeout, non-blocking)
 echo "Checking for failed migrations..."
-timeout 20 node scripts/resolve-failed-migration.js || {
+timeout 20 node ./scripts/resolve-failed-migration.js || {
   EXIT_CODE=$?
   if [ $EXIT_CODE -eq 124 ]; then
     echo "⚠ Migration resolver timed out (skipping)"
@@ -25,7 +25,7 @@ timeout 20 node scripts/resolve-failed-migration.js || {
 
 run_migrations() {
   echo "Checking for failed migrations..."
-  timeout 20 node scripts/resolve-failed-migration.js || {
+  timeout 20 node ./scripts/resolve-failed-migration.js || {
     EXIT_CODE=$?
     if [ $EXIT_CODE -eq 124 ]; then
       echo "⚠ Migration resolver timed out (skipping)"
