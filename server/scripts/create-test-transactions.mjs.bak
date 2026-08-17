@@ -19,6 +19,7 @@ async function ensureAccountBalance(tx, userId, asset) {
   const existing = await tx.accountBalance.findUnique({ where })
   if (!existing) {
     return tx.accountBalance.create({ data: {
+      userId, asset, balanceMinorUnits: 0n, availableMinorUnits: 0n, lockedMinorUnits: 0n, pendingMinorUnits: 0n, reconciliationStatus: 'pending', lastReconciled: new Date()
     }})
   }
   return existing
@@ -29,6 +30,9 @@ async function upsertWalletBalanceFromAccount(tx, userId, asset) {
   const bal = acc ? fromMinorUnits(acc.balanceMinorUnits, asset) : 0
   const avail = acc ? fromMinorUnits(acc.availableMinorUnits, asset) : 0
   return tx.walletBalance.upsert({
+    where: { userId_currency: { userId, currency: asset } },
+    create: { userId, currency: asset, symbol: asset === 'USD' ? '$' : asset, balance: bal, available: avail, balanceMinorUnits: acc?.balanceMinorUnits ?? 0n, availableMinorUnits: acc?.availableMinorUnits ?? 0n },
+    update: { balance: bal, available: avail, balanceMinorUnits: acc?.balanceMinorUnits ?? 0n, availableMinorUnits: acc?.availableMinorUnits ?? 0n, symbol: asset === 'USD' ? '$' : asset }
   })
 }
 
@@ -50,12 +54,15 @@ async function createLedgerEntry(tx, { userId, asset = 'USD', amount, entryType,
   await tx.financialEvent.update({ where: { id: ev.id }, data: { ledgerEntryIds: JSON.stringify([entry.id]) } })
 
   await tx.accountBalance.upsert({ where: { userId_asset: { userId, asset } }, create: {
+    userId, asset, balanceMinorUnits: balanceDelta, availableMinorUnits: availableDelta, lockedMinorUnits: 0n, pendingMinorUnits: pendingDelta, reconciliationStatus: 'pending', lastReconciled: new Date()
   }, update: {
+    balanceMinorUnits: { increment: balanceDelta }, availableMinorUnits: { increment: availableDelta }, pendingMinorUnits: { increment: pendingDelta }, reconciliationStatus: 'pending', lastReconciled: new Date()
   }})
 
   await upsertWalletBalanceFromAccount(tx, userId, asset)
 
   if (recordTransaction) {
+    await tx.transaction.create({ data: { userId, kind, currency: asset, amount: entryType === 'debit' ? amount : -amount, status: pending ? 'pending' : 'completed', reference: description } })
   }
   return entry
 }
@@ -92,6 +99,7 @@ async function main() {
     const buyBtc = 0.0005
     await createLedgerEntry(tx, { userId: recipient.id, amount: buyUsd, entryType: 'credit', kind: 'trade', description: `Trade buy BTC`, idempotencyKey: `test_trade_buy_out:${Date.now()}:${Math.random().toString(36).slice(2)}` })
     // create holding record for BTC
+    const holding = await tx.holding.upsert({ where: { userId_symbol: { userId: recipient.id, symbol: 'BTC' } }, create: { userId: recipient.id, symbol: 'BTC', name: 'Bitcoin', amount: buyBtc, avgPrice: buyUsd / buyBtc, type: 'crypto' }, update: { amount: { increment: buyBtc } } })
 
     const sellBtc = 0.0003
     const sellUsd = 12

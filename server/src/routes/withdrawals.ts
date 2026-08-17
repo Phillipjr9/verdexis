@@ -5,6 +5,7 @@ import { prisma } from '../db.js'
 import { requireAuth, requireAdmin, type AuthedRequest } from '../auth.js'
 import { executeCryptoWithdrawal, resolveWithdrawalChain } from '../services/cryptoWithdrawal.js'
 import { recordLedgerTransaction } from '../services/ledger.js'
+import { generateTransactionId } from '../utils/transactionIdGenerator.js'
 import { env } from '../env.js'
 import { idempotency } from '../idempotency.js'
 
@@ -189,242 +190,80 @@ router.post('/', requireAuth, moneyLimiter, idempotency(), async (req: AuthedReq
     const prepared = await prisma.$transaction(async (tx) => {
       const walletLink = await tx.walletLink.upsert({
         where: { userId_address: { userId: req.userId!, address: targetAddress } },
-        create: {
-          userId: req.userId!,
-          address: targetAddress,
-          chainId: requestedChain ?? null,
-          provider: 'user',
-          isPrimary: false,
-        },
+        create: { userId: req.userId!, address: targetAddress, chainId: requestedChain ?? null, provider: 'user', isPrimary: false },
         update: {},
       })
 
-      const limit = await tx.withdrawalLimit.findUnique({
-        where: { userId_asset: { userId: req.userId!, asset } },
-      })
+      const limit = await tx.withdrawalLimit.findUnique({ where: { userId_asset: { userId: req.userId!, asset } } })
 
       const now = new Date()
       let dailyUsed = limit?.dailyUsed ?? 0
       let monthlyUsed = limit?.monthlyUsed ?? 0
 
-      if (limit?.dailyResetAt && limit.dailyResetAt < now) {
-        dailyUsed = 0
-      }
-      if (limit?.monthlyResetAt && limit.monthlyResetAt < now) {
-        monthlyUsed = 0
-      }
+      if (limit?.dailyResetAt && limit.dailyResetAt < now) { dailyUsed = 0 }
+      if (limit?.monthlyResetAt && limit.monthlyResetAt < now) { monthlyUsed = 0 }
 
-      if (limit?.dailyLimit && dailyUsed + totalDebit > limit.dailyLimit) {
-        throw Object.assign(new Error('Daily withdrawal limit exceeded'), { status: 400 })
-      }
-      if (limit?.monthlyLimit && monthlyUsed + totalDebit > limit.monthlyLimit) {
-        throw Object.assign(new Error('Monthly withdrawal limit exceeded'), { status: 400 })
-      }
-      if (limit?.perTransactionLimit && amount > limit.perTransactionLimit) {
-        throw Object.assign(new Error('Per-transaction limit exceeded'), { status: 400 })
-      }
+      if (limit?.dailyLimit && dailyUsed + totalDebit > limit.dailyLimit) { throw Object.assign(new Error('Daily withdrawal limit exceeded'), { status: 400 }) }
+      if (limit?.monthlyLimit && monthlyUsed + totalDebit > limit.monthlyLimit) { throw Object.assign(new Error('Monthly withdrawal limit exceeded'), { status: 400 }) }
+      if (limit?.perTransactionLimit && amount > limit.perTransactionLimit) { throw Object.assign(new Error('Per-transaction limit exceeded'), { status: 400 }) }
 
       const normalizedAsset = asset.toUpperCase()
-      let holding = await tx.holding.findUnique({
-        where: { userId_symbol: { userId: req.userId!, symbol: normalizedAsset } },
-      })
+      let holding = await tx.holding.findUnique({ where: { userId_symbol: { userId: req.userId!, symbol: normalizedAsset } } })
       let usedWalletBalanceFallback = false
       if (!holding || holding.amount < totalDebit) {
-        // Development helper: allow the demo test user to withdraw from their USD wallet balance
-        // when a corresponding holding record doesn't exist. This is strictly a dev-only
-        // convenience to let the local demo user (testuser@verdexis.local) exercise withdrawals
-        // without needing full production holdings migration. Guarded by explicit email check.
         const userRow = await tx.user.findUnique({ where: { id: req.userId! }, select: { email: true } })
         const demoEmail = process.env.TEST_USER_EMAIL || 'testuser@verdexis.local'
         if (userRow?.email === demoEmail) {
-          // Try to consume from walletBalance as a fallback for the demo user.
           const wb = await tx.walletBalance.findUnique({ where: { userId_currency: { userId: req.userId!, currency: normalizedAsset } } })
           if (wb && wb.available >= totalDebit) {
-            // Reserve funds via the ledger so the wallet balance remains the source
-            // of truth and pending withdrawals are reflected in the available amount.
-            await recordLedgerTransaction({
-              tx,
-              userId: req.userId!,
-              asset: normalizedAsset,
-              amount: totalDebit,
-              entryType: 'credit',
-              kind: 'withdrawal',
-              eventType: 'withdrawal_request',
-              sourceType: 'withdrawal_request',
-              sourceId: `withdrawal_request:${req.userId!}:${normalizedAsset}:${targetAddress}:${totalDebit}`,
-              externalRef: `withdrawal_request:${req.userId!}:${normalizedAsset}:${targetAddress}:${totalDebit}`,
-              idempotencyKey: getIdempotencyKey(req),
-              description: `Withdrawal request ${normalizedAsset}`,
-              reference: `Withdrawal request ${normalizedAsset}`,
-              pending: true,
-            })
+            await recordLedgerTransaction({ tx, userId: req.userId!, asset: normalizedAsset, amount: totalDebit, entryType: 'credit', kind: 'withdrawal', eventType: 'withdrawal_request', sourceType: 'withdrawal_request', sourceId: `withdrawal_request:${req.userId!}:${normalizedAsset}:${targetAddress}:${totalDebit}`, externalRef: `withdrawal_request:${req.userId!}:${normalizedAsset}:${targetAddress}:${totalDebit}`, idempotencyKey: getIdempotencyKey(req), description: `Withdrawal request ${normalizedAsset}`, reference: `Withdrawal request ${normalizedAsset}`, pending: true, })
 
-            const existingHolding = await tx.holding.findUnique({
-              where: { userId_symbol: { userId: req.userId!, symbol: normalizedAsset } },
-            })
-
+            const existingHolding = await tx.holding.findUnique({ where: { userId_symbol: { userId: req.userId!, symbol: normalizedAsset } } })
             if (existingHolding) {
-              holding = await tx.holding.update({
-                where: { id: existingHolding.id },
-                data: { amount: { set: Math.max(0, existingHolding.amount - totalDebit) } },
-              })
+              holding = await tx.holding.update({ where: { id: existingHolding.id }, data: { amount: { set: Math.max(0, existingHolding.amount - totalDebit) } } })
             } else {
-              holding = await tx.holding.create({
-                data: {
-                  user: { connect: { id: req.userId! } },
-                  symbol: normalizedAsset,
-                  name: normalizedAsset,
-                  amount: Math.max(0, wb.available - totalDebit),
-                  avgPrice: 0,
-                  type: 'manual',
-                },
-              })
+              holding = await tx.holding.create({ data: { user: { connect: { id: req.userId! } }, symbol: normalizedAsset, name: normalizedAsset, amount: Math.max(0, wb.available - totalDebit), avgPrice: 0, type: 'manual', } })
             }
 
             usedWalletBalanceFallback = true
-          } else {
-            throw Object.assign(new Error('Insufficient balance for withdrawal and processing fee'), { status: 400 })
-          }
-        } else {
-          throw Object.assign(new Error('Insufficient balance for withdrawal and processing fee'), { status: 400 })
-        }
+          } else { throw Object.assign(new Error('Insufficient balance for withdrawal and processing fee'), { status: 400 }) }
+        } else { throw Object.assign(new Error('Insufficient balance for withdrawal and processing fee'), { status: 400 }) }
       }
 
-      const withdrawal = await tx.withdrawalRequest.create({
-        data: {
-          userId: req.userId!,
-          walletLinkId: walletLink.id,
-          amount,
-          asset: normalizedAsset,
-          fee: processingFee,
-          status: 'pending',
-        },
-      })
+      const withdrawal = await tx.withdrawalRequest.create({ data: { userId: req.userId!, walletLinkId: walletLink.id, amount, asset: normalizedAsset, fee: processingFee, status: 'pending' } })
 
-      if (!usedWalletBalanceFallback) {
-        await tx.holding.update({
-          where: { id: holding.id },
-          data: { amount: { decrement: totalDebit } },
-        })
-      }
+      if (!usedWalletBalanceFallback) { await tx.holding.update({ where: { id: holding.id }, data: { amount: { decrement: totalDebit } } }) }
 
-      const nextDailyResetAt = limit?.dailyResetAt && limit.dailyResetAt < now
-        ? new Date(now.getTime() + 24 * 60 * 60 * 1000)
-        : limit?.dailyResetAt ?? null
-      const nextMonthlyResetAt = limit?.monthlyResetAt && limit.monthlyResetAt < now
-        ? new Date(now.getFullYear(), now.getMonth() + 1, 1)
-        : limit?.monthlyResetAt ?? null
+      const nextDailyResetAt = limit?.dailyResetAt && limit.dailyResetAt < now ? new Date(now.getTime() + 24 * 60 * 60 * 1000) : limit?.dailyResetAt ?? null
+      const nextMonthlyResetAt = limit?.monthlyResetAt && limit.monthlyResetAt < now ? new Date(now.getFullYear(), now.getMonth() + 1, 1) : limit?.monthlyResetAt ?? null
 
-      await tx.withdrawalLimit.upsert({
-        where: { userId_asset: { userId: req.userId!, asset } },
-        create: {
-          userId: req.userId!,
-          asset,
-          dailyUsed: totalDebit,
-          monthlyUsed: totalDebit,
-          dailyResetAt: nextDailyResetAt ?? new Date(now.getTime() + 24 * 60 * 60 * 1000),
-          monthlyResetAt: nextMonthlyResetAt ?? new Date(now.getFullYear(), now.getMonth() + 1, 1),
-        },
-        update: {
-          dailyUsed: dailyUsed + totalDebit,
-          monthlyUsed: monthlyUsed + totalDebit,
-          dailyResetAt: nextDailyResetAt,
-          monthlyResetAt: nextMonthlyResetAt,
-        },
-      })
+      await tx.withdrawalLimit.upsert({ where: { userId_asset: { userId: req.userId!, asset } }, create: { userId: req.userId!, asset, dailyUsed: totalDebit, monthlyUsed: totalDebit, dailyResetAt: nextDailyResetAt ?? new Date(now.getTime() + 24 * 60 * 60 * 1000), monthlyResetAt: nextMonthlyResetAt ?? new Date(now.getFullYear(), now.getMonth() + 1, 1), }, update: { dailyUsed: dailyUsed + totalDebit, monthlyUsed: monthlyUsed + totalDebit, dailyResetAt: nextDailyResetAt, monthlyResetAt: nextMonthlyResetAt, } })
 
-      return {
-        withdrawal,
-        normalizedAsset,
-        targetAddress,
-        chain: requestedChain,
-        tokenAddress,
-      }
+      return { withdrawal, normalizedAsset, targetAddress, chain: requestedChain, tokenAddress }
     })
 
-    const transfer = await executeCryptoWithdrawal({
-      asset: prepared.normalizedAsset,
-      amount,
-      destinationAddress: prepared.targetAddress,
-      ...(prepared.chain ? { chain: prepared.chain } : {}),
-      ...(prepared.tokenAddress ? { tokenAddress: prepared.tokenAddress } : {}),
-    })
+    const transfer = await executeCryptoWithdrawal({ asset: prepared.normalizedAsset, amount, destinationAddress: prepared.targetAddress, ...(prepared.chain ? { chain: prepared.chain } : {}), ...(prepared.tokenAddress ? { tokenAddress: prepared.tokenAddress } : {}), })
 
     const finalized = await prisma.$transaction(async (tx) => {
-      const withdrawal = await tx.withdrawalRequest.findUnique({
-        where: { id: prepared.withdrawal.id },
-      })
-      if (!withdrawal) {
-        throw Object.assign(new Error('Withdrawal not found'), { status: 404 })
-      }
+      const withdrawal = await tx.withdrawalRequest.findUnique({ where: { id: prepared.withdrawal.id } })
+      if (!withdrawal) { throw Object.assign(new Error('Withdrawal not found'), { status: 404 }) }
 
       if (transfer.status === 'completed') {
-        const updated = await tx.withdrawalRequest.update({
-          where: { id: prepared.withdrawal.id },
-          data: {
-            status: 'approved',
-            txHash: transfer.txHash?.toLowerCase() ?? null,
-            approvedBy: req.userId!,
-            approvedAt: new Date(),
-            completedAt: new Date(),
-          },
-        })
+        const updated = await tx.withdrawalRequest.update({ where: { id: prepared.withdrawal.id }, data: { status: 'approved', txHash: transfer.txHash?.toLowerCase() ?? null, approvedBy: req.userId!, approvedAt: new Date(), completedAt: new Date(), } })
 
-        await tx.transaction.create({
-          data: {
-            userId: req.userId!,
-            kind: 'withdrawal',
-            currency: prepared.normalizedAsset,
-            amount,
-            status: 'completed',
-            reference: transfer.txHash ?? null,
-          } as any,
-        })
+        await tx.transaction.create({ data: { transactionId: generateTransactionId(), userId: req.userId!, kind: 'withdrawal', currency: prepared.normalizedAsset, amount, status: 'completed', reference: transfer.txHash ?? null, } as any })
 
-        await tx.notification.create({
-          data: {
-            userId: req.userId!,
-            kind: 'withdrawal',
-            title: `Withdrawal completed: ${amount} ${prepared.normalizedAsset}`,
-            body: transfer.message,
-          },
-        })
+        await tx.notification.create({ data: { userId: req.userId!, kind: 'withdrawal', title: `Withdrawal completed: ${amount} ${prepared.normalizedAsset}`, body: transfer.message, } })
 
         return updated
       }
 
-      // transfer.status === 'pending': keep the withdrawal request open for
-      // admin manual processing. Do NOT refund the holding yet — the admin
-      // will either approve (and send on-chain) or reject (which triggers
-      // the refund via PUT /admin/:id/reject).
-      const updated = await tx.withdrawalRequest.update({
-        where: { id: prepared.withdrawal.id },
-        data: { status: 'pending' },
-      })
-
-      await tx.notification.create({
-        data: {
-          userId: req.userId!,
-          kind: 'withdrawal',
-          title: `Withdrawal queued: ${amount} ${prepared.normalizedAsset}`,
-          body: transfer.message,
-        },
-      })
-
+      const updated = await tx.withdrawalRequest.update({ where: { id: prepared.withdrawal.id }, data: { status: 'pending' } })
+      await tx.notification.create({ data: { userId: req.userId!, kind: 'withdrawal', title: `Withdrawal queued: ${amount} ${prepared.normalizedAsset}`, body: transfer.message, } })
       return updated
     })
 
-    res.status(201).json({
-      withdrawal: finalized,
-      transfer: {
-        status: transfer.status,
-        message: transfer.message,
-        txHash: transfer.txHash ?? null,
-      },
-      tier,
-      processingFee,
-      totalDebit,
-    })
+    res.status(201).json({ withdrawal: finalized, transfer: { status: transfer.status, message: transfer.message, txHash: transfer.txHash ?? null }, tier, processingFee, totalDebit })
   } catch (err) {
     const error = err as Error & { status?: number }
     console.error('[withdrawals] POST error:', error)
@@ -434,121 +273,46 @@ router.post('/', requireAuth, moneyLimiter, idempotency(), async (req: AuthedReq
 })
 
 router.get('/', requireAuth, async (req: AuthedRequest, res) => {
-  const withdrawals = await prisma.withdrawalRequest.findMany({
-    where: { userId: req.userId! },
-    include: { walletLink: true },
-    orderBy: { createdAt: 'desc' },
-    take: 50,
-  })
+  const withdrawals = await prisma.withdrawalRequest.findMany({ where: { userId: req.userId! }, include: { walletLink: true }, orderBy: { createdAt: 'desc' }, take: 50 })
   res.json({ withdrawals })
 })
 
 router.get('/:id', requireAuth, async (req: AuthedRequest, res) => {
   const withdrawalId = req.params['id']
-  if (!withdrawalId) {
-    res.status(400).json({ error: 'Withdrawal id is required' })
-    return
-  }
+  if (!withdrawalId) { res.status(400).json({ error: 'Withdrawal id is required' }); return }
 
-  const withdrawal = await prisma.withdrawalRequest.findFirst({
-    where: { id: withdrawalId, userId: req.userId! },
-    include: { walletLink: true },
-  })
-  if (!withdrawal) {
-    res.status(404).json({ error: 'Withdrawal not found' })
-    return
-  }
+  const withdrawal = await prisma.withdrawalRequest.findFirst({ where: { id: withdrawalId, userId: req.userId! }, include: { walletLink: true } })
+  if (!withdrawal) { res.status(404).json({ error: 'Withdrawal not found' }); return }
   res.json({ withdrawal })
 })
 
 // Admin endpoints
 router.get('/admin/pending', requireAuth, requireAdmin, async (_req, res) => {
-  const pending = await prisma.withdrawalRequest.findMany({
-    where: { status: 'pending' },
-    include: { user: true, walletLink: true },
-    orderBy: { createdAt: 'asc' },
-    take: 100,
-  })
+  const pending = await prisma.withdrawalRequest.findMany({ where: { status: 'pending' }, include: { user: true, walletLink: true }, orderBy: { createdAt: 'asc' }, take: 100 })
   res.json({ withdrawals: pending })
 })
 
 router.put('/admin/:id/approve', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
-  const { txHash, fee } = z.object({
-    txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/, 'Invalid tx hash'),
-    fee: z.number().nonnegative().optional(),
-  }).parse(req.body)
+  const { txHash, fee } = z.object({ txHash: z.string().regex(/^0x[a-fA-F0-9]{64}$/, 'Invalid tx hash'), fee: z.number().nonnegative().optional(), }).parse(req.body)
 
   const withdrawalId = req.params['id']
-  if (!withdrawalId) {
-    res.status(400).json({ error: 'Withdrawal id is required' })
-    return
-  }
+  if (!withdrawalId) { res.status(400).json({ error: 'Withdrawal id is required' }); return }
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      const withdrawal = await tx.withdrawalRequest.findUnique({
-        where: { id: withdrawalId },
-        include: { user: true },
-      })
-      if (!withdrawal) {
-        throw Object.assign(new Error('Withdrawal not found'), { status: 404 })
-      }
-      if (withdrawal.status !== 'pending') {
-        throw Object.assign(new Error('Withdrawal already processed'), { status: 400 })
-      }
+      const withdrawal = await tx.withdrawalRequest.findUnique({ where: { id: withdrawalId }, include: { user: true } })
+      if (!withdrawal) { throw Object.assign(new Error('Withdrawal not found'), { status: 404 }) }
+      if (withdrawal.status !== 'pending') { throw Object.assign(new Error('Withdrawal already processed'), { status: 400 }) }
 
-      const updated = await tx.withdrawalRequest.update({
-        where: { id: withdrawalId },
-        data: {
-          status: 'approved',
-          txHash: txHash.toLowerCase(),
-          fee: fee ?? 0,
-          approvedBy: req.userId!,
-          approvedAt: new Date(),
-        },
-      })
+      const updated = await tx.withdrawalRequest.update({ where: { id: withdrawalId }, data: { status: 'approved', txHash: txHash.toLowerCase(), fee: fee ?? 0, approvedBy: req.userId!, approvedAt: new Date(), } })
 
-      // Create transaction record
-      await tx.transaction.create({
-        data: {
-          userId: withdrawal.userId,
-          kind: 'withdrawal',
-          currency: withdrawal.asset,
-          amount: withdrawal.amount,
-          status: 'completed',
-          reference: txHash,
-        } as any,
-      })
+      await tx.transaction.create({ data: { transactionId: generateTransactionId(), userId: withdrawal.userId, kind: 'withdrawal', currency: withdrawal.asset, amount: withdrawal.amount, status: 'completed', reference: txHash, } as any })
 
-      // Credit processing fee back to user in the same asset it was charged
       if (withdrawal.fee && withdrawal.fee > 0) {
-        await recordLedgerTransaction({
-          tx,
-          userId: withdrawal.userId,
-          asset: withdrawal.asset,
-          amount: withdrawal.fee,
-          entryType: 'credit',
-          kind: 'deposit',
-          eventType: 'withdrawal_fee_refund',
-          sourceType: 'withdrawal_fee_refund',
-          sourceId: `withdrawal_fee_refund:${withdrawal.id}`,
-          externalRef: `withdrawal_fee_refund:${withdrawal.id}`,
-          description: `Withdrawal fee refund for ${withdrawal.asset}`,
-          reference: `Withdrawal fee refund for ${withdrawal.asset}`,
-          subType: 'fee_refund',
-          recordTransaction: true,
-        })
+        await recordLedgerTransaction({ tx, userId: withdrawal.userId, asset: withdrawal.asset, amount: withdrawal.fee, entryType: 'credit', kind: 'deposit', eventType: 'withdrawal_fee_refund', sourceType: 'withdrawal_fee_refund', sourceId: `withdrawal_fee_refund:${withdrawal.id}`, externalRef: `withdrawal_fee_refund:${withdrawal.id}`, description: `Withdrawal fee refund for ${withdrawal.asset}`, reference: `Withdrawal fee refund for ${withdrawal.asset}`, subType: 'fee_refund', recordTransaction: true, })
       }
 
-      // Notify user
-      await tx.notification.create({
-        data: {
-          userId: withdrawal.userId,
-          kind: 'withdrawal',
-          title: `Withdrawal approved: ${withdrawal.amount} ${withdrawal.asset}`,
-          body: `Your withdrawal has been approved and sent. Tx: ${txHash.slice(0, 14)}…${withdrawal.fee ? ` Processing fee of $${withdrawal.fee.toFixed(2)} has been credited.` : ''}`,
-        },
-      })
+      await tx.notification.create({ data: { userId: withdrawal.userId, kind: 'withdrawal', title: `Withdrawal approved: ${withdrawal.amount} ${withdrawal.asset}`, body: `Your withdrawal has been approved and sent. Tx: ${txHash.slice(0, 14)}…${withdrawal.fee ? ` Processing fee of $${withdrawal.fee.toFixed(2)} has been credited.` : ''}`, } })
 
       return updated
     })
@@ -563,64 +327,22 @@ router.put('/admin/:id/approve', requireAuth, requireAdmin, async (req: AuthedRe
 })
 
 router.put('/admin/:id/reject', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
-  const { reason } = z.object({
-    reason: z.string().min(1).max(500),
-  }).parse(req.body)
+  const { reason } = z.object({ reason: z.string().min(1).max(500) }).parse(req.body)
 
   const withdrawalId = req.params['id']
-  if (!withdrawalId) {
-    res.status(400).json({ error: 'Withdrawal id is required' })
-    return
-  }
+  if (!withdrawalId) { res.status(400).json({ error: 'Withdrawal id is required' }); return }
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      const withdrawal = await tx.withdrawalRequest.findUnique({
-        where: { id: withdrawalId },
-        include: { user: true },
-      })
-      if (!withdrawal) {
-        throw Object.assign(new Error('Withdrawal not found'), { status: 404 })
-      }
-      if (withdrawal.status !== 'pending') {
-        throw Object.assign(new Error('Withdrawal already processed'), { status: 400 })
-      }
+      const withdrawal = await tx.withdrawalRequest.findUnique({ where: { id: withdrawalId }, include: { user: true } })
+      if (!withdrawal) { throw Object.assign(new Error('Withdrawal not found'), { status: 404 }) }
+      if (withdrawal.status !== 'pending') { throw Object.assign(new Error('Withdrawal already processed'), { status: 400 }) }
 
-      const updated = await tx.withdrawalRequest.update({
-        where: { id: withdrawalId },
-        data: {
-          status: 'rejected',
-          rejectedReason: reason,
-        },
-      })
+      const updated = await tx.withdrawalRequest.update({ where: { id: withdrawalId }, data: { status: 'rejected', rejectedReason: reason } })
 
-      // Refund balance and fee
-      await recordLedgerTransaction({
-        tx,
-        userId: withdrawal.userId,
-        asset: withdrawal.asset,
-        amount: withdrawal.amount + (withdrawal.fee ?? 0),
-        entryType: 'credit',
-        kind: 'deposit',
-        eventType: 'withdrawal_reject',
-        sourceType: 'withdrawal_reject',
-        sourceId: `withdrawal_reject:${withdrawal.id}`,
-        externalRef: `withdrawal_reject:${withdrawal.id}`,
-        description: `Withdrawal rejected refund for ${withdrawal.asset}`,
-        reference: `Withdrawal rejected refund for ${withdrawal.asset}`,
-        subType: 'withdrawal_reject',
-        recordTransaction: true,
-      })
+      await recordLedgerTransaction({ tx, userId: withdrawal.userId, asset: withdrawal.asset, amount: withdrawal.amount + (withdrawal.fee ?? 0), entryType: 'credit', kind: 'deposit', eventType: 'withdrawal_reject', sourceType: 'withdrawal_reject', sourceId: `withdrawal_reject:${withdrawal.id}`, externalRef: `withdrawal_reject:${withdrawal.id}`, description: `Withdrawal rejected refund for ${withdrawal.asset}`, reference: `Withdrawal rejected refund for ${withdrawal.asset}`, subType: 'withdrawal_reject', recordTransaction: true, })
 
-      // Notify user
-      await tx.notification.create({
-        data: {
-          userId: withdrawal.userId,
-          kind: 'withdrawal',
-          title: `Withdrawal rejected: ${withdrawal.amount} ${withdrawal.asset}`,
-          body: `Reason: ${reason}. Amount${withdrawal.fee ? ` and processing fee of $${withdrawal.fee.toFixed(2)}` : ''} refunded to your account.`,
-        },
-      })
+      await tx.notification.create({ data: { userId: withdrawal.userId, kind: 'withdrawal', title: `Withdrawal rejected: ${withdrawal.amount} ${withdrawal.asset}`, body: `Reason: ${reason}. Amount${withdrawal.fee ? ` and processing fee of $${withdrawal.fee.toFixed(2)}` : ''} refunded to your account.`, } })
 
       return updated
     })

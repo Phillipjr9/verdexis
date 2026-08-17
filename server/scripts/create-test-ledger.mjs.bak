@@ -22,6 +22,8 @@ async function ensureUpsertAccountBalance(tx, userId, asset, balanceDelta, avail
       data: {
         userId,
         asset,
+        balanceMinorUnits: balanceDelta,
+        availableMinorUnits: availableDelta,
         lockedMinorUnits: 0n,
         pendingMinorUnits: pendingDelta,
         reconciliationStatus: 'pending',
@@ -31,6 +33,8 @@ async function ensureUpsertAccountBalance(tx, userId, asset, balanceDelta, avail
   }
   return tx.accountBalance.update({
     where, data: {
+      balanceMinorUnits: { increment: balanceDelta },
+      availableMinorUnits: { increment: availableDelta },
       pendingMinorUnits: { increment: pendingDelta },
       reconciliationStatus: 'pending',
       lastReconciled: new Date(),
@@ -87,11 +91,15 @@ async function main() {
 
       const accountBalance = await ensureUpsertAccountBalance(tx, userId, 'USD', balanceDelta, availableDelta, pendingDelta)
 
+      await tx.walletBalance.upsert({ where: { userId_currency: { userId, currency: 'USD' } }, create: {
+        userId, currency: 'USD', symbol: '$', balance: fromMinorUnits(accountBalance.balanceMinorUnits, 'USD'), available: fromMinorUnits(accountBalance.availableMinorUnits, 'USD'), balanceMinorUnits: accountBalance.balanceMinorUnits, availableMinorUnits: accountBalance.availableMinorUnits
       }, update: {
+        balance: fromMinorUnits(accountBalance.balanceMinorUnits, 'USD'), available: fromMinorUnits(accountBalance.availableMinorUnits, 'USD'), balanceMinorUnits: accountBalance.balanceMinorUnits, availableMinorUnits: accountBalance.availableMinorUnits, symbol: '$'
       }})
 
       if (recordTransaction) {
         await tx.transaction.create({ data: {
+          userId, kind, currency: 'USD', amount: entryType === 'debit' ? amount : -amount, status: pending ? 'pending' : 'completed', reference: description
         }})
       }
     }

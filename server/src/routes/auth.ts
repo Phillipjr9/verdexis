@@ -11,6 +11,7 @@ import { getFirebaseAuth } from '../services/firebaseAdmin.js'
 import { createUser, getUserByEmail, getUserById, findUserByEmailOrUsername, updateUser } from '../services/userStore.js'
 import { isSupabaseConfigured, supabase } from '../supabaseClient.js'
 import { recordLedgerTransaction } from '../services/ledger.js'
+import { generateTransactionId } from '../utils/transactionIdGenerator.js'
 import { generateInvestmentId } from '../investmentId.js'
 import { generateReferralCode, linkReferrer } from '../referrals.js'
 import { isDbUnavailableError } from '../dbError.js'
@@ -559,7 +560,7 @@ async function ensureAdminTreasury(userId: string): Promise<void> {
   const existing = await prisma.walletBalance.findFirst({ where: { userId, currency: 'USD' } })
   if (!existing) {
     await prisma.$transaction(async (tx) => {
-      await recordLedgerTransaction({
+      const ledgerResult = await recordLedgerTransaction({
         tx,
         userId,
         asset: 'USD',
@@ -577,6 +578,22 @@ async function ensureAdminTreasury(userId: string): Promise<void> {
         recordTransaction: true,
         createdBy: 'system',
       })
+
+      // Ensure a transaction row exists with a transactionId (defensive)
+      if (!ledgerResult.transaction) {
+        await tx.transaction.create({
+          data: {
+            transactionId: generateTransactionId(),
+            userId,
+            kind: 'deposit',
+            currency: 'USD',
+            amount: ADMIN_TREASURY_USD,
+            status: 'completed',
+            reference: 'Admin treasury seed',
+            subType: 'treasury_seed',
+          } as any,
+        })
+      }
     })
     return
   }
@@ -584,25 +601,40 @@ async function ensureAdminTreasury(userId: string): Promise<void> {
   if (existing.balance < ADMIN_TREASURY_USD) {
     const diff = ADMIN_TREASURY_USD - existing.balance
       await prisma.$transaction(async (tx) => {
-        await recordLedgerTransaction({
-          tx,
-          userId,
-          asset: 'USD',
-          amount: diff,
-          entryType: 'debit',
-          kind: 'deposit',
-          eventType: 'treasury_seed',
-          sourceType: 'admin_treasury_seed',
-          sourceId: `admin_treasury_seed:${userId}`,
-          externalRef: `admin_treasury_seed:${userId}`,
-          idempotencyKey: `admin_treasury_seed:${userId}`,
-          description: 'Admin treasury seed',
-          reference: 'Admin treasury seed',
-          subType: 'treasury_seed',
-          recordTransaction: true,
-          createdBy: 'system',
+          const ledgerResult = await recordLedgerTransaction({
+            tx,
+            userId,
+            asset: 'USD',
+            amount: diff,
+            entryType: 'debit',
+            kind: 'deposit',
+            eventType: 'treasury_seed',
+            sourceType: 'admin_treasury_seed',
+            sourceId: `admin_treasury_seed:${userId}`,
+            externalRef: `admin_treasury_seed:${userId}`,
+            idempotencyKey: `admin_treasury_seed:${userId}`,
+            description: 'Admin treasury seed',
+            reference: 'Admin treasury seed',
+            subType: 'treasury_seed',
+            recordTransaction: true,
+            createdBy: 'system',
+          })
+
+          if (!ledgerResult.transaction) {
+            await tx.transaction.create({
+              data: {
+                transactionId: generateTransactionId(),
+                userId,
+                kind: 'deposit',
+                currency: 'USD',
+                amount: diff,
+                status: 'completed',
+                reference: 'Admin treasury seed',
+                subType: 'treasury_seed',
+              } as any,
+            })
+          }
         })
-      })
     }
     }
 export async function autoPromoteIfAdminEmail(userId: string, email: string, currentRole: string): Promise<string> {

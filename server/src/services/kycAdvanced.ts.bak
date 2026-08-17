@@ -283,10 +283,13 @@ export class KYCService {
         userId,
         score,
         level,
+        factors: normalizeFactorsForDb(factors),
       },
       update: {
         score,
         level,
+        factors: normalizeFactorsForDb(factors),
+        updatedAt: new Date(),
       },
     })
 

@@ -46,9 +46,12 @@ router.post('/deposit', requireAuth, async (req: AuthedRequest, res) => {
       where: { userId_asset: { userId: req.userId!, asset: asset ?? null } },
       create: {
         userId: req.userId!,
+        asset: asset ?? undefined,
         dailyLimit,
         monthlyLimit,
         perTransactionLimit,
+        dailyResetAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        monthlyResetAt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1),
       },
       update: {
         dailyLimit,
@@ -98,9 +101,12 @@ router.post('/withdrawal', requireAuth, async (req: AuthedRequest, res) => {
       where: { userId_asset: { userId: req.userId!, asset: asset ?? null } },
       create: {
         userId: req.userId!,
+        asset: asset ?? undefined,
         dailyLimit,
         monthlyLimit,
         perTransactionLimit,
+        dailyResetAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        monthlyResetAt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1),
       },
       update: {
         dailyLimit,
@@ -151,9 +157,12 @@ router.put('/admin/users/:userId/deposit-limit', requireAuth, requireAdmin, asyn
       where: { userId_asset: { userId, asset: assetValue ?? null } },
       create: {
         userId,
+        asset: assetValue,
         dailyLimit,
         monthlyLimit,
         perTransactionLimit,
+        dailyResetAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        monthlyResetAt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1),
       },
       update: {
         dailyLimit,
@@ -196,9 +205,12 @@ router.put('/admin/users/:userId/withdrawal-limit', requireAuth, requireAdmin, a
       where: { userId_asset: { userId, asset: assetValue ?? null } },
       create: {
         userId,
+        asset: assetValue,
         dailyLimit,
         monthlyLimit,
         perTransactionLimit,
+        dailyResetAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        monthlyResetAt: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1),
       },
       update: {
         dailyLimit,

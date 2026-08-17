@@ -1,5 +1,4 @@
 import type { Prisma } from '@prisma/client'
-import { generateTransactionId } from '../utils/transactionIdGenerator.js'
 
 const CURRENCY_DECIMALS: Record<string, number> = {
   USD: 2,
@@ -186,7 +185,6 @@ export async function recordLedgerTransaction({
   if (recordTransaction) {
     transaction = await tx.transaction.create({
       data: {
-        transactionId: generateTransactionId(),
         userId,
         kind,
         currency: asset,

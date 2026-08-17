@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '../db.js'
 import { requireAuth, type AuthedRequest } from '../auth.js'
 import { recordLedgerBalanceReservation, recordLedgerTransaction } from '../services/ledger.js'
+import { generateTransactionId } from '../utils/transactionIdGenerator.js'
 
 const router = Router()
 
@@ -64,6 +65,7 @@ router.post('/positions', requireAuth, async (req: AuthedRequest, res) => {
       // Create transaction record
       await tx.transaction.create({
         data: {
+          transactionId: generateTransactionId(),
           userId: req.userId!,
           kind: 'staking',
           currency: asset,
@@ -175,6 +177,7 @@ router.post('/positions/:id/unstake', requireAuth, async (req: AuthedRequest, re
       // Create transaction record
       await tx.transaction.create({
         data: {
+          transactionId: generateTransactionId(),
           userId: req.userId!,
           kind: 'unstaking',
           currency: position.asset,

@@ -537,7 +537,9 @@ model WalletBalance {
   currency  String
   symbol    String
   balance   Float    @default(0)
+  balanceMinorUnits BigInt @default(0)
   available Float    @default(0)
+  availableMinorUnits BigInt @default(0)
   updatedAt DateTime @updatedAt
 
   @@unique([userId, currency])

@@ -63,8 +63,16 @@ async function main() {
         },
       },
       update: {
+        symbol: 'USD',
+        balance: initialUsdBalance,
+        available: initialUsdBalance,
       },
       create: {
+        userId: admin.id,
+        currency: 'USD',
+        symbol: 'USD',
+        balance: initialUsdBalance,
+        available: initialUsdBalance,
       },
     })
 

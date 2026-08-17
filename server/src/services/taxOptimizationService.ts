@@ -1,4 +1,5 @@
 import { prisma } from '../db.js'
+import { generateTransactionId } from '../utils/transactionIdGenerator.js'
 import { getCurrentCryptoPrice } from '../historicalPrice.js'
 
 export interface TaxLossHarvestingOpportunity {
@@ -145,6 +146,7 @@ export class TaxOptimizationService {
       // Record transaction
       await prisma.transaction.create({
         data: {
+          transactionId: generateTransactionId(),
           userId,
           kind: 'withdraw',
           currency: symbol,

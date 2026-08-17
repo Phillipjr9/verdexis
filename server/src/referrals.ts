@@ -1,5 +1,6 @@
 import crypto from 'node:crypto'
 import { prisma } from './db.js'
+import { generateTransactionId } from './utils/transactionIdGenerator.js'
 
 const REFERRAL_BONUS_REFERRER_USD = 250  // $250 to referrer
 const REFERRAL_BONUS_REFEREE_USD = 10   // $10 to referee
@@ -191,6 +192,7 @@ export async function creditReferralBonus(bonusId: string, paymentMethod: 'tradi
   // Create a transaction to credit the user
   const transaction = await prisma.transaction.create({
     data: {
+      transactionId: generateTransactionId(),
       userId: bonus.userId,
       kind: 'deposit',
       currency: 'USD',

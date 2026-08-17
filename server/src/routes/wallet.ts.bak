@@ -217,6 +217,8 @@ router.post('/transactions', requireAuth, moneyLimiter, idempotency(), async (re
   }
   const { kind, currency, symbol, amount, reference } = parsed.data
 
+  // Gate privileged credit kinds (`dividend`, `interest`) to admin callers.
+  // See PRIVILEGED_CREDIT_KINDS above for the rationale.
   if (PRIVILEGED_CREDIT_KINDS.has(kind) && req.userRole !== 'admin') {
     res.status(403).json({
       error: 'Only an administrator can post this transaction kind from this endpoint.',
@@ -514,7 +516,9 @@ router.post('/swap', requireAuth, moneyLimiter, idempotency(), async (req: Authe
   }
 
   const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const src = await tx.walletBalance.findUnique({ where: { userId_currency: { userId: req.userId!, currency: fromCurrency } } })
+    const src = await tx.walletBalance.findUnique({
+      where: { userId_currency: { userId: req.userId!, currency: fromCurrency } },
+    })
     if (!src || src.available < amount) {
       throw Object.assign(new Error(`Insufficient ${fromCurrency}`), { status: 400 })
     }
@@ -678,7 +682,9 @@ router.post('/transfer', requireAuth, moneyLimiter, idempotency(), async (req: A
   }
 
   const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-    const senderBal = await tx.walletBalance.findUnique({ where: { userId_currency: { userId: req.userId!, currency } } })
+    const senderBal = await tx.walletBalance.findUnique({
+      where: { userId_currency: { userId: req.userId!, currency } },
+    })
     if (!senderBal || senderBal.available < amount) {
       throw Object.assign(new Error('Insufficient funds'), { status: 400 })
     }
@@ -875,14 +881,21 @@ router.post('/links', requireAuth, async (req: AuthedRequest, res) => {
   const provider = parsed.data.provider ?? null
   const label = parsed.data.label ?? null
 
-  const link = await prisma.$transaction(async (tx) => {
-    const existing = await tx.walletLink.findUnique({ where: { userId_address: { userId: req.userId!, address } } })
-    const otherCount = await tx.walletLink.count({ where: { userId: req.userId!, NOT: { address } } })
+  const link = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const existing = await tx.walletLink.findUnique({
+      where: { userId_address: { userId: req.userId!, address } },
+    })
+    const otherCount = await tx.walletLink.count({
+      where: { userId: req.userId!, NOT: { address } },
+    })
     const wantsPrimary = parsed.data.setPrimary === true || otherCount === 0 || existing?.isPrimary === true
     if (wantsPrimary) {
       // Demote any other primary first \u2014 we enforce single-primary in app
       // logic rather than a db constraint to keep migrations simple.
-      await tx.walletLink.updateMany({ where: { userId: req.userId!, isPrimary: true, NOT: { address } }, data: { isPrimary: false } })
+      await tx.walletLink.updateMany({
+        where: { userId: req.userId!, isPrimary: true, NOT: { address } },
+        data: { isPrimary: false },
+      })
     }
     const row = await tx.walletLink.upsert({
       where: { userId_address: { userId: req.userId!, address } },
@@ -904,14 +917,17 @@ router.post('/links', requireAuth, async (req: AuthedRequest, res) => {
 
 router.delete('/links/:id', requireAuth, async (req: AuthedRequest, res) => {
   const id = req.params.id
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const row = await tx.walletLink.findFirst({ where: { id, userId: req.userId! } })
     if (!row) return { ok: false as const }
     await tx.walletLink.delete({ where: { id } })
     if (row.isPrimary) {
       // Promote the most recently-linked remaining wallet to primary so the
       // user always has a sensible default deposit destination.
-      const next = await tx.walletLink.findFirst({ where: { userId: req.userId! }, orderBy: { linkedAt: 'desc' } })
+      const next = await tx.walletLink.findFirst({
+        where: { userId: req.userId! },
+        orderBy: { linkedAt: 'desc' },
+      })
       if (next) {
         await tx.walletLink.update({ where: { id: next.id }, data: { isPrimary: true } })
         await mirrorPrimaryToUser(tx, req.userId!, {
@@ -933,10 +949,13 @@ router.delete('/links/:id', requireAuth, async (req: AuthedRequest, res) => {
 // amazonq-ignore-next-line
 router.post('/links/:id/primary', requireAuth, async (req: AuthedRequest, res) => {
   const id = req.params.id
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const row = await tx.walletLink.findFirst({ where: { id, userId: req.userId! } })
     if (!row) return { ok: false as const }
-    await tx.walletLink.updateMany({ where: { userId: req.userId!, isPrimary: true, NOT: { id } }, data: { isPrimary: false } })
+    await tx.walletLink.updateMany({
+      where: { userId: req.userId!, isPrimary: true, NOT: { id } },
+      data: { isPrimary: false },
+    })
     await tx.walletLink.update({ where: { id }, data: { isPrimary: true } })
     await mirrorPrimaryToUser(tx, req.userId!, {
       address: row.address, chainId: row.chainId, provider: row.provider,
@@ -956,7 +975,7 @@ router.post('/links/:id/primary', requireAuth, async (req: AuthedRequest, res) =
 // IMMEDIATELY (before confirmations). The row stays `pending` until an admin
 // (or a future chain-watcher job) verifies the transaction on a block
 // explorer and credits the user's WalletBalance via /admin endpoint.
-
+//
 // The unique index on txHash dedupes the same submit being fired twice.
 
 const pendingDepositSchema = z.object({
@@ -1042,7 +1061,7 @@ router.get('/withdrawal-fee-config', requireAuth, async (_req, res) => {
 })
 
 // --- Deposit instructions (admin-managed, all users read) -------------
-// One JSON blob keyed 'deposit_instructions' in AppSetting that stores:
+// One JSON blob keyed `'deposit_instructions'` in AppSetting that stores:
 //   { wires: [...], cryptos: [...], web3: { [chainIdHex]: {...} } }
 // Admin writes from /admin pages, all signed-in users read.
 
