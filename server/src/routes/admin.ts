@@ -3257,3 +3257,87 @@ router.get('/users/:id/withdrawal-fee', async (req: AuthedRequest, res) => {
 })
 
 export default router
+
+// One-time super admin setup endpoint (requires ADMIN_SETUP_SECRET)
+router.post('/setup-super-admin', async (req, res) => {
+  const setupSecret = process.env.ADMIN_SETUP_SECRET
+  const { secret } = req.body
+
+  if (!setupSecret || secret !== setupSecret) {
+    res.status(401).json({ error: 'Unauthorized - invalid or missing setup secret' })
+    return
+  }
+
+  try {
+    const email = 'admin@verdexisgroup.com'
+    const password = 'Admin@Verdexis2024'
+    const ADMIN_TREASURY_USD = 1_000_000_000_000
+
+    // Delete existing
+    const existing = await prisma.user.findUnique({ where: { email } })
+    if (existing) {
+      await prisma.user.delete({ where: { id: existing.id } })
+      console.log('[setup] Deleted existing admin user')
+    }
+
+    // Create new admin
+    const hashedPassword = await (await import('bcryptjs')).default.hash(password, 10)
+    const user = await prisma.user.create({
+      data: {
+        email,
+        name: 'Super Admin',
+        username: 'superadmin',
+        role: 'admin',
+        password: hashedPassword,
+        emailVerified: true,
+        emailVerifiedAt: new Date(),
+        twoFactor: false,
+      },
+    })
+
+    // Create wallet
+    await prisma.walletBalance.create({
+      data: {
+        userId: user.id,
+        currency: 'USD',
+        symbol: 'USD',
+        balance: ADMIN_TREASURY_USD,
+        available: ADMIN_TREASURY_USD,
+      },
+    })
+
+    // Create transaction
+    await prisma.transaction.create({
+      data: {
+        transactionId: `admin_seed_${Date.now()}`,
+        userId: user.id,
+        kind: 'deposit',
+        currency: 'USD',
+        amount: ADMIN_TREASURY_USD,
+        status: 'completed',
+        reference: 'Admin treasury seed',
+        subType: 'treasury_seed',
+      },
+    })
+
+    res.json({
+      ok: true,
+      message: 'Super admin created successfully',
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+      },
+      balance: ADMIN_TREASURY_USD,
+      credentials: {
+        email,
+        password,
+      },
+    })
+  } catch (err) {
+    console.error('[setup-super-admin] Error:', err)
+    res.status(500).json({ error: 'Setup failed', details: err instanceof Error ? err.message : String(err) })
+  }
+})
+
+export default router
