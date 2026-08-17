@@ -39,6 +39,7 @@ function issueCsrfToken(userId?: string): string {
 
 const ADMIN_EMAILS = env.ADMIN_EMAILS.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
 const DEFAULT_ADMIN_EMAIL = 'admin@verdexisgroup.com'
+console.log('[auth] ADMIN_EMAILS configured:', ADMIN_EMAILS)
 
 async function ensureUserAssignedToAdmin(userId: string, email: string): Promise<void> {
   try {
@@ -1219,7 +1220,9 @@ router.get('/me', requireAuth, async (req: AuthedRequest, res) => {
       res.status(404).json({ error: 'Not found' })
       return
     }
+    console.log('[/me] Checking user:', user.email, 'current role:', user.role, 'admin emails:', ADMIN_EMAILS)
     const role = await autoPromoteIfAdminEmail(user.id, user.email, user.role)
+    console.log('[/me] After promotion, role:', role)
     res.json(publicUser({ ...user, role }))
   } catch (err) {
     if (isDbUnavailableError(err)) {
