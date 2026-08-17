@@ -3259,9 +3259,11 @@ router.get('/users/:id/withdrawal-fee', async (req: AuthedRequest, res) => {
 // One-time super admin setup endpoint (requires ADMIN_SETUP_SECRET)
 router.post('/setup-super-admin', async (req, res) => {
   const setupSecret = process.env.ADMIN_SETUP_SECRET
+  console.log('[setup-super-admin] Attempt - setupSecret set:', !!setupSecret, 'received secret:', req.body.secret)
   const { secret } = req.body
 
   if (!setupSecret || secret !== setupSecret) {
+    console.log('[setup-super-admin] Unauthorized - setupSecret:', setupSecret, 'provided:', secret)
     res.status(401).json({ error: 'Unauthorized - invalid or missing setup secret' })
     return
   }
