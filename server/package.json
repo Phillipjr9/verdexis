@@ -9,9 +9,9 @@
   "scripts": {
     "dev": "node scripts/generate-prisma-client.mjs && tsx watch src/index.ts",
     "build": "node scripts/generate-prisma-client.mjs && npx tsc -p tsconfig.json --skipLibCheck",
-    "start": "node dist/index.js",
+    "start": "bash scripts/prestart.sh && node dist/index.js",
     "token-registry-agent": "tsx src/scripts/tokenRegistryAgent.ts",
-    "start:migrate": "npx prisma migrate deploy --schema prisma/schema.prisma && node dist/index.js",
+    "start:migrate": "bash scripts/prestart.sh && node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev --name init",
     "prisma:deploy": "prisma migrate deploy",
