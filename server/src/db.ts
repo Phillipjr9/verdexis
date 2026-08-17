@@ -182,13 +182,23 @@ const MAX_RETRIES = 3
 export let dbUnavailable = false
 let databaseInitializationPromise: Promise<void> | null = null
 
+// Health check cache: avoid hitting DB on every operation
+let lastHealthCheckTime = 0
+let lastHealthCheckResult = false
+const HEALTH_CHECK_CACHE_TTL = 30000 // 30 seconds
+
 export const prisma = new Proxy({} as PrismaClient, {
   get(_target, prop, receiver) {
     const value = Reflect.get(currentPrismaClient, prop, receiver)
     if (typeof value === 'function') {
       const fn = value as (...args: unknown[]) => unknown
       return async (...args: unknown[]) => {
-        await waitForDatabaseInitialization()
+        // Wait for initial connection only on first startup
+        if (!databaseInitializationPromise && lastHealthCheckTime === 0) {
+          await waitForDatabaseInitialization()
+        }
+        // On subsequent operations, use cached health check
+        await checkDatabaseHealth()
         return (fn as Function).apply(currentPrismaClient, args)
       }
     }
@@ -280,6 +290,7 @@ async function ensureConnection() {
 }
 
 export function waitForDatabaseInitialization(): Promise<void> {
+  // Only run ensureConnection once on startup
   if (databaseInitializationPromise) {
     return databaseInitializationPromise
   }
@@ -290,11 +301,30 @@ export function waitForDatabaseInitialization(): Promise<void> {
       console.warn('[verdexis-api] ⚠️ Database initialization skipped:', err instanceof Error ? err.message : String(err))
       throw err
     })
-    .finally(() => {
-      databaseInitializationPromise = null
-    })
 
   return databaseInitializationPromise
+}
+
+// Per-operation health check with caching to avoid repeated connection checks
+async function checkDatabaseHealth(): Promise<void> {
+  const now = Date.now()
+  
+  // Use cached result if fresh (within 30s)
+  if (lastHealthCheckResult && (now - lastHealthCheckTime) < HEALTH_CHECK_CACHE_TTL) {
+    return
+  }
+  
+  // Run health check (simple query)
+  try {
+    await currentPrismaClient.$queryRaw`SELECT 1`
+    lastHealthCheckResult = true
+    lastHealthCheckTime = now
+  } catch (err) {
+    lastHealthCheckResult = false
+    lastHealthCheckTime = now
+    dbUnavailable = true
+    throw err
+  }
 }
 
 // Start connection attempts without crashing the process.

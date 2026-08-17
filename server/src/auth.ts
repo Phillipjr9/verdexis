@@ -22,7 +22,16 @@ export function signToken(payload: AuthPayload): string {
 export function verifyToken(token: string): AuthPayload | null {
   try {
     return jwt.verify(token, SECRET) as AuthPayload
-  } catch {
+  } catch (err) {
+    try {
+      const e = err as Error
+      // Log the verification error name/message to help operators debug
+      // token failures (e.g. invalid signature vs expired). Do NOT log
+      // the token itself or any sensitive payload.
+      console.warn('[auth] verifyToken failed:', e.name, e.message)
+    } catch {
+      // ignore logging failure
+    }
     return null
   }
 }

@@ -40,20 +40,61 @@ export default function AdminSettings() {
   const [auditNote, setAuditNote] = useState('')
 
   useEffect(() => {
+    // Load withdrawal fee config
     adminApi.get('/withdrawal-fee-config')
-      .then((r: { ratePct: number }) => setRatePct(r.ratePct))
-      .catch(() => {})
-      .finally(() => setFeeLoading(false))
+      .then((r: { ratePct: number }) => {
+        setRatePct(r.ratePct)
+        setFeeLoading(false)
+      })
+      .catch((e) => {
+        console.error('Failed to load withdrawal fee config:', e)
+        toast.error('Failed to load withdrawal fee config')
+        setFeeLoading(false)
+      })
 
+    // Load signup bonus
     adminApi.getSignupBonus()
-      .then((r) => { setBonusEnabled(r.enabled); setBonusAmount(r.amountUsd); setBonusNote(r.note ?? '') })
-      .catch(() => {})
-      .finally(() => setBonusLoading(false))
+      .then((r) => {
+        setBonusEnabled(r.enabled)
+        setBonusAmount(r.amountUsd)
+        setBonusNote(r.note ?? '')
+        setBonusLoading(false)
+      })
+      .catch((e) => {
+        console.error('Failed to load signup bonus settings:', e)
+        toast.error('Failed to load signup bonus settings')
+        setBonusLoading(false)
+      })
 
+    // Load OTP analytics (non-critical)
     adminApi.get('/otp/analytics')
-      .then((r: OtpAnalytics) => setOtp(r))
-      .catch(() => {})
-      .finally(() => setOtpLoading(false))
+      .then((r: OtpAnalytics) => {
+        setOtp(r)
+        setOtpLoading(false)
+      })
+      .catch((e) => {
+        console.warn('Failed to load OTP analytics (non-critical):', e)
+        setOtpLoading(false)
+      })
+
+    // Load governance settings
+    Promise.all([
+      adminApi.getSetting('requireOtpForWithdrawals').then(r => r.setting.value === 'true').catch(() => true),
+      adminApi.getSetting('requireKycForWithdrawals').then(r => r.setting.value === 'true').catch(() => true),
+      adminApi.getSetting('autoVerifySettings').then(r => r.setting.value === 'true').catch(() => true),
+      adminApi.getSetting('flagSuspiciousLogins').then(r => r.setting.value === 'true').catch(() => true),
+    ])
+      .then(([otp, kyc, auto, flag]) => {
+        setGovSettings({
+          requireOtpForWithdrawals: otp,
+          requireKycForWithdrawals: kyc,
+          autoVerifySettings: auto,
+          flagSuspiciousLogins: flag,
+        })
+      })
+      .catch((e) => {
+        console.warn('Failed to load governance settings (using defaults):', e)
+      })
   }, [])
 
   const saveFee = async () => {
@@ -66,7 +107,8 @@ export default function AdminSettings() {
       await adminApi.setWithdrawalFeeConfig({ ratePct })
       toast.success(`Withdrawal fee updated to ${ratePct}%`)
     } catch (e) {
-      toast.error((e as { error?: string }).error || 'Failed to save')
+      console.error('Failed to save withdrawal fee:', e)
+      toast.error((e as { error?: string }).error || 'Failed to save withdrawal fee')
     } finally {
       setFeeSaving(false)
     }
@@ -82,7 +124,8 @@ export default function AdminSettings() {
       await adminApi.setSignupBonus({ enabled: bonusEnabled, amountUsd: bonusAmount, note: bonusNote })
       toast.success('Signup bonus settings saved')
     } catch (e) {
-      toast.error((e as { error?: string }).error || 'Failed to save')
+      console.error('Failed to save signup bonus:', e)
+      toast.error((e as { error?: string }).error || 'Failed to save signup bonus')
     } finally {
       setBonusSaving(false)
     }
@@ -91,9 +134,15 @@ export default function AdminSettings() {
   const refreshOtp = () => {
     setOtpLoading(true)
     adminApi.get('/otp/analytics')
-      .then((r: OtpAnalytics) => setOtp(r))
-      .catch(() => {})
-      .finally(() => setOtpLoading(false))
+      .then((r: OtpAnalytics) => {
+        setOtp(r)
+        setOtpLoading(false)
+      })
+      .catch((e) => {
+        console.warn('Failed to refresh OTP analytics:', e)
+        toast.error('Failed to refresh OTP analytics')
+        setOtpLoading(false)
+      })
   }
 
   const setGovToggle = async (key: keyof typeof govSettings, value: boolean) => {
@@ -102,7 +151,10 @@ export default function AdminSettings() {
       await adminApi.saveSetting(key, String(value))
       toast.success('Governance setting updated')
     } catch (error) {
+      console.error('Failed to save governance setting:', error)
       toast.error((error as { error?: string })?.error || 'Failed to save governance setting')
+      // Revert on failure
+      setGovSettings((prev) => ({ ...prev, [key]: !value }))
     }
   }
 

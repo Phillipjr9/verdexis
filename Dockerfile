@@ -1,10 +1,8 @@
-FROM node:20-alpine
+# Stage 1: Builder
+FROM node:20-alpine AS builder
 
-# Cache busting marker - update this to force full rebuild
-ENV BUILD_ID="2026-08-03-11-35-00"
-
-# Install OpenSSL for Prisma (Alpine uses OpenSSL 3)
-RUN apk add --no-cache openssl
+# Install build dependencies
+RUN apk add --no-cache openssl python3 make g++
 
 WORKDIR /app
 
@@ -12,15 +10,13 @@ WORKDIR /app
 COPY package*.json ./
 COPY server/package*.json server/
 
-# Install dependencies (include dev dependencies for build)
-RUN npm install --legacy-peer-deps && \
+# Install dependencies (including dev deps for build)
+RUN npm install && \
     cd server && \
-    npm install --legacy-peer-deps && \
+    npm install && \
     cd ..
 
 # Copy source code
-# Cache invalidation: 2026-08-03T11:35:00Z
-RUN echo "Preparing to copy source files..."
 COPY server/src ./server/src
 COPY server/tsconfig.json ./server/
 COPY server/prisma ./server/prisma
@@ -30,20 +26,37 @@ COPY server/entrypoint.sh ./server/
 # Make entrypoint executable
 RUN chmod +x ./server/entrypoint.sh
 
-# Build
-RUN echo "=== Build sanity checks ===" && \
-    cd server && \
-    echo "=== Prisma schema file list ===" && \
-    find prisma -maxdepth 1 -type f | sort && \
-    echo "=== Prisma schema preview ===" && \
-    sed -n '1,80p' prisma/schema.prisma && \
-    echo "=== Installed server dependencies ===" && \
-    npm ls --depth=0 && \
-    echo "=== Prisma CLI version ===" && \
-    npx prisma --version && \
-    echo "=== Starting server build ===" && \
+# Build the application
+RUN cd server && \
     npm run build && \
     cd ..
+
+# Stage 2: Runtime
+FROM node:20-alpine
+
+# Install runtime dependencies only
+RUN apk add --no-cache openssl
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+COPY server/package*.json server/
+
+# Install production dependencies only
+RUN npm install --production && \
+    cd server && \
+    npm install --production && \
+    cd ..
+
+# Copy built application from builder
+COPY --from=builder /app/server/dist ./server/dist
+COPY --from=builder /app/server/prisma ./server/prisma
+COPY --from=builder /app/server/entrypoint.sh ./server/
+COPY --from=builder /app/server/node_modules ./server/node_modules
+
+# Make entrypoint executable
+RUN chmod +x ./server/entrypoint.sh
 
 EXPOSE 4000
 
@@ -51,7 +64,3 @@ WORKDIR /app/server
 
 # Run entrypoint script
 ENTRYPOINT ["sh", "./entrypoint.sh"]
-
-# If a SQLite dev.db was generated during build, copy it into /tmp so the
-# runtime fallback database on Render has the schema and seed available.
-RUN if [ -f server/prisma/dev.db ]; then cp server/prisma/dev.db /tmp/verdexis-render.db || true; fi

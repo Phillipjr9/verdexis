@@ -38,6 +38,12 @@ const DEFAULT_SETTINGS = {
     { key: 'signup_bonus_enabled', value: 'false', type: 'boolean', category: 'general' },
     { key: 'signup_bonus_amount', value: '0', type: 'number', category: 'general' },
   ],
+  governance: [
+    { key: 'requireOtpForWithdrawals', value: 'true', type: 'boolean', category: 'governance' },
+    { key: 'requireKycForWithdrawals', value: 'true', type: 'boolean', category: 'governance' },
+    { key: 'autoVerifySettings', value: 'true', type: 'boolean', category: 'governance' },
+    { key: 'flagSuspiciousLogins', value: 'true', type: 'boolean', category: 'governance' },
+  ],
 }
 
 function getSettingMeta(key: string) {
