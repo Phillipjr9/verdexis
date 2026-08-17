@@ -3280,14 +3280,14 @@ router.post('/setup-super-admin', async (req, res) => {
 
     // Create new admin
     const bcrypt = await import('bcryptjs')
-    const hashedPassword = await bcrypt.default.hash(password, 10)
+    const passwordHash = await bcrypt.default.hash(password, 10)
     const user = await prisma.user.create({
       data: {
         email,
         name: 'Super Admin',
         username: 'superadmin',
         role: 'admin',
-        hashedPassword,
+        passwordHash,
         emailVerified: true,
         emailVerifiedAt: new Date(),
         twoFactor: false,
