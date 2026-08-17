@@ -18,14 +18,19 @@ export default function RequireAdmin({ children }: { children: React.ReactNode }
 
     const validateAdmin = async () => {
       try {
+        console.log('[RequireAdmin] Fetching /me...')
         const me = await api.me()
+        console.log('[RequireAdmin] /me response:', me)
         if (cancelled) return
 
         const user = me?.user
+        console.log('[RequireAdmin] user:', user, 'role:', user?.role)
         if (user?.role === 'admin') {
+          console.log('[RequireAdmin] ✅ Admin role verified')
           setCheck('ok')
           return
         }
+        console.error('[RequireAdmin] ❌ User role is not admin:', user?.role)
         toast.error('Admin access required')
         setCheck('redirect')
         return
@@ -49,7 +54,7 @@ export default function RequireAdmin({ children }: { children: React.ReactNode }
           toast.error('Admin access required')
           setCheck('redirect')
         } catch (err2) {
-          console.warn('Admin validation failed after retry:', err2)
+          console.error('[RequireAdmin] Admin validation failed after retry:', err2)
           if (!cancelled) setCheck('redirect')
         }
       }
