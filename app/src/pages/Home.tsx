@@ -8,7 +8,7 @@ import ScrambleText from '../components/ScrambleText'
 import TetrahedronCanvas from '../components/Tetrahedron'
 import { type CryptoQuote, marketData } from '../lib/marketData'
 import { liveTicker } from '../lib/liveTicker'
-import { ArrowRight, Shield, ChevronRight, CheckCircle, Play, Lock, Fingerprint, Eye, Server, Globe, Sparkles, Wallet } from 'lucide-react'
+import { Shield, ChevronRight, CheckCircle, Play, Lock, Fingerprint, Eye, Server, Globe, Sparkles, Wallet } from 'lucide-react'
 
 const platformStats = [
   { value: 'Unified', label: 'All your accounts', icon: Globe },
@@ -47,6 +47,31 @@ const audienceItems = [
   { title: 'For self-directed investors', desc: 'Track portfolios, compare market moves, and keep your decisions grounded in clean, readable data.' },
   { title: 'For people planning ahead', desc: 'Set goals, review your accounts, and keep the long view in focus without losing the short-term details.' },
   { title: 'For anyone who wants clarity', desc: 'Verdexis is designed to simplify complicated financial work into one view that is easier to understand.' },
+]
+
+const howItWorks = [
+  { step: '01', title: 'Create your account', desc: 'Sign up in minutes. Add 2FA when you are ready. No credit card required.' },
+  { step: '02', title: 'Get your wallets', desc: 'Generate a deposit address for each coin, or connect an external wallet. Admin can still update addresses if needed.' },
+  { step: '03', title: 'Move and track money', desc: 'Deposit, transfer, and withdraw with a live status trail so you always know where a request stands.' },
+]
+
+const planItems = [
+  {
+    name: 'Free',
+    price: '$0',
+    detail: 'Forever',
+    points: ['Account and portfolio overview', 'Per-coin deposit addresses', 'Transfers and withdrawal tracking', 'Live market data'],
+    cta: 'Start free',
+    featured: true,
+  },
+  {
+    name: 'Premium',
+    price: 'Coming soon',
+    detail: 'Optional upgrades',
+    points: ['Advanced planning tools', 'Deeper reports', 'Priority support'],
+    cta: 'Join the waitlist',
+    featured: false,
+  },
 ]
 
 const faqItems = [
@@ -117,7 +142,6 @@ export default function Home() {
 
   useEffect(() => {
     let active = true
-
     const loadTicker = async () => {
       try {
         const list = await marketData.getCryptoList()
@@ -126,7 +150,6 @@ export default function Home() {
         if (active) setTickerCoins([])
       }
     }
-
     void loadTicker()
     const id = window.setInterval(() => { void loadTicker() }, 3000)
     return () => {
@@ -156,9 +179,9 @@ export default function Home() {
           <p className="text-base md:text-lg text-[#A0A0A0] max-w-lg mx-auto mb-10 leading-relaxed">Securely connect your accounts, track progress, and keep your finances organized without the noise.</p>
           <div className="flex items-center justify-center gap-4 flex-wrap">
             <button onClick={openSignup} className="px-8 py-3.5 bg-[#0C8B44] text-white text-sm font-medium tracking-[0.04em] uppercase rounded-lg hover:bg-[#0a7539] transition-colors glow-accent">Start Free</button>
-            <Link to="/markets" className="flex items-center gap-2 px-8 py-3.5 text-[#E5E5E5] text-sm font-medium tracking-[0.04em] uppercase border border-[#ffffff15] rounded-lg hover:border-[#0C8B44]/30 transition-colors"><Play className="w-4 h-4" />Market</Link>
+            <a href="#product" className="flex items-center gap-2 px-8 py-3.5 text-[#E5E5E5] text-sm font-medium tracking-[0.04em] uppercase border border-[#ffffff15] rounded-lg hover:border-[#0C8B44]/30 transition-colors"><Play className="w-4 h-4" />See the product</a>
           </div>
-          <p className="text-xs text-[#737373] mt-4">No credit card required. Free forever plan available. <button onClick={openLogin} className="text-[#0C8B44] hover:text-[#00E676] underline-offset-4 hover:underline transition-colors">Already have an account? Sign in</button></p>
+          <p className="text-xs text-[#737373] mt-4">No credit card required. Free forever plan available. Not a bank. Not investment advice. <button onClick={openLogin} className="text-[#0C8B44] hover:text-[#00E676] underline-offset-4 hover:underline transition-colors">Already have an account? Sign in</button></p>
         </div>
       </section>
 
@@ -190,15 +213,10 @@ export default function Home() {
               will-change: transform;
             }
             @media (max-width: 767px) {
-              .market-marquee-track {
-                animation-duration: 22s;
-              }
+              .market-marquee-track { animation-duration: 22s; }
             }
           `}</style>
-          <div
-            className="overflow-x-auto overflow-y-hidden"
-            style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-          >
+          <div className="overflow-x-auto overflow-y-hidden" style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
             <div className="market-marquee-track flex items-center gap-4 px-4 py-3 sm:px-5">
               {[...tickerCoins, ...tickerCoins].map((coin, index) => (
                 <TickerItem key={`${coin.id}-${index}`} coin={coin} />
@@ -214,23 +232,12 @@ export default function Home() {
             <p className="text-[10px] md:text-xs font-medium uppercase tracking-[0.18em] text-[#8B9AA3]">Trusted partners</p>
             <div className="flex flex-wrap items-center justify-center gap-2.5 md:gap-4">
               {trustedPartners.map((partner) => (
-                <div
-                  key={partner.name}
-                  className="flex h-14 md:h-16 items-center justify-center px-0.5 md:px-1"
-                >
+                <div key={partner.name} className="flex h-14 md:h-16 items-center justify-center px-0.5 md:px-1">
                   <img
                     src={partner.src}
                     alt={partner.name}
-                    className={[
-                      'partner-logo',
-                      partner.white ? 'partner-logo--white' : '',
-                      'h-8 md:h-10 w-auto object-contain',
-                      partner.className ?? 'max-w-[140px]',
-                    ].join(' ')}
-                    onError={(event) => {
-                      const image = event.currentTarget as HTMLImageElement
-                      image.style.display = 'none'
-                    }}
+                    className={['partner-logo', partner.white ? 'partner-logo--white' : '', 'h-8 md:h-10 w-auto object-contain', partner.className ?? 'max-w-[140px]'].join(' ')}
+                    onError={(event) => { const image = event.currentTarget as HTMLImageElement; image.style.display = 'none' }}
                   />
                 </div>
               ))}
@@ -246,7 +253,6 @@ export default function Home() {
             <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-4">Built for modern investors who want control and clarity.</h2>
             <p className="text-[#A0A0A0] max-w-lg mx-auto">Everything you need to monitor progress, set goals, and keep your finances under one roof.</p>
           </div>
-
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
             {audienceItems.map((item) => (
               <div key={item.title} className="p-6 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff05]">
@@ -255,7 +261,6 @@ export default function Home() {
               </div>
             ))}
           </div>
-
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {featureItems.map((feature) => (
               <div key={feature.title} className="p-8 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff05] hover:border-[#0C8B44]/30 transition-all duration-300 group">
@@ -264,6 +269,43 @@ export default function Home() {
                 <p className="text-sm text-[#A0A0A0] leading-relaxed">{feature.desc}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="how-it-works" className="py-16 md:py-24 px-6 bg-[#070C0E]">
+        <div className="max-w-[1280px] mx-auto">
+          <div className="text-center mb-10 md:mb-16">
+            <span className="text-xs tracking-[0.05em] uppercase text-[#0C8B44] mb-3 block">How it works</span>
+            <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-4">From signup to your first deposit.</h2>
+            <p className="text-[#A0A0A0] max-w-lg mx-auto">Three steps. No bank paperwork on day one.</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {howItWorks.map((item) => (
+              <div key={item.step} className="p-8 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff05]">
+                <p className="text-xs tracking-[0.14em] uppercase text-[#0C8B44] mb-4">{item.step}</p>
+                <h3 className="text-xl font-medium text-[#E5E5E5] mb-3">{item.title}</h3>
+                <p className="text-sm text-[#A0A0A0] leading-relaxed">{item.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="product" className="py-16 md:py-24 px-6 bg-[#0a0f11]">
+        <div className="max-w-[1280px] mx-auto">
+          <div className="text-center mb-10 md:mb-16">
+            <span className="text-xs tracking-[0.05em] uppercase text-[#0C8B44] mb-3 block">Product</span>
+            <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-4">See the workspace before you sign up.</h2>
+            <p className="text-[#A0A0A0] max-w-lg mx-auto">Dashboard, wallets, and market context in one place.</p>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 items-center">
+            <div className="lg:col-span-3 rounded-2xl overflow-hidden border border-[#ffffff10] bg-[#070C0E]">
+              <img src="/assets/ui-dashboard.png" alt="Verdexis dashboard preview" className="w-full h-auto object-cover" />
+            </div>
+            <div className="lg:col-span-2 rounded-2xl overflow-hidden border border-[#ffffff10] bg-[#070C0E] max-w-sm mx-auto">
+              <img src="/assets/ui-mobile-wallet.png" alt="Verdexis wallet on mobile" className="w-full h-auto object-cover" />
+            </div>
           </div>
         </div>
       </section>
@@ -290,6 +332,43 @@ export default function Home() {
               <img src="/assets/showcase-team.jpg" alt="Team collaborating on financial decisions" className="w-full h-[420px] object-cover" />
             </div>
           </div>
+        </div>
+      </section>
+
+      <section id="pricing" className="py-16 md:py-24 px-6 bg-[#070C0E]">
+        <div className="max-w-[1280px] mx-auto">
+          <div className="text-center mb-10 md:mb-16">
+            <span className="text-xs tracking-[0.05em] uppercase text-[#0C8B44] mb-3 block">Pricing</span>
+            <h2 className="text-4xl md:text-5xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-4">Start free. Upgrade only if you need more.</h2>
+            <p className="text-[#A0A0A0] max-w-lg mx-auto">The core wallet, deposits, transfers, and tracking stay on the free plan.</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
+            {planItems.map((plan) => (
+              <div key={plan.name} className={`p-8 rounded-2xl border ${plan.featured ? 'border-[#0C8B44]/40 bg-[#0C8B44]/5' : 'border-[#ffffff08] bg-[#0f1619]/50'}`}>
+                <p className="text-sm text-[#A0A0A0]">{plan.name}</p>
+                <p className="text-3xl font-light text-[#E5E5E5] mt-2">{plan.price}</p>
+                <p className="text-xs text-[#737373] mt-1">{plan.detail}</p>
+                <ul className="mt-6 space-y-2">
+                  {plan.points.map((point) => (
+                    <li key={point} className="flex items-start gap-2 text-sm text-[#A0A0A0]">
+                      <CheckCircle className="w-4 h-4 text-[#0C8B44] shrink-0 mt-0.5" />
+                      {point}
+                    </li>
+                  ))}
+                </ul>
+                <button type="button" onClick={openSignup} className={`mt-8 w-full px-6 py-3 rounded-lg text-sm font-medium tracking-[0.04em] uppercase ${plan.featured ? 'bg-[#0C8B44] text-white hover:bg-[#0a7539]' : 'border border-[#ffffff15] text-[#E5E5E5] hover:border-[#0C8B44]/30'}`}>
+                  {plan.cta}
+                </button>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-[#737373] max-w-2xl mx-auto text-center mt-8 leading-relaxed">
+            Verdexis is not a bank and does not provide investment, tax, or legal advice. Balances, fees, and market prices are estimates for informational purposes. Crypto transfers can be irreversible. Review the{' '}
+            <Link to="/risk-disclosure" className="text-[#0C8B44] hover:underline">risk disclosure</Link>
+            {' '}and{' '}
+            <Link to="/terms" className="text-[#0C8B44] hover:underline">terms</Link>
+            {' '}before you move funds.
+          </p>
         </div>
       </section>
 
