@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Plus, Trash2, Users, Settings } from 'lucide-react'
-import { api } from '../lib/api'
+import { adminHierarchy } from '../lib/admin-hierarchy-api'
 
 interface Admin {
   id: string
@@ -46,7 +46,7 @@ export default function AdminHierarchyManager() {
   async function loadAdmins() {
     try {
       setLoading(true)
-      const response = await api.get('/admin/hierarchy/admins')
+      const response = await adminHierarchy.listSubAdmins()
       setAdmins(response.admins || [])
       setError(null)
     } catch (err) {
@@ -58,8 +58,8 @@ export default function AdminHierarchyManager() {
 
   async function loadAdminUsers(adminId: string) {
     try {
-      const response = await api.get(`/admin/hierarchy/admins/${adminId}/users`)
-      setAdminUsers(response.users || [])
+      const response = await adminHierarchy.getUsersForAdmin(adminId)
+      setAdminUsers(response.usersAndAdmins || [])
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load users')
     }
@@ -74,7 +74,7 @@ export default function AdminHierarchyManager() {
 
     try {
       setLoading(true)
-      await api.post('/admin/hierarchy/admins', {
+      await adminHierarchy.createSubAdmin({
         email: formData.email,
         name: formData.name,
         password: formData.password,
@@ -96,10 +96,7 @@ export default function AdminHierarchyManager() {
     if (!window.confirm('Remove this user assignment?')) return
 
     try {
-      await api.post('/admin/hierarchy/remove-assignment', {
-        userId,
-        adminId: selectedAdmin,
-      })
+      await adminHierarchy.removeAssignment(userId, selectedAdmin)
       setSuccess('User assignment removed')
       await loadAdminUsers(selectedAdmin)
       setError(null)

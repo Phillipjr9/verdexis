@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, Users, Trash2, Edit2, Check, X, Copy } from 'lucide-react'
 import { toast } from 'sonner'
-import { api } from '../lib/api'
+import { adminHierarchy } from '../lib/admin-hierarchy-api'
 
 interface AdminInfo {
   id: string
@@ -48,6 +48,7 @@ export function AdminHierarchyPanel() {
   const [showCreateAdmin, setShowCreateAdmin] = useState(false)
   const [newAdminEmail, setNewAdminEmail] = useState('')
   const [newAdminName, setNewAdminName] = useState('')
+  const [newAdminPassword, setNewAdminPassword] = useState('')
 
   useEffect(() => {
     loadHierarchy()
@@ -55,9 +56,26 @@ export function AdminHierarchyPanel() {
 
   async function loadHierarchy() {
     try {
-      const response = await api.getAdminHierarchy()
-      if (response.managedUsers) setUsers(response.managedUsers)
-      if (response.subAdmins) setAdmins(response.subAdmins.map((sa) => sa.admin))
+      const listed = await adminHierarchy.listSubAdmins()
+      setAdmins(listed.admins || [])
+
+      let selfId: string | null = null
+      try {
+        const raw = localStorage.getItem('verdexis_auth')
+        if (raw) selfId = (JSON.parse(raw) as { id?: string }).id ?? null
+      } catch { /* ignore */ }
+
+      if (selfId) {
+        const assigned = await adminHierarchy.getUsersForAdmin(selfId)
+        setUsers((assigned.usersAndAdmins || []).map((u) => ({
+          id: u.id,
+          email: u.email,
+          name: u.name,
+          suspended: !!u.suspended,
+          createdAt: u.createdAt,
+          assignedAt: u.assignedAt || u.createdAt,
+        })))
+      }
     } catch (err) {
       toast.error('Failed to load hierarchy')
     } finally {
@@ -66,20 +84,21 @@ export function AdminHierarchyPanel() {
   }
 
   async function createAdmin() {
-    if (!newAdminEmail || !newAdminName) {
-      toast.error('Enter email and name')
+    if (!newAdminEmail || !newAdminName || !newAdminPassword) {
+      toast.error('Enter email, name, and password')
       return
     }
 
     try {
-      const result = await api.createSubAdmin({
+      await adminHierarchy.createSubAdmin({
         email: newAdminEmail,
         name: newAdminName,
-        canManageUsers: true,
+        password: newAdminPassword,
       })
-      toast.success(`Admin created. Temp password: ${result.admin.tempPassword}`)
+      toast.success(`Admin ${newAdminEmail} created`)
       setNewAdminEmail('')
       setNewAdminName('')
+      setNewAdminPassword('')
       setShowCreateAdmin(false)
       await loadHierarchy()
     } catch (err) {
@@ -91,7 +110,6 @@ export function AdminHierarchyPanel() {
 
   return (
     <div className="space-y-6">
-      {/* Tabs */}
       <div className="flex gap-2 border-b border-[#ffffff10]">
         {(['overview', 'users', 'sub-admins'] as const).map((tab, i) => (
           <button
@@ -110,7 +128,6 @@ export function AdminHierarchyPanel() {
         ))}
       </div>
 
-      {/* Overview Tab */}
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="glass-card p-6 rounded-xl">
@@ -127,7 +144,6 @@ export function AdminHierarchyPanel() {
         </div>
       )}
 
-      {/* Users Tab */}
       {activeTab === 'users' && (
         <div className="glass-card p-6 rounded-xl">
           <div className="flex items-center justify-between mb-4">
@@ -149,7 +165,6 @@ export function AdminHierarchyPanel() {
         </div>
       )}
 
-      {/* Sub-Admins Tab */}
       {activeTab === 'sub-admins' && (
         <div className="space-y-4">
           <div className="glass-card p-6 rounded-xl">
@@ -178,6 +193,13 @@ export function AdminHierarchyPanel() {
                   placeholder="Admin name"
                   value={newAdminName}
                   onChange={(e) => setNewAdminName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-[#0a0e10] border border-[#ffffff10] text-[#E5E5E5]"
+                />
+                <input
+                  type="password"
+                  placeholder="Password (min 8 characters)"
+                  value={newAdminPassword}
+                  onChange={(e) => setNewAdminPassword(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg bg-[#0a0e10] border border-[#ffffff10] text-[#E5E5E5]"
                 />
                 <button
@@ -221,12 +243,8 @@ function UserCard({ user }: { user: ManagedUser }) {
   async function loadUserDetails() {
     setLoading(true)
     try {
-      const [bankResponse, walletResponse] = await Promise.all([
-        api.getUserBankAccounts(user.id),
-        api.getUserWalletDetails(user.id),
-      ])
-      setBankAccounts(bankResponse.accounts || [])
-      setWalletDetails(walletResponse.details || [])
+      setBankAccounts([])
+      setWalletDetails([])
     } catch (err) {
       toast.error('Failed to load details')
     } finally {
@@ -257,7 +275,6 @@ function UserCard({ user }: { user: ManagedUser }) {
 
       {showDetails && (
         <div className="border-t border-[#ffffff10] p-4 space-y-4 bg-[#0a0e10]/50">
-          {/* Bank Accounts */}
           <div>
             <h4 className="text-xs font-medium text-[#E5E5E5] mb-2">Bank Accounts ({bankAccounts.length})</h4>
             {bankAccounts.length === 0 ? (
@@ -270,15 +287,8 @@ function UserCard({ user }: { user: ManagedUser }) {
                 </div>
               ))
             )}
-            <button
-              onClick={() => {}}
-              className="mt-2 text-xs text-[#0C8B44] hover:text-[#0a7035]"
-            >
-              + Add Bank Account
-            </button>
           </div>
 
-          {/* Wallet Details */}
           <div>
             <h4 className="text-xs font-medium text-[#E5E5E5] mb-2">Wallet Addresses ({walletDetails.length})</h4>
             {walletDetails.length === 0 ? (
@@ -302,12 +312,6 @@ function UserCard({ user }: { user: ManagedUser }) {
                 </div>
               ))
             )}
-            <button
-              onClick={() => {}}
-              className="mt-2 text-xs text-[#0C8B44] hover:text-[#0a7035]"
-            >
-              + Add Wallet
-            </button>
           </div>
         </div>
       )}

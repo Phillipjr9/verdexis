@@ -1,138 +1,64 @@
-// Add these methods to app/src/lib/api.ts
+import { api } from './api'
 
-// Multi-Admin Hierarchy API Methods
+const BASE = '/api/admin/hierarchy'
 
-export const adminHierarchy = {
-  // Create sub-admin
-  createSubAdmin: (payload: {
-    email: string
-    name: string
-    canCreateAdmins?: boolean
-    canManageUsers?: boolean
-    canManageDeposits?: boolean
-    canManageTransactions?: boolean
-  }) =>
-    request<{ admin: { id: string; email: string; name: string; tempPassword: string } }>(
-      '/api/admin/admins/create',
-      { method: 'POST', body: JSON.stringify(payload) }
-    ),
-
-  // Get admin hierarchy
-  getHierarchy: () =>
-    request<{
-      adminInfo: any
-      subAdmins: Array<{ admin: { id: string; email: string; name: string } }>
-      managedUsers: Array<{
-        id: string
-        email: string
-        name: string
-        suspended: boolean
-        createdAt: string
-        assignedAt: string
-      }>
-    }>('/api/admin/admins/hierarchy'),
-
-  // Assign user to admin
-  assignUserToAdmin: (userId: string, adminId: string) =>
-    request('/api/admin/users/' + encodeURIComponent(userId) + '/assign-admin', {
-      method: 'POST',
-      body: JSON.stringify({ adminId }),
-    }),
-
-  // Get users for admin
-  getUsersForAdmin: (adminId: string) =>
-    request<{
-      users: Array<{
-        id: string
-        email: string
-        name: string
-        kycStatus: string
-        suspended: boolean
-        createdAt: string
-        assignedAt: string
-      }>
-    }>('/api/admin/admins/' + encodeURIComponent(adminId) + '/users'),
-
-  // Bank Accounts
-  addBankAccount: (userId: string, account: {
-    bankName: string
-    accountNumber: string
-    routingNumber?: string
-    accountHolder: string
-    accountType?: 'checking' | 'savings'
-    country?: string
-  }) =>
-    request('/api/admin/users/' + encodeURIComponent(userId) + '/bank-accounts', {
-      method: 'POST',
-      body: JSON.stringify(account),
-    }),
-
-  getUserBankAccounts: (userId: string) =>
-    request<{
-      accounts: Array<{
-        id: string
-        bankName: string
-        accountNumber: string
-        accountHolder: string
-        accountType: string
-        country?: string
-        verifiedAt?: string
-        createdAt: string
-      }>
-    }>('/api/admin/users/' + encodeURIComponent(userId) + '/bank-accounts'),
-
-  updateBankAccount: (accountId: string, update: {
-    bankName?: string
-    accountHolder?: string
-    country?: string
-  }) =>
-    request('/api/admin/bank-accounts/' + encodeURIComponent(accountId), {
-      method: 'PATCH',
-      body: JSON.stringify(update),
-    }),
-
-  deleteBankAccount: (accountId: string) =>
-    request('/api/admin/bank-accounts/' + encodeURIComponent(accountId), { method: 'DELETE' }),
-
-  // Wallet Details
-  addWalletDetail: (userId: string, wallet: {
-    walletAddress: string
-    chainId?: string
-    walletType?: string
-    label?: string
-    notes?: string
-  }) =>
-    request('/api/admin/users/' + encodeURIComponent(userId) + '/wallet-details', {
-      method: 'POST',
-      body: JSON.stringify(wallet),
-    }),
-
-  getUserWalletDetails: (userId: string) =>
-    request<{
-      details: Array<{
-        id: string
-        walletAddress: string
-        chainId?: string
-        walletType: string
-        label?: string
-        notes?: string
-        verifiedAt?: string
-        createdAt: string
-      }>
-    }>('/api/admin/users/' + encodeURIComponent(userId) + '/wallet-details'),
-
-  updateWalletDetail: (detailId: string, update: {
-    label?: string
-    notes?: string
-  }) =>
-    request('/api/admin/wallet-details/' + encodeURIComponent(detailId), {
-      method: 'PATCH',
-      body: JSON.stringify(update),
-    }),
-
-  deleteWalletDetail: (detailId: string) =>
-    request('/api/admin/wallet-details/' + encodeURIComponent(detailId), { method: 'DELETE' }),
+export interface HierarchyAdmin {
+  id: string
+  email: string
+  name: string
+  canCreateAdmins?: boolean
+  canManageUsers?: boolean
+  canManageDeposits?: boolean
+  canManageTransactions?: boolean
+  createdAt?: string
 }
 
-// Update the main api export to include these
-// api.adminHierarchy = adminHierarchy
+export interface AssignedUser {
+  id: string
+  email: string
+  name: string
+  role?: string
+  suspended?: boolean
+  kycStatus?: string
+  createdAt: string
+  assignedAt?: string
+  type?: 'admin' | 'user'
+}
+
+export const adminHierarchy = {
+  listSubAdmins: () =>
+    api.get<{ admins: HierarchyAdmin[]; count: number }>(`${BASE}/admins`),
+
+  getAdmin: (adminId: string) =>
+    api.get<{
+      admin: HierarchyAdmin
+      hierarchy: {
+        canCreateAdmins?: boolean
+        canManageUsers?: boolean
+        canManageDeposits?: boolean
+        canManageTransactions?: boolean
+        parentAdmin: { id: string; email: string; name: string } | null
+        isSuperAdmin?: boolean
+      }
+      assignedUsersAndAdmins: AssignedUser[]
+      assignedCount: number
+    }>(`${BASE}/admins/${encodeURIComponent(adminId)}`),
+
+  createSubAdmin: (payload: { email: string; name: string; password: string }) =>
+    api.post<{
+      ok: boolean
+      admin: { id: string; email: string; name: string; role: string; createdAt: string }
+      message: string
+    }>(`${BASE}/admins`, payload),
+
+  assignUserToAdmin: (userId: string, adminId: string) =>
+    api.post<{ ok: boolean; message: string }>(`${BASE}/assign-user`, { userId, adminId }),
+
+  getUsersForAdmin: (adminId: string) =>
+    api.get<{ usersAndAdmins: AssignedUser[]; count: number }>(
+      `${BASE}/admins/${encodeURIComponent(adminId)}/users`,
+    ),
+
+  removeAssignment: (userId: string, adminId: string) =>
+    api.post<{ ok: boolean; message: string }>(`${BASE}/remove-assignment`, { userId, adminId }),
+}
