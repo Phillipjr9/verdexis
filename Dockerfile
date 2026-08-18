@@ -54,6 +54,7 @@ COPY --from=builder /app/server/dist ./server/dist
 COPY --from=builder /app/server/prisma ./server/prisma
 COPY --from=builder /app/server/entrypoint.sh ./server/
 COPY --from=builder /app/server/node_modules ./server/node_modules
+COPY --from=builder /app/server/scripts ./server/scripts
 
 # Make entrypoint executable
 RUN chmod +x ./server/entrypoint.sh
