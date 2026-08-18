@@ -249,9 +249,9 @@ router.post('/', requireAuth, moneyLimiter, idempotency(), async (req: AuthedReq
       if (!withdrawal) { throw Object.assign(new Error('Withdrawal not found'), { status: 404 }) }
 
       if (transfer.status === 'completed') {
-        const updated = await tx.withdrawalRequest.update({ where: { id: prepared.withdrawal.id }, data: { status: 'approved', txHash: transfer.txHash?.toLowerCase() ?? null, approvedBy: req.userId!, approvedAt: new Date(), completedAt: new Date(), } })
+        const updated = await tx.withdrawalRequest.update({ where: { id: prepared.withdrawal.id }, data: { status: 'approved', txHash: (transfer as any).txHash?.toLowerCase() ?? null, approvedBy: req.userId!, approvedAt: new Date(), completedAt: new Date(), } })
 
-        await tx.transaction.create({ data: { transactionId: generateTransactionId(), userId: req.userId!, kind: 'withdrawal', currency: prepared.normalizedAsset, amount, status: 'completed', reference: transfer.txHash ?? null, } as any })
+        await tx.transaction.create({ data: { transactionId: generateTransactionId(), userId: req.userId!, kind: 'withdrawal', currency: prepared.normalizedAsset, amount, status: 'completed', reference: (transfer as any).txHash ?? null, } as any })
 
         await tx.notification.create({ data: { userId: req.userId!, kind: 'withdrawal', title: `Withdrawal completed: ${amount} ${prepared.normalizedAsset}`, body: transfer.message, } })
 
@@ -263,7 +263,7 @@ router.post('/', requireAuth, moneyLimiter, idempotency(), async (req: AuthedReq
       return updated
     })
 
-    res.status(201).json({ withdrawal: finalized, transfer: { status: transfer.status, message: transfer.message, txHash: transfer.txHash ?? null }, tier, processingFee, totalDebit })
+    res.status(201).json({ withdrawal: finalized, transfer: { status: transfer.status, message: transfer.message, txHash: (transfer as any).txHash ?? null }, tier, processingFee, totalDebit })
   } catch (err) {
     const error = err as Error & { status?: number }
     console.error('[withdrawals] POST error:', error)
