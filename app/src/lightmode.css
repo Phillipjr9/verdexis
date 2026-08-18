@@ -7,31 +7,32 @@
   color-scheme: light;
 }
 
-/* ── Root canvas & body ─────────────────────────────────── */
 [data-theme="light"] body,
 [data-theme="light"] #root {
   background-color: #f4f6f8 !important;
   color: #1a1a1a !important;
 }
 
-/* ── Page backgrounds ───────────────────────────────────── */
 [data-theme="light"] .bg-\[\#070C0E\],
 [data-theme="light"] .bg-\[\#091113\],
 [data-theme="light"] .bg-\[\#0a0e10\],
 [data-theme="light"] .bg-\[\#0a0f11\],
 [data-theme="light"] .bg-\[\#0f1619\],
+[data-theme="light"] .bg-\[\#121212\],
 [data-theme="light"] .bg-\[\#1a1a1a\] {
   background-color: #f4f6f8 !important;
 }
 
-/* opacity variants */
+[data-theme="light"] .bg-\[\#0f1619\]\/40,
 [data-theme="light"] .bg-\[\#0f1619\]\/50,
+[data-theme="light"] .bg-\[\#0f1619\]\/60,
+[data-theme="light"] .bg-\[\#0f1619\]\/70,
 [data-theme="light"] .bg-\[\#0a0e10\]\/50,
 [data-theme="light"] .bg-\[\#0a0e10\]\/10,
 [data-theme="light"] .bg-\[\#1a1a1a\]\/50,
 [data-theme="light"] .bg-\[\#1a1a1a\]\/60,
 [data-theme="light"] .bg-\[\#1a1a1a\]\/80 {
-  background-color: rgba(255, 255, 255, 0.85) !important;
+  background-color: rgba(255, 255, 255, 0.92) !important;
 }
 
 [data-theme="light"] .bg-\[\#ffffff05\],
@@ -39,51 +40,50 @@
   background-color: rgba(0, 0, 0, 0.04) !important;
 }
 
-/* ── Glass / card components ────────────────────────────── */
 [data-theme="light"] .glass-card {
-  background: rgba(255, 255, 255, 0.92) !important;
+  background: rgba(255, 255, 255, 0.95) !important;
   border-color: rgba(0, 0, 0, 0.08) !important;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06) !important;
+  color: #111827 !important;
 }
 
 [data-theme="light"] .liquid-card {
-  background: rgba(255, 255, 255, 0.88) !important;
-  border-color: rgba(0, 0, 0, 0.07) !important;
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05) !important;
+  color: #111827 !important;
 }
 
-/* ── Navigation ─────────────────────────────────────────── */
+[data-theme="light"] .hero-sweep {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(236, 253, 245, 0.9)) !important;
+}
+
 [data-theme="light"] .nav-glass {
-  background: rgba(255, 255, 255, 0.95) !important;
+  background: rgba(255, 255, 255, 0.96) !important;
   border-bottom-color: rgba(0, 0, 0, 0.08) !important;
   box-shadow: 0 1px 8px rgba(0, 0, 0, 0.06) !important;
 }
 
-/* override the mobile solid-dark fallback */
 @media (max-width: 1023px) {
   [data-theme="light"] .nav-glass {
     background: rgba(255, 255, 255, 0.98) !important;
   }
 }
 
-/* ── Dropdown / popover panels ──────────────────────────── */
-[data-theme="light"] .bg-\[\#0f1619\] {
-  background-color: #ffffff !important;
-}
-
-/* ── Text ───────────────────────────────────────────────── */
 [data-theme="light"] .text-\[\#E5E5E5\] { color: #111827 !important; }
 [data-theme="light"] .text-\[\#8B9AA3\] { color: #4b5563 !important; }
+[data-theme="light"] .text-\[\#8EA39B\] { color: #4b5563 !important; }
 [data-theme="light"] .text-\[\#A0A0A0\] { color: #4b5563 !important; }
 [data-theme="light"] .text-\[\#737373\] { color: #6b7280 !important; }
 [data-theme="light"] .text-\[\#555\]    { color: #6b7280 !important; }
+[data-theme="light"] .text-\[\#444\]    { color: #6b7280 !important; }
 [data-theme="light"] .text-\[\#dfe9ee\] { color: #1f2937 !important; }
+[data-theme="light"] .text-\[\#00E676\] { color: #059669 !important; }
+[data-theme="light"] .text-\[\#0C8B44\] { color: #0a7a3c !important; }
 
-/* hover text */
 [data-theme="light"] .hover\:text-\[\#E5E5E5\]:hover { color: #111827 !important; }
 [data-theme="light"] .hover\:text-\[\#A0A0A0\]:hover { color: #4b5563 !important; }
 
-/* ── Borders ────────────────────────────────────────────── */
 [data-theme="light"] .border-\[\#ffffff05\],
 [data-theme="light"] .border-\[\#ffffff08\],
 [data-theme="light"] .border-\[\#ffffff10\],
@@ -93,7 +93,6 @@
   border-color: rgba(0, 0, 0, 0.1) !important;
 }
 
-/* ── Hover backgrounds ──────────────────────────────────── */
 [data-theme="light"] .hover\:bg-\[\#ffffff05\]:hover,
 [data-theme="light"] .hover\:bg-\[\#0C8B44\]\/5:hover {
   background-color: rgba(0, 0, 0, 0.04) !important;
@@ -103,19 +102,20 @@
   background-color: rgba(0, 0, 0, 0.06) !important;
 }
 
-/* ── KPI tile hover ─────────────────────────────────────── */
 [data-theme="light"] .kpi-tile:hover {
   background: rgba(255, 255, 255, 0.98) !important;
   border-color: rgba(12, 139, 68, 0.25) !important;
 }
 
-/* ── Accent bg tints (keep green tints, just lighter) ───── */
-[data-theme="light"] .bg-\[\#0C8B44\]\/5  { background-color: rgba(12, 139, 68, 0.06) !important; }
-[data-theme="light"] .bg-\[\#0C8B44\]\/10 { background-color: rgba(12, 139, 68, 0.10) !important; }
-[data-theme="light"] .bg-\[\#0C8B44\]\/15 { background-color: rgba(12, 139, 68, 0.13) !important; }
+[data-theme="light"] .bg-\[\#0C8B44\]\/5  { background-color: rgba(12, 139, 68, 0.08) !important; }
+[data-theme="light"] .bg-\[\#0C8B44\]\/10 { background-color: rgba(12, 139, 68, 0.12) !important; }
+[data-theme="light"] .bg-\[\#0C8B44\]\/15 { background-color: rgba(12, 139, 68, 0.14) !important; }
 [data-theme="light"] .bg-\[\#0C8B44\]\/20 { background-color: rgba(12, 139, 68, 0.16) !important; }
+[data-theme="light"] .bg-\[\#4CAF50\]\/15 { background-color: rgba(76, 175, 80, 0.12) !important; }
+[data-theme="light"] .bg-\[\#f44336\]\/10,
+[data-theme="light"] .bg-\[\#f44336\]\/15 { background-color: rgba(244, 67, 54, 0.1) !important; }
+[data-theme="light"] .bg-\[\#FF9800\]\/15 { background-color: rgba(255, 152, 0, 0.12) !important; }
 
-/* ── Form elements ──────────────────────────────────────── */
 [data-theme="light"] input,
 [data-theme="light"] textarea,
 [data-theme="light"] select {
@@ -135,7 +135,6 @@
   border-color: #0C8B44 !important;
 }
 
-/* Chrome autofill override */
 [data-theme="light"] input:-webkit-autofill,
 [data-theme="light"] input:-webkit-autofill:hover,
 [data-theme="light"] input:-webkit-autofill:focus,
@@ -145,33 +144,30 @@
   caret-color: #111827 !important;
 }
 
-/* ── Donut chart inner circle ───────────────────────────── */
-/* The SVG has fill="#070C0E" hardcoded — override via CSS */
 [data-theme="light"] svg circle[fill="#070C0E"] {
   fill: #f4f6f8 !important;
 }
-
-/* ── Donut chart text ───────────────────────────────────── */
 [data-theme="light"] svg text[fill="#E5E5E5"] { fill: #111827 !important; }
 [data-theme="light"] svg text[fill="#737373"] { fill: #6b7280 !important; }
 
 [data-theme="light"] .partner-logo {
   filter: none !important;
   opacity: 1 !important;
+  visibility: visible !important;
 }
-
 [data-theme="light"] .partner-logo--white {
-  filter: brightness(0) saturate(0) contrast(1.2) !important;
+  filter: brightness(0) saturate(0) contrast(1.15) !important;
+  opacity: 1 !important;
 }
-
 [data-theme="dark"] .partner-logo--white {
   filter: brightness(0) invert(1) contrast(1.2) !important;
+  opacity: 1 !important;
 }
-
 .partner-logo:not(.partner-logo--white) {
   filter: none !important;
+  opacity: 1 !important;
+  visibility: visible !important;
 }
-
 .partner-wordmark {
   display: flex !important;
   align-items: center !important;
@@ -180,16 +176,21 @@
   visibility: visible !important;
   filter: none !important;
 }
-
 .partner-wordmark__text {
-  color: #f5f7fa !important;
   font-weight: 700 !important;
   letter-spacing: -0.04em !important;
-  text-shadow: 0 0 1px rgba(255, 255, 255, 0.2) !important;
   opacity: 1 !important;
+  visibility: visible !important;
+}
+[data-theme="dark"] .partner-wordmark__text {
+  color: #f5f7fa !important;
+  text-shadow: 0 0 1px rgba(255, 255, 255, 0.2) !important;
+}
+[data-theme="light"] .partner-wordmark__text {
+  color: #111827 !important;
+  text-shadow: none !important;
 }
 
-/* ── Shimmer skeleton ───────────────────────────────────── */
 [data-theme="light"] .shimmer {
   background: linear-gradient(
     90deg,
@@ -199,7 +200,6 @@
   ) !important;
 }
 
-/* ── Scrollbar ──────────────────────────────────────────── */
 [data-theme="light"] * {
   scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
 }
@@ -210,7 +210,6 @@
   background: rgba(12, 139, 68, 0.4) !important;
 }
 
-/* ── Text selection ─────────────────────────────────────── */
 [data-theme="light"] ::selection {
   background: rgba(12, 139, 68, 0.2) !important;
   color: #111827 !important;
@@ -220,7 +219,6 @@
   color: #111827 !important;
 }
 
-/* ── Focus ring ─────────────────────────────────────────── */
 [data-theme="light"] :focus-visible {
   outline-color: rgba(12, 139, 68, 0.7) !important;
 }
@@ -230,7 +228,6 @@
   box-shadow: 0 0 0 2px rgba(12, 139, 68, 0.3) !important;
 }
 
-/* ── Toaster ────────────────────────────────────────────── */
 [data-theme="light"] [data-sonner-toaster] {
   --normal-bg: rgba(255, 255, 255, 0.97);
   --normal-border: rgba(0, 0, 0, 0.1);
@@ -246,23 +243,56 @@
   --info-text: #1976d2;
 }
 
-/* ── Links ──────────────────────────────────────────────── */
 [data-theme="light"] a:not([class]) {
   color: #0C8B44;
 }
 
-/* ── Separator / divider lines ──────────────────────────── */
 [data-theme="light"] .border-t,
 [data-theme="light"] .border-b {
   border-color: rgba(0, 0, 0, 0.08) !important;
 }
 
-/* ── Gradient dividers (the "from-[#ffffff10]" lines) ───── */
 [data-theme="light"] .bg-gradient-to-r.from-\[\#ffffff10\] {
   background-image: linear-gradient(to right, rgba(0,0,0,0.1), transparent) !important;
 }
 
-/* ── Lazy-load fallback spinner bg ─────────────────────── */
 [data-theme="light"] .min-h-screen.bg-\[\#070C0E\] {
   background-color: #f4f6f8 !important;
+}
+
+[data-theme="light"] .opacity-40,
+[data-theme="light"] .opacity-50 {
+  opacity: 0.7 !important;
+}
+
+[data-theme="light"] table,
+[data-theme="light"] thead,
+[data-theme="light"] tbody,
+[data-theme="light"] tr,
+[data-theme="light"] td,
+[data-theme="light"] th {
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-theme="light"] [role="dialog"],
+[data-theme="light"] [data-radix-popper-content-wrapper] {
+  color: #111827;
+}
+
+[data-theme="light"] .highcharts-background {
+  fill: #ffffff !important;
+}
+[data-theme="light"] .highcharts-title,
+[data-theme="light"] .highcharts-axis-labels text {
+  fill: #374151 !important;
+}
+[data-theme="light"] .highcharts-grid-line {
+  stroke: rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-theme="light"] button,
+[data-theme="light"] a,
+[data-theme="light"] input,
+[data-theme="light"] select {
+  visibility: visible !important;
 }
