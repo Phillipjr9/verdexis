@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { toast } from 'sonner'
 import { api, getToken } from '../lib/api'
+import { PageSpinner } from './ui/spinner'
 
 function roleFromMe(me: unknown): string | undefined {
   if (!me || typeof me !== 'object') return undefined
@@ -9,10 +10,6 @@ function roleFromMe(me: unknown): string | undefined {
   return rec.user?.role ?? rec.role
 }
 
-/**
- * Gates a route to authenticated admin users.
- * /api/auth/me returns the user at the top level (`{ role }`), not `{ user }`.
- */
 export default function RequireAdmin({ children }: { children: React.ReactNode }) {
   const location = useLocation()
   const [check, setCheck] = useState<'pending' | 'ok' | 'redirect'>(() => (getToken() ? 'pending' : 'redirect'))
@@ -58,15 +55,7 @@ export default function RequireAdmin({ children }: { children: React.ReactNode }
     return () => { cancelled = true }
   }, [check])
 
-  if (check === 'pending') {
-    return (
-      <div className="min-h-screen bg-[#070C0E] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-[#0C8B44] border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
-  if (check === 'redirect') {
-    return <Navigate to="/dashboard" replace state={{ from: location.pathname }} />
-  }
+  if (check === 'pending') return <PageSpinner />
+  if (check === 'redirect') return <Navigate to="/dashboard" replace state={{ from: location.pathname }} />
   return <>{children}</>
 }
