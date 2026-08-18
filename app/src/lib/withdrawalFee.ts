@@ -5,7 +5,7 @@ export type WithdrawalFeeEstimate = {
   method: string
   tier: string
   ratePct: number
-  source: 'override' | 'tier' | 'local'
+  source: 'override' | 'tier' | 'local' | 'global'
   processingFee: number
   totalDebit: number
   youReceive: number
@@ -20,29 +20,46 @@ const LOCAL_TIER_RATES: Record<string, number> = {
   UNVERIFIED: 3,
 }
 
-export function localWithdrawalFee(amount: number, method = 'crypto'): WithdrawalFeeEstimate {
-  const ratePct = method === 'check' ? 0 : LOCAL_TIER_RATES.UNVERIFIED
-  const processingFee = amount * ratePct / 100
+export function feeFromRate(amount: number, ratePct: number, method = 'crypto', source: WithdrawalFeeEstimate['source'] = 'local', tier = 'UNVERIFIED'): WithdrawalFeeEstimate {
+  const rate = method === 'check' ? 0 : Math.min(Math.max(ratePct, 0), 15)
+  const processingFee = amount * rate / 100
   return {
     amount,
     method,
-    tier: 'UNVERIFIED',
-    ratePct,
-    source: 'local',
+    tier,
+    ratePct: rate,
+    source,
     processingFee,
     totalDebit: amount + processingFee,
     youReceive: amount,
   }
 }
 
+export function localWithdrawalFee(amount: number, method = 'crypto'): WithdrawalFeeEstimate {
+  return feeFromRate(amount, LOCAL_TIER_RATES.UNVERIFIED, method, 'local')
+}
+
 export async function estimateWithdrawalFee(amount: number, method = 'crypto'): Promise<WithdrawalFeeEstimate> {
   if (!Number.isFinite(amount) || amount <= 0) return localWithdrawalFee(0, method)
   if (!getToken()) return localWithdrawalFee(amount, method)
+
   try {
-    return await api.get<WithdrawalFeeEstimate>(
+    const live = await api.get<WithdrawalFeeEstimate>(
       `/api/withdrawals/estimate?amount=${encodeURIComponent(String(amount))}&method=${encodeURIComponent(method)}`,
     )
+    if (live && typeof live.processingFee === 'number') return live
   } catch {
-    return localWithdrawalFee(amount, method)
+    /* fall through */
   }
+
+  try {
+    const cfg = await api.get<{ ratePct?: number }>('/api/wallet/withdrawal-fee-config')
+    if (typeof cfg.ratePct === 'number') {
+      return feeFromRate(amount, cfg.ratePct, method, 'global')
+    }
+  } catch {
+    /* use local default */
+  }
+
+  return localWithdrawalFee(amount, method)
 }
