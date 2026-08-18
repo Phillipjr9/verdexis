@@ -117,6 +117,8 @@ const signupSchema = z.object({
   // Phone is optional at signup and can be stored in the user's profile later.
   // Accepts E.164 or local formats with at least 7 digits when provided.
   phone: z.string().trim().min(7).max(32).regex(/^[+0-9 ()\-.]+$/, 'Invalid phone number').optional(),
+  // Street address (single-line) is collected at signup for compliance and contact.
+  address: z.string().trim().min(5).max(200).optional(),
 })
 
 const loginSchema = z.object({
@@ -688,7 +690,9 @@ router.post('/signup', ensureDbReady, authLimiter, async (req, res) => {
       investmentId,
       referralCode,
       role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user',
+      // Store phone in prefs (existing code paths expect prefs JSON), but write address to a dedicated column
       prefs: JSON.stringify({ phone: phone ?? null }),
+      address: parsed.data.address ?? null,
     }
     user = await createUser(createData)
   } catch (e) {

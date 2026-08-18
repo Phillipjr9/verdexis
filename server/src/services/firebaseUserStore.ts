@@ -98,6 +98,7 @@ export async function createUser(data: any): Promise<FirebaseUserRecord> {
     passwordHash: data.passwordHash,
     avatar: data.avatar || null,
     prefs: data.prefs ?? null,
+    address: data.address ?? null,
     twoFactor: Boolean(data.twoFactor),
     role: data.role || 'user',
     suspended: Boolean(data.suspended) || false,
@@ -132,6 +133,7 @@ export async function createUser(data: any): Promise<FirebaseUserRecord> {
       phoneVerified: record.phoneVerified,
       phoneVerifiedAt: record.phoneVerifiedAt ? new Date(record.phoneVerifiedAt) : null,
       prefs: record.prefs,
+      address: (record as any).address ?? null,
       investmentId: record.investmentId,
       tokenVersion: record.tokenVersion ?? 0,
     }})
@@ -202,6 +204,7 @@ export async function updateUser(id: string, data: any): Promise<FirebaseUserRec
       phoneVerified: record.phoneVerified,
       phoneVerifiedAt: record.phoneVerifiedAt ? new Date(record.phoneVerifiedAt) : null,
       prefs: record.prefs,
+      address: (record as any).address ?? null,
       investmentId: record.investmentId,
       tokenVersion: record.tokenVersion ?? 0,
     }})

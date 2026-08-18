@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import Navigation from '../components/Navigation'
 import { adminApi, type AdminSessionStats, type AdminStats } from '../lib/adminApi'
+import { api } from '../lib/api'
 import { AdminDashboardCharts } from '../components/dashboard/AdminDashboardCharts'
 import {
   Users, ShieldCheck, Ban, ArrowLeftRight, Banknote, UserPlus, MegaphoneIcon, Settings as Cog, Activity, FileCheck2,
@@ -33,7 +34,7 @@ export default function AdminDashboard() {
         setPendingReviewCount(reviewResult.reviews.length)
         setStatsError(null)
         try {
-          const w = await (await fetch('/api/wallet')).json()
+          const w = await api.get('/api/wallet')
           const usd = w.balances?.find((b: any) => b.currency === 'USD')
           if (usd) setTreasuryBalance(usd.balance)
         } catch (e) {

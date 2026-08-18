@@ -19,7 +19,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
   const navigate = useNavigate()
   const [mode, setMode] = useState<Mode>(defaultMode)
   const [showPassword, setShowPassword] = useState(false)
-  const [form, setForm] = useState({ email: '', password: '', confirmPassword: '', firstName: '', lastName: '', phone: '' })
+  const [form, setForm] = useState({ email: '', password: '', confirmPassword: '', firstName: '', lastName: '', phone: '', address: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [resetSent, setResetSent] = useState(false)
@@ -99,10 +99,11 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
 
       if (mode === 'signup') {
         const safeEmail = sanitizeEmail(form.email)
-        const safePhone = sanitizeText(form.phone, '').replace(/[^\d+()\-\s.]/g, '')
+        const safePhone = sanitizeText(form.phone, '').replace(/[^^\d+()\-\s.]/g, '')
+        const safeAddress = sanitizeDisplayText(form.address, 200)
         const safeFirstName = sanitizeDisplayText(form.firstName, 40)
         const safeLastName = sanitizeDisplayText(form.lastName, 40)
-        setForm((current) => ({ ...current, email: safeEmail, phone: safePhone, firstName: safeFirstName, lastName: safeLastName }))
+        setForm((current) => ({ ...current, email: safeEmail, phone: safePhone, address: safeAddress, firstName: safeFirstName, lastName: safeLastName }))
 
         // basic client-side validations
         if (!safeEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(safeEmail)) {
@@ -128,6 +129,12 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
             setLoading(false)
             return
           }
+        }
+        // Require address on signup
+        if (!safeAddress || safeAddress.length < 5) {
+          setError('Please enter your street address')
+          setLoading(false)
+          return
         }
       }
 
@@ -168,10 +175,11 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
       const safeFirstName = sanitizeDisplayText(form.firstName, 40)
       const safeLastName = sanitizeDisplayText(form.lastName, 40)
       const safePhone = sanitizeText(form.phone, '').replace(/[^\d+()\-\s.]/g, '')
+      const safeAddress = sanitizeDisplayText(form.address, 200)
       const name = `${safeFirstName} ${safeLastName}`.trim()
       let result
       if (mode === 'signup') {
-        result = await api.signup(safeEmail, form.password, name, safePhone.trim())
+        result = await api.signup(safeEmail, form.password, name, safePhone.trim(), safeAddress.trim())
       } else {
         result = await api.login(safeEmail, form.password)
       }
@@ -492,6 +500,26 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
                 </div>
                 <p className="mt-2 text-[11px] text-[#A3A3A3] leading-relaxed">
                   Required. Used by our team to contact you for account verification and important security notices.
+                </p>
+              </div>
+            )}
+
+            {mode === 'signup' && (
+              <div>
+                <label className="text-xs text-[#737373] mb-1.5 block">Street address</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={form.address}
+                    onChange={(e) => setForm({ ...form, address: sanitizeDisplayText(e.target.value, 200) })}
+                    className="w-full pl-3 pr-4 py-3 bg-[#1a1a1a] border border-[#ffffff08] rounded-xl text-sm text-[#E5E5E5] placeholder-[#737373] focus:outline-none focus:border-[#0C8B44] transition-colors"
+                    placeholder="123 Main St, Apt 4B"
+                    autoComplete="street-address"
+                    required
+                  />
+                </div>
+                <p className="mt-2 text-[11px] text-[#A3A3A3] leading-relaxed">
+                  Required. Provide your street address for compliance and account setup.
                 </p>
               </div>
             )}

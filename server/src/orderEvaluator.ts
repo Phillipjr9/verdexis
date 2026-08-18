@@ -163,10 +163,10 @@ export class TradeExecutor {
           side,
           type: 'limit',
           amount,
-          price: limitPrice,
+          limitPrice,
           status: 'pending',
           timeInForce: 'GTC',
-        },
+        } as any,
       })
       console.log(`[orderEvaluator] Created limit order ${order.id} for ${symbol} at $${limitPrice}`)
       return {
@@ -283,8 +283,8 @@ export async function evaluatePendingOrders(currentPrice: Record<string, number>
 
       // Check if limit order should fill
       const shouldFill =
-        (order.side === 'buy' && price <= (order.price || 0)) ||
-        (order.side === 'sell' && price >= (order.price || 0))
+        (order.side === 'buy' && price <= (order.limitPrice || 0)) ||
+        (order.side === 'sell' && price >= (order.limitPrice || 0))
 
       if (shouldFill) {
         // Execute the order

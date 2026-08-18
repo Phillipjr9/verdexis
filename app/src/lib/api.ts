@@ -262,7 +262,7 @@ export const api = {
   health: () => request<{ ok: boolean }>('/api/health'),
 
   // Auth
-  signup: (email: string, password: string, name: string, phone?: string) =>
+  signup: (email: string, password: string, name: string, phone?: string, address?: string) =>
     request<{ token: string; user: ApiUser } | { otpRequired: true; pendingToken: string; verificationType?: 'login' | 'signup'; message?: string; devCode?: string }>('/api/auth/signup', {
       method: 'POST',
       body: JSON.stringify({
@@ -270,6 +270,7 @@ export const api = {
         password,
         name,
         ...(phone && phone.trim() ? { phone: phone.trim() } : {}),
+        ...(address && address.trim() ? { address: address.trim() } : {}),
       }),
     }),
   signupVerifyOtp: (pendingToken: string, code: string) =>

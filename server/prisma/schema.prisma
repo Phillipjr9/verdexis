@@ -61,6 +61,7 @@ model User {
   walletChainId        String?
   walletProvider       String?
   walletLinkedAt       DateTime?
+  address              String?  // Primary contact/street address collected at signup
   tokenVersion         Int       @default(0)
   referralCode         String?   @unique
   referrerId           String?
