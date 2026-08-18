@@ -1,6 +1,4 @@
-// Applies the user's chosen theme as a `data-theme` attribute on <html>.
-// The app currently ships dark-first; this attribute is the hook future
-// CSS can target to implement additional themes.
+// Applies the user's chosen theme as `data-theme` + Tailwind `dark` class on <html>.
 
 type Theme = 'dark' | 'light' | 'auto'
 
@@ -24,20 +22,47 @@ function resolve(theme: Theme): 'dark' | 'light' {
   return theme
 }
 
+export function getResolvedTheme(): 'dark' | 'light' {
+  return resolve(readTheme())
+}
+
 export function applyTheme(theme: Theme = readTheme()) {
   const resolved = resolve(theme)
-  document.documentElement.setAttribute('data-theme', resolved)
-  document.documentElement.style.colorScheme = resolved
+  const root = document.documentElement
+  root.setAttribute('data-theme', resolved)
+  root.style.colorScheme = resolved
+  root.classList.toggle('dark', resolved === 'dark')
+  root.classList.toggle('light', resolved === 'light')
+  try {
+    window.dispatchEvent(new CustomEvent('verdexis:theme', { detail: resolved }))
+  } catch {
+    /* ignore */
+  }
+}
+
+export function setThemePreference(theme: Theme) {
+  try {
+    const raw = localStorage.getItem(PREFS_KEY)
+    const prefs = raw ? JSON.parse(raw) : {}
+    prefs.theme = theme
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs))
+  } catch {
+    /* ignore */
+  }
+  applyTheme(theme)
+  try {
+    window.dispatchEvent(new Event('verdexis:prefs'))
+  } catch {
+    /* ignore */
+  }
 }
 
 export function initTheme() {
   applyTheme()
-  // Re-apply when prefs change in this tab or another tab.
   window.addEventListener('storage', (e) => {
     if (e.key === PREFS_KEY) applyTheme()
   })
   window.addEventListener('verdexis:prefs', () => applyTheme())
-  // React to system changes when on auto.
   const mq = window.matchMedia('(prefers-color-scheme: light)')
   mq.addEventListener('change', () => {
     if (readTheme() === 'auto') applyTheme()
