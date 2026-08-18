@@ -1,206 +1,226 @@
 import { useEffect, useState } from 'react'
-import { Copy, Trash2, Plus, QrCode, AlertCircle } from 'lucide-react'
+import { Copy, QrCode, RefreshCw, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
-import { WalletQrScanner } from './WalletQrScanner'
+import { api, getToken } from '../lib/api'
+import { getProfile } from '../lib/userProfile'
+import { hydrateUserWalletsFromServer, userWallets, USER_WALLETS_EVENT } from '../lib/userWallets'
+import { cryptoIconFor } from '../lib/cryptoIcon'
 
-interface DepositAddress {
-  address: string
-  currency: string
-  chainId?: string
-  network?: string
-  qrCodeUrl?: string
-}
+const COINS = [
+  { symbol: 'BTC', currency: 'btc', name: 'Bitcoin', network: 'Bitcoin' },
+  { symbol: 'ETH', currency: 'eth', name: 'Ethereum', network: 'Ethereum' },
+  { symbol: 'SOL', currency: 'sol', name: 'Solana', network: 'Solana' },
+  { symbol: 'USDT', currency: 'usdt', name: 'Tether', network: 'Ethereum (ERC-20)' },
+  { symbol: 'USDC', currency: 'usdc', name: 'USD Coin', network: 'Ethereum (ERC-20)' },
+  { symbol: 'MATIC', currency: 'matic', name: 'Polygon', network: 'Polygon' },
+] as const
 
-interface WalletLink {
-  id: string
+type CoinRow = {
+  symbol: string
+  name: string
+  network: string
   address: string
-  chainId?: string
-  provider?: string
-  label?: string
-  isPrimary: boolean
-  linkedAt: string
+  source: 'admin' | 'generated' | 'none'
 }
 
 export function CryptoDepositAddresses() {
-  const [selectedCurrency, setSelectedCurrency] = useState<string>('btc')
-  const [depositAddress, setDepositAddress] = useState<DepositAddress | null>(null)
-  const [walletLinks, setWalletLinks] = useState<WalletLink[]>([])
-  const [loading, setLoading] = useState(false)
-  const [showQR, setShowQR] = useState(false)
-  const [supportedCurrencies, setSupportedCurrencies] = useState<any[]>([])
+  const [rows, setRows] = useState<CoinRow[]>(
+    COINS.map((c) => ({ symbol: c.symbol, name: c.name, network: c.network, address: '', source: 'none' })),
+  )
+  const [loading, setLoading] = useState<string | 'all' | null>(null)
+  const [qrSymbol, setQrSymbol] = useState<string | null>(null)
+
+  async function load() {
+    const profile = getProfile()
+    if (profile?.email) {
+      await hydrateUserWalletsFromServer({ email: profile.email })
+    }
+    applyOverrides()
+  }
+
+  function applyOverrides() {
+    const profile = getProfile()
+    const override = profile?.email ? userWallets.get(profile.email) : null
+    setRows((curr) =>
+      curr.map((row) => {
+        const adminAddr = override?.cryptos?.[row.symbol]?.address?.trim()
+        if (adminAddr) {
+          return {
+            ...row,
+            address: adminAddr,
+            network: override?.cryptos?.[row.symbol]?.network || row.network,
+            source: 'admin',
+          }
+        }
+        return row
+      }),
+    )
+  }
 
   useEffect(() => {
-    fetchSupportedCurrencies()
-    fetchWalletLinks()
+    void load()
+    const onChange = () => applyOverrides()
+    window.addEventListener(USER_WALLETS_EVENT, onChange)
+    return () => window.removeEventListener(USER_WALLETS_EVENT, onChange)
   }, [])
 
-  const fetchSupportedCurrencies = async () => {
-    try {
-      const res = await fetch('/api/deposit-addresses/supported')
-      const data = await res.json()
-      setSupportedCurrencies(data.currencies)
-    } catch (err) {
-      console.error('Failed to fetch supported currencies:', err)
+  function persist(next: CoinRow[]) {
+    const profile = getProfile()
+    if (!profile?.email) return
+    const existing = userWallets.get(profile.email) || { cryptos: {} }
+    const cryptos = { ...existing.cryptos }
+    for (const row of next) {
+      if (!row.address) continue
+      if (cryptos[row.symbol]?.address && row.source !== 'generated') continue
+      cryptos[row.symbol] = {
+        currency: row.symbol,
+        network: row.network,
+        address: row.address,
+      }
     }
+    userWallets.set(profile.email, { ...existing, cryptos })
   }
 
-  const fetchWalletLinks = async () => {
-    try {
-      const res = await fetch('/api/deposit-addresses')
-      if (!res.ok) throw new Error('Failed to fetch wallet links')
-      const data = await res.json()
-      setWalletLinks(data.addresses)
-    } catch (err) {
-      console.error('Failed to fetch wallet links:', err)
-    }
+  async function generateOne(symbol: string, currency: string): Promise<string | null> {
+    const res = await api.get<{ address?: string; network?: string }>(
+      `/api/deposit-addresses/generate?currency=${encodeURIComponent(currency)}`,
+    )
+    return res.address || null
   }
 
-  const generateAddress = async () => {
-    setLoading(true)
+  async function handleGenerate(symbol: string, currency: string) {
+    if (!getToken()) {
+      toast.error('Sign in to generate a wallet address')
+      return
+    }
+    setLoading(symbol)
     try {
-      const res = await fetch(`/api/deposit-addresses/generate?currency=${selectedCurrency}`)
-      if (!res.ok) throw new Error('Failed to generate address')
-      const data = await res.json()
-      setDepositAddress(data)
-      setShowQR(true)
-      toast.success('Deposit address generated!')
+      const address = await generateOne(symbol, currency)
+      if (!address) throw new Error('No address returned')
+      setRows((curr) => {
+        const next = curr.map((row) =>
+          row.symbol === symbol && row.source !== 'admin'
+            ? { ...row, address, source: 'generated' as const }
+            : row,
+        )
+        persist(next)
+        return next
+      })
+      toast.success(`${symbol} address ready`)
     } catch (err) {
-      toast.error((err as Error).message || 'Failed to generate address')
+      toast.error((err as { error?: string }).error || `Could not generate ${symbol} address`)
     } finally {
-      setLoading(false)
+      setLoading(null)
     }
   }
 
-  const copyAddress = () => {
-    if (depositAddress?.address) {
-      navigator.clipboard.writeText(depositAddress.address)
-      toast.success('Address copied to clipboard!')
+  async function handleGenerateAll() {
+    if (!getToken()) {
+      toast.error('Sign in to generate wallet addresses')
+      return
     }
-  }
-
-  const deleteWallet = async (id: string) => {
-    if (!confirm('Delete this wallet address?')) return
+    setLoading('all')
     try {
-      const res = await fetch(`/api/deposit-addresses/${id}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed to delete wallet')
-      setWalletLinks(walletLinks.filter((w) => w.id !== id))
-      toast.success('Wallet deleted!')
+      const generated: Record<string, string> = {}
+      for (const coin of COINS) {
+        const address = await generateOne(coin.symbol, coin.currency)
+        if (address) generated[coin.symbol] = address
+      }
+      setRows((curr) => {
+        const next = curr.map((row) => {
+          if (row.source === 'admin') return row
+          const address = generated[row.symbol]
+          return address ? { ...row, address, source: 'generated' as const } : row
+        })
+        persist(next)
+        return next
+      })
+      toast.success('A unique address was created for each crypto')
     } catch (err) {
-      toast.error((err as Error).message || 'Failed to delete wallet')
+      toast.error((err as { error?: string }).error || 'Could not generate wallets')
+    } finally {
+      setLoading(null)
     }
+  }
+
+  function copy(address: string, symbol: string) {
+    void navigator.clipboard.writeText(address)
+    toast.success(`${symbol} address copied`)
   }
 
   return (
-    <div className="space-y-6">
-      {/* Generate Address Section */}
-      <div className="bg-[#0F1619] rounded-lg p-6 border border-[#1a2329]">
-        <h2 className="text-xl font-semibold text-white mb-4">Generate Deposit Address</h2>
-        
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm text-[#A0A0A0] mb-2">Select Currency</label>
-            <select
-              value={selectedCurrency}
-              onChange={(e) => setSelectedCurrency(e.target.value)}
-              className="w-full bg-[#070C0E] border border-[#1a2329] rounded-lg px-4 py-2 text-white"
-            >
-              {supportedCurrencies.map((currency) => (
-                <option key={currency.symbol} value={currency.symbol}>
-                  {currency.name} ({currency.symbol.toUpperCase()}) - {currency.network}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <button
-            onClick={generateAddress}
-            disabled={loading}
-            className="w-full bg-[#0C8B44] hover:bg-[#0a6b35] disabled:opacity-50 text-white py-2 rounded-lg font-medium transition"
-          >
-            {loading ? 'Generating...' : 'Generate Address'}
-          </button>
+    <div className="space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-medium text-[#E5E5E5] flex items-center gap-2">
+            <Wallet className="w-5 h-5 text-[#0C8B44]" />
+            Crypto wallets
+          </h2>
+          <p className="text-sm text-[#737373] mt-1">
+            Each coin has its own deposit address. Generate yours here. An admin can still change any address on your profile.
+          </p>
         </div>
+        <button
+          type="button"
+          onClick={() => void handleGenerateAll()}
+          disabled={loading !== null}
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0C8B44] px-4 py-2.5 text-sm text-white hover:bg-[#0a7539] disabled:opacity-50"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading === 'all' ? 'animate-spin' : ''}`} />
+          {loading === 'all' ? 'Generating…' : 'Generate all wallets'}
+        </button>
       </div>
 
-      {/* Display Generated Address */}
-      {depositAddress && (
-        <div className="bg-[#0F1619] rounded-lg p-6 border border-[#1a2329]">
-          <h3 className="text-lg font-semibold text-white mb-4">Your {depositAddress.currency.toUpperCase()} Address</h3>
-          
-          <div className="space-y-4">
-            {/* Use new QR Scanner component */}
-            <WalletQrScanner
-              address={depositAddress.address}
-              currency={depositAddress.currency.toUpperCase()}
-              network={depositAddress.network || 'Unknown'}
-            />
-
-            {/* QR Code Display Toggle */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowQR(!showQR)}
-                className="flex items-center gap-2 text-[#0C8B44] hover:text-[#0a6b35] text-sm font-medium"
-              >
-                <QrCode size={16} />
-                {showQR ? 'Hide' : 'Show'} QR Code
-              </button>
-            </div>
-
-            {/* QR Code */}
-            {showQR && depositAddress.qrCodeUrl && (
-              <div className="flex justify-center bg-white p-4 rounded">
-                <img
-                  src={depositAddress.qrCodeUrl}
-                  alt="QR Code"
-                  className="w-40 h-40"
-                />
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Linked Wallets */}
-      {walletLinks.length > 0 && (
-        <div className="bg-[#0F1619] rounded-lg p-6 border border-[#1a2329]">
-          <h3 className="text-lg font-semibold text-white mb-4">Linked Wallets</h3>
-          
-          <div className="space-y-3">
-            {walletLinks.map((wallet) => (
-              <div
-                key={wallet.id}
-                className="bg-[#070C0E] rounded p-4 flex items-center justify-between"
-              >
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <code className="text-[#0C8B44] font-mono text-sm">{wallet.address}</code>
-                    {wallet.isPrimary && (
-                      <span className="text-xs bg-[#0C8B44] text-black px-2 py-1 rounded">Primary</span>
+      <div className="space-y-3">
+        {rows.map((row) => {
+          const qr = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(row.address)}`
+          return (
+            <div key={row.symbol} className="rounded-2xl border border-[#ffffff10] bg-[#0f1619]/70 p-4">
+              <div className="flex items-start gap-3">
+                <img src={cryptoIconFor(row.symbol)} alt="" className="w-8 h-8 rounded-full mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm text-[#E5E5E5]">{row.name}</p>
+                      <p className="text-[11px] text-[#737373]">{row.network}</p>
+                    </div>
+                    {row.source === 'admin' && (
+                      <span className="text-[10px] uppercase tracking-wider text-[#0C8B44]">Admin</span>
                     )}
                   </div>
-                  {wallet.label && <p className="text-xs text-[#A0A0A0] mt-1">{wallet.label}</p>}
-                  {wallet.provider && <p className="text-xs text-[#737373]">{wallet.provider}</p>}
+                  {row.address ? (
+                    <div className="mt-3 flex items-center gap-2">
+                      <code className="flex-1 min-w-0 truncate rounded-lg bg-[#070C0E] border border-[#ffffff10] px-3 py-2 text-xs text-[#E5E5E5] font-mono">
+                        {row.address}
+                      </code>
+                      <button type="button" onClick={() => copy(row.address, row.symbol)} className="p-2 rounded-lg border border-[#ffffff10] text-[#A0A0A0] hover:text-white">
+                        <Copy className="w-4 h-4" />
+                      </button>
+                      <button type="button" onClick={() => setQrSymbol(qrSymbol === row.symbol ? null : row.symbol)} className="p-2 rounded-lg border border-[#ffffff10] text-[#A0A0A0] hover:text-white">
+                        <QrCode className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={loading !== null}
+                      onClick={() => void handleGenerate(row.symbol, COINS.find((c) => c.symbol === row.symbol)!.currency)}
+                      className="mt-3 text-sm text-[#0C8B44] hover:underline disabled:opacity-50"
+                    >
+                      {loading === row.symbol ? 'Generating…' : `Generate ${row.symbol} address`}
+                    </button>
+                  )}
+                  {qrSymbol === row.symbol && row.address && (
+                    <div className="mt-3 inline-block rounded-xl bg-white p-2">
+                      <img src={qr} alt={`${row.symbol} QR`} className="w-36 h-36" />
+                    </div>
+                  )}
                 </div>
-                <button
-                  onClick={() => deleteWallet(wallet.id)}
-                  className="text-red-500 hover:text-red-400 transition p-2"
-                  title="Delete wallet"
-                >
-                  <Trash2 size={18} />
-                </button>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Empty State */}
-      {walletLinks.length === 0 && !depositAddress && (
-        <div className="bg-[#0F1619] rounded-lg p-6 border border-[#1a2329] text-center">
-          <Plus size={32} className="mx-auto text-[#737373] mb-2" />
-          <p className="text-[#A0A0A0]">No deposit addresses yet. Generate one to start receiving crypto.</p>
-        </div>
-      )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
