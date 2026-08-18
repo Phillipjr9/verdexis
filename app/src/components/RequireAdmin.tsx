@@ -3,10 +3,15 @@ import { Navigate, useLocation } from 'react-router-dom'
 import { toast } from 'sonner'
 import { api, getToken } from '../lib/api'
 
+function roleFromMe(me: unknown): string | undefined {
+  if (!me || typeof me !== 'object') return undefined
+  const rec = me as { role?: string; user?: { role?: string } }
+  return rec.user?.role ?? rec.role
+}
+
 /**
- * Gates a route to authenticated *admin* users. We re-validate against the
- * server (`/api/auth/me`) on mount so the role check can't be spoofed by
- * editing localStorage. While the check is in flight we render a spinner.
+ * Gates a route to authenticated admin users.
+ * /api/auth/me returns the user at the top level (`{ role }`), not `{ user }`.
  */
 export default function RequireAdmin({ children }: { children: React.ReactNode }) {
   const location = useLocation()
@@ -18,36 +23,25 @@ export default function RequireAdmin({ children }: { children: React.ReactNode }
 
     const validateAdmin = async () => {
       try {
-        console.log('[RequireAdmin] Fetching /me...')
         const me = await api.me()
-        console.log('[RequireAdmin] /me response:', me)
         if (cancelled) return
-
-        const user = me?.user
-        console.log('[RequireAdmin] user:', user, 'role:', user?.role)
-        if (user?.role === 'admin') {
-          console.log('[RequireAdmin] ✅ Admin role verified')
+        if (roleFromMe(me) === 'admin') {
           setCheck('ok')
           return
         }
-        console.error('[RequireAdmin] ❌ User role is not admin:', user?.role)
         toast.error('Admin access required')
         setCheck('redirect')
-        return
       } catch (err: any) {
-        // If the server explicitly reports unauthorized, redirect.
         const status = err && typeof err.status === 'number' ? err.status : undefined
         if (status === 401) {
           if (!cancelled) setCheck('redirect')
           return
         }
-
-        // For transient network or 5xx errors, retry once after a short delay
         try {
           await new Promise((res) => setTimeout(res, 700))
           const me2 = await api.me()
           if (cancelled) return
-          if (me2?.user?.role === 'admin') {
+          if (roleFromMe(me2) === 'admin') {
             setCheck('ok')
             return
           }
