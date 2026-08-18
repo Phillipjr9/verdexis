@@ -242,7 +242,7 @@ router.post('/', requireAuth, moneyLimiter, idempotency(), async (req: AuthedReq
       return { withdrawal, normalizedAsset, targetAddress, chain: requestedChain, tokenAddress }
     })
 
-    const transfer = await executeCryptoWithdrawal({ asset: prepared.normalizedAsset, amount, destinationAddress: prepared.targetAddress, ...(prepared.chain ? { chain: prepared.chain } : {}), ...(prepared.tokenAddress ? { tokenAddress: prepared.tokenAddress } : {}), })
+    const transfer = await (executeCryptoWithdrawal as any)({ asset: prepared.normalizedAsset, amount, destinationAddress: prepared.targetAddress, ...(prepared.chain ? { chain: prepared.chain } : {}), ...(prepared.tokenAddress ? { tokenAddress: prepared.tokenAddress } : {}), })
 
     const finalized = await prisma.$transaction(async (tx) => {
       const withdrawal = await tx.withdrawalRequest.findUnique({ where: { id: prepared.withdrawal.id } })

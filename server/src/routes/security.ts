@@ -436,7 +436,7 @@ router.get('/aws/status', async (_req: AuthedRequest, res) => {
 })
 
 router.post('/aws/test', async (_req: AuthedRequest, res) => {
-  const connectionTest = await awsOTPService.testConnection()
+  const connectionTest = await (awsOTPService as any).testConnection()
   res.json({ connectionTest })
 })
 router.post('/aws/send-test-otp', async (req: AuthedRequest, res) => {
@@ -448,7 +448,7 @@ router.post('/aws/send-test-otp', async (req: AuthedRequest, res) => {
   }
   
   try {
-    const result = await awsOTPService.sendOTP(phoneNumber, code, 'admin_test', req.userId!)
+    const result = await (awsOTPService as any).sendOTP(phoneNumber, code, 'admin_test', req.userId!)
     res.json({ result })
   } catch (error) {
     res.status(500).json({ 
