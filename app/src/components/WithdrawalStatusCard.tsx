@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CheckCircle2, Clock, XCircle, RefreshCw, Copy } from 'lucide-react'
-import { toast } from 'sonner'
+import { RefreshCw } from 'lucide-react'
 import { api, getToken } from '../lib/api'
+import { ProgressTrail, WITHDRAW_STEPS, stepFromStatus } from './progress/ProgressTrail'
 
 type Withdrawal = {
   id: string
@@ -12,13 +12,6 @@ type Withdrawal = {
   rejectedReason?: string | null
   createdAt: string
   destination?: string | null
-}
-
-function normalizeStatus(status: string) {
-  const s = (status || '').toLowerCase()
-  if (s === 'approved' || s === 'completed' || s === 'sent') return 'sent'
-  if (s === 'rejected' || s === 'failed' || s === 'declined') return 'rejected'
-  return 'pending'
 }
 
 export function WithdrawalStatusCard({ refreshKey = 0 }: { refreshKey?: number }) {
@@ -106,55 +99,22 @@ export function WithdrawalStatusCard({ refreshKey = 0 }: { refreshKey?: number }
           Refresh
         </button>
       </div>
-
       {items.length === 0 && !loading && (
         <p className="text-xs text-[#737373]">No withdrawals yet. After you request one, its status will show here.</p>
       )}
-
       {items.map((item) => {
-        const state = normalizeStatus(item.status)
-        const steps = [
-          { label: 'Submitted', done: true },
-          { label: 'In review', done: true },
-          { label: state === 'rejected' ? 'Rejected' : 'Sent', done: state === 'sent' || state === 'rejected' },
-        ]
-        if (state === 'pending') steps[2].done = false
-
+        const trail = stepFromStatus(item.status, 'withdraw')
         return (
-          <div key={item.id} className="rounded-xl border border-[#ffffff10] bg-[#070C0E] p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm text-[#E5E5E5]">{item.amount} {item.asset}</p>
-                <p className="text-[11px] text-[#737373] mt-0.5">{new Date(item.createdAt).toLocaleString()}</p>
-              </div>
-              <span className={`text-[10px] uppercase tracking-wider ${
-                state === 'sent' ? 'text-[#0C8B44]' : state === 'rejected' ? 'text-[#f44336]' : 'text-[#F57C00]'
-              }`}>{state}</span>
-            </div>
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              {steps.map((step) => (
-                <div key={step.label} className="text-center">
-                  <div className={`mx-auto mb-1 flex h-6 w-6 items-center justify-center rounded-full ${
-                    step.done
-                      ? state === 'rejected' && step.label === 'Rejected'
-                        ? 'bg-[#f44336]/20 text-[#f44336]'
-                        : 'bg-[#0C8B44]/20 text-[#0C8B44]'
-                      : 'bg-[#ffffff08] text-[#737373]'
-                  }`}>
-                    {step.label === 'Rejected' && step.done ? <XCircle className="w-3.5 h-3.5" /> : step.done ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
-                  </div>
-                  <p className="text-[10px] text-[#A0A0A0]">{step.label}</p>
-                </div>
-              ))}
-            </div>
-            {item.destination && <p className="mt-3 text-[11px] text-[#737373] font-mono truncate">To {item.destination}</p>}
-            {item.txHash && (
-              <button type="button" className="mt-2 inline-flex items-center gap-1 text-[11px] text-[#0C8B44] font-mono" onClick={() => { void navigator.clipboard.writeText(item.txHash || ''); toast.success('Transaction hash copied') }}>
-                <Copy className="w-3 h-3" />
-                {item.txHash.slice(0, 18)}…
-              </button>
-            )}
-            {item.rejectedReason && <p className="mt-2 text-[11px] text-[#f44336]">{item.rejectedReason}</p>}
+          <div key={item.id} className="space-y-2">
+            <ProgressTrail
+              title={`${item.amount} ${item.asset} withdrawal`}
+              phase={item.rejectedReason ? `Rejected: ${item.rejectedReason}` : trail.phase}
+              steps={WITHDRAW_STEPS}
+              current={trail.current}
+              done={trail.done}
+              reference={`Ref ${(item.txHash || item.id).slice(0, 12)} · ${new Date(item.createdAt).toLocaleString()}`}
+            />
+            {item.destination && <p className="text-[11px] text-[#737373] font-mono truncate px-1">To {item.destination}</p>}
           </div>
         )
       })}
