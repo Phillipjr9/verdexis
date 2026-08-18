@@ -155,12 +155,24 @@ export class TradeExecutor {
       (side === 'sell' && currentPrice >= limitPrice)
 
     if (!shouldFill) {
-      // Return pending order
-      // TODO: Store in database with limit price
+      // Store pending limit order in database
+      const order = await prisma.order.create({
+        data: {
+          userId,
+          symbol,
+          side,
+          type: 'limit',
+          amount,
+          price: limitPrice,
+          status: 'pending',
+          timeInForce: 'GTC',
+        },
+      })
+      console.log(`[orderEvaluator] Created limit order ${order.id} for ${symbol} at $${limitPrice}`)
       return {
-        orderId: 'pending-order-id',
+        orderId: order.id,
         executed: false,
-        message: `Order pending. Awaiting price to reach $${limitPrice}`,
+        message: `Limit order created. Awaiting price to reach $${limitPrice}`,
       }
     }
 
@@ -254,12 +266,50 @@ export class TradeExecutor {
 }
 
 // Background job to evaluate and execute pending orders
-export async function evaluatePendingOrders() {
+export async function evaluatePendingOrders(currentPrice: Record<string, number>) {
   console.log('[order-evaluator] Checking pending orders...')
 
-  // Get all pending orders
-  // In production, would fetch from database
-  // For now, this is a placeholder for the poller
+  try {
+    // Get all pending limit orders
+    const pendingOrders = await prisma.order.findMany({
+      where: { status: 'pending', type: 'limit' },
+    })
 
-  return 0 // number of orders executed
+    let executedCount = 0
+
+    for (const order of pendingOrders) {
+      const price = currentPrice[order.symbol]
+      if (!price) continue
+
+      // Check if limit order should fill
+      const shouldFill =
+        (order.side === 'buy' && price <= (order.price || 0)) ||
+        (order.side === 'sell' && price >= (order.price || 0))
+
+      if (shouldFill) {
+        // Execute the order
+        const result = await TradeExecutor.executeMarketOrder(
+          order.userId,
+          order.symbol,
+          order.side as 'buy' | 'sell',
+          order.amount,
+          price,
+        )
+
+        // Update order status
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { status: 'filled', executedPrice: price },
+        })
+
+        executedCount++
+        console.log(`[order-evaluator] Executed limit order ${order.id} at $${price}`)
+      }
+    }
+
+    return executedCount
+  } catch (error) {
+    console.error('[order-evaluator] Error evaluating pending orders:', error)
+    return 0
+  }
 }

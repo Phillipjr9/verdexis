@@ -30,6 +30,13 @@ const DEMO_NFTS: NFT[] = [
   { id: '5', name: 'ENS: verdexis.eth', collection: 'ENS Domains', category: 'Utility', image: '🔑', floorPrice: 0.05, floorChange24h: 1.2, purchasePrice: 0.04, quantity: 1, chain: 'ETH', openseaUrl: 'https://app.ens.domains/' },
 ]
 
+const CATEGORY_COLORS: Record<string, string> = {
+  Art: '#8B5CF6',
+  Gaming: '#EF4444',
+  PFP: '#3B82F6',
+  Utility: '#10B981',
+}
+
 export default function NFTPortfolio() { return <RequireAuth><NFTPortfolioInner /></RequireAuth> }
 
 function NFTPortfolioInner() {
@@ -41,6 +48,18 @@ function NFTPortfolioInner() {
   const [loading, setLoading] = useState(false)
   const [isDemo, setIsDemo] = useState(true)
 
+  const fetchUserNFTs = async (walletAddress: string) => {
+    try {
+      const response = await fetch(`/api/nfts/${walletAddress}`)
+      const data = await response.json()
+      setNfts(data.nfts)
+      setIsDemo(false)
+    } catch (error) {
+      console.error('Failed to fetch NFTs:', error)
+      toast.error('Failed to load NFTs')
+    }
+  }
+
   // Check if user has connected wallet
   useEffect(() => {
     const auth = localStorage.getItem('verdexis_auth')
@@ -51,8 +70,7 @@ function NFTPortfolioInner() {
           setWalletAddress(parsed.walletAddress)
           setWalletConnected(true)
           setIsDemo(false)
-          // In production, fetch real NFTs here
-          // fetchUserNFTs(parsed.walletAddress)
+          fetchUserNFTs(parsed.walletAddress)
         }
       } catch (err) {
         console.error('Failed to parse auth:', err)
@@ -72,8 +90,7 @@ function NFTPortfolioInner() {
           setWalletConnected(true)
           setIsDemo(false)
           toast.success('Wallet connected!')
-          // TODO: Save wallet address to backend
-          // TODO: Fetch real NFTs from Simplehash/Reservoir API
+          fetchUserNFTs(accounts[0])
         }
       } else {
         toast.error('Please install MetaMask to connect your wallet')
@@ -90,10 +107,7 @@ function NFTPortfolioInner() {
     if (!walletAddress) return
     setLoading(true)
     try {
-      // TODO: Fetch fresh NFT data from API
-      // const response = await fetch(`/api/nfts/${walletAddress}`)
-      // const data = await response.json()
-      // setNfts(data.nfts)
+      await fetchUserNFTs(walletAddress)
       toast.success('NFT data refreshed')
     } catch (error) {
       toast.error('Failed to refresh NFT data')
