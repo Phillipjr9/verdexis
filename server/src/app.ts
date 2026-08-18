@@ -182,6 +182,31 @@ app.use(cookieParser())
 app.use(morgan(IS_PROD ? 'combined' : 'dev'))
 app.use(requestContextMiddleware)
 
+// Ensure BigInt values returned from Prisma are JSON-serializable.
+// Convert BigInt -> string recursively before sending JSON responses.
+app.use((req, res, next) => {
+  const origJson = res.json.bind(res)
+  function convertBigInt(value: unknown): unknown {
+    if (value === null || value === undefined) return value
+    if (typeof value === 'bigint') return value.toString()
+    if (Array.isArray(value)) return value.map(convertBigInt)
+    if (typeof value === 'object') {
+      // Preserve Dates and Buffers
+      if (value instanceof Date) return value
+      if (value instanceof Buffer) return value
+      const out: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+        out[k] = convertBigInt(v)
+      }
+      return out
+    }
+    return value
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ;(res as any).json = (body: unknown) => origJson(convertBigInt(body))
+  next()
+})
+
 function rateLimitKey(req: express.Request): string {
   const header = req.headers.authorization
   if (header?.startsWith('Bearer ')) {
