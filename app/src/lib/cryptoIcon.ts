@@ -1,28 +1,11 @@
-// Crypto icons. We resolve a CoinGecko-style id (e.g. "bitcoin") or a ticker
-// symbol (e.g. "btc") to a remote logo URL. The web is full of half-broken
-// icon CDNs — the spothq `cryptocurrency-icons` set hasn't been updated in
-// years (no TON/APT/SUI/HYPE/WBT/PEPE/BONK/etc.) and CoinCap's icon CDN
-// (`assets.coincap.io`) has been flaky/sunset since the Coinbase migration,
-// which is why the user kept seeing broken images.
-//
-// Strategy:
-//   1. If the caller has a CoinGecko market object, use its `image` field
-//      directly — that's the canonical logo CoinGecko serves for every
-//      coin we list, no symbol guessing required.
-//   2. Otherwise (we only know the id/symbol), try jsDelivr's mirror of
-//      the actively-maintained `coinwink/cryptocurrency-logos` PNG set,
-//      which covers ~2k tokens including the modern ones.
-//   3. Fall back to the spothq SVG set for the long tail of older coins.
-//   4. Finally, render a coloured-initial SVG so the slot is never blank.
+// Crypto icons. CoinGecko `image` when available, otherwise ticker-named
+// cryptocurrency-icons SVGs. The old coinwink 32x32/{ticker}.png path 404s.
 
 import type React from 'react'
 
-// Actively-maintained PNG icon set (~2000 tokens, includes TON/APT/SUI/etc.).
-const COINWINK_CDN = 'https://cdn.jsdelivr.net/gh/coinwink/cryptocurrency-logos@master/coins/32x32'
-// Long-standing SVG set, used as a secondary fallback. Updated via jsDelivr.
 const SPOTHQ_CDN = 'https://cdn.jsdelivr.net/npm/cryptocurrency-icons@0.18.1/svg/color'
+const SPOTHQ_PNG_CDN = 'https://cdn.jsdelivr.net/npm/cryptocurrency-icons@0.18.1/32/color'
 
-// CoinGecko id -> lowercased ticker symbol.
 const ID_TO_SYMBOL: Record<string, string> = {
   bitcoin: 'btc',
   ethereum: 'eth',
@@ -79,7 +62,7 @@ const ID_TO_SYMBOL: Record<string, string> = {
   pepe: 'pepe',
   bonk: 'bonk',
   wif: 'wif',
-  'dogwifcoin': 'wif',
+  dogwifcoin: 'wif',
   jupiter: 'jup',
   'jupiter-exchange-solana': 'jup',
   pyth: 'pyth',
@@ -139,13 +122,11 @@ const ID_TO_SYMBOL: Record<string, string> = {
   bonkswap: 'bonk',
 }
 
-// Resolve to lowercased ticker symbol used by CoinCap / spothq.
 function symbolFor(idOrSymbol: string): string {
   const key = idOrSymbol.toLowerCase()
   return ID_TO_SYMBOL[key] ?? key
 }
 
-// Improved icon loading with proper caching and error handling
 export function cryptoIconFor(
   input: string | { id?: string; symbol?: string; image?: string | null } | undefined | null,
 ): string | null {
@@ -155,22 +136,13 @@ export function cryptoIconFor(
     return cryptoIconFor(input.id || input.symbol || '')
   }
   const sym = symbolFor(input)
-  // Return the primary CDN URL directly
-  return `${COINWINK_CDN}/${sym}.png`
+  return `${SPOTHQ_CDN}/${sym}.svg`
 }
 
-// Returns the secondary URLs we should try when the primary image 404s.
-// Used by `cryptoIconErrorFallback` to chain through providers.
 function cryptoIconFallbackChain(sym: string): string[] {
-  return [
-    `${COINWINK_CDN}/${sym}.png`,
-    `${SPOTHQ_CDN}/${sym}.svg`,
-  ]
+  return [`${SPOTHQ_PNG_CDN}/${sym}.png`]
 }
 
-// ---- Stock / equity icons -------------------------------------------------
-// Maps common tickers to the company domain we feed Clearbit's free logo
-// service. Falls through to the initial-circle fallback when unknown.
 const STOCK_DOMAIN: Record<string, string> = {
   AAPL: 'apple.com',
   MSFT: 'microsoft.com',
@@ -230,7 +202,6 @@ const STOCK_DOMAIN: Record<string, string> = {
   SPOT: 'spotify.com',
   ROKU: 'roku.com',
   ZM: 'zoom.us',
-  // Common ETFs
   SPY: 'spdrs.com',
   VOO: 'vanguard.com',
   VTI: 'vanguard.com',
@@ -244,16 +215,9 @@ export function stockIconFor(symbol: string | undefined | null): string | null {
   const key = symbol.toUpperCase()
   const domain = STOCK_DOMAIN[key]
   if (!domain) return null
-  // Clearbit's free logo API was retired in 2024 and now returns 404 for
-  // most tickers (which is exactly the "broken Apple icon" the user kept
-  // seeing). Google's S2 favicon endpoint is public, key-less, never 404s
-  // (returns a generic globe at worst), and serves a real branded icon for
-  // every domain in our table. Use ?sz=128 to get a crisp logo at 32-48px.
   return `https://www.google.com/s2/favicons?domain=${domain}&sz=128`
 }
 
-// Smart resolver. Picks crypto vs stock URL based on `type` (preferred) or
-// by checking whether the symbol/id looks like a known crypto/stock.
 export function assetIconFor(
   idOrSymbol: string | undefined | null,
   type?: 'crypto' | 'stock' | 'etf' | string,
@@ -261,23 +225,15 @@ export function assetIconFor(
   if (!idOrSymbol) return null
   const key = String(idOrSymbol).toLowerCase()
   const upper = String(idOrSymbol).toUpperCase()
-  // Type-driven dispatch is most reliable when caller knows.
   if (type === 'crypto') return cryptoIconFor(idOrSymbol)
   if (type === 'stock' || type === 'etf') return stockIconFor(idOrSymbol)
-  // Heuristics: known crypto id/symbol takes precedence.
   if (ID_TO_SYMBOL[key] || ['btc', 'eth', 'sol', 'ada', 'xrp', 'usdt', 'usdc', 'doge', 'bnb'].includes(key)) {
     return cryptoIconFor(idOrSymbol)
   }
   if (STOCK_DOMAIN[upper]) return stockIconFor(idOrSymbol)
-  // Unknown — try crypto first (matches existing behaviour), the onError
-  // fallback will substitute a coloured initial if it 404s.
   return cryptoIconFor(idOrSymbol)
 }
 
-// React-friendly onError fallback: walk the secondary CDN chain before
-// substituting an inline coloured-initial SVG. Pass as `onError` on an <img>.
-// The optional `idOrSymbol` enables the multi-CDN fallback chain; without
-// it we just go straight to the initial SVG (legacy behaviour).
 export function cryptoIconErrorFallback(initial: string, idOrSymbol?: string) {
   const chain = idOrSymbol ? cryptoIconFallbackChain(symbolFor(idOrSymbol)) : []
   let attempt = 0
