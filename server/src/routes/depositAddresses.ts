@@ -6,15 +6,11 @@ import { addressGenerator } from '../cryptoAddressGenerator.js'
 
 const router = Router()
 
-// Supported currencies for deposit addresses
 const SUPPORTED_CURRENCIES = ['btc', 'bitcoin', 'eth', 'ethereum', 'sol', 'solana', 'matic', 'polygon', 'usdc', 'usdt', 'dai']
 
-// Cache to avoid regenerating same address repeatedly
 const addressCache = new Map<string, { address: string; timestamp: number }>()
-const CACHE_TTL = 24 * 60 * 60 * 1000 // 24 hours
+const CACHE_TTL = 24 * 60 * 60 * 1000
 
-// GET /api/deposit-addresses
-// List user's existing deposit addresses
 router.get('/', requireAuth, async (req: AuthedRequest, res) => {
   const userId = req.userId
   if (!userId) {
@@ -43,8 +39,39 @@ router.get('/', requireAuth, async (req: AuthedRequest, res) => {
   }
 })
 
-// GET /api/deposit-addresses/generate?currency=btc
-// Generate a new deposit address for the given currency
+const SYMBOL_BY_CURRENCY: Record<string, string> = {
+  btc: 'BTC',
+  bitcoin: 'BTC',
+  eth: 'ETH',
+  ethereum: 'ETH',
+  sol: 'SOL',
+  solana: 'SOL',
+  matic: 'MATIC',
+  polygon: 'MATIC',
+  usdc: 'USDC',
+  usdt: 'USDT',
+  dai: 'DAI',
+}
+
+type CryptoOverride = { currency: string; network: string; address: string; memo?: string; notes?: string }
+
+async function mergeGeneratedAddress(userId: string, currency: string, network: string, address: string) {
+  const symbol = SYMBOL_BY_CURRENCY[currency.toLowerCase()] || currency.toUpperCase()
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { prefs: true } })
+  let prefs: Record<string, unknown> = {}
+  try { if (user?.prefs) prefs = JSON.parse(user.prefs) } catch { prefs = {} }
+
+  const current = (prefs.depositAddresses && typeof prefs.depositAddresses === 'object')
+    ? prefs.depositAddresses as { cryptos?: Record<string, CryptoOverride>; wire?: unknown; notes?: string }
+    : { cryptos: {} as Record<string, CryptoOverride> }
+  const cryptos = { ...(current.cryptos || {}) }
+  if (cryptos[symbol]?.address) return
+
+  cryptos[symbol] = { currency: symbol, network, address }
+  prefs.depositAddresses = { ...current, cryptos, updatedAt: new Date().toISOString() }
+  await prisma.user.update({ where: { id: userId }, data: { prefs: JSON.stringify(prefs) } })
+}
+
 router.get('/generate', requireAuth, async (req: AuthedRequest, res) => {
   const userId = req.userId
   if (!userId) {
@@ -54,50 +81,73 @@ router.get('/generate', requireAuth, async (req: AuthedRequest, res) => {
 
   const currency = ((req.query.currency as string) || '').trim().toLowerCase()
   if (!SUPPORTED_CURRENCIES.includes(currency)) {
-    res.status(400).json({
-      error: 'Unsupported currency',
-      supported: SUPPORTED_CURRENCIES,
-    })
+    res.status(400).json({ error: 'Unsupported currency', supported: SUPPORTED_CURRENCIES })
     return
   }
 
   try {
-    // Check cache first
-    const cacheKey = `${userId}-${currency}`
-    const cached = addressCache.get(cacheKey)
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-      const generated = addressGenerator.generateAddress(userId, currency)
-      const qrCodeUrl = addressGenerator.generateQRCode(generated.address)
-      res.json({
-        ...generated,
-        qrCodeUrl,
-        cached: true,
-      })
-      return
-    }
-
     const generated = addressGenerator.generateAddress(userId, currency)
     const qrCodeUrl = addressGenerator.generateQRCode(generated.address)
-
-    // Update cache
-    addressCache.set(cacheKey, {
-      address: generated.address,
-      timestamp: Date.now(),
-    })
-
-    res.json({
-      ...generated,
-      qrCodeUrl,
-      cached: false,
-    })
+    const cacheKey = `${userId}-${currency}`
+    const cached = addressCache.get(cacheKey)
+    const isCached = Boolean(cached && Date.now() - cached.timestamp < CACHE_TTL)
+    if (!isCached) {
+      addressCache.set(cacheKey, { address: generated.address, timestamp: Date.now() })
+    }
+    res.json({ ...generated, qrCodeUrl, cached: isCached })
+    await mergeGeneratedAddress(userId, generated.currency, generated.network, generated.address)
   } catch (err) {
     console.error('[deposit-addresses] generate error:', err)
     res.status(400).json({ error: (err as Error).message })
   }
 })
 
-// POST /api/deposit-addresses/link
-// Link an external wallet address (e.g., MetaMask)
+const saveSchema = z.object({
+  cryptos: z.record(z.object({
+    currency: z.string().min(1).max(16),
+    network: z.string().min(1).max(64),
+    address: z.string().min(8).max(128),
+    memo: z.string().max(128).optional(),
+    notes: z.string().max(300).optional(),
+  })),
+})
+
+router.put('/save', requireAuth, async (req: AuthedRequest, res) => {
+  const userId = req.userId
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
+  const parsed = saveSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid input' })
+    return
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { prefs: true } })
+  let prefs: Record<string, unknown> = {}
+  try { if (user?.prefs) prefs = JSON.parse(user.prefs) } catch { prefs = {} }
+
+  const current = (prefs.depositAddresses && typeof prefs.depositAddresses === 'object')
+    ? prefs.depositAddresses as { cryptos?: Record<string, CryptoOverride>; wire?: unknown; notes?: string }
+    : { cryptos: {} as Record<string, CryptoOverride> }
+  const cryptos = { ...(current.cryptos || {}) }
+  for (const [symbol, row] of Object.entries(parsed.data.cryptos)) {
+    const key = symbol.toUpperCase()
+    if (cryptos[key]?.address) continue
+    cryptos[key] = {
+      currency: row.currency.toUpperCase(),
+      network: row.network,
+      address: row.address,
+      memo: row.memo,
+      notes: row.notes,
+    }
+  }
+  prefs.depositAddresses = { ...current, cryptos, updatedAt: new Date().toISOString() }
+  await prisma.user.update({ where: { id: userId }, data: { prefs: JSON.stringify(prefs) } })
+  res.json({ addresses: prefs.depositAddresses })
+})
+
 const linkWalletSchema = z.object({
   address: z.string().min(26).max(100),
   chainId: z.string().optional(),
@@ -122,7 +172,6 @@ router.post('/link', requireAuth, async (req: AuthedRequest, res) => {
   const { address, chainId, provider, label, isPrimary } = parsed.data
 
   try {
-    // If marking as primary, unmark any existing primary
     if (isPrimary) {
       await prisma.walletLink.updateMany({
         where: { userId, isPrimary: true },
@@ -130,7 +179,6 @@ router.post('/link', requireAuth, async (req: AuthedRequest, res) => {
       })
     }
 
-    // Create or update wallet link
     const walletLink = await prisma.walletLink.upsert({
       where: { userId_address: { userId, address: address.toLowerCase() } },
       create: {
@@ -162,8 +210,6 @@ router.post('/link', requireAuth, async (req: AuthedRequest, res) => {
   }
 })
 
-// DELETE /api/deposit-addresses/:id
-// Unlink a wallet address
 router.delete('/:id', requireAuth, async (req: AuthedRequest, res) => {
   const userId = req.userId
   if (!userId) {
@@ -174,24 +220,16 @@ router.delete('/:id', requireAuth, async (req: AuthedRequest, res) => {
   const { id } = req.params
 
   try {
-    const walletLink = await prisma.walletLink.findUnique({
-      where: { id },
-    })
-
+    const walletLink = await prisma.walletLink.findUnique({ where: { id } })
     if (!walletLink) {
       res.status(404).json({ error: 'Wallet not found' })
       return
     }
-
     if (walletLink.userId !== userId) {
       res.status(403).json({ error: 'Forbidden' })
       return
     }
-
-    await prisma.walletLink.delete({
-      where: { id },
-    })
-
+    await prisma.walletLink.delete({ where: { id } })
     res.json({ ok: true })
   } catch (err) {
     console.error('[deposit-addresses] delete error:', err)
@@ -199,8 +237,6 @@ router.delete('/:id', requireAuth, async (req: AuthedRequest, res) => {
   }
 })
 
-// GET /api/deposit-addresses/supported
-// List supported currencies
 router.get('/supported', (_req, res) => {
   res.json({
     currencies: [
