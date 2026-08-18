@@ -3,7 +3,6 @@ import Footer from '../components/Footer'
 import { Link, useLocation } from 'react-router-dom'
 
 type PageKey = 'privacy' | 'terms' | 'cookies' | 'risk' | 'security' | 'accessibility' | 'regulatory' | 'fees' | 'contact' | 'support' | 'fraud' | 'careers' | 'faq'
-
 type Section = { title: string; paragraphs: string[] }
 
 const pages: Record<PageKey, { eyebrow: string; title: string; intro: string; sections: Section[] }> = {
@@ -17,11 +16,12 @@ const pages: Record<PageKey, { eyebrow: string; title: string; intro: string; se
     ],
   },
   terms: {
-    eyebrow: 'Legal', title: 'Terms of Service', intro: 'These Terms of Service describe the rules for using the platform. If you have questions about these terms, contact Support.',
+    eyebrow: 'Legal', title: 'Terms of Service', intro: 'These Terms of Service describe the rules for using the platform. Creating an account requires that you read and accept these terms, the Privacy Policy, and the Risk Disclosure.',
     sections: [
       { title: 'Use of the platform', paragraphs: ['Users are responsible for accurate account information, protecting credentials, and using the platform lawfully. Do not share passwords, private keys, seed phrases, or authentication codes.'] },
       { title: 'Information and transactions', paragraphs: ['Market information and platform content may be incomplete, delayed, or unavailable. Transaction availability, fees, limits, reversals, and third-party dependencies depend on the applicable feature and current disclosures.'] },
       { title: 'Restrictions and service availability', paragraphs: ['Abuse, unauthorized access, fraud, unlawful activity, and attempts to disrupt the service are prohibited. Features may be suspended for security, maintenance, legal, or provider reasons.'] },
+      { title: 'Acceptance', paragraphs: ['By checking the agreement box at signup, you confirm that you have read these Terms, the Privacy Policy, the Risk Disclosure, and the Disclosures page.'] },
       { title: 'Legal review required', paragraphs: ['Governing law, dispute resolution, liability limits, indemnification, eligibility, and entity-specific terms must be supplied and approved by Verdexis legal counsel before final publication.'] },
     ],
   },
@@ -34,12 +34,15 @@ const pages: Record<PageKey, { eyebrow: string; title: string; intro: string; se
     ],
   },
   risk: {
-    eyebrow: 'Risk', title: 'Risk Disclosure', intro: 'Investment and digital-asset activities involve risk. Values can rise or fall, and users may lose some or all of the amount invested.',
+    eyebrow: 'Risk', title: 'Risk Disclosure', intro: 'Using Verdexis involves financial, technology, and operational risk. You can lose some or all of the value of assets you track or transfer. Read this page together with the Terms of Use, Privacy Policy, and Disclosures before you create an account or send funds.',
     sections: [
-      { title: 'Market and liquidity risk', paragraphs: ['Prices can move quickly and markets may become difficult to trade. An asset may not be sellable at the expected price or time.'] },
-      { title: 'Technology and provider risk', paragraphs: ['Outages, cyber incidents, software defects, network failures, blockchain events, market-data errors, and third-party provider failures may affect availability or records.'] },
-      { title: 'Currency, fees, and taxes', paragraphs: ['Foreign-exchange movements, transaction charges, spreads, network charges, and other expenses can reduce returns. Tax treatment depends on the user\'s circumstances and jurisdiction.'] },
-      { title: 'Performance and advice', paragraphs: ['Past performance, simulations, projections, and AI-generated information do not predict future results. Website information is general and is not individualized financial, legal, tax, or accounting advice.'] },
+      { title: 'Not a bank, broker, or adviser', paragraphs: ['Verdexis is software. It is not a bank, broker-dealer, exchange, money transmitter, custodian, or registered investment adviser unless separately documented on the Regulatory Information page.', 'Nothing on the site is an offer to sell securities, an invitation to invest, or personalized financial, legal, or tax advice.'] },
+      { title: 'You can lose money', paragraphs: ['Digital assets and market prices are volatile. Values can fall quickly, stay depressed for long periods, or go to zero.', 'You are solely responsible for deciding whether to deposit, transfer, withdraw, or hold any asset.'] },
+      { title: 'Transfers may be irreversible', paragraphs: ['Cryptocurrency sent to the wrong address, on the wrong network, or without a required memo or tag may be permanently lost. Verdexis cannot reverse most blockchain transactions.', 'Deposits and withdrawals can be delayed, queued for review, rejected, or fail because of network congestion, compliance review, or provider outages.'] },
+      { title: 'No custody or insurance promise', paragraphs: ['Do not assume balances shown in the app are FDIC-insured, SIPC-protected, or held in a segregated custodial account unless that is expressly stated for a specific product.', 'Displayed balances, fees, and market prices are estimates and can differ from on-chain or bank records.'] },
+      { title: 'Technology and third-party risk', paragraphs: ['Outages, bugs, cyber incidents, blockchain reorganizations, oracle or market-data errors, and failures by hosting or wallet providers can affect access, records, or settlement.'] },
+      { title: 'Eligibility and local law', paragraphs: ['You must be legally allowed to use the service where you live. You are responsible for taxes, reporting, and any license or restriction that applies to you.', 'The platform may restrict features or close accounts for security, legal, or abuse reasons.'] },
+      { title: 'Limitation of claims', paragraphs: ['To the fullest extent allowed by law, Verdexis and its operators are not liable for investment losses, irreversible transfers, delayed credits, or decisions you make using information on the site. See the Terms of Use and Disclosures for the full allocation of risk.'] },
     ],
   },
   security: {
@@ -96,5 +99,5 @@ export default function PublicInformation() {
           : pathname.replace(/^\//, '')
   ) as PageKey
   const page = pages[key] ?? pages.faq
-  return <div className="min-h-screen bg-[#070C0E]"><Navigation /><main className="pt-24 pb-16 px-6"><article className="max-w-[920px] mx-auto"><p className="text-xs tracking-[0.3em] uppercase text-[#0C8B44] mb-3">{page.eyebrow}</p><h1 className="text-4xl md:text-5xl font-light text-[#E5E5E5] mb-4">{page.title}</h1><p className="text-sm text-[#A0A0A0] leading-relaxed max-w-3xl mb-10">{page.intro}</p><div className="space-y-8">{page.sections.map((section, sIdx) => <section key={`section-${sIdx}`}><h2 className="text-2xl font-light text-[#E5E5E5] mb-3">{section.title}</h2>{section.paragraphs.map((paragraph, pIdx) => <p key={`section-${sIdx}-p-${pIdx}`} className="text-sm text-[#A0A0A0] leading-relaxed mb-3">{paragraph}</p>)}</section>)}</div><div className="mt-12 pt-6 border-t border-[#ffffff08] text-sm text-[#737373]">Need help? <Link to="/support" className="text-[#0C8B44]">Visit Support</Link>.</div></article></main><Footer /></div>
+  return <div className="min-h-screen bg-[#070C0E]"><Navigation /><main className="pt-24 pb-16 px-6"><article className="max-w-[920px] mx-auto"><p className="text-xs tracking-[0.3em] uppercase text-[#0C8B44] mb-3">{page.eyebrow}</p><h1 className="text-4xl md:text-5xl font-light text-[#E5E5E5] mb-4">{page.title}</h1><p className="text-sm text-[#A0A0A0] leading-relaxed max-w-3xl mb-10">{page.intro}</p><div className="space-y-8">{page.sections.map((section, sIdx) => <section key={`section-${sIdx}`}><h2 className="text-2xl font-light text-[#E5E5E5] mb-3">{section.title}</h2>{section.paragraphs.map((paragraph, pIdx) => <p key={`section-${sIdx}-p-${pIdx}`} className="text-sm text-[#A0A0A0] leading-relaxed mb-3">{paragraph}</p>)}</section>)}</div><div className="mt-12 pt-6 border-t border-[#ffffff08] text-sm text-[#737373] space-y-3"><p>Related: <Link to="/terms" className="text-[#0C8B44]">Terms</Link> · <Link to="/privacy" className="text-[#0C8B44]">Privacy</Link> · <Link to="/risk-disclosure" className="text-[#0C8B44]">Risk disclosure</Link> · <Link to="/disclosures" className="text-[#0C8B44]">Disclosures</Link> · <Link to="/regulatory" className="text-[#0C8B44]">Regulatory</Link></p><p>Need help? <Link to="/support" className="text-[#0C8B44]">Visit Support</Link>.</p></div></article></main><Footer /></div>
 }
