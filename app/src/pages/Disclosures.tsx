@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import Navigation from '../components/Navigation'
 import Footer from '../components/Footer'
 import { AlertTriangle } from 'lucide-react'
@@ -72,6 +73,29 @@ const SECTIONS: Array<{ id: string; title: string; body: string[] }> = [
       'When a partnership materially affects placement, it will be labelled “Sponsored” or “Partner”.',
     ],
   },
+  {
+    id: 'no-custody',
+    title: 'No Bank, Custody, or Insurance Claim',
+    body: [
+      'Verdexis does not claim to be a bank, broker, exchange, or insured custodian on this page. Balances in the application are software records unless a separately documented product says otherwise.',
+      'Do not treat the platform as FDIC- or SIPC-protected. Lost, misdirected, or irreversible crypto transfers are your risk.',
+    ],
+  },
+  {
+    id: 'user-responsibility',
+    title: 'Your Responsibility',
+    body: [
+      'You are responsible for safeguarding passwords, devices, 2FA codes, and any recovery information. Verdexis will never ask for a password, seed phrase, or one-time code.',
+      'You must confirm destination addresses, networks, amounts, and fees before sending funds. You agree that you have read the Terms of Use, Privacy Policy, and Risk Disclosure when you create an account.',
+    ],
+  },
+  {
+    id: 'related',
+    title: 'Related Documents',
+    body: [
+      'These disclosures work together with the Terms of Use, Privacy Policy, Cookie Policy, Risk Disclosure, and Regulatory Information. If anything on a marketing page conflicts with those documents, the legal pages control.',
+    ],
+  },
 ]
 
 export default function Disclosures() {
@@ -89,8 +113,6 @@ export default function Disclosures() {
           <p className="text-sm text-[#A0A0A0] mb-12">
             Read these disclosures carefully before using Verdexis. Last updated {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}.
           </p>
-
-          {/* Quick nav */}
           <nav className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-12 p-4 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08]">
             {SECTIONS.map((s) => (
               <a key={s.id} href={`#${s.id}`} className="text-xs text-[#A0A0A0] hover:text-[#0C8B44] transition-colors">
@@ -98,7 +120,6 @@ export default function Disclosures() {
               </a>
             ))}
           </nav>
-
           {SECTIONS.map((s) => (
             <section key={s.id} id={s.id} className="mb-12 scroll-mt-24">
               <h2 className="text-2xl font-light text-[#E5E5E5] mb-4">{s.title}</h2>
@@ -109,11 +130,13 @@ export default function Disclosures() {
               </div>
             </section>
           ))}
-
           <div className="mt-16 p-5 rounded-2xl bg-amber-400/5 border border-amber-400/20">
             <p className="text-xs text-amber-200/90 leading-relaxed">
-              By continuing to use Verdexis you acknowledge that you have read, understood, and accept these disclosures.
-              Questions? Use the official <a href="/support" className="underline">Verdexis Support page</a>.
+              Creating an account or continuing to use Verdexis means you acknowledge these disclosures and the{' '}
+              <Link to="/terms" className="underline">Terms of Use</Link>,{' '}
+              <Link to="/privacy" className="underline">Privacy Policy</Link>, and{' '}
+              <Link to="/risk-disclosure" className="underline">Risk Disclosure</Link>.
+              Questions? Use the official <Link to="/support" className="underline">Support page</Link>.
             </p>
           </div>
         </div>
