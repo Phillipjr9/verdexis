@@ -4,6 +4,7 @@ import { Menu, X, LogOut, Settings as SettingsIcon, Wallet as WalletIcon, LifeBu
 import VerifiedBadge from './VerifiedBadge'
 import AuthModal from './AuthModal'
 import NotificationBell from './NotificationBell'
+import ThemeToggle from './dashboard/ThemeToggle'
 import { getAvatar } from '../lib/userProfile'
 import { api, clearStoredAuth, getToken } from '../lib/api'
 import { useWeb3 } from '../hooks/use-web3'
@@ -34,6 +35,7 @@ const userMoreLinks = [
   { label: 'Calendar', path: '/calendar' },
   { label: 'Learn', path: '/learn' },
   { label: 'Linked Wallets', path: '/linked-wallets' },
+  { label: 'Create Wallet', path: '/create-wallet' },
 ]
 
 const adminPrivateLinks = [
@@ -79,7 +81,6 @@ export default function Navigation() {
   const location = useLocation()
   const [moreOpen, setMoreOpen] = useState(false)
 
-  // Check auth state from localStorage
   const checkAuth = () => {
     const auth = localStorage.getItem('verdexis_auth')
     setIsAuthenticated(!!auth)
@@ -127,7 +128,6 @@ export default function Navigation() {
     ? 'text-[#0C8B44] bg-[#0C8B44]/10 border border-[#0C8B44]/30'
     : 'text-[#737373] bg-[#1a1a1a] border border-[#ffffff12]'
 
-
   const openLogin = () => {
     setAuthMode('login')
     setAuthOpen(true)
@@ -158,14 +158,11 @@ export default function Navigation() {
     <>
       <nav className="fixed top-0 left-0 right-0 z-50 h-16 flex items-center transition-all duration-300 nav-glass">
         <div className="w-full max-w-[1280px] mx-auto px-4 sm:px-6 flex items-center justify-between gap-3">
-          {/* Logo */}
           <Link to="/" className="flex items-center gap-2 sm:gap-3 shrink-0">
-            {/* Logo with graceful fallback for local asset issues */}
             <img src="/assets/logo-icon-transparent.png" alt="Verdexis" className="logo-knockout" onError={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.display = 'none' }} />
             <span className="text-lg sm:text-xl font-light tracking-[0.15em] uppercase text-[#E5E5E5]">VERDEXIS</span>
           </Link>
 
-          {/* Desktop Nav */}
           <div className="hidden lg:flex items-center gap-3 xl:gap-5 flex-1 justify-end overflow-x-auto">
             {navLinks.map((link) => (
               <Link key={link.path} to={link.path}
@@ -197,7 +194,6 @@ export default function Navigation() {
             )}
           </div>
 
-          {/* Desktop Auth Buttons */}
           <div className="hidden lg:flex items-center gap-3 shrink-0">
             {isAuthenticated && (
               <button
@@ -226,6 +222,7 @@ export default function Navigation() {
                   <span className="text-xs text-[#737373]">{userName}</span>
                   {isVerified && <VerifiedBadge />}
                 </span>
+                <ThemeToggle compact />
                 <NotificationBell />
                 <Link to={isAdmin ? '/admin/users' : '/dashboard'} className="w-9 h-9 rounded-full bg-[#0C8B44]/20 flex items-center justify-center text-sm font-bold text-[#0C8B44] hover:bg-[#0C8B44]/30 transition-colors overflow-hidden" title={isAdmin ? 'Users' : 'Dashboard'}>
                   {avatar ? (
@@ -247,10 +244,8 @@ export default function Navigation() {
             )}
           </div>
 
-          {/* Mobile/tablet: notification bell (signed-in) + hamburger. The bar
-             itself stays transparent while scrolling — only the icons float
-             over the page. Tapping the hamburger reveals the solid menu. */}
           <div className="flex lg:hidden items-center gap-2 shrink-0">
+            <ThemeToggle compact />
             {isAuthenticated && <NotificationBell />}
             <button
               className="text-[#E5E5E5] p-2 -mr-2"
@@ -262,11 +257,9 @@ export default function Navigation() {
           </div>
         </div>
 
-        {/* Mobile menu */}
         {mobileOpen && (
           <div className="absolute top-16 left-0 right-0 nav-glass py-4 px-6 lg:hidden max-h-[calc(100dvh-4rem)] overflow-y-auto">
             <div className="flex flex-col gap-4">
-              {/* Auth buttons first so signed-out users see them without scrolling. */}
               {!isAuthenticated && (
                 <div className="flex items-center gap-3 pb-3 border-b border-[#ffffff08]">
                   <button onClick={openLogin} className="flex-1 py-2.5 text-[#E5E5E5] text-sm font-medium tracking-[0.04em] uppercase border border-[#ffffff20] rounded-lg">Log In</button>
