@@ -15,7 +15,6 @@ export default function LinkedWallets() {
       <Navigation />
       <div className="pt-24 pb-16 px-6">
         <div className="max-w-2xl mx-auto">
-          {/* Back link */}
           <Link
             to="/wallet"
             className="inline-flex items-center gap-2 text-sm text-[#737373] hover:text-[#0C8B44] transition-colors mb-6"
@@ -24,7 +23,6 @@ export default function LinkedWallets() {
             Back to Wallet
           </Link>
 
-          {/* Header */}
           <div className="flex items-center gap-3 mb-8">
             <div className="w-12 h-12 rounded-2xl bg-[#0C8B44]/20 flex items-center justify-center">
               <Wallet className="w-6 h-6 text-[#0C8B44]" />
@@ -35,7 +33,17 @@ export default function LinkedWallets() {
             </div>
           </div>
 
-          {/* Panel */}
+          <Link
+            to="/create-wallet"
+            className="mb-6 flex items-center justify-between rounded-2xl border border-[#0C8B44]/30 bg-[#0C8B44]/10 px-4 py-4 hover:border-[#0C8B44]/60 transition-colors"
+          >
+            <div>
+              <p className="text-sm font-medium text-[#E5E5E5]">Create a new deposit wallet</p>
+              <p className="text-xs text-[#737373] mt-1">Generate a 12-word wallet like Trust Wallet. Use it for ETH / ERC-20 deposits.</p>
+            </div>
+            <span className="text-xs text-[#0C8B44]">Create →</span>
+          </Link>
+
           <LinkedWalletsPanel
             activeAddress={isConnected ? (address ?? null) : null}
             refreshKey={refreshKey}
