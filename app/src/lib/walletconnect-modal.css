@@ -1,0 +1,19 @@
+/* Keep WalletConnect / Reown QR visible. The modal lives in a web
+   component; our theme CSS can otherwise leave the QR canvas blank. */
+wcm-modal,
+w3m-modal {
+  z-index: 2147483000 !important;
+  pointer-events: auto !important;
+}
+
+wcm-qrcode,
+w3m-qr-code,
+wcm-modal canvas,
+w3m-modal canvas,
+wcm-modal svg,
+w3m-modal svg {
+  background: #ffffff !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  color: #000000 !important;
+}
