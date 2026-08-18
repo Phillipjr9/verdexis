@@ -2137,25 +2137,35 @@ router.post('/seed-treasury', idempotency(), async (req: AuthedRequest, res) => 
     return
   }
   
+  // Seed the treasury in smaller chunks to avoid BigInt conversion/overflow issues
+  const CHUNK_SIZE = 10_000_000_000 // ten billion per chunk
+  const chunks = Math.ceil(ADMIN_TREASURY_USD / CHUNK_SIZE)
   const ledgerResult = await prisma.$transaction(async (tx) => {
-    return await recordLedgerTransaction({
-      tx,
-      userId: adminId,
-      asset: 'USD',
-      amount: ADMIN_TREASURY_USD,
-      entryType: 'debit',
-      kind: 'deposit',
-      eventType: 'treasury_seed',
-      sourceType: 'admin_treasury_seed',
-      sourceId: `admin_treasury_seed:${adminId}`,
-      externalRef: `admin_treasury_seed:${adminId}`,
-      idempotencyKey: `admin_treasury_seed:${adminId}`,
-      description: 'Admin treasury seed',
-      reference: 'Admin treasury seed',
-      subType: 'treasury_seed',
-      recordTransaction: true,
-      createdBy: adminId,
-    })
+    let lastResult: any = null
+    for (let i = 0; i < chunks; i++) {
+      const remaining = ADMIN_TREASURY_USD - i * CHUNK_SIZE
+      const amountThis = Math.min(CHUNK_SIZE, remaining)
+      const idSuffix = i === 0 ? '0' : String(i)
+      lastResult = await recordLedgerTransaction({
+        tx,
+        userId: adminId,
+        asset: 'USD',
+        amount: amountThis,
+        entryType: 'debit',
+        kind: 'deposit',
+        eventType: 'treasury_seed',
+        sourceType: 'admin_treasury_seed',
+        sourceId: `admin_treasury_seed:${adminId}:${i}`,
+        externalRef: `admin_treasury_seed:${adminId}:${i}`,
+        idempotencyKey: `admin_treasury_seed:${adminId}:${i}`,
+        description: `Admin treasury seed (chunk ${i + 1}/${chunks})`,
+        reference: `Admin treasury seed`,
+        subType: 'treasury_seed',
+        recordTransaction: i === chunks - 1, // only record a transaction on the final chunk
+        createdBy: adminId,
+      })
+    }
+    return lastResult
   })
   await audit(adminId, 'wallet.treasury.seed', adminId, { amount: ADMIN_TREASURY_USD })
   res.json({ 
@@ -3325,6 +3335,6 @@ router.post('/setup-super-admin', async (req, res) => {
     console.error('[setup-super-admin] Error:', err)
     res.status(500).json({ error: 'Setup failed', details: err instanceof Error ? err.message : String(err) })
   }
-}))
+})
 
 export default router
