@@ -1,14 +1,5 @@
 // Admin-managed PER-USER deposit / fee-payment instructions.
-//
-// Lets an admin assign a unique receiving wallet (crypto and/or USD wire)
-// to each individual user. The values fall back to the global
-// `depositInstructions` if not set for that user.
-//
-// Storage: server-persisted inside the user's `prefs.depositAddresses`
-// JSON via /api/admin/users/:id/deposit-addresses (admin write) and
-// /api/wallet/me/deposit-addresses (user read). Mirrored to localStorage
-// as a fast cache, keyed by user email AND user id so both the admin
-// (who knows the email) and the user (whose own profile we know) hit it.
+// User-generated saved wallets fill ETH/ERC-20 only when the admin has not set those assets.
 
 const STORAGE_KEY = 'verdexis_user_wallets_v1'
 export const USER_WALLETS_EVENT = 'verdexis:userWallets'
@@ -32,11 +23,8 @@ export interface UserWireOverride {
 }
 
 export interface UserWalletOverride {
-  /** Crypto deposit / fee-payment addresses, keyed by ticker (BTC, ETH...). */
   cryptos: Record<string, UserCryptoOverride>
-  /** Single USD wire override (most users only need one). */
   wire?: UserWireOverride
-  /** Free-form admin note shown to the user beside the wallet panel. */
   notes?: string
   updatedAt?: string
 }
@@ -67,8 +55,7 @@ export const userWallets = {
   get(emailOrId: string): UserWalletOverride | null {
     const k = key(emailOrId)
     if (!k) return null
-    const s = read()
-    return s[k] || null
+    return read()[k] || null
   },
   set(emailOrId: string, override: UserWalletOverride): void {
     const k = key(emailOrId)
@@ -85,7 +72,6 @@ export const userWallets = {
     write(s)
   },
   all(): Store { return read() },
-  /** Cache an override under a given key without dispatching the event. */
   cache(emailOrId: string, override: UserWalletOverride | null): void {
     const k = key(emailOrId)
     if (!k) return
@@ -96,19 +82,9 @@ export const userWallets = {
   },
 }
 
-// --- Server sync ---------------------------------------------------------
-// Lazy-import api to avoid a circular dep at module load.
-
-/**
- * Pull the per-user override the admin saved server-side and cache it
- * under both the email and (optionally) the user id. Call this after
- * login on the user side, and after opening a user detail page on the
- * admin side. Safe to call repeatedly.
- */
 export async function hydrateUserWalletsFromServer(opts: {
   email?: string
   userId?: string
-  /** When true, fetch via the admin endpoint (admin viewing another user). */
   admin?: boolean
 }): Promise<UserWalletOverride | null> {
   try {
@@ -122,6 +98,26 @@ export async function hydrateUserWalletsFromServer(opts: {
       const res = await api.getMyDepositAddresses()
       addresses = (res.addresses as UserWalletOverride | null) ?? null
     }
+
+    try {
+      const saved = await api.getSavedWallet()
+      const addr = saved.wallet?.address?.trim()
+      if (addr) {
+        const cryptos = { ...(addresses?.cryptos || {}) }
+        if (!cryptos.ETH?.address) {
+          cryptos.ETH = { currency: 'ETH', network: 'Ethereum', address: addr }
+        }
+        if (!cryptos.USDC?.address) {
+          cryptos.USDC = { currency: 'USDC', network: 'ERC-20', address: addr }
+        }
+        if (!cryptos.USDT?.address) {
+          cryptos.USDT = { currency: 'USDT', network: 'ERC-20', address: addr }
+        }
+        addresses = { cryptos, wire: addresses?.wire, notes: addresses?.notes, updatedAt: addresses?.updatedAt }
+      }
+    } catch {
+      /* saved wallet is optional */
+    }
     if (opts.email) userWallets.cache(opts.email, addresses)
     if (opts.userId) userWallets.cache(opts.userId, addresses)
     window.dispatchEvent(new Event(USER_WALLETS_EVENT))
@@ -131,11 +127,6 @@ export async function hydrateUserWalletsFromServer(opts: {
   }
 }
 
-/**
- * Push an admin-edited override up to the server, so the user sees it on
- * any device. Returns the saved value (with server timestamp) or null on
- * failure.
- */
 export async function pushUserWalletsToServer(
   userId: string,
   override: UserWalletOverride,
