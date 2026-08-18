@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import Navigation from '../components/Navigation'
 import { adminApi, TRANSFER_REASONS, type AdminUserSummary } from '../lib/adminApi'
 import { api } from '../lib/api'
+import { userFromMe } from '../lib/authMe'
 import { ArrowLeft, ArrowRightLeft, Search, Lock } from 'lucide-react'
 
 export default function AdminTransfer() {
@@ -19,20 +20,22 @@ export default function AdminTransfer() {
   const [progress, setProgress] = useState(0)
   const [fromError, setFromError] = useState<string | null>(null)
 
-  // Source account is always the signed-in admin — it is never user-selectable.
-  // This is enforced both here and on the server.
   useEffect(() => {
     let cancelled = false
     api.me()
       .then((r) => {
         if (cancelled) return
-        const u = r.user
+        const u = userFromMe(r)
+        if (!u) {
+          setFromError('Could not load your admin profile. Please re-login.')
+          return
+        }
         setFrom({
           id: u.id,
           email: u.email,
-          name: u.name,
-          role: u.role,
-          suspended: u.suspended,
+          name: u.name || u.email,
+          role: (u.role as AdminUserSummary['role']) || 'admin',
+          suspended: !!u.suspended,
           createdAt: new Date().toISOString(),
         } as AdminUserSummary)
       })
@@ -44,9 +47,6 @@ export default function AdminTransfer() {
           toast.error('Could not load admin profile — please re-login')
           return
         }
-
-        // Transient/network error: inform the user but don't force re-login.
-        console.warn('Could not load admin profile (transient):', err)
         setFromError('Network error while loading your profile. Try again shortly.')
         toast.error('Network temporarily unavailable — please try again')
       })
@@ -58,7 +58,6 @@ export default function AdminTransfer() {
       setProgress(0)
       return
     }
-
     setProgress(12)
     const timer = window.setInterval(() => {
       setProgress((value) => {
@@ -67,7 +66,6 @@ export default function AdminTransfer() {
         return Math.min(92, value + step)
       })
     }, 700)
-
     return () => window.clearInterval(timer)
   }, [busy])
 
@@ -105,7 +103,6 @@ export default function AdminTransfer() {
             <p className="text-xs text-[#737373]">Move funds between two user accounts. All actions are audited.</p>
           </div>
         </div>
-
         <form onSubmit={submit} className="space-y-4">
           <div className="grid md:grid-cols-2 gap-4">
             <Field label="From (operator — locked)">

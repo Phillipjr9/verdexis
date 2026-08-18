@@ -1,20 +1,17 @@
 import { useEffect, useState } from 'react'
 import { api, getFriendlyApiErrorMessage } from '../../lib/api'
+import { userFromMe } from '../../lib/authMe'
 import { toast } from 'sonner'
 import { AdminConsoleContent } from '../../pages/AdminDashboard'
 
-/**
- * Renders the full admin console body inline inside the Dashboard, so that an
- * admin sees their dashboard and operator console "all together" on a single
- * page. Visible only when the server confirms `role === 'admin'` — never
- * trusts cached localStorage state.
- */
 export default function AdminConsoleEmbed() {
   const [isAdmin, setIsAdmin] = useState(false)
   useEffect(() => {
     let cancelled = false
     api.me()
-      .then((r) => { if (!cancelled) setIsAdmin(r.user.role === 'admin') })
+      .then((r) => {
+        if (!cancelled) setIsAdmin(userFromMe(r)?.role === 'admin')
+      })
       .catch((err: any) => {
         if (cancelled) return
         const friendly = getFriendlyApiErrorMessage(err)
