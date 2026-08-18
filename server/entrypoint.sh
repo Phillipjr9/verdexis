@@ -14,14 +14,28 @@ fi
 
 # Attempt to resolve failed migrations (with timeout, non-blocking)
 echo "Checking for failed migrations..."
-timeout 20 node ./scripts/resolve-failed-migration.js || {
-  EXIT_CODE=$?
-  if [ $EXIT_CODE -eq 124 ]; then
-    echo "⚠ Migration resolver timed out (skipping)"
-  elif [ $EXIT_CODE -ne 0 ]; then
-    echo "⚠ Migration resolver failed with code $EXIT_CODE (continuing)"
-  fi
+# Try a few possible locations because working dir may differ in some runtimes
+try_resolver() {
+  PATHS_TO_TRY=("./scripts/resolve-failed-migration.js" "server/scripts/resolve-failed-migration.js" "/app/server/scripts/resolve-failed-migration.js")
+  for p in "${PATHS_TO_TRY[@]}"; do
+    if [ -f "$p" ]; then
+      echo "Found resolver at $p"
+      timeout 20 node "$p" || {
+        EXIT_CODE=$?
+        if [ $EXIT_CODE -eq 124 ]; then
+          echo "⚠ Migration resolver timed out (skipping)"
+        elif [ $EXIT_CODE -ne 0 ]; then
+          echo "⚠ Migration resolver failed with code $EXIT_CODE (continuing)"
+        fi
+      }
+      return 0
+    fi
+  done
+  echo "⚠ Migration resolver not found in expected locations; continuing startup"
+  return 0
 }
+
+try_resolver
 
 run_migrations() {
   echo "Checking for failed migrations..."
