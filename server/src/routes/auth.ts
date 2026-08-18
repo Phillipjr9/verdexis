@@ -1,4 +1,5 @@
 import { Router, type Request, type Response, type NextFunction } from 'express'
+import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 import crypto from 'node:crypto'
 import { z } from 'zod'
@@ -1034,6 +1035,22 @@ router.post('/login', ensureDbReady, authLimiter, async (req, res) => {
     }
 
     const token = signToken({ sub: user.id, email: user.email, v: (user as { tokenVersion?: number }).tokenVersion ?? 0 })
+    // Also set an HttpOnly cookie for browser-based login flows so the
+    // client does not need to attach Authorization headers manually.
+    try {
+      const decoded = jwt.decode(token) as { exp?: number } | null
+      const expires = decoded?.exp ? new Date(decoded.exp * 1000) : undefined
+      res.cookie('vdx_token', token, {
+        httpOnly: true,
+        secure: (env.NODE_ENV || 'development') === 'production',
+        sameSite: 'lax',
+        path: '/',
+        expires,
+      })
+    } catch {
+      // best-effort only; continue and return token in body if cookie fails
+    }
+
     res.json({
       token,
       user: publicUser({ ...user, role }),

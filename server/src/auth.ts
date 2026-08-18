@@ -61,6 +61,19 @@ export async function requireAuth(req: AuthedRequest, res: Response, next: NextF
   const header = req.headers.authorization
   let token: string | undefined
   if (header?.startsWith('Bearer ')) token = header.slice(7)
+  // Fallback to cookie if present. This allows browser logins that rely on
+  // an HttpOnly cookie instead of manually attaching Authorization headers.
+  // Cookie name: `vdx_token`.
+  if (!token) {
+    try {
+      // cookie-parser populates `req.cookies` when used in app.ts
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const cookies = (req as any).cookies as Record<string, unknown> | undefined
+      if (cookies && typeof cookies.vdx_token === 'string') token = String(cookies.vdx_token)
+    } catch {
+      // ignore and continue to Unauthorized response below
+    }
+  }
 
   if (!token) {
     res.status(401).json({ error: 'Unauthorized' })
