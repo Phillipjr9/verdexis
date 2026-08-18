@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
-import { CheckCircle2, AlertCircle, Loader2, MailCheck } from 'lucide-react'
+import { CheckCircle2, AlertCircle, MailCheck } from 'lucide-react'
 import { api, setStoredUser, setTokenWithTimestamp } from '../lib/api'
+import { Spinner } from '../components/ui/spinner'
 
 type State = 'pending' | 'verifying' | 'success' | 'error'
 
@@ -25,12 +26,8 @@ export default function VerifyEmail() {
           try {
             if (result.token) setTokenWithTimestamp(result.token)
             setStoredUser(result.user)
-            try {
-              localStorage.removeItem('verdexis_just_verified')
-            } catch { /* ignore */ }
-          } catch {
-            /* ignore */
-          }
+            try { localStorage.removeItem('verdexis_just_verified') } catch { /* ignore */ }
+          } catch { /* ignore */ }
           window.dispatchEvent(new Event('verdexis:profile'))
         }
         setTimeout(() => navigate('/dashboard'), 1200)
@@ -47,7 +44,7 @@ export default function VerifyEmail() {
     <div className="min-h-screen bg-[#070C0E] flex items-center justify-center px-6">
       <div className="w-full max-w-md rounded-2xl bg-[#0f1619]/60 border border-[#ffffff08] p-8 text-center">
         <div className="w-12 h-12 rounded-2xl bg-[#0C8B44]/15 flex items-center justify-center mx-auto mb-5">
-          {state === 'verifying' && <Loader2 className="w-6 h-6 text-[#0C8B44] animate-spin" />}
+          {state === 'verifying' && <Spinner size={24} />}
           {state === 'success' && <CheckCircle2 className="w-6 h-6 text-[#0C8B44]" />}
           {state === 'error' && <AlertCircle className="w-6 h-6 text-red-400" />}
           {state === 'pending' && <MailCheck className="w-6 h-6 text-[#0C8B44]" />}
@@ -67,14 +64,6 @@ export default function VerifyEmail() {
           <Link to="/dashboard" className="px-4 py-2 bg-[#0C8B44] text-white text-xs uppercase tracking-[0.05em] rounded-lg hover:bg-[#0a7539] transition-colors">
             Back to dashboard
           </Link>
-          {state === 'error' && (
-            <button
-              onClick={() => api.sendVerification().then(() => setMessage('A new verification link was sent. Check your notifications.')).catch((e: unknown) => setMessage((e as Error)?.message || 'Could not send link.'))}
-              className="text-[11px] text-[#737373] hover:text-[#E5E5E5] transition-colors"
-            >
-              Send a new verification link
-            </button>
-          )}
         </div>
       </div>
     </div>
