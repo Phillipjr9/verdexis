@@ -12,9 +12,6 @@ import { api, getToken } from '../lib/api'
 
 const STORAGE_KEY = 'verdexis_web3_address'
 
-// Synthetic identity for the WalletConnect "meta" wallet — distinguishes
-// it from EIP-6963 entries in the picker without colliding with any real
-// wallet rdns.
 export const WALLETCONNECT_RDNS = 'org.walletconnect'
 const WALLETCONNECT_INFO: WalletProviderInfo = {
   uuid: 'walletconnect',
@@ -55,7 +52,6 @@ const initialState: Web3State = {
   balanceEth: null,
   isConnected: false,
   isConnecting: false,
-  // Optimistic; real value resolved after first discovery pass.
   isAvailable: typeof window !== 'undefined' && !!window.ethereum,
   error: null,
   walletInfo: null,
@@ -67,8 +63,6 @@ function chainNameFor(id: string | null): string {
   return CHAIN_NAMES[s.toLowerCase()] ?? `Chain ${parseInt(s, 16) || s}`
 }
 
-/** Normalize a chainId returned by `eth_chainId` (WC v2 sometimes hands back
- *  a number, injected providers a 0x-hex string) to a 0x-hex string. */
 function normalizeChainId(raw: unknown): string | null {
   if (raw == null) return null
   if (typeof raw === 'string') return raw
@@ -88,9 +82,21 @@ async function fetchBalance(provider: EthereumProvider, address: string): Promis
   }
 }
 
-// Best-effort: tell the backend which self-custody address this user just
-// linked. Auth-gated; silently no-ops when the user is signed out so the
-// hook works on landing-page wallet demos as well as inside the app.
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+  ])
+}
+
+async function hydrateChainAndBalance(provider: EthereumProvider, address: string) {
+  const chainId = normalizeChainId(
+    await withTimeout(provider.request({ method: 'eth_chainId' }).catch(() => null), 2500, null),
+  )
+  const balanceEth = await withTimeout(fetchBalance(provider, address), 3000, null)
+  return { chainId, balanceEth }
+}
+
 async function persistLinkToBackend(address: string, chainId: string | null, providerName: string): Promise<void> {
   if (!getToken()) return
   try {
@@ -100,8 +106,7 @@ async function persistLinkToBackend(address: string, chainId: string | null, pro
       provider: providerName,
     })
   } catch {
-    // Don't surface API failures in the wallet UI — the on-chain
-    // connection is what matters; the link record is convenience.
+    /* link is convenience */
   }
 }
 
@@ -112,7 +117,6 @@ async function clearLinkOnBackend(): Promise<void> {
 
 export function useWeb3() {
   const [state, setState] = useState<Web3State>(initialState)
-  // Active provider — kept in a ref so listeners always close over the latest one.
   const providerRef = useRef<EthereumProvider | null>(null)
   const [discovered, setDiscovered] = useState<DiscoveredProvider[]>([])
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -133,9 +137,6 @@ export function useWeb3() {
     }
     const onChainChanged = (...args: unknown[]) => {
       const raw = args[0]
-      // WalletConnect v2 emits a number; injected providers emit a hex string.
-      // Normalize to a 0x-prefixed hex string so downstream `.toLowerCase()`
-      // calls and chain lookups never explode.
       const id = typeof raw === 'string'
         ? raw
         : typeof raw === 'number'
@@ -151,7 +152,6 @@ export function useWeb3() {
     }
   }, [])
 
-  // Discovery pass on mount — also auto-rehydrates the previously chosen wallet.
   useEffect(() => {
     let cancelled = false
     let detach: (() => void) | undefined
@@ -177,14 +177,12 @@ export function useWeb3() {
           const addr = accounts[0]
           providerRef.current = target.provider
           detach = attachListeners(target.provider)
-          const chainId = normalizeChainId(await target.provider.request({ method: 'eth_chainId' }).catch(() => null))
-          const balanceEth = await fetchBalance(target.provider, addr)
           if (cancelled) return
           setState({
             address: addr,
-            chainId,
-            chainName: chainNameFor(chainId),
-            balanceEth,
+            chainId: null,
+            chainName: '',
+            balanceEth: null,
             isConnected: true,
             isConnecting: false,
             isAvailable: true,
@@ -192,9 +190,13 @@ export function useWeb3() {
             walletInfo: target.info,
           })
           try { localStorage.setItem(STORAGE_KEY, addr) } catch { /* ignore */ }
+          void hydrateChainAndBalance(target.provider, addr).then(({ chainId, balanceEth }) => {
+            if (cancelled) return
+            setState((s) => s.address === addr ? { ...s, chainId, chainName: chainNameFor(chainId), balanceEth } : s)
+          })
         }
       } catch {
-        // Provider exists but call failed — leave disconnected, don't error UI.
+        /* leave disconnected */
       }
     })()
 
@@ -206,16 +208,11 @@ export function useWeb3() {
   }, [])
 
   const connectTo = useCallback(async (uuid: string) => {
-    // Special-case the WalletConnect synthetic uuid so callers can
-    // funnel both EIP-6963 picks and the WC option through one entry point.
     if (uuid === WALLETCONNECT_INFO.uuid) {
       await connectWalletConnectInternal()
       return
     }
 
-    // Don't re-scan the browser for wallets right after the user already chose a
-    // detected wallet from the picker. That second discovery pass can stall for
-    // the full timeout window (1500ms+) before the actual request goes out.
     const target = discovered.find((d) => d.info.uuid === uuid)
     const refreshed = target ? discovered : await discoverWallets()
     setDiscovered(refreshed)
@@ -227,17 +224,16 @@ export function useWeb3() {
     setState((s) => ({ ...s, isConnecting: true, error: null }))
     try {
       const accounts = await resolvedTarget.provider.request<string[]>({ method: 'eth_requestAccounts' })
-      const chainId = normalizeChainId(await resolvedTarget.provider.request({ method: 'eth_chainId' }).catch(() => null))
       if (accounts && accounts.length > 0) {
         const addr = accounts[0]
-        providerRef.current = resolvedTarget.provider
-        attachListeners(resolvedTarget.provider)
-        const balanceEth = await fetchBalance(resolvedTarget.provider, addr)
+        const provider = resolvedTarget.provider
+        providerRef.current = provider
+        attachListeners(provider)
         setState({
           address: addr,
-          chainId,
-          chainName: chainNameFor(chainId),
-          balanceEth,
+          chainId: null,
+          chainName: '',
+          balanceEth: null,
           isConnected: true,
           isConnecting: false,
           isAvailable: true,
@@ -248,14 +244,15 @@ export function useWeb3() {
           localStorage.setItem(STORAGE_KEY, addr)
           localStorage.setItem(WALLET_RDNS_STORAGE, resolvedTarget.info.rdns)
         } catch { /* ignore */ }
-        // Close the picker immediately — don't wait for the backend link to complete.
         setPickerOpen(false)
-        // Fire-and-forget with a timeout to prevent hanging indefinitely
-        const linkTimeout = setTimeout(() => {
-           
-          console.warn('[persistLink] request exceeded 10s, abandoning')
-        }, 10000)
-        persistLinkToBackend(addr, chainId, resolvedTarget.info.name).finally(() => clearTimeout(linkTimeout))
+        void (async () => {
+          const { chainId, balanceEth } = await hydrateChainAndBalance(provider, addr)
+          setState((s) => s.address === addr ? { ...s, chainId, chainName: chainNameFor(chainId), balanceEth } : s)
+          const linkTimeout = setTimeout(() => {
+            console.warn('[persistLink] request exceeded 10s, abandoning')
+          }, 10000)
+          persistLinkToBackend(addr, chainId, resolvedTarget.info.name).finally(() => clearTimeout(linkTimeout))
+        })()
       } else {
         setState((s) => ({ ...s, isConnecting: false, error: 'No account selected' }))
       }
@@ -266,8 +263,6 @@ export function useWeb3() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attachListeners])
 
-  // Internal helper kept out of the public API — connectTo('walletconnect')
-  // is the public entry point so the picker UI doesn't need a second method.
   const connectWalletConnectInternal = useCallback(async () => {
     if (!isWalletConnectConfigured()) {
       setState((s) => ({
@@ -283,29 +278,21 @@ export function useWeb3() {
         setState((s) => ({ ...s, isConnecting: false, error: 'WalletConnect failed to initialize' }))
         return
       }
-      // `enable()` is the documented entry point on the WC v2 provider:
-      // it opens the QR / deep-link modal, waits for the user to approve
-      // in their wallet, and resolves with the account list. Calling
-      // `request({ method: 'eth_requestAccounts' })` directly throws
-      // "Please call connect() before request()" because the EIP-1193
-      // request layer is gated until the session exists.
       type WcEnable = { enable: () => Promise<string[]> }
       const enablePromise = (wc as unknown as WcEnable).enable()
       const timeoutPromise = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('Connection request timed out after 3 minutes. Please try again.')), 180000)
       )
       const accounts = await Promise.race([enablePromise, timeoutPromise])
-      const chainId = normalizeChainId(await wc.request({ method: 'eth_chainId' }).catch(() => null))
       if (accounts && accounts.length > 0) {
         const addr = accounts[0]
         providerRef.current = wc
         attachListeners(wc)
-        const balanceEth = await fetchBalance(wc, addr)
         setState({
           address: addr,
-          chainId,
-          chainName: chainNameFor(chainId),
-          balanceEth,
+          chainId: null,
+          chainName: '',
+          balanceEth: null,
           isConnected: true,
           isConnecting: false,
           isAvailable: true,
@@ -316,20 +303,19 @@ export function useWeb3() {
           localStorage.setItem(STORAGE_KEY, addr)
           localStorage.setItem(WALLET_RDNS_STORAGE, WALLETCONNECT_INFO.rdns)
         } catch { /* ignore */ }
-        // Close the picker immediately — don't wait for the backend link to complete.
-        // The link persistence is best-effort and shouldn't block the UX.
         setPickerOpen(false)
-        // Fire-and-forget with a timeout to prevent hanging indefinitely
-        const linkTimeout = setTimeout(() => {
-           
-          console.warn('[persistLink] request exceeded 10s, abandoning')
-        }, 10000)
-        persistLinkToBackend(addr, chainId, 'WalletConnect').finally(() => clearTimeout(linkTimeout))
+        void (async () => {
+          const { chainId, balanceEth } = await hydrateChainAndBalance(wc, addr)
+          setState((s) => s.address === addr ? { ...s, chainId, chainName: chainNameFor(chainId), balanceEth } : s)
+          const linkTimeout = setTimeout(() => {
+            console.warn('[persistLink] request exceeded 10s, abandoning')
+          }, 10000)
+          persistLinkToBackend(addr, chainId, 'WalletConnect').finally(() => clearTimeout(linkTimeout))
+        })()
       } else {
         setState((s) => ({ ...s, isConnecting: false, error: 'No account approved' }))
       }
     } catch (err) {
-       
       console.error('[WalletConnect] connect failed', err)
       const raw = err instanceof Error ? err.message : String(err ?? '')
       let msg = raw || 'Connection rejected'
@@ -343,20 +329,12 @@ export function useWeb3() {
       } else if (!raw) {
         msg = 'WalletConnect didn\u2019t respond. Check your network connection and try again.'
       }
-      // On expiry, throw away the cached provider so the next click
-      // builds a brand-new session with a fresh URI \u2014 otherwise WC
-      // re-uses the dead proposal and the Open button stays grey.
       if (expired) resetWalletConnect()
       setState((s) => ({ ...s, isConnecting: false, error: msg }))
     }
-   
   }, [attachListeners])
 
-
-
   const connect = useCallback(async () => {
-    // Always re-discover when the user clicks Connect — wallet extensions can
-    // inject after page load, so a stale empty list shouldn't lock them out.
     const list = await discoverWallets()
     setDiscovered(list)
     if (list.length === 0) {
@@ -379,9 +357,6 @@ export function useWeb3() {
   }, [])
 
   const disconnect = useCallback(() => {
-    // If the active provider is WalletConnect, tear down its session so the
-    // QR modal shows up again next time. Best-effort — some implementations
-    // throw if there's no active session.
     const p = providerRef.current as (EthereumProvider & { disconnect?: () => Promise<void> }) | null
     if (p && typeof p.disconnect === 'function') {
       try { void p.disconnect() } catch { /* ignore */ }
@@ -433,7 +408,7 @@ export function useWeb3() {
     return txHash
   }, [state.address, refreshBalance])
 
-  const shortAddress = state.address ? `${state.address.slice(0, 6)}…${state.address.slice(-4)}` : null
+  const shortAddress = state.address ? `${state.address.slice(0, 6)}\u2026${state.address.slice(-4)}` : null
 
   return {
     ...state,
