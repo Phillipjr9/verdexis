@@ -15,7 +15,7 @@
     "@nomicfoundation/hardhat-toolbox-viem": "^5.0.7",
     "@types/node": "^22.20.1",
     "forge-std": "github:foundry-rs/forge-std#v1.9.4",
-    "hardhat": "^3.9.1",
+    "hardhat": "^3.13.0",
     "typescript": "^5.7.0",
     "viem": "^2.55.0"
   },
