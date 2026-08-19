@@ -130,6 +130,7 @@ class EmailService {
     const template = this.templates.get('otp_verification')
 
     const expiresAt = new Date(Date.now() + expirationMinutes * 60000)
+    const base = (env.APP_BASE_URL || emailLinks.website).replace(/\/$/, '')
 
     const html = template
       ? this.replaceVariables(template, {
@@ -142,9 +143,9 @@ class EmailService {
           ACTION_BUTTONS: '',
           BACKUP_CODES_SECTION: '',
           TWO_FA_APP_SECTION: '',
-          SECURITY_ALERT_URL: `${env.APP_BASE_URL}/security/alert`,
-          HELP_VERIFICATION_URL: `${env.APP_BASE_URL}/help/verification`,
-          CONTACT_SUPPORT_URL: `${env.APP_BASE_URL}/contact`,
+          SECURITY_ALERT_URL: `${base}/security/alert`,
+          HELP_VERIFICATION_URL: `${base}/help/verification`,
+          CONTACT_SUPPORT_URL: emailLinks.support || `${base}/contact`,
         })
       : `<div style="font-family:sans-serif;padding:24px"><h2>Your verification code</h2><p>Hi ${userName},</p><p style="font-size:32px;font-weight:bold;letter-spacing:8px">${otp}</p><p>Expires in ${expirationMinutes} minutes. Do not share this code.</p></div>`
 
@@ -164,11 +165,16 @@ class EmailService {
     const template = this.templates.get('welcome')
     if (!template) return false
 
+    const base = (env.APP_BASE_URL || emailLinks.website).replace(/\/$/, '')
+
     const html = this.replaceVariables(template, {
       USER_NAME: userName,
-      ONBOARDING_URL: `${env.APP_BASE_URL}/onboarding`,
-      HELP_CENTER_URL: `${env.APP_BASE_URL}/help`,
-      SUPPORT_EMAIL: emailLinks.support,
+      ONBOARDING_URL: `${base}/onboarding`,
+      DASHBOARD_URL: `${base}/dashboard`,
+      MARKETS_URL: `${base}/markets`,
+      PORTFOLIO_URL: `${base}/portfolio`,
+      HELP_CENTER_URL: `${base}/help`,
+      SUPPORT_EMAIL: companyInfo.contact.email || emailLinks.support,
     })
 
     return this.send({
@@ -184,10 +190,9 @@ class EmailService {
   }
 
   async sendPasswordReset(to: string, userName: string, resetUrl: string, userId?: string): Promise<boolean> {
-    // Use the Colorlib-inspired simple transactional template we added
-    const template = this.templates.get('colorlib_simple') || this.templates.get('password_reset')
+    // Prefer the full standalone password_reset template; fall back to colorlib fragment
+    const template = this.templates.get('password_reset') || this.templates.get('colorlib_simple')
     if (!template) {
-      // Fallback to simple text email
       const html = `
         <h2>Password Reset Request</h2>
         <p>Hello ${userName},</p>
@@ -211,27 +216,27 @@ class EmailService {
     const html = this.replaceVariables(template, {
       USER_NAME: userName,
       RESET_URL: resetUrl,
-      REQUEST_TIME: new Date().toLocaleString('en-US', { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric', 
-        hour: '2-digit', 
-        minute: '2-digit', 
-        timeZoneName: 'short' 
+      REQUEST_TIME: new Date().toLocaleString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZoneName: 'short',
       }),
-      EXPIRY_TIME: new Date(Date.now() + 60 * 60 * 1000).toLocaleString('en-US', { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric', 
-        hour: '2-digit', 
-        minute: '2-digit', 
-        timeZoneName: 'short' 
+      EXPIRY_TIME: new Date(Date.now() + 60 * 60 * 1000).toLocaleString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZoneName: 'short',
       }),
       USER_EMAIL: to,
-      USER_AGENT: 'Unknown', // Would come from request headers in real implementation
-      LOCATION: 'Unknown', // Would come from IP geolocation
+      USER_AGENT: 'Unknown',
+      LOCATION: 'Unknown',
     })
 
     return this.send({
@@ -264,6 +269,8 @@ class EmailService {
     const template = this.templates.get('transaction_confirmation')
     if (!template) return false
 
+    const base = (env.APP_BASE_URL || emailLinks.website).replace(/\/$/, '')
+
     const html = this.replaceVariables(template, {
       USER_NAME: userName,
       TRANSACTION_ID: transaction.id,
@@ -276,9 +283,9 @@ class EmailService {
       TRANSACTION_DATE: transaction.date,
       TRANSACTION_TIME: transaction.time,
       FEE_WARNING: '',
-      DASHBOARD_URL: `${env.APP_BASE_URL}/dashboard`,
-      TRANSACTION_DETAILS_URL: `${env.APP_BASE_URL}/transactions/${transaction.id}`,
-      SUPPORT_URL: `${env.APP_BASE_URL}/support`,
+      DASHBOARD_URL: `${base}/dashboard`,
+      TRANSACTION_DETAILS_URL: `${base}/transactions/${transaction.id}`,
+      SUPPORT_URL: `${base}/support`,
     })
 
     return this.send({
