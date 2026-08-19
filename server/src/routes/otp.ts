@@ -123,7 +123,9 @@ router.post('/send-otp', requireAuth, otpLimiter, async (req: AuthedRequest, res
     
     let deliveryMethod = parsed.data.method
     if (deliveryMethod === 'auto') {
-      deliveryMethod = otpSettings?.method === 'sms' ? 'sms' : 'email'
+      // OTPSettings.method is 'email' | 'both' | 'disabled' (no pure 'sms').
+      // Default to email; client can still pass method: 'sms' explicitly.
+      deliveryMethod = 'email'
     }
 
     let deliveryResult
