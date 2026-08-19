@@ -1,78 +1,81 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { MapPin } from 'lucide-react'
 
-/** Minimal Google Maps Places types so we avoid a hard dependency on @types/google.maps */
+/** Google Maps Extended Component Library custom elements */
 declare global {
-  interface Window {
-    google?: {
-      maps: {
-        places: {
-          Autocomplete: new (
-            input: HTMLInputElement,
-            opts?: {
-              types?: string[]
-              fields?: string[]
-              componentRestrictions?: { country?: string | string[] }
-            }
-          ) => {
-            addListener: (event: string, handler: () => void) => void
-            getPlace: () => {
-              formatted_address?: string
-              address_components?: Array<{
-                long_name: string
-                short_name: string
-                types: string[]
-              }>
-              name?: string
-            }
-          }
-        }
-        event: {
-          clearInstanceListeners: (instance: unknown) => void
-        }
-      }
+  namespace JSX {
+    interface IntrinsicElements {
+      'gmpx-api-loader': React.DetailedHTMLProps<
+        React.HTMLAttributes<HTMLElement> & {
+          key?: string
+          'solution-channel'?: string
+        },
+        HTMLElement
+      >
+      'gmpx-place-picker': React.DetailedHTMLProps<
+        React.HTMLAttributes<HTMLElement> & {
+          placeholder?: string
+          disabled?: boolean
+        },
+        HTMLElement
+      >
     }
-    __verdexisGoogleMapsPromise?: Promise<void>
+  }
+
+  interface Window {
+    __verdexisGmpxLoaderPromise?: Promise<void>
   }
 }
 
-const SCRIPT_ID = 'verdexis-google-maps-places'
+const ECL_SCRIPT_ID = 'verdexis-gmpx-ecl'
+const ECL_SCRIPT_SRC =
+  'https://ajax.googleapis.com/ajax/libs/@googlemaps/extended-component-library/0.6.15/index.min.js'
 
 function getApiKey(): string {
-  return (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined)?.trim() || ''
+  // Vite inlines this at build time — must be set on the frontend host (e.g. Vercel)
+  // as VITE_GOOGLE_MAPS_API_KEY and the app rebuilt for production.
+  const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+  return typeof key === 'string' ? key.trim() : ''
 }
 
-/** Load the Google Maps JS API (Places library) once per page. */
-function loadGoogleMapsScript(apiKey: string): Promise<void> {
+/** Load the Extended Component Library once (defines gmpx-* elements). */
+function loadGmpxLibrary(): Promise<void> {
   if (typeof window === 'undefined') return Promise.reject(new Error('No window'))
-  if (window.google?.maps?.places) return Promise.resolve()
+  if (customElements.get('gmpx-place-picker')) return Promise.resolve()
 
-  if (window.__verdexisGoogleMapsPromise) return window.__verdexisGoogleMapsPromise
+  if (window.__verdexisGmpxLoaderPromise) return window.__verdexisGmpxLoaderPromise
 
-  window.__verdexisGoogleMapsPromise = new Promise<void>((resolve, reject) => {
-    const existing = document.getElementById(SCRIPT_ID) as HTMLScriptElement | null
+  window.__verdexisGmpxLoaderPromise = new Promise<void>((resolve, reject) => {
+    const existing = document.getElementById(ECL_SCRIPT_ID) as HTMLScriptElement | null
     if (existing) {
+      if (customElements.get('gmpx-place-picker')) {
+        resolve()
+        return
+      }
       existing.addEventListener('load', () => resolve())
-      existing.addEventListener('error', () => reject(new Error('Google Maps failed to load')))
-      // Already loaded
-      if (window.google?.maps?.places) resolve()
+      existing.addEventListener('error', () => reject(new Error('gmpx library failed to load')))
       return
     }
 
     const script = document.createElement('script')
-    script.id = SCRIPT_ID
-    script.async = true
-    script.defer = true
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places&loading=async`
+    script.id = ECL_SCRIPT_ID
+    script.type = 'module'
+    script.src = ECL_SCRIPT_SRC
     script.onload = () => resolve()
     script.onerror = () => {
-      window.__verdexisGoogleMapsPromise = undefined
-      reject(new Error('Google Maps script failed to load'))
+      window.__verdexisGmpxLoaderPromise = undefined
+      reject(new Error('gmpx library failed to load'))
     }
     document.head.appendChild(script)
   })
 
-  return window.__verdexisGoogleMapsPromise
+  return window.__verdexisGmpxLoaderPromise
+}
+
+interface GmpxPlace {
+  formattedAddress?: string
+  displayName?: string
+  addressComponents?: unknown
 }
 
 export interface AddressAutocompleteProps {
@@ -82,125 +85,152 @@ export interface AddressAutocompleteProps {
   required?: boolean
   className?: string
   id?: string
-  /** ISO country codes to bias results, e.g. ['us'] or ['us','ca'] */
-  countries?: string[]
   disabled?: boolean
 }
 
 /**
- * Street-address input with Google Places Autocomplete.
- * Falls back to a normal text input when VITE_GOOGLE_MAPS_API_KEY is missing
- * or the Places script fails to load.
+ * Street-address field using Google Place Picker
+ * (Extended Component Library: gmpx-api-loader + gmpx-place-picker).
+ * Falls back to a plain text input when VITE_GOOGLE_MAPS_API_KEY is missing
+ * or the library fails to load.
  */
 export default function AddressAutocomplete({
   value,
   onChange,
-  placeholder = 'Start typing your address…',
+  placeholder = 'Enter an address',
   required = false,
   className = '',
   id,
-  countries,
   disabled = false,
 }: AddressAutocompleteProps) {
-  const inputRef = useRef<HTMLInputElement>(null)
-  const autocompleteRef = useRef<ReturnType<NonNullable<typeof window.google>['maps']['places']['Autocomplete']> | null>(null)
+  const apiKey = getApiKey()
+  const [ready, setReady] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const pickerRef = useRef<HTMLElement | null>(null)
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
 
-  const attachAutocomplete = useCallback(async () => {
-    const apiKey = getApiKey()
-    if (!apiKey || !inputRef.current) return
-
-    try {
-      await loadGoogleMapsScript(apiKey)
-      if (!window.google?.maps?.places || !inputRef.current) return
-
-      // Tear down previous instance if any
-      if (autocompleteRef.current) {
-        try {
-          window.google.maps.event.clearInstanceListeners(autocompleteRef.current)
-        } catch {
-          /* ignore */
-        }
-        autocompleteRef.current = null
-      }
-
-      const opts: {
-        types: string[]
-        fields: string[]
-        componentRestrictions?: { country: string | string[] }
-      } = {
-        types: ['address'],
-        fields: ['formatted_address', 'address_components', 'name'],
-      }
-      if (countries && countries.length > 0) {
-        opts.componentRestrictions = {
-          country: countries.length === 1 ? countries[0] : countries,
-        }
-      }
-
-      const ac = new window.google.maps.places.Autocomplete(inputRef.current, opts)
-      ac.addListener('place_changed', () => {
-        const place = ac.getPlace()
-        const formatted =
-          place.formatted_address ||
-          place.name ||
-          inputRef.current?.value ||
-          ''
-        if (formatted) {
-          onChangeRef.current(formatted)
-        }
+  useEffect(() => {
+    if (!apiKey) return
+    let cancelled = false
+    void loadGmpxLibrary()
+      .then(() => {
+        if (!cancelled) setReady(true)
       })
-      autocompleteRef.current = ac
-    } catch (err) {
-      console.warn('[AddressAutocomplete] Google Places unavailable:', err)
-    }
-  }, [countries])
-
-  useEffect(() => {
-    void attachAutocomplete()
+      .catch((err) => {
+        console.warn('[AddressAutocomplete] gmpx unavailable:', err)
+        if (!cancelled) setFailed(true)
+      })
     return () => {
-      if (autocompleteRef.current && window.google?.maps?.event) {
-        try {
-          window.google.maps.event.clearInstanceListeners(autocompleteRef.current)
-        } catch {
-          /* ignore */
-        }
-        autocompleteRef.current = null
-      }
+      cancelled = true
     }
-  }, [attachAutocomplete])
+  }, [apiKey])
 
-  // Keep the controlled value in sync with the DOM input (Places can write
-  // directly to the input element).
   useEffect(() => {
-    if (inputRef.current && inputRef.current.value !== value) {
-      inputRef.current.value = value
+    if (!ready || !pickerRef.current) return
+    const el = pickerRef.current
+
+    const handlePlaceChange = () => {
+      // gmpx-place-picker exposes `.place` after selection
+      const place = (el as HTMLElement & { place?: GmpxPlace | null }).place
+      if (!place) {
+        // Cleared selection — allow empty
+        onChangeRef.current('')
+        return
+      }
+      const formatted =
+        place.formattedAddress ||
+        place.displayName ||
+        ''
+      if (formatted) onChangeRef.current(formatted)
     }
-  }, [value])
+
+    el.addEventListener('gmpx-placechange', handlePlaceChange)
+    return () => el.removeEventListener('gmpx-placechange', handlePlaceChange)
+  }, [ready])
+
+  const inputClass =
+    className ||
+    'w-full pl-10 pr-4 py-3 bg-[#1a1a1a] border border-[#ffffff08] rounded-xl text-sm text-[#E5E5E5] placeholder-[#737373] focus:outline-none focus:border-[#0C8B44] transition-colors'
+
+  // No key or library failed → plain controlled input (signup still works)
+  if (!apiKey || failed) {
+    return (
+      <div className="relative">
+        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#737373] pointer-events-none z-[1]" />
+        <input
+          id={id}
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={inputClass}
+          placeholder={placeholder}
+          autoComplete="street-address"
+          required={required}
+          disabled={disabled}
+        />
+      </div>
+    )
+  }
+
+  // Loading library
+  if (!ready) {
+    return (
+      <div className="relative">
+        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#737373] pointer-events-none z-[1]" />
+        <input
+          id={id}
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={inputClass}
+          placeholder={placeholder}
+          autoComplete="street-address"
+          required={required}
+          disabled={disabled}
+        />
+      </div>
+    )
+  }
 
   return (
-    <div className="relative">
-      <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#737373] pointer-events-none z-[1]" />
-      <input
-        ref={inputRef}
-        id={id}
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={
-          className ||
-          'w-full pl-10 pr-4 py-3 bg-[#1a1a1a] border border-[#ffffff08] rounded-xl text-sm text-[#E5E5E5] placeholder-[#737373] focus:outline-none focus:border-[#0C8B44] transition-colors'
+    <div className="verdexis-place-picker relative" id={id}>
+      {/* Loads Maps JS + Places for this key (once per page is fine) */}
+      <gmpx-api-loader key={apiKey} solution-channel="GMP_GE_placepicker_v2" />
+
+      <div className="verdexis-place-picker-box">
+        <div className="verdexis-place-picker-container">
+          <gmpx-place-picker
+            ref={pickerRef as React.RefObject<HTMLElement>}
+            placeholder={placeholder}
+            // @ts-expect-error web component boolean attr
+            disabled={disabled || undefined}
+          />
+        </div>
+      </div>
+
+      {/* Hidden field so HTML5 required + form state stay in sync */}
+      <input type="hidden" value={value} required={required} readOnly aria-hidden />
+
+      <style>{`
+        .verdexis-place-picker-box {
+          width: 100%;
         }
-        placeholder={placeholder}
-        autoComplete="street-address"
-        required={required}
-        disabled={disabled}
-        // Prevent the browser from fighting Google's dropdown on some browsers
-        role="combobox"
-        aria-autocomplete="list"
-        aria-expanded="false"
-      />
+        .verdexis-place-picker-container {
+          width: 100%;
+        }
+        .verdexis-place-picker gmpx-place-picker {
+          width: 100%;
+          display: block;
+          --gmpx-color-surface: #1a1a1a;
+          --gmpx-color-on-surface: #e5e5e5;
+          --gmpx-color-on-surface-variant: #737373;
+          --gmpx-color-primary: #0c8b44;
+          --gmpx-color-outline: rgba(255, 255, 255, 0.08);
+          --gmpx-font-family: inherit;
+          border-radius: 0.75rem;
+        }
+      `}</style>
     </div>
   )
 }
