@@ -88,7 +88,8 @@ const schema = z.object({
   EMAIL_PROVIDER: z.string().optional(),
   EMAIL_API_KEY: z.string().optional(),
   EMAIL_FROM_NAME: z.string().default('Verdexis'),
-  EMAIL_FROM_ADDRESS: z.string().email().default('admin@verdexisgroup.com'),
+  // Customer transactional From (OTP, reset, welcome). Must match provider-authorized sender.
+  EMAIL_FROM_ADDRESS: z.string().email().default('no-reply@verdexisgroup.com'),
   ADMIN_EMAIL_ADDRESS: z.string().email().default('admin@verdexisgroup.com'),
   EMAIL_REPLY_TO: z.string().optional(),
   // SMS configuration for OTP delivery
@@ -190,7 +191,21 @@ const envSummary = {
   BSC_TOKEN_ADDRESS_SET: !!parsed.data.BSC_TOKEN_ADDRESS,
   BNB_TOKEN_ADDRESS_SET: !!parsed.data.BNB_TOKEN_ADDRESS,
   AWS_COGNITO_USER_POOL_ID_SET: !!parsed.data.AWS_COGNITO_USER_POOL_ID,
+  // Email / SMTP (boolean flags only — never log credentials)
+  SMTP_HOST_SET: !!parsed.data.SMTP_HOST,
+  SMTP_USER_SET: !!parsed.data.SMTP_USER,
+  SMTP_PASS_SET: !!parsed.data.SMTP_PASS,
+  SMTP_PORT: parsed.data.SMTP_PORT || '587',
+  EMAIL_FROM_ADDRESS: parsed.data.EMAIL_FROM_ADDRESS,
+  EMAIL_FROM_NAME: parsed.data.EMAIL_FROM_NAME,
+  ADMIN_EMAIL_ADDRESS: parsed.data.ADMIN_EMAIL_ADDRESS,
+  ADMIN_EMAIL: parsed.data.ADMIN_EMAIL,
+  ADMIN_EMAILS: parsed.data.ADMIN_EMAILS,
+  APP_URL: parsed.data.APP_URL,
 }
 console.log('[verdexis-api] Environment summary:', JSON.stringify(envSummary, null, 2))
+if (!parsed.data.SMTP_HOST || !parsed.data.SMTP_USER || !parsed.data.SMTP_PASS) {
+  console.warn('[verdexis-api] SMTP incomplete — signup OTP and transactional email will fail until SMTP_HOST, SMTP_USER, and SMTP_PASS are set.')
+}
 
 export const env = parsed.data
