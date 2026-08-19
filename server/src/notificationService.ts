@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { prisma } from './db.js'
 import { env } from './env.js'
-import { customerEmailAddress, customerEmailName, adminEmailAddress, adminEmailRecipients, customerEmailFooter, emailReplyTo, formatEmailAddress, emailLogoUrl } from './config/email.js'
+import { customerEmailAddress, customerEmailName, adminEmailAddress, adminEmailRecipients, customerEmailFooter, emailReplyTo, formatEmailAddress, emailLogoUrl, appUrl } from './config/email.js'
 import { companyInfo } from './config/company.js'
 
 interface NotificationPreferences {
@@ -89,10 +89,10 @@ export function resolveEmailTransportConfig(
 
 function escapeHtml(value: string): string {
   return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+    .replace(/&/g, '&')
+    .replace(/</g, '<')
+    .replace(/>/g, '>')
+    .replace(/"/g, '"')
     .replace(/'/g, '&#39;')
 }
 
@@ -350,31 +350,141 @@ export async function sendEmailNotification(
   }
 }
 
+export type AdminEmailOptions = {
+  /** Mark message as high importance (Outlook / Gmail priority). */
+  important?: boolean
+  recipients?: string[]
+}
+
 /** Send an internal operational message only to configured administrators. */
 export async function sendAdminEmailNotification(
   subject: string,
   body: string,
   htmlBody?: string,
-  recipients: string[] = adminEmailRecipients,
+  recipientsOrOptions: string[] | AdminEmailOptions = adminEmailRecipients,
 ): Promise<boolean> {
   try {
     const transporter = getEmailTransporter()
     if (!transporter) return false
     const config = resolveEmailTransportConfig()
     const from = formatEmailAddress(adminEmailAddress, 'Verdexis Admin')
+
+    const options: AdminEmailOptions = Array.isArray(recipientsOrOptions)
+      ? { recipients: recipientsOrOptions }
+      : (recipientsOrOptions || {})
+    const recipients = (options.recipients?.length ? options.recipients : adminEmailRecipients)
+      .map((a) => a.trim().toLowerCase())
+      .filter(Boolean)
+    if (!recipients.length) {
+      console.warn('[notification-service] No admin email recipients configured')
+      return false
+    }
+
+    const headers: Record<string, string> = {
+      'X-Mailer': 'Verdexis',
+      'Auto-Submitted': 'auto-generated',
+    }
+    if (options.important) {
+      headers['Importance'] = 'high'
+      headers['X-Priority'] = '1'
+      headers['Priority'] = 'urgent'
+      headers['X-MSMail-Priority'] = 'High'
+    }
+
     await transporter.sendMail({
       from,
       to: recipients,
       subject,
       text: body,
       html: htmlBody ?? `<p>${escapeHtml(body).replace(/\n/g, '<br />')}</p>`,
-      headers: { 'X-Mailer': 'Verdexis', 'Auto-Submitted': 'auto-generated' },
+      headers,
       envelope: { from: adminEmailAddress, to: recipients },
       ...(config.replyTo ? { replyTo: config.replyTo } : {}),
     })
     return true
   } catch (error) {
     console.error('[notification-service] Error sending admin email:', error)
+    return false
+  }
+}
+
+export type NewUserNotifyPayload = {
+  id: string
+  email: string
+  name?: string | null
+  investmentId?: string | null
+  role?: string | null
+  createdAt?: Date | string | null
+}
+
+/**
+ * Always notify admin(s) when a user completes email verification
+ * and becomes a fully registered account. High-importance so it stands out.
+ * Safe to call only on the first transition to emailVerified=true.
+ */
+export async function notifyAdminNewUser(user: NewUserNotifyPayload): Promise<boolean> {
+  try {
+    const email = String(user.email || '').trim().toLowerCase()
+    if (!email) return false
+
+    // Do not spam admin about their own bootstrap account
+    if (adminEmailRecipients.includes(email) || email === String(adminEmailAddress || '').toLowerCase()) {
+      return false
+    }
+
+    const name = (user.name || '').trim() || '—'
+    const investmentId = user.investmentId || '—'
+    const role = user.role || 'user'
+    const verifiedAt = new Date().toISOString()
+    const createdAt = user.createdAt
+      ? (user.createdAt instanceof Date ? user.createdAt.toISOString() : String(user.createdAt))
+      : '—'
+    const adminUsersUrl = `${(appUrl || env.APP_BASE_URL || 'https://www.verdexisgroup.com').replace(/\/$/, '')}/admin/users`
+
+    const subject = `[IMPORTANT] New Verdexis user registered: ${email}`
+    const body = [
+      'A new user has completed email verification and is now fully registered.',
+      '',
+      `Name: ${name}`,
+      `Email: ${email}`,
+      `User ID: ${user.id}`,
+      `Investment ID: ${investmentId}`,
+      `Role: ${role}`,
+      `Account created: ${createdAt}`,
+      `Email verified at: ${verifiedAt}`,
+      '',
+      `Admin users: ${adminUsersUrl}`,
+    ].join('\n')
+
+    const html = `
+      <div style="font-family:Segoe UI,Arial,sans-serif;line-height:1.5;color:#0f172a">
+        <p style="margin:0 0 12px;padding:10px 14px;background:#fef3c7;border-left:4px solid #d97706;border-radius:4px">
+          <strong>IMPORTANT</strong> — New registered user
+        </p>
+        <p>A new user has completed <strong>email verification</strong> and is now fully registered on Verdexis.</p>
+        <table style="border-collapse:collapse;width:100%;max-width:480px;font-size:14px">
+          <tr><td style="padding:6px 0;color:#64748b;width:140px">Name</td><td style="padding:6px 0"><strong>${escapeHtml(name)}</strong></td></tr>
+          <tr><td style="padding:6px 0;color:#64748b">Email</td><td style="padding:6px 0"><a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a></td></tr>
+          <tr><td style="padding:6px 0;color:#64748b">User ID</td><td style="padding:6px 0;font-family:monospace;font-size:12px">${escapeHtml(user.id)}</td></tr>
+          <tr><td style="padding:6px 0;color:#64748b">Investment ID</td><td style="padding:6px 0;font-family:monospace;font-size:12px">${escapeHtml(String(investmentId))}</td></tr>
+          <tr><td style="padding:6px 0;color:#64748b">Role</td><td style="padding:6px 0">${escapeHtml(String(role))}</td></tr>
+          <tr><td style="padding:6px 0;color:#64748b">Created</td><td style="padding:6px 0">${escapeHtml(createdAt)}</td></tr>
+          <tr><td style="padding:6px 0;color:#64748b">Verified at</td><td style="padding:6px 0">${escapeHtml(verifiedAt)}</td></tr>
+        </table>
+        <p style="margin-top:20px">
+          <a href="${escapeHtml(adminUsersUrl)}" style="display:inline-block;background:#0C8B44;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600">Open admin users</a>
+        </p>
+      </div>`
+
+    const ok = await sendAdminEmailNotification(subject, body, html, { important: true })
+    if (ok) {
+      console.log(`[notification-service] New-user admin alert sent for ${email}`)
+    } else {
+      console.warn(`[notification-service] New-user admin alert FAILED for ${email}`)
+    }
+    return ok
+  } catch (error) {
+    console.error('[notification-service] Error notifying admin of new user:', error)
     return false
   }
 }
