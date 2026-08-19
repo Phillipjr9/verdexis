@@ -7,7 +7,6 @@ declare global {
     interface IntrinsicElements {
       'gmpx-api-loader': React.DetailedHTMLProps<
         React.HTMLAttributes<HTMLElement> & {
-          key?: string
           'solution-channel'?: string
         },
         HTMLElement
@@ -15,7 +14,6 @@ declare global {
       'gmpx-place-picker': React.DetailedHTMLProps<
         React.HTMLAttributes<HTMLElement> & {
           placeholder?: string
-          disabled?: boolean
         },
         HTMLElement
       >
@@ -106,6 +104,7 @@ export default function AddressAutocomplete({
   const apiKey = getApiKey()
   const [ready, setReady] = useState(false)
   const [failed, setFailed] = useState(false)
+  const loaderRef = useRef<HTMLElement | null>(null)
   const pickerRef = useRef<HTMLElement | null>(null)
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
@@ -126,6 +125,13 @@ export default function AddressAutocomplete({
     }
   }, [apiKey])
 
+  // React treats `key` as reserved — set the Maps API key attribute imperatively.
+  useEffect(() => {
+    if (!ready || !loaderRef.current || !apiKey) return
+    loaderRef.current.setAttribute('key', apiKey)
+    loaderRef.current.setAttribute('solution-channel', 'GMP_GE_placepicker_v2')
+  }, [ready, apiKey])
+
   useEffect(() => {
     if (!ready || !pickerRef.current) return
     const el = pickerRef.current
@@ -134,14 +140,10 @@ export default function AddressAutocomplete({
       // gmpx-place-picker exposes `.place` after selection
       const place = (el as HTMLElement & { place?: GmpxPlace | null }).place
       if (!place) {
-        // Cleared selection — allow empty
         onChangeRef.current('')
         return
       }
-      const formatted =
-        place.formattedAddress ||
-        place.displayName ||
-        ''
+      const formatted = place.formattedAddress || place.displayName || ''
       if (formatted) onChangeRef.current(formatted)
     }
 
@@ -154,27 +156,7 @@ export default function AddressAutocomplete({
     'w-full pl-10 pr-4 py-3 bg-[#1a1a1a] border border-[#ffffff08] rounded-xl text-sm text-[#E5E5E5] placeholder-[#737373] focus:outline-none focus:border-[#0C8B44] transition-colors'
 
   // No key or library failed → plain controlled input (signup still works)
-  if (!apiKey || failed) {
-    return (
-      <div className="relative">
-        <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#737373] pointer-events-none z-[1]" />
-        <input
-          id={id}
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className={inputClass}
-          placeholder={placeholder}
-          autoComplete="street-address"
-          required={required}
-          disabled={disabled}
-        />
-      </div>
-    )
-  }
-
-  // Loading library
-  if (!ready) {
+  if (!apiKey || failed || !ready) {
     return (
       <div className="relative">
         <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#737373] pointer-events-none z-[1]" />
@@ -195,16 +177,14 @@ export default function AddressAutocomplete({
 
   return (
     <div className="verdexis-place-picker relative" id={id}>
-      {/* Loads Maps JS + Places for this key (once per page is fine) */}
-      <gmpx-api-loader key={apiKey} solution-channel="GMP_GE_placepicker_v2" />
+      {/* Loads Maps JS + Places for this key. Attribute set via ref (React reserves `key`). */}
+      <gmpx-api-loader ref={loaderRef as React.RefObject<HTMLElement>} />
 
       <div className="verdexis-place-picker-box">
         <div className="verdexis-place-picker-container">
           <gmpx-place-picker
             ref={pickerRef as React.RefObject<HTMLElement>}
             placeholder={placeholder}
-            // @ts-expect-error web component boolean attr
-            disabled={disabled || undefined}
           />
         </div>
       </div>
