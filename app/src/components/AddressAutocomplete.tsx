@@ -72,8 +72,11 @@ function loadGmpxLibrary(): Promise<void> {
 
 interface GmpxPlace {
   formattedAddress?: string
+  formatted_address?: string
   displayName?: string
+  name?: string
   addressComponents?: unknown
+  value?: GmpxPlace
 }
 
 export interface AddressAutocompleteProps {
@@ -136,19 +139,37 @@ export default function AddressAutocomplete({
     if (!ready || !pickerRef.current) return
     const el = pickerRef.current
 
-    const handlePlaceChange = () => {
-      // gmpx-place-picker exposes `.place` after selection
-      const place = (el as HTMLElement & { place?: GmpxPlace | null }).place
+    const extractAddress = (raw: unknown): string => {
+      if (!raw || typeof raw !== 'object') return ''
+      const place = raw as GmpxPlace
+      // Official API: picker.value is the Place object (not .place)
+      const nested = place.value && typeof place.value === 'object' ? place.value : place
+      const formatted =
+        nested.formattedAddress ||
+        nested.formatted_address ||
+        nested.displayName ||
+        nested.name ||
+        ''
+      return String(formatted || '').trim()
+    }
+
+    const handlePlaceChange = (event?: Event) => {
+      const target = (event?.target ?? el) as HTMLElement & {
+        value?: GmpxPlace | null
+        place?: GmpxPlace | null
+      }
+      // Docs use picker.value / e.target.value — also try .place for older builds
+      const place = target.value ?? target.place ?? null
       if (!place) {
         onChangeRef.current('')
         return
       }
-      const formatted = place.formattedAddress || place.displayName || ''
+      const formatted = extractAddress(place)
       if (formatted) onChangeRef.current(formatted)
     }
 
-    el.addEventListener('gmpx-placechange', handlePlaceChange)
-    return () => el.removeEventListener('gmpx-placechange', handlePlaceChange)
+    el.addEventListener('gmpx-placechange', handlePlaceChange as EventListener)
+    return () => el.removeEventListener('gmpx-placechange', handlePlaceChange as EventListener)
   }, [ready])
 
   const inputClass =
