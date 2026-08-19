@@ -31,13 +31,38 @@ class EmailService {
     this.loadTemplates()
   }
 
-  private initTransporter() {
-    const host = (env.SMTP_HOST || 'smtp.gmail.com').trim()
-    const port = Number(env.SMTP_PORT) || 587
-    const secure = String(env.SMTP_SECURE || 'false').toLowerCase() === 'true'
+  private smtpAuth(): { user: string; pass: string } | null {
     const user = (env.SMTP_USER || '').trim()
     const pass = (env.SMTP_PASS || '').trim()
-    if (!user || !pass) {
+    if (!user || !pass) return null
+    return { user, pass }
+  }
+
+  private buildTransport(port: number): Transporter | null {
+    const auth = this.smtpAuth()
+    if (!auth) return null
+    const host = (env.SMTP_HOST || 'smtp.gmail.com').trim()
+    const secure = port === 465 || String(env.SMTP_SECURE || 'false').toLowerCase() === 'true'
+    const emailConfig: SMTPTransport.Options = {
+      host,
+      port,
+      secure,
+      auth,
+      requireTLS: !secure && (host.includes('mailgun') || port === 587 || port === 2525 || port === 2587),
+      connectionTimeout: 15_000,
+      greetingTimeout: 15_000,
+      socketTimeout: 15_000,
+      tls: {
+        rejectUnauthorized: false,
+        minVersion: 'TLSv1.2',
+      },
+    }
+    return nodemailer.createTransport(emailConfig)
+  }
+
+  private initTransporter() {
+    const auth = this.smtpAuth()
+    if (!auth) {
       console.warn('[email] SMTP credentials missing, emails will be logged only', {
         hostSet: Boolean(env.SMTP_HOST),
         userSet: Boolean(env.SMTP_USER),
@@ -45,31 +70,25 @@ class EmailService {
       })
       return
     }
-
-    const emailConfig: SMTPTransport.Options = {
-      host,
-      port,
-      secure,
-      auth: { user, pass },
-      requireTLS: host.includes('mailgun') || port === 587 || port === 2587,
-      connectionTimeout: 20_000,
-      greetingTimeout: 20_000,
-      socketTimeout: 20_000,
-      tls: {
-        rejectUnauthorized: false,
-        minVersion: 'TLSv1.2',
-      },
-    }
-
-    this.transporter = nodemailer.createTransport(emailConfig)
-    console.log('[email] SMTP transporter ready', { host, port, user })
+    const host = (env.SMTP_HOST || '').toLowerCase()
+    const configured = Number(env.SMTP_PORT) || 0
+    const port = configured || (host.includes('mailgun') ? 2525 : 587)
+    this.transporter = this.buildTransport(port)
+    console.log('[email] SMTP transporter ready', { host: env.SMTP_HOST, port, user: auth.user })
   }
 
-  /** Ensure transporter exists (lazy re-init if env was late). */
   private getTransporter(): Transporter | null {
     if (this.transporter) return this.transporter
     this.initTransporter()
     return this.transporter
+  }
+
+  private smtpPortCandidates(): number[] {
+    const configured = Number(env.SMTP_PORT) || 0
+    const host = (env.SMTP_HOST || '').toLowerCase()
+    const preferred = configured || (host.includes('mailgun') ? 2525 : 587)
+    const rest = [2525, 587, 465].filter((p) => p !== preferred)
+    return [preferred, ...rest]
   }
 
   private loadTemplates() {
@@ -104,7 +123,7 @@ class EmailService {
           const name = file.replace(/^email_/, '').replace(/\.html$/i, '')
           this.templates.set(name, content)
         } catch {
-          // skip unreadable
+          // skip
         }
       }
       console.log(`[email] Loaded ${this.templates.size} template(s) from ${templateDir}`)
@@ -132,10 +151,9 @@ class EmailService {
       WEBSITE_LINK: emailLinks.website,
       ...vars,
     }
-
     return Object.entries(defaultVars).reduce(
       (result, [key, value]) => result.replace(new RegExp(`{{${key}}}`, 'g'), value ?? ''),
-      html
+      html,
     )
   }
 
@@ -153,7 +171,6 @@ class EmailService {
         body: plainText,
         createWebNotification: options.createWebNotification,
       })
-
       if (success) console.log('[email] Sent to:', options.to)
       else console.error('[email] sendEmailNotification returned false for:', options.to, 'kind:', options.kind)
       return success
@@ -165,10 +182,8 @@ class EmailService {
 
   async sendOTP(to: string, userName: string, otp: string, expirationMinutes: number, userId?: string): Promise<boolean> {
     const template = this.templates.get('otp_verification')
-
     const expiresAt = new Date(Date.now() + expirationMinutes * 60000)
     const base = this.appBase()
-
     const html = template
       ? this.replaceVariables(template, {
           USER_NAME: userName,
@@ -186,10 +201,9 @@ class EmailService {
         })
       : `<div style="font-family:sans-serif;padding:24px"><h2>Your verification code</h2><p>Hi ${userName},</p><p style="font-size:32px;font-weight:bold;letter-spacing:8px">${otp}</p><p>Expires in ${expirationMinutes} minutes. Do not share this code.</p></div>`
 
-    const subject = `Your Verdexis verification code`
+    const subject = 'Your Verdexis verification code'
     const text = `Your Verdexis verification code is ${otp}. It expires in ${expirationMinutes} minutes. Do not share this code.`
 
-    // Critical path: send OTP directly via SMTP (do not depend on notificationService wrappers).
     const direct = await this.sendOtpDirect(to, subject, text, html)
     if (direct) return true
 
@@ -206,13 +220,8 @@ class EmailService {
     })
   }
 
-  /**
-   * Direct Nodemailer send for verification codes.
-   * Uses the same SMTP env as production Mailgun; logs real provider errors.
-   */
   private async sendOtpDirect(to: string, subject: string, text: string, html: string): Promise<boolean> {
-    const transporter = this.getTransporter()
-    if (!transporter) {
+    if (!this.smtpAuth()) {
       console.error('[email] OTP direct send aborted: no SMTP transporter', {
         hostSet: Boolean(env.SMTP_HOST),
         userSet: Boolean(env.SMTP_USER),
@@ -231,53 +240,72 @@ class EmailService {
     const from = `${fromName} <${fromAddress}>`
     const envelopeFrom = (env.SMTP_USER || fromAddress).trim()
     const replyTo = (env.EMAIL_REPLY_TO || env.SMTP_REPLY_TO || '').trim() || undefined
-
-    try {
-      const info = await transporter.sendMail({
-        from,
-        to,
-        replyTo,
-        subject,
-        text,
-        html,
-        headers: {
-          'X-Mailer': 'Verdexis',
-          'Auto-Submitted': 'no',
-          ...(replyTo ? { 'Reply-To': replyTo } : {}),
-        },
-        envelope: { from: envelopeFrom, to },
-      })
-      console.log('[email] OTP sent directly', {
-        to,
-        messageId: info.messageId,
-        response: info.response,
-        accepted: info.accepted,
-        rejected: info.rejected,
-      })
-      return true
-    } catch (error) {
-      const err = error as { message?: string; code?: string; response?: string; responseCode?: number; command?: string }
-      console.error('[email] OTP direct SMTP error', {
-        to,
-        message: err?.message,
-        code: err?.code,
-        response: err?.response,
-        responseCode: err?.responseCode,
-        command: err?.command,
-        fromAddress,
-        envelopeFrom,
-        host: env.SMTP_HOST,
-      })
-      return false
+    const mail = {
+      from,
+      to,
+      replyTo,
+      subject,
+      text,
+      html,
+      headers: {
+        'X-Mailer': 'Verdexis',
+        'Auto-Submitted': 'no',
+        ...(replyTo ? { 'Reply-To': replyTo } : {}),
+      },
+      envelope: { from: envelopeFrom, to },
     }
+
+    let lastError: unknown
+    for (const port of this.smtpPortCandidates()) {
+      try {
+        const transporter = this.buildTransport(port)
+        if (!transporter) continue
+        const info = await transporter.sendMail(mail)
+        this.transporter = transporter
+        console.log('[email] OTP sent directly', {
+          to,
+          port,
+          messageId: info.messageId,
+          response: info.response,
+          accepted: info.accepted,
+          rejected: info.rejected,
+        })
+        return true
+      } catch (error) {
+        lastError = error
+        const err = error as { message?: string; code?: string }
+        const msg = String(err?.message || error)
+        const isTimeout = /timeout|ETIMEDOUT|ECONNREFUSED|ENOTFOUND/i.test(msg)
+        console.error('[email] OTP direct SMTP error', {
+          to,
+          port,
+          message: err?.message,
+          code: err?.code,
+          willRetry: isTimeout,
+          host: env.SMTP_HOST,
+        })
+        if (!isTimeout) break
+      }
+    }
+
+    const err = lastError as { message?: string; code?: string; response?: string; responseCode?: number }
+    console.error('[email] OTP direct SMTP exhausted ports', {
+      to,
+      message: err?.message,
+      code: err?.code,
+      response: err?.response,
+      responseCode: err?.responseCode,
+      fromAddress,
+      envelopeFrom,
+      host: env.SMTP_HOST,
+    })
+    return false
   }
 
   async sendWelcome(to: string, userName: string, userId?: string): Promise<boolean> {
     const template = this.templates.get('welcome')
     if (!template) return false
-
     const base = this.appBase()
-
     const html = this.replaceVariables(template, {
       USER_NAME: userName,
       ONBOARDING_URL: `${base}/onboarding`,
@@ -287,7 +315,6 @@ class EmailService {
       HELP_CENTER_URL: `${base}/help`,
       SUPPORT_EMAIL: companyInfo.contact.email || emailLinks.support,
     })
-
     return this.send({
       to,
       subject: 'Welcome to Verdexis!',
@@ -322,33 +349,21 @@ class EmailService {
         createWebNotification: true,
       })
     }
-
     const html = this.replaceVariables(template, {
       USER_NAME: userName,
       RESET_URL: resetUrl,
       REQUEST_TIME: new Date().toLocaleString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        timeZoneName: 'short',
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
       }),
       EXPIRY_TIME: new Date(Date.now() + 60 * 60 * 1000).toLocaleString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        timeZoneName: 'short',
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
       }),
       USER_EMAIL: to,
       USER_AGENT: 'Unknown',
       LOCATION: 'Unknown',
     })
-
     return this.send({
       to,
       subject: 'Reset your Verdexis password',
@@ -365,23 +380,14 @@ class EmailService {
     to: string,
     userName: string,
     transaction: {
-      id: string
-      type: string
-      amount: string
-      currency: string
-      from: string
-      to: string
-      fee: string
-      date: string
-      time: string
+      id: string; type: string; amount: string; currency: string
+      from: string; to: string; fee: string; date: string; time: string
     },
-    userId?: string
+    userId?: string,
   ): Promise<boolean> {
     const template = this.templates.get('transaction_confirmation')
     if (!template) return false
-
     const base = this.appBase()
-
     const html = this.replaceVariables(template, {
       USER_NAME: userName,
       TRANSACTION_ID: transaction.id,
@@ -398,7 +404,6 @@ class EmailService {
       TRANSACTION_DETAILS_URL: `${base}/transactions/${transaction.id}`,
       SUPPORT_URL: emailLinks.support || `${base}/support`,
     })
-
     return this.send({
       to,
       subject: `Transaction confirmed: ${transaction.amount} ${transaction.currency} (${transaction.type})`,
@@ -414,31 +419,17 @@ class EmailService {
   async sendSecurityAlert(
     to: string,
     userName: string,
-    alert: {
-      title: string
-      message: string
-      location?: string
-      ip?: string
-      device?: string
-      time?: string
-    },
-    userId?: string
+    alert: { title: string; message: string; location?: string; ip?: string; device?: string; time?: string },
+    userId?: string,
   ): Promise<boolean> {
     const template = this.templates.get('security')
     const base = this.appBase()
-
     const eventTime =
       alert.time ||
       new Date().toLocaleString('en-US', {
-        weekday: 'short',
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        timeZoneName: 'short',
+        weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
       })
-
     const html = template
       ? this.replaceVariables(template, {
           USER_NAME: userName,
@@ -453,7 +444,6 @@ class EmailService {
           SUPPORT_URL: emailLinks.support || `${base}/support`,
         })
       : `<div style="font-family:sans-serif;padding:24px"><h2>Security alert</h2><p>Hi ${userName},</p><p><strong>${alert.title}</strong></p><p>${alert.message}</p><p>Time: ${eventTime}<br/>Location: ${alert.location || 'Unknown'}<br/>IP: ${alert.ip || 'Unknown'}</p></div>`
-
     return this.send({
       to,
       subject: `Security alert: ${alert.title}`,
