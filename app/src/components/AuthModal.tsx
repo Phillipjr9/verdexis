@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { api, getFriendlyApiErrorMessage, setTokenWithTimestamp, setStoredUser, type ApiError } from '../lib/api'
 import { sanitizeDisplayText, sanitizeEmail, sanitizeText } from '../lib/sanitize'
 import { isSupabaseConfigured, signInWithEmail, signUpWithEmail } from '../lib/supabase'
+import AddressAutocomplete from './AddressAutocomplete'
 
 interface AuthModalProps {
   isOpen: boolean
@@ -99,7 +100,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
 
       if (mode === 'signup') {
         const safeEmail = sanitizeEmail(form.email)
-        const safePhone = sanitizeText(form.phone, '').replace(/[^^\d+()\-\s.]/g, '')
+        const safePhone = sanitizeText(form.phone, '').replace(/[^\d+()\-\s.]/g, '')
         const safeAddress = sanitizeDisplayText(form.address, 200)
         const safeFirstName = sanitizeDisplayText(form.firstName, 40)
         const safeLastName = sanitizeDisplayText(form.lastName, 40)
@@ -507,19 +508,14 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
             {mode === 'signup' && (
               <div>
                 <label className="text-xs text-[#737373] mb-1.5 block">Street address</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={form.address}
-                    onChange={(e) => setForm({ ...form, address: sanitizeDisplayText(e.target.value, 200) })}
-                    className="w-full pl-3 pr-4 py-3 bg-[#1a1a1a] border border-[#ffffff08] rounded-xl text-sm text-[#E5E5E5] placeholder-[#737373] focus:outline-none focus:border-[#0C8B44] transition-colors"
-                    placeholder="123 Main St, Apt 4B"
-                    autoComplete="street-address"
-                    required
-                  />
-                </div>
+                <AddressAutocomplete
+                  value={form.address}
+                  onChange={(address) => setForm({ ...form, address: sanitizeDisplayText(address, 200) })}
+                  placeholder="Start typing your address…"
+                  required
+                />
                 <p className="mt-2 text-[11px] text-[#A3A3A3] leading-relaxed">
-                  Required. Provide your street address for compliance and account setup.
+                  Required. Start typing and select your address from the suggestions for faster, accurate entry.
                 </p>
               </div>
             )}
