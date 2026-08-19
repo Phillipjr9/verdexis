@@ -3,13 +3,14 @@ import rateLimit from 'express-rate-limit'
 import { prisma } from '../db.js'
 import { recordLedgerTransaction } from '../services/ledger.js'
 import { verifyDepositActionToken } from '../services/adminEmailActions.js'
+import { notifyDepositEvent } from '../services/emailHooks.js'
 
 const router = Router()
 const actionLimiter = rateLimit({ windowMs: 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false })
 router.use(actionLimiter)
 
 function escapeHtml(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  return value.replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>').replace(/"/g, '"')
 }
 
 function page(title: string, message: string, actionButton?: { label: string; actionUrl: string }, autoSubmit = false): string {
@@ -53,6 +54,18 @@ async function approveDeposit(depositId: string, actor: string) {
   }
 
   await prisma.notification.create({ data: { userId: pending.userId, kind: 'deposit', title: `Deposit credited: ${pending.amount} ${pending.asset}`, body: 'Your deposit was verified and credited by the Verdexis admin team.' } }).catch(() => {})
+  process.nextTick(() => {
+    prisma.user.findUnique({ where: { id: pending.userId }, select: { id: true, email: true, name: true } }).then((u) => {
+      if (!u) return
+      notifyDepositEvent(u, {
+        status: 'credited',
+        amount: pending.amount,
+        asset: pending.asset,
+        reference: pending.txHash,
+        id: pending.id,
+      }).catch(() => {})
+    }).catch(() => {})
+  })
   return { status: 200, message: `Deposit ${pending.id} approved and credited successfully.` }
 }
 
@@ -78,6 +91,18 @@ async function rejectDeposit(depositId: string, actor: string) {
   }
 
   await prisma.notification.create({ data: { userId: pending.userId, kind: 'deposit', title: 'Deposit rejected', body: 'Your deposit was reviewed and rejected by the Verdexis admin team.' } }).catch(() => {})
+  process.nextTick(() => {
+    prisma.user.findUnique({ where: { id: pending.userId }, select: { id: true, email: true, name: true } }).then((u) => {
+      if (!u) return
+      notifyDepositEvent(u, {
+        status: 'rejected',
+        amount: pending.amount,
+        asset: pending.asset,
+        reference: pending.txHash,
+        id: pending.id,
+      }).catch(() => {})
+    }).catch(() => {})
+  })
   return { status: 200, message: `Deposit ${pending.id} rejected.` }
 }
 
