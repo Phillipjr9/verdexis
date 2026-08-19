@@ -223,19 +223,25 @@ router.post('/register/verify', requireAuth, async (req: AuthedRequest, res) => 
 // Start passkey authentication (generate challenge)
 router.post('/auth/options', async (req, res) => {
   try {
-    const { email } = req.body as { email?: string }
+    const rawEmail = (req.body as { email?: string })?.email
+    const email = typeof rawEmail === 'string' ? rawEmail.trim().toLowerCase() : ''
 
     if (!email) {
       return res.status(400).json({ error: 'Email is required' })
     }
 
+    // Match auth routes: emails are stored lowercased
     const user = await prisma.user.findUnique({
       where: { email },
-      select: { id: true },
+      select: { id: true, emailVerified: true },
     })
 
     if (!user) {
-      return res.status(404).json({ error: 'User not found' })
+      // Keep message explicit so the UI can distinguish "no account" vs route missing
+      return res.status(404).json({
+        error: 'User not found',
+        message: 'No account found for this email. Sign in with password or create an account first.',
+      })
     }
 
     const passkeys = await prisma.passkey.findMany({
@@ -244,7 +250,10 @@ router.post('/auth/options', async (req, res) => {
     })
 
     if (passkeys.length === 0) {
-      return res.status(404).json({ error: 'No passkeys registered' })
+      return res.status(404).json({
+        error: 'No passkeys registered',
+        message: 'This account has no passkeys yet. Sign in with password, then add a passkey in Security settings.',
+      })
     }
 
     const options = await generateAuthenticationOptions({
