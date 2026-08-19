@@ -82,7 +82,34 @@ async function ensureAppKit(): Promise<AppKitModal> {
 export async function getWalletConnectProvider(): Promise<Eip1193Provider | null> {
   if (!isWalletConnectConfigured()) return null
   const kit = await ensureAppKit()
-  return (kit.getWalletProvider?.() as Eip1193Provider) || null
+  const current = kit.getWalletProvider?.() as (Eip1193Provider & { enable?: () => Promise<string[]> }) | undefined
+  if (current && typeof current.enable === 'function') return current
+
+  const shim = {
+    _inner: current,
+    async enable() {
+      const { address, provider } = await connectWithAppKit()
+      shim._inner = provider
+      return [address]
+    },
+    request(args: { method: string; params?: unknown }) {
+      const inner = shim._inner || (kit.getWalletProvider?.() as Eip1193Provider | undefined)
+      if (!inner) throw new Error('Please call connect() before request()')
+      return inner.request(args as never)
+    },
+    on(event: string, cb: (...a: unknown[]) => void) {
+      const inner = shim._inner || (kit.getWalletProvider?.() as Eip1193Provider | undefined)
+      return inner?.on?.(event, cb)
+    },
+    removeListener(event: string, cb: (...a: unknown[]) => void) {
+      const inner = shim._inner || (kit.getWalletProvider?.() as Eip1193Provider | undefined)
+      return inner?.removeListener?.(event, cb)
+    },
+    disconnect() {
+      return kit.disconnect?.()
+    },
+  }
+  return shim as unknown as Eip1193Provider
 }
 
 export async function connectWithAppKit(): Promise<{ address: string; provider: Eip1193Provider }> {
