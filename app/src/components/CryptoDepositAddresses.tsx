@@ -79,6 +79,7 @@ export function CryptoDepositAddresses() {
       }
     }
     userWallets.set(profile.email, { ...existing, cryptos })
+    void api.put('/api/deposit-addresses/save', { cryptos }).catch(() => undefined)
   }
 
   async function generateOne(symbol: string, currency: string): Promise<string | null> {
@@ -88,8 +89,22 @@ export function CryptoDepositAddresses() {
     return res.address || null
   }
 
+  function recoverSessionToken() {
+    const existing = getToken()
+    if (existing) return existing
+    try {
+      const auth = JSON.parse(localStorage.getItem('verdexis_auth') || '{}') as { token?: string }
+      if (auth.token && auth.token.length > 10) {
+        localStorage.setItem('verdexis_token', auth.token)
+        return auth.token
+      }
+    } catch { /* ignore */ }
+    return null
+  }
+
   async function handleGenerate(symbol: string, currency: string) {
-    if (!getToken()) {
+    recoverSessionToken()
+    if (!getToken() && !getProfile()?.email) {
       toast.error('Sign in to generate a wallet address')
       return
     }
@@ -108,14 +123,20 @@ export function CryptoDepositAddresses() {
       })
       toast.success(`${symbol} address ready`)
     } catch (err) {
-      toast.error((err as { error?: string }).error || `Could not generate ${symbol} address`)
+      const status = (err as { status?: number }).status
+      toast.error(
+        status === 401
+          ? 'Session expired. Sign out and sign in again, then generate the address.'
+          : (err as { error?: string }).error || `Could not generate ${symbol} address`,
+      )
     } finally {
       setLoading(null)
     }
   }
 
   async function handleGenerateAll() {
-    if (!getToken()) {
+    recoverSessionToken()
+    if (!getToken() && !getProfile()?.email) {
       toast.error('Sign in to generate wallet addresses')
       return
     }
@@ -137,7 +158,12 @@ export function CryptoDepositAddresses() {
       })
       toast.success('A unique address was created for each crypto')
     } catch (err) {
-      toast.error((err as { error?: string }).error || 'Could not generate wallets')
+      const status = (err as { status?: number }).status
+      toast.error(
+        status === 401
+          ? 'Session expired. Sign out and sign in again, then generate wallets.'
+          : (err as { error?: string }).error || 'Could not generate wallets',
+      )
     } finally {
       setLoading(null)
     }
@@ -150,7 +176,7 @@ export function CryptoDepositAddresses() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div className="flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex">
         <div>
           <h2 className="text-lg font-medium text-[#E5E5E5] flex items-center gap-2">
             <Wallet className="w-5 h-5 text-[#0C8B44]" />
@@ -167,10 +193,9 @@ export function CryptoDepositAddresses() {
           className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0C8B44] px-4 py-2.5 text-sm text-white hover:bg-[#0a7539] disabled:opacity-50"
         >
           <RefreshCw className={`w-4 h-4 ${loading === 'all' ? 'animate-spin' : ''}`} />
-          {loading === 'all' ? 'Generating…' : 'Generate all wallets'}
+          {loading === 'all' ? 'Generating\u2026' : 'Generate all wallets'}
         </button>
       </div>
-
       <div className="space-y-3">
         {rows.map((row) => {
           const qr = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(row.address)}`
@@ -207,7 +232,7 @@ export function CryptoDepositAddresses() {
                       onClick={() => void handleGenerate(row.symbol, COINS.find((c) => c.symbol === row.symbol)!.currency)}
                       className="mt-3 text-sm text-[#0C8B44] hover:underline disabled:opacity-50"
                     >
-                      {loading === row.symbol ? 'Generating…' : `Generate ${row.symbol} address`}
+                      {loading === row.symbol ? 'Generating\u2026' : `Generate ${row.symbol} address`}
                     </button>
                   )}
                   {qrSymbol === row.symbol && row.address && (
