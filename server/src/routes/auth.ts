@@ -175,11 +175,10 @@ const verifySignupOtpSchema = z.object({
 
 /**
  * Standard signup flow:
- * 1) Create account with emailVerified=false
- * 2) Send 6-digit OTP to email
- * 3) Return pendingToken so client can submit the code
- * 4) On ANY OTP create/send failure: purge the unverified user so email is free
- * 5) Unverified email can always retry signup (never 409)
+ * 1) Create/update account with emailVerified=false
+ * 2) Create OTP + send email (SMTP is outside the DB transaction)
+ * 3) On OTP/email failure: Prisma $transaction rollback (delete OTPs + user)
+ * 4) Unverified emails may always retry (never 409)
  */
 router.post('/signup', authLimiter, async (req, res) => {
   try {
@@ -191,15 +190,31 @@ router.post('/signup', authLimiter, async (req, res) => {
     const { email, password, name, phone, address } = parsed.data
     const normalizedEmail = email.trim().toLowerCase()
 
-    async function purgeUnverifiedSignupUser(userId: string, reason: string): Promise<boolean> {
+    /**
+     * Compensating transaction: remove OTP rows + user atomically.
+     * Used when SMTP/OTP fails after the user row was written so we never
+     * leave a phantom "already registered" account without a verification path.
+     * (Email I/O cannot run inside the DB transaction — rollback is explicit.)
+     */
+    async function rollbackUnverifiedSignup(userId: string, reason: string): Promise<boolean> {
       try {
-        await prisma.otp.deleteMany({ where: { userId } }).catch(() => ({ count: 0 }))
-        await prisma.user.delete({ where: { id: userId } })
-        console.warn(`[auth] Purged unverified signup user ${userId} (${reason})`)
+        await prisma.$transaction(async (tx) => {
+          await tx.otp.deleteMany({ where: { userId } })
+          await tx.user.delete({ where: { id: userId } })
+        })
+        console.warn(`[auth] Transaction rollback: purged unverified signup user ${userId} (${reason})`)
         return true
       } catch (err) {
-        console.error(`[auth] Failed to purge unverified user ${userId} (${reason}):`, err)
-        return false
+        console.error(`[auth] Transaction rollback FAILED for user ${userId} (${reason}):`, err)
+        try {
+          await prisma.otp.deleteMany({ where: { userId } })
+          await prisma.user.delete({ where: { id: userId } })
+          console.warn(`[auth] Fallback sequential purge succeeded for ${userId}`)
+          return true
+        } catch (err2) {
+          console.error(`[auth] Fallback purge also failed for ${userId}:`, err2)
+          return false
+        }
       }
     }
 
@@ -221,7 +236,6 @@ router.post('/signup', authLimiter, async (req, res) => {
     const isSignupRetry = !!(existing && !existing.emailVerified)
 
     let user: any
-    let createdNew = false
     try {
       if (isSignupRetry && existing) {
         user = await updateUser(existing.id, {
@@ -248,7 +262,6 @@ router.post('/signup', authLimiter, async (req, res) => {
         }
         if (address !== undefined) createData.address = address
         user = await createUser(createData)
-        createdNew = true
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
@@ -263,7 +276,6 @@ router.post('/signup', authLimiter, async (req, res) => {
             emailVerified: false,
             emailVerifiedAt: null,
           })
-          createdNew = false
         } else {
           res.status(409).json({ error: 'Email already registered' })
           return
@@ -276,7 +288,7 @@ router.post('/signup', authLimiter, async (req, res) => {
     try {
       const otpResult = await otpService.create(user.id, 'email_verification')
       if (otpResult.error || !otpResult.code) {
-        await purgeUnverifiedSignupUser(user.id, `otp-create-failed: ${otpResult.error || 'no-code'}`)
+        await rollbackUnverifiedSignup(user.id, `otp-create-failed: ${otpResult.error || 'no-code'}`)
         res.status(429).json({
           error: otpResult.error || 'Could not create verification code',
           message: otpResult.error || 'Please wait a moment and try again.',
@@ -287,10 +299,10 @@ router.post('/signup', authLimiter, async (req, res) => {
       const emailSent = await emailService.sendOTP(user.email, user.name, otpResult.code, 10, user.id)
       if (!emailSent) {
         console.error('[auth] Signup OTP email failed to send to', user.email)
-        const purged = await purgeUnverifiedSignupUser(user.id, 'otp-email-send-failed')
+        const rolledBack = await rollbackUnverifiedSignup(user.id, 'otp-email-send-failed')
         res.status(500).json({
           error: 'Verification email failed',
-          message: purged
+          message: rolledBack
             ? 'Unable to send verification code. No account was saved — please try again in a moment.'
             : 'Unable to send verification code. Please try again or contact support.',
         })
@@ -298,7 +310,7 @@ router.post('/signup', authLimiter, async (req, res) => {
       }
     } catch (signupOtpErr) {
       console.error('[auth] Failed to create/send signup verification OTP:', signupOtpErr)
-      await purgeUnverifiedSignupUser(user.id, 'otp-exception')
+      await rollbackUnverifiedSignup(user.id, 'otp-exception')
       res.status(500).json({
         error: 'Verification email failed',
         message: 'Unable to send verification code. No account was saved — please try again or contact support.',
