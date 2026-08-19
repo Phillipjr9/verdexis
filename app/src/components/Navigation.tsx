@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { Menu, X, LogOut, Settings as SettingsIcon, Wallet as WalletIcon, LifeBuoy, ShieldCheck } from 'lucide-react'
+import { Menu, X, LogOut, Settings as SettingsIcon, LifeBuoy, ShieldCheck } from 'lucide-react'
 import VerifiedBadge from './VerifiedBadge'
 import AuthModal from './AuthModal'
 import NotificationBell from './NotificationBell'
 import ThemeToggle from './dashboard/ThemeToggle'
 import { getAvatar } from '../lib/userProfile'
 import { api, clearStoredAuth, getToken } from '../lib/api'
-import { useWeb3 } from '../hooks/use-web3'
 
 const publicLinks = [
   { label: 'Home', path: '/' },
@@ -77,7 +76,6 @@ export default function Navigation() {
   const [isAdmin, setIsAdmin] = useState(initial.isAdmin)
   const [isVerified, setIsVerified] = useState(initial.isVerified)
   const [avatar, setAvatar] = useState<string | null>(initial.avatar)
-  const { isConnected: web3Connected, isConnecting: web3Connecting, shortAddress, connect: connectWeb3, error: web3Error } = useWeb3()
   const location = useLocation()
   const [moreOpen, setMoreOpen] = useState(false)
 
@@ -195,17 +193,6 @@ export default function Navigation() {
           </div>
 
           <div className="hidden lg:flex items-center gap-3 shrink-0">
-            {isAuthenticated && (
-              <button
-                onClick={() => { if (!web3Connected) connectWeb3() }}
-                disabled={web3Connecting}
-                title={web3Error ?? (web3Connected ? `Wallet ${shortAddress}` : 'Choose a wallet to connect')}
-                className={`hidden xl:inline-flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-xs font-medium tracking-[0.04em] uppercase whitespace-nowrap transition-colors ${web3Connected ? 'bg-[#0C8B44]/15 text-[#0C8B44] border border-[#0C8B44]/40' : 'bg-[#1a1a1a] text-[#A0A0A0] border border-[#ffffff10] hover:text-[#0C8B44] hover:border-[#0C8B44]/40'} disabled:opacity-50`}
-              >
-                <WalletIcon className="w-3.5 h-3.5" />
-                {web3Connecting ? 'Connecting…' : web3Connected ? shortAddress : 'Connect Wallet'}
-              </button>
-            )}
             {!isAuthenticated ? (
               <>
                 <button onClick={openLogin} className="px-4 py-2.5 text-[#A0A0A0] text-sm font-light tracking-[0.04em] uppercase whitespace-nowrap hover:text-[#E5E5E5] transition-colors">Log In</button>
