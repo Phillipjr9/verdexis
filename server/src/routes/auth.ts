@@ -666,11 +666,18 @@ router.post('/signup', ensureDbReady, authLimiter, async (req, res) => {
   const safeName = sanitizeForStorage(name)
   const safeEmail = sanitizeForStorage(email)
 
+  // Only a VERIFIED email is considered registered. Unverified rows are treated
+  // as incomplete signups and may be retried (credentials updated + new OTP).
+  let existing: Awaited<ReturnType<typeof getUserByEmail>> | null = null
+  let isSignupRetry = false
   try {
-    const existing = await getUserByEmail(safeEmail)
-    if (existing) {
+    existing = await getUserByEmail(safeEmail)
+    if (existing?.emailVerified) {
       res.status(409).json({ error: 'Email already registered' })
       return
+    }
+    if (existing && !existing.emailVerified) {
+      isSignupRetry = true
     }
   } catch (dbError) {
     if (!isDbUnavailableError(dbError as Error)) {
@@ -684,21 +691,43 @@ router.post('/signup', ensureDbReady, authLimiter, async (req, res) => {
   const referrerCode = (req.query.ref as string) || ''
   let user
   try {
-    const createData: any = {
-      email: safeEmail,
-      name: safeName,
-      passwordHash,
-      investmentId,
-      referralCode,
-      role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user',
-      // Store phone in prefs (existing code paths expect prefs JSON), but write address to a dedicated column
-      prefs: JSON.stringify({ phone: phone ?? null }),
-      address: parsed.data.address ?? null,
+    if (isSignupRetry && existing) {
+      // Incomplete signup: refresh credentials and re-issue verification OTP
+      user = await updateUser(existing.id, {
+        name: safeName,
+        passwordHash,
+        prefs: JSON.stringify({ phone: phone ?? null }),
+        address: parsed.data.address ?? null,
+        emailVerified: false,
+        emailVerifiedAt: null,
+      })
+    } else {
+      const createData: any = {
+        email: safeEmail,
+        name: safeName,
+        passwordHash,
+        investmentId,
+        referralCode,
+        role: ADMIN_EMAILS.includes(email) ? 'admin' : 'user',
+        // Store phone in prefs (existing code paths expect prefs JSON), but write address to a dedicated column
+        prefs: JSON.stringify({ phone: phone ?? null }),
+        address: parsed.data.address ?? null,
+      }
+      user = await createUser(createData)
     }
-    user = await createUser(createData)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     if (/Unique constraint failed/i.test(msg) || /P2002/.test(msg)) {
+      // Race: another request may have just verified this email
+      try {
+        const raced = await getUserByEmail(safeEmail)
+        if (raced?.emailVerified) {
+          res.status(409).json({ error: 'Email already registered' })
+          return
+        }
+      } catch {
+        // fall through
+      }
       res.status(409).json({ error: 'Email already registered' })
       return
     }
@@ -716,10 +745,13 @@ router.post('/signup', ensureDbReady, authLimiter, async (req, res) => {
       // best-effort only
     }
   }
-  try {
-    await awardSignupBonus(user.id)
-  } catch {
-    // best-effort only
+  // Award signup bonus only on first create, not on incomplete-signup retries
+  if (!isSignupRetry) {
+    try {
+      await awardSignupBonus(user.id)
+    } catch {
+      // best-effort only
+    }
   }
 
   let pendingVerificationPayload: ReturnType<typeof buildPendingVerificationPayload> | null = null
@@ -744,15 +776,17 @@ router.post('/signup', ensureDbReady, authLimiter, async (req, res) => {
     console.error('[auth] Failed to create signup verification OTP:', signupOtpErr)
   }
 
-  process.nextTick(() => {
-    emailService.sendWelcome(user.email, user.name, user.id).catch(err => {
-      console.error('[auth] Failed to send welcome email:', err)
+  if (!isSignupRetry) {
+    process.nextTick(() => {
+      emailService.sendWelcome(user.email, user.name, user.id).catch(err => {
+        console.error('[auth] Failed to send welcome email:', err)
+      })
     })
-  })
-  if (user.role === 'user') {
+  }
+  if (user.role === 'user' && !isSignupRetry) {
     await ensureUserAssignedToAdmin(user.id, user.email)
   }
-  if (referrerCode) {
+  if (referrerCode && !isSignupRetry) {
     try {
       await linkReferrer(user.id, email, referrerCode)
     } catch {
@@ -769,7 +803,7 @@ router.post('/signup', ensureDbReady, authLimiter, async (req, res) => {
   }
 
   const isDev = (env.NODE_ENV || 'development') !== 'production'
-  res.status(201).json({
+  res.status(isSignupRetry ? 202 : 201).json({
     ...pendingVerificationPayload,
     // expose the pendingToken as `token` for test runners and integration tests
     // that expect a token on signup responses (safe: this is a one-time pending token)
@@ -992,6 +1026,35 @@ router.post('/login', ensureDbReady, authLimiter, async (req, res) => {
     failedLoginAttempts.delete(user.email.toLowerCase())
     if (user.suspended) {
       res.status(403).json({ error: 'Account suspended' })
+      return
+    }
+
+    // Unverified accounts are not fully registered — force email verification
+    // (same flow as incomplete signup) instead of issuing a session.
+    if (!user.emailVerified) {
+      const result = await otpService.create(user.id, 'email_verification')
+      if (result.error) {
+        res.status(429).json({ error: result.error })
+        return
+      }
+      const emailSent = await emailService.sendOTP(user.email, user.name, result.code!, 10, user.id)
+      if (!emailSent) {
+        console.error('[auth] Failed to send signup verification OTP on login to', user.email)
+        res.status(500).json({ error: 'Failed to send verification email' })
+        return
+      }
+      const pendingToken = signToken({
+        sub: user.id,
+        email: user.email,
+        v: (user as { tokenVersion?: number }).tokenVersion ?? 0,
+        otpPending: true,
+        signupVerification: true,
+      })
+      const isDev = (env.NODE_ENV || 'development') !== 'production'
+      res.status(202).json({
+        ...buildPendingVerificationPayload({ kind: 'signup', pendingToken, email: user.email }),
+        ...(isDev ? { devCode: result.code } : {}),
+      })
       return
     }
 
