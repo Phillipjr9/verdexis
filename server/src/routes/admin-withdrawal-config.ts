@@ -5,9 +5,9 @@ import { requireAuth, requireAdmin, type AuthedRequest } from '../auth.js'
 
 const router = Router()
 
-// Require authenticated admin for all routes in this file
-router.use(requireAuth)
-router.use(requireAdmin)
+// NOTE: Do not put global requireAuth/requireAdmin here.
+// This router is mounted at /api; global auth would 401 every unmatched /api/* path
+// (e.g. /api/health/email). Auth is applied per-route below.
 
 // Schema for admin configuring ACH for a user
 const setUserAchSchema = z.object({
