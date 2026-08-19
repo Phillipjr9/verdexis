@@ -21,6 +21,7 @@ COPY server/src ./server/src
 COPY server/tsconfig.json ./server/
 COPY server/prisma ./server/prisma
 COPY server/scripts ./server/scripts
+COPY server/templates ./server/templates
 COPY server/entrypoint.sh ./server/
 
 # Make entrypoint executable
@@ -52,6 +53,7 @@ RUN npm install --production && \
 # Copy built application from builder
 COPY --from=builder /app/server/dist ./server/dist
 COPY --from=builder /app/server/prisma ./server/prisma
+COPY --from=builder /app/server/templates ./server/templates
 COPY --from=builder /app/server/entrypoint.sh ./server/
 COPY --from=builder /app/server/node_modules ./server/node_modules
 COPY --from=builder /app/server/scripts ./server/scripts
