@@ -7,6 +7,7 @@ import { otpService } from '../services/otp.js'
 import { emailService } from '../services/email.js'
 import { cognitoOTPService } from '../services/cognitoOTP.js'
 import { getUserOTPSettings } from '../middleware/otpAuth.js'
+import { notifyAdminNewUser } from '../notificationService.js'
 
 const router = Router()
 
@@ -28,6 +29,45 @@ const verifyOtpSchema = z.object({
   code: z.string().length(6).regex(/^\d+$/, 'Code must be 6 digits'),
   purpose: z.enum(['login', 'email_verification', 'transaction', '2fa']).optional().default('email_verification'),
 })
+
+/** Mark email verified and notify admin once on first successful verification. */
+async function markEmailVerifiedAndNotifyAdmin(userId: string): Promise<void> {
+  const before = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      investmentId: true,
+      role: true,
+      createdAt: true,
+      emailVerified: true,
+    },
+  })
+  if (!before) return
+
+  const wasVerified = !!before.emailVerified
+  await prisma.user.update({
+    where: { id: userId },
+    data: { emailVerified: true, emailVerifiedAt: new Date() },
+  })
+
+  // Only alert on the first transition to verified (fully registered user)
+  if (!wasVerified) {
+    process.nextTick(() => {
+      notifyAdminNewUser({
+        id: before.id,
+        email: before.email,
+        name: before.name,
+        investmentId: before.investmentId,
+        role: before.role,
+        createdAt: before.createdAt,
+      }).catch((err) => {
+        console.error('[otp] Failed to send new-user admin notification:', err)
+      })
+    })
+  }
+}
 
 router.post('/send-otp', requireAuth, otpLimiter, async (req: AuthedRequest, res) => {
   const parsed = sendOtpSchema.safeParse(req.body)
@@ -152,10 +192,7 @@ router.post('/verify-otp', requireAuth, otpLimiter, async (req: AuthedRequest, r
   }
 
   if (parsed.data.purpose === 'email_verification') {
-    await prisma.user.update({
-      where: { id: req.userId! },
-      data: { emailVerified: true, emailVerifiedAt: new Date() },
-    })
+    await markEmailVerifiedAndNotifyAdmin(req.userId!)
   }
 
   // Set OTP verified header for subsequent requests
@@ -404,14 +441,7 @@ router.post('/verify-email-otp', requireAuth, otpLimiter, async (req: AuthedRequ
     return
   }
 
-  // Update user with verified email
-  await prisma.user.update({
-    where: { id: req.userId! },
-    data: {
-      emailVerified: true,
-      emailVerifiedAt: new Date(),
-    },
-  })
+  await markEmailVerifiedAndNotifyAdmin(req.userId!)
 
   res.json({
     verified: true,
