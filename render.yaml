@@ -43,6 +43,20 @@ services:
         sync: false
       - key: SMTP_FROM
         sync: false
+      - key: SMTP_SECURE
+        value: "false"
+      - key: SMTP_FROM_NAME
+        value: "Verdexis"
+      - key: EMAIL_FROM_NAME
+        value: "Verdexis"
+      - key: EMAIL_FROM_ADDRESS
+        value: "no-reply@verdexisgroup.com"
+      - key: ADMIN_EMAIL_ADDRESS
+        value: "admin@verdexisgroup.com"
+      - key: ADMIN_EMAIL
+        value: "admin@verdexisgroup.com"
+      - key: APP_URL
+        value: "https://www.verdexisgroup.com"
       - key: COINGECKO_API_KEY
         sync: false
       - key: OPENAI_API_KEY
