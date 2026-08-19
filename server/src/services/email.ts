@@ -63,7 +63,29 @@ class EmailService {
   }
 
   private loadTemplates() {
-    const templateDir = path.join(__dirname, '../../templates')
+    // Resolve templates across common deploy layouts (src, dist, cwd).
+    const candidates = [
+      path.join(__dirname, '../../templates'),
+      path.join(__dirname, '../templates'),
+      path.join(__dirname, '../../../templates'),
+      path.join(process.cwd(), 'templates'),
+      path.join(process.cwd(), 'server/templates'),
+    ]
+    let templateDir: string | null = null
+    for (const dir of candidates) {
+      try {
+        if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) {
+          templateDir = dir
+          break
+        }
+      } catch {
+        // try next
+      }
+    }
+    if (!templateDir) {
+      console.warn('[email] No templates directory found; using inline fallbacks')
+      return
+    }
     try {
       const files = fs.readdirSync(templateDir)
       for (const file of files) {
@@ -72,12 +94,13 @@ class EmailService {
           const content = fs.readFileSync(path.join(templateDir, file), 'utf-8')
           const name = file.replace(/^email_/, '').replace(/\.html$/i, '')
           this.templates.set(name, content)
-        } catch (err) {
+        } catch {
           // skip unreadable
         }
       }
+      console.log(`[email] Loaded ${this.templates.size} template(s) from ${templateDir}`)
     } catch (err) {
-      // templates directory may not exist
+      console.warn('[email] Failed to load templates:', err)
     }
   }
 
