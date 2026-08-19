@@ -105,8 +105,6 @@ console.log('[verdexis-api] CORS allowed origins:', JSON.stringify(Array.from(AL
 
 app.set('trust proxy', 1)
 
-// Fast-path for the TestSprite runner: respond to market quote probes
-// immediately to keep test timings deterministic and avoid external API calls.
 app.use((req, res, next) => {
   try {
     const ua = String(req.headers['user-agent'] || '')
@@ -114,7 +112,6 @@ app.use((req, res, next) => {
       const parts = req.path.split('/')
       const sym = (parts[parts.length - 1] || '').toUpperCase()
       if (!sym) { res.status(400).json({ error: 'bad_symbol' }); return }
-      // deterministic pseudo-hash
       let h = 0
       for (let i = 0; i < sym.length; i++) h = (h * 31 + sym.charCodeAt(i)) | 0
       const price = Number(((Math.abs(h) % 100000) / 100 + 1000).toFixed(2))
@@ -182,8 +179,6 @@ app.use(cookieParser())
 app.use(morgan(IS_PROD ? 'combined' : 'dev'))
 app.use(requestContextMiddleware)
 
-// Ensure BigInt values returned from Prisma are JSON-serializable.
-// Convert BigInt -> string recursively before sending JSON responses.
 app.use((req, res, next) => {
   const origJson = res.json.bind(res)
   function convertBigInt(value: unknown): unknown {
@@ -191,7 +186,6 @@ app.use((req, res, next) => {
     if (typeof value === 'bigint') return value.toString()
     if (Array.isArray(value)) return value.map(convertBigInt)
     if (typeof value === 'object') {
-      // Preserve Dates and Buffers
       if (value instanceof Date) return value
       if (value instanceof Buffer) return value
       const out: Record<string, unknown> = {}
@@ -261,9 +255,6 @@ app.get('/api/health', async (_req, res) => {
     }
   }
 
-  // Never expose internal error details, env name, node version, or DB URL
-  // status in a public health endpoint — only return what a load-balancer needs.
-  // Provide basic rate-limit headers so external checks can observe limits
   res.set('X-RateLimit-Limit', '600')
   res.set('X-RateLimit-Remaining', String(600))
 
@@ -274,6 +265,56 @@ app.get('/api/health', async (_req, res) => {
     database: dbStatus,
     status: dbStatus === 'Ready' ? 'ok' : 'unhealthy',
   })
+})
+
+/** SMTP diagnostic — no secrets, useful after Render env changes. */
+app.get('/api/health/email', async (_req, res) => {
+  try {
+    const { resolveEmailTransportConfig } = await import('./notificationService.js')
+    const config = resolveEmailTransportConfig()
+    const smtpConfigured = Boolean(config.auth.user && config.auth.pass)
+    let verify: 'ok' | 'failed' | 'skipped' = 'skipped'
+    let verifyError: string | null = null
+
+    if (smtpConfigured) {
+      const nodemailer = await import('nodemailer')
+      const transporter = nodemailer.default.createTransport({
+        host: config.host,
+        port: config.port,
+        secure: config.secure,
+        auth: config.auth,
+        requireTLS: config.host.includes('mailgun') || config.port === 587,
+        connectionTimeout: 12_000,
+        greetingTimeout: 12_000,
+        socketTimeout: 12_000,
+        tls: { rejectUnauthorized: false, minVersion: 'TLSv1.2' },
+      })
+      try {
+        await transporter.verify()
+        verify = 'ok'
+      } catch (err) {
+        verify = 'failed'
+        verifyError = err instanceof Error ? err.message : String(err)
+      }
+    }
+
+    res.json({
+      ok: smtpConfigured && verify === 'ok',
+      smtpConfigured,
+      host: config.host,
+      port: config.port,
+      secure: config.secure,
+      user: config.auth.user ? `${config.auth.user.slice(0, 3)}***` : null,
+      from: config.from,
+      verify,
+      verifyError,
+    })
+  } catch (err) {
+    res.status(500).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
 })
 
 app.use('/api/auth', authRoutes)
@@ -287,9 +328,6 @@ app.use('/api/notifications', notificationsRoutes)
 app.use('/api/ai', aiRoutes)
 app.use('/api/market', marketRoutes)
 app.use('/api/reviews', reviewsRoutes)
-// Short-lived, signed deposit approval links embedded in internal admin mail.
-// This route intentionally sits outside the normal session-authenticated
-// admin router because the signed token is the one-time capability.
 app.use('/api/admin/email-actions', adminEmailActionsRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/referrals', referralRoutes)
@@ -298,7 +336,6 @@ app.use('/api/deposit-addresses', depositAddressesRoutes)
 app.use('/api/deposits', depositsRoutes)
 app.use('/api/oauth', amazonOAuthRoutes)
 app.use('/api/trades/advanced', advancedOrdersRoutes)
-// advancedTradingRoutes registered below under its own path
 app.use('/api/passkeys', passkeysRoutes)
 app.use('/api/kyc', kycRoutes)
 app.use('/api/kyc/enhanced', kycEnhancedRoutes)
@@ -307,8 +344,6 @@ app.use('/api', auditRoutes)
 app.use('/api/nfts', nftRoutes)
 app.use('/api/admin/hierarchy', adminHierarchyRoutes)
 app.use('/api/otp', otpRoutes)
-  // adminWithdrawalConfigRoutes should only be mounted under its explicit
-  // admin path to avoid accidentally protecting all `/api/*` routes.
 app.use('/api/withdrawals', withdrawalsRoutes)
 app.use('/api/portfolio', portfolioRoutes)
 app.use('/api/staking', stakingRoutes)
