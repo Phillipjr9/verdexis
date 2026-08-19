@@ -107,6 +107,10 @@ class EmailService {
     )
   }
 
+  private appBase(): string {
+    return (env.APP_BASE_URL || emailLinks.website).replace(/\/$/, '')
+  }
+
   async send(options: EmailOptions): Promise<boolean> {
     try {
       const plainText = options.text ?? options.subject
@@ -130,7 +134,7 @@ class EmailService {
     const template = this.templates.get('otp_verification')
 
     const expiresAt = new Date(Date.now() + expirationMinutes * 60000)
-    const base = (env.APP_BASE_URL || emailLinks.website).replace(/\/$/, '')
+    const base = this.appBase()
 
     const html = template
       ? this.replaceVariables(template, {
@@ -165,7 +169,7 @@ class EmailService {
     const template = this.templates.get('welcome')
     if (!template) return false
 
-    const base = (env.APP_BASE_URL || emailLinks.website).replace(/\/$/, '')
+    const base = this.appBase()
 
     const html = this.replaceVariables(template, {
       USER_NAME: userName,
@@ -190,7 +194,6 @@ class EmailService {
   }
 
   async sendPasswordReset(to: string, userName: string, resetUrl: string, userId?: string): Promise<boolean> {
-    // Prefer the full standalone password_reset template; fall back to colorlib fragment
     const template = this.templates.get('password_reset') || this.templates.get('colorlib_simple')
     if (!template) {
       const html = `
@@ -264,12 +267,13 @@ class EmailService {
       fee: string
       date: string
       time: string
-    }
+    },
+    userId?: string
   ): Promise<boolean> {
     const template = this.templates.get('transaction_confirmation')
     if (!template) return false
 
-    const base = (env.APP_BASE_URL || emailLinks.website).replace(/\/$/, '')
+    const base = this.appBase()
 
     const html = this.replaceVariables(template, {
       USER_NAME: userName,
@@ -285,13 +289,76 @@ class EmailService {
       FEE_WARNING: '',
       DASHBOARD_URL: `${base}/dashboard`,
       TRANSACTION_DETAILS_URL: `${base}/transactions/${transaction.id}`,
-      SUPPORT_URL: `${base}/support`,
+      SUPPORT_URL: emailLinks.support || `${base}/support`,
     })
 
     return this.send({
       to,
-      subject: `Transaction Confirmed: ${transaction.amount} ${transaction.currency}`,
+      subject: `Transaction confirmed: ${transaction.amount} ${transaction.currency} (${transaction.type})`,
       html,
+      text: `Your ${transaction.type} of ${transaction.amount} ${transaction.currency} was confirmed. ID: ${transaction.id}`,
+      userId,
+      kind: 'transaction',
+      title: 'Transaction Confirmed',
+      createWebNotification: true,
+    })
+  }
+
+  /**
+   * Security alerts: new login, password change, suspicious activity, etc.
+   */
+  async sendSecurityAlert(
+    to: string,
+    userName: string,
+    alert: {
+      title: string
+      message: string
+      location?: string
+      ip?: string
+      device?: string
+      time?: string
+    },
+    userId?: string
+  ): Promise<boolean> {
+    const template = this.templates.get('security')
+    const base = this.appBase()
+
+    const eventTime =
+      alert.time ||
+      new Date().toLocaleString('en-US', {
+        weekday: 'short',
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZoneName: 'short',
+      })
+
+    const html = template
+      ? this.replaceVariables(template, {
+          USER_NAME: userName,
+          ALERT_TITLE: alert.title,
+          ALERT_MESSAGE: alert.message,
+          EVENT_TIME: eventTime,
+          LOCATION: alert.location || 'Unknown',
+          IP_ADDRESS: alert.ip || 'Unknown',
+          DEVICE: alert.device || 'Unknown',
+          SECURITY_URL: `${base}/security`,
+          CHANGE_PASSWORD_URL: `${base}/settings/security`,
+          SUPPORT_URL: emailLinks.support || `${base}/support`,
+        })
+      : `<div style="font-family:sans-serif;padding:24px"><h2>Security alert</h2><p>Hi ${userName},</p><p><strong>${alert.title}</strong></p><p>${alert.message}</p><p>Time: ${eventTime}<br/>Location: ${alert.location || 'Unknown'}<br/>IP: ${alert.ip || 'Unknown'}</p></div>`
+
+    return this.send({
+      to,
+      subject: `Security alert: ${alert.title}`,
+      html,
+      text: `Security alert: ${alert.title}. ${alert.message} Time: ${eventTime}. Location: ${alert.location || 'Unknown'}. IP: ${alert.ip || 'Unknown'}.`,
+      userId,
+      kind: 'security',
+      title: alert.title,
+      createWebNotification: true,
     })
   }
 }
