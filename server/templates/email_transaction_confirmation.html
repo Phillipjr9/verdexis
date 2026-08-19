@@ -1,178 +1,141 @@
-<!-- TRANSACTION CONFIRMATION EMAIL -->
-<!-- Use: Trade confirmations, deposits, withdrawals -->
 <!DOCTYPE html>
-<html lang="en">
-<!-- Transaction fragment: wrapper will provide header/footer -->
-<div style="padding:20px;font-family:Arial, sans-serif;color:#0f172a">
-  <p style="margin:0 0 12px">Hi {{USER_NAME}},</p>
-  <p style="margin:0 0 12px">Your <strong>{{TRANSACTION_TYPE}}</strong> of <strong>{{AMOUNT}} {{CURRENCY}}</strong> has been confirmed.</p>
-
-  <div style="border:1px solid #e6eef6;padding:12px;border-radius:8px;background:#f9fafc;margin:12px 0">
-    <p style="margin:6px 0"><strong>Transaction ID:</strong> {{TRANSACTION_ID}}</p>
-    <p style="margin:6px 0"><strong>From:</strong> {{FROM_ACCOUNT}}</p>
-    <p style="margin:6px 0"><strong>To:</strong> {{TO_ACCOUNT}}</p>
-    <p style="margin:6px 0"><strong>Fee:</strong> {{FEE}}</p>
-    <p style="margin:6px 0"><strong>Date:</strong> {{TRANSACTION_DATE}} {{TRANSACTION_TIME}}</p>
-  </div>
-
-  <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width:100%"><tr><td align="center"><a href="{{TRANSACTION_DETAILS_URL}}" style="background:#0f4c81;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none;display:inline-block">View transaction</a></td></tr></table>
-</div>
-      padding: 28px 32px;
-    }
-    .alert-box {
-      padding: 16px;
-      border-radius: 8px;
-      margin: 16px 0;
-      border-left: 4px solid;
-      background: #e8f5e9;
-      border-left-color: #4caf50;
-      color: #2e7d32;
-    }
-    .transaction-detail {
-      background: #f7f9fb;
-      border-radius: 8px;
-      padding: 20px;
-      margin: 20px 0;
-    }
-    .detail-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 10px 0;
-      border-bottom: 1px solid #e0e6ed;
-    }
-    .detail-row:last-child {
-      border-bottom: none;
-    }
-    .detail-label {
-      color: #777;
-      font-weight: 500;
-    }
-    .detail-value {
-      color: #0f4c81;
-      font-weight: 600;
-    }
-    .amount-positive {
-      color: #4caf50;
-    }
-    .amount-negative {
-      color: #f44336;
-    }
-    .button {
-      display: inline-block;
-      margin: 16px 8px 16px 0;
-      padding: 12px 24px;
-      background: #0077d9;
-      color: #fff;
-      text-decoration: none;
-      border-radius: 8px;
-      font-weight: bold;
-    }
-    .button-secondary {
-      background: #f4f6f8;
-      color: #0077d9;
-      border: 1px solid #0077d9;
-    }
-    .fee-warning {
-      background: #fff3e0;
-      border: 1px solid #ffb74d;
-      padding: 12px;
-      border-radius: 6px;
-      font-size: 14px;
-      color: #e65100;
-      margin: 16px 0;
-    }
-    .footer {
-      padding: 24px 32px;
-      background: #f4f6f8;
-      color: #777;
-      font-size: 13px;
-      border-top: 1px solid #e0e6ed;
+<html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="x-apple-disable-message-reformatting" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <title>Transaction Confirmed</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <style>
+    body, table, td, p, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+    img { -ms-interpolation-mode: bicubic; border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; }
+    body { margin: 0 !important; padding: 0 !important; background-color: #f4f6f8; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; -webkit-font-smoothing: antialiased; }
+    .preheader { display: none !important; visibility: hidden; mso-hide: all; font-size: 1px; line-height: 1px; max-height: 0; max-width: 0; opacity: 0; overflow: hidden; }
+    .wrapper { width: 100%; max-width: 600px; margin: 0 auto; }
+    .card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; }
+    .header { background: linear-gradient(135deg, #0C8B44 0%, #0a6b35 100%); padding: 28px 24px; text-align: center; }
+    .content { padding: 28px 24px; color: #0f172a; }
+    .detail-table td { padding: 10px 0; border-bottom: 1px solid #e2e8f0; font-size: 14px; }
+    .detail-table tr:last-child td { border-bottom: none; }
+    .label { color: #64748b; }
+    .value { color: #0f172a; font-weight: 600; text-align: right; }
+    .btn-primary a { background: #0C8B44; color: #ffffff !important; padding: 14px 22px; border-radius: 10px; text-decoration: none; display: inline-block; font-weight: 700; font-size: 14px; }
+    .btn-secondary a { background: #f8fafc; color: #0C8B44 !important; padding: 12px 20px; border-radius: 10px; text-decoration: none; display: inline-block; font-weight: 600; font-size: 14px; border: 1px solid #bbf7d0; }
+    .footer { background: #f8fafc; padding: 20px 24px 24px; text-align: center; font-size: 12px; color: #64748b; line-height: 1.6; }
+    .footer a { color: #0C8B44; text-decoration: none; font-weight: 600; }
+    @media only screen and (max-width: 600px) {
+      .content { padding: 20px 16px !important; }
+      .btn-primary a, .btn-secondary a { display: block !important; text-align: center; margin: 6px 0 !important; }
     }
   </style>
 </head>
 <body>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+  <span class="preheader">Your {{TRANSACTION_TYPE}} of {{AMOUNT}} {{CURRENCY}} has been confirmed.</span>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f4f6f8">
     <tr>
-      <td align="center" style="padding: 24px 0; background: #eef2f7;">
-        <div class="email-container">
-          <div class="header">
-            <h1 style="margin: 0;">Transaction Confirmed ✓</h1>
-          </div>
-
-          <div class="content">
-            <p style="margin-top: 0;">
-              Hi {{USER_NAME}},
-            </p>
-
-            <div class="alert-box">
-              Your {{TRANSACTION_TYPE}} has been successfully processed.
-            </div>
-
-            <div class="transaction-detail">
-              <div class="detail-row">
-                <span class="detail-label">Transaction ID</span>
-                <span class="detail-value">{{TRANSACTION_ID}}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Type</span>
-                <span class="detail-value">{{TRANSACTION_TYPE}}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Amount</span>
-                <span class="detail-value amount-positive">{{AMOUNT}} {{CURRENCY}}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">From</span>
-                <span class="detail-value">{{FROM_ACCOUNT}}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">To</span>
-                <span class="detail-value">{{TO_ACCOUNT}}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Fee</span>
-                <span class="detail-value">{{FEE}} {{CURRENCY}}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Date & Time</span>
-                <span class="detail-value">{{TRANSACTION_DATE}} at {{TRANSACTION_TIME}}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Status</span>
-                <span class="detail-value" style="color: #4caf50;">Confirmed</span>
-              </div>
-            </div>
-
-            {{FEE_WARNING}}
-
-            <p>
-              You can view full transaction details and history in your <a href="{{DASHBOARD_URL}}" style="color: #0077d9;">Verdexis Dashboard</a>.
-            </p>
-
-            <div style="text-align: center; margin: 24px 0;">
-              <a href="{{TRANSACTION_DETAILS_URL}}" class="button">View Details</a>
-              <a href="{{DASHBOARD_URL}}" class="button button-secondary">Back to Dashboard</a>
-            </div>
-
-            <p style="font-size: 14px; color: #777; margin-top: 20px;">
-              <strong>Didn't authorize this transaction?</strong> 
-              <a href="{{SUPPORT_URL}}" style="color: #f44336; font-weight: bold;">Report it immediately</a>
-            </p>
-          </div>
-
-          <div class="footer">
-            <strong>Verdexis</strong><br/>
-            {{COMPANY_ADDRESS}}<br/>
-            <a href="{{TERMS_LINK}}" style="color: #0077d9;">Terms</a> | 
-            <a href="{{PRIVACY_LINK}}" style="color: #0077d9;">Privacy</a> |
-            <a href="{{CONTACT_LINK}}" style="color: #0077d9;">Support</a><br/>
-            © {{YEAR}} Verdexis. All rights reserved.
-          </div>
-        </div>
-      </td>
+      <td align="center" style="padding: 24px 12px">
+        <table role="presentation" class="wrapper" cellspacing="0" cellpadding="0" border="0">
           <tr>
-            <td class="header" style="text-align:center">
-              <img src="{{LOGO_CID}}" alt="{{COMPANY_NAME}}" style="max-width:140px;height:auto;margin:0 auto 8px;display:block" onerror="this.onerror=null;this.src='{{LOGO_URL}}'" />
-              <h1>Transaction Confirmation</h1>
+            <td class="card">
+              <div class="header">
+                <img src="{{LOGO_URL}}" alt="{{COMPANY_NAME}}" width="48" height="48" style="display:block;margin:0 auto 12px;border:0;border-radius:10px" onerror="this.style.display='none'" />
+                <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700">Transaction Confirmed</h1>
+                <p style="margin:6px 0 0;color:rgba(255,255,255,0.9);font-size:13px">{{TRANSACTION_TYPE}} · {{AMOUNT}} {{CURRENCY}}</p>
+              </div>
+
+              <div class="content">
+                <p style="margin:0 0 8px;font-size:16px;font-weight:600;color:#0f172a">Hi {{USER_NAME}},</p>
+                <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#475569">Your <strong>{{TRANSACTION_TYPE}}</strong> has been processed successfully.</p>
+
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 16px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px">
+                  <tr>
+                    <td style="padding:14px 16px;font-size:14px;color:#166534;font-weight:600;text-align:center">
+                      Status: Confirmed
+                    </td>
+                  </tr>
+                </table>
+
+                <table role="presentation" class="detail-table" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px">
+                  <tr>
+                    <td style="padding:14px 16px 0 16px" colspan="2"></td>
+                  </tr>
+                  <tr>
+                    <td class="label" style="padding:8px 16px;color:#64748b;font-size:14px">Transaction ID</td>
+                    <td class="value" style="padding:8px 16px;color:#0f172a;font-weight:600;font-size:13px;text-align:right;font-family:monospace;word-break:break-all">{{TRANSACTION_ID}}</td>
+                  </tr>
+                  <tr>
+                    <td class="label" style="padding:8px 16px;color:#64748b;font-size:14px">Type</td>
+                    <td class="value" style="padding:8px 16px;color:#0f172a;font-weight:600;font-size:14px;text-align:right">{{TRANSACTION_TYPE}}</td>
+                  </tr>
+                  <tr>
+                    <td class="label" style="padding:8px 16px;color:#64748b;font-size:14px">Amount</td>
+                    <td class="value" style="padding:8px 16px;color:#0C8B44;font-weight:700;font-size:16px;text-align:right">{{AMOUNT}} {{CURRENCY}}</td>
+                  </tr>
+                  <tr>
+                    <td class="label" style="padding:8px 16px;color:#64748b;font-size:14px">From</td>
+                    <td class="value" style="padding:8px 16px;color:#0f172a;font-weight:600;font-size:14px;text-align:right">{{FROM_ACCOUNT}}</td>
+                  </tr>
+                  <tr>
+                    <td class="label" style="padding:8px 16px;color:#64748b;font-size:14px">To</td>
+                    <td class="value" style="padding:8px 16px;color:#0f172a;font-weight:600;font-size:14px;text-align:right">{{TO_ACCOUNT}}</td>
+                  </tr>
+                  <tr>
+                    <td class="label" style="padding:8px 16px;color:#64748b;font-size:14px">Fee</td>
+                    <td class="value" style="padding:8px 16px;color:#0f172a;font-weight:600;font-size:14px;text-align:right">{{FEE}}</td>
+                  </tr>
+                  <tr>
+                    <td class="label" style="padding:8px 16px 14px 16px;color:#64748b;font-size:14px">Date & time</td>
+                    <td class="value" style="padding:8px 16px 14px 16px;color:#0f172a;font-weight:600;font-size:14px;text-align:right">{{TRANSACTION_DATE}} · {{TRANSACTION_TIME}}</td>
+                  </tr>
+                </table>
+
+                {{FEE_WARNING}}
+
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:20px 0 8px">
+                  <tr>
+                    <td align="center" class="btn-primary" style="padding:4px">
+                      <a href="{{TRANSACTION_DETAILS_URL}}" target="_blank" rel="noopener">View transaction</a>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td align="center" class="btn-secondary" style="padding:4px">
+                      <a href="{{DASHBOARD_URL}}" target="_blank" rel="noopener">Back to dashboard</a>
+                    </td>
+                  </tr>
+                </table>
+
+                <p style="margin:16px 0 0;font-size:13px;line-height:1.6;color:#64748b">
+                  Didn’t authorize this transaction?
+                  <a href="{{SUPPORT_URL}}" style="color:#dc2626;font-weight:700;text-decoration:none">Report it immediately</a>
+                </p>
+              </div>
+
+              <div class="footer">
+                <div style="margin-bottom:8px"><strong style="color:#0f172a">{{COMPANY_NAME}}</strong></div>
+                <div>{{COMPANY_ADDRESS}}</div>
+                <div style="margin-top:10px">
+                  <a href="{{SUPPORT_LINK}}">Support</a> ·
+                  <a href="{{PRIVACY_LINK}}">Privacy</a> ·
+                  <a href="{{TERMS_LINK}}">Terms</a> ·
+                  <a href="{{SECURITY_LINK}}">Security</a>
+                </div>
+                <div style="margin-top:10px;color:#94a3b8">© {{YEAR}} {{COMPANY_NAME}}. All rights reserved.</div>
+              </div>
             </td>
           </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
