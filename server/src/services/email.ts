@@ -32,18 +32,25 @@ class EmailService {
   }
 
   private initTransporter() {
-    const host = env.SMTP_HOST || 'smtp.gmail.com'
+    const host = (env.SMTP_HOST || 'smtp.gmail.com').trim()
     const port = Number(env.SMTP_PORT) || 587
-    const secure = env.SMTP_SECURE === 'true'
-    const auth = {
-      user: env.SMTP_USER,
-      pass: env.SMTP_PASS,
+    const secure = String(env.SMTP_SECURE || 'false').toLowerCase() === 'true'
+    const user = (env.SMTP_USER || '').trim()
+    const pass = (env.SMTP_PASS || '').trim()
+    if (!user || !pass) {
+      console.warn('[email] SMTP credentials missing, emails will be logged only', {
+        hostSet: Boolean(env.SMTP_HOST),
+        userSet: Boolean(env.SMTP_USER),
+        passSet: Boolean(env.SMTP_PASS),
+      })
+      return
     }
+
     const emailConfig: SMTPTransport.Options = {
       host,
       port,
       secure,
-      auth,
+      auth: { user, pass },
       requireTLS: host.includes('mailgun') || port === 587 || port === 2587,
       connectionTimeout: 20_000,
       greetingTimeout: 20_000,
@@ -54,16 +61,18 @@ class EmailService {
       },
     }
 
-    if (!auth.user || !auth.pass) {
-      console.warn('[email] SMTP credentials missing, emails will be logged only')
-      return
-    }
-
     this.transporter = nodemailer.createTransport(emailConfig)
+    console.log('[email] SMTP transporter ready', { host, port, user })
+  }
+
+  /** Ensure transporter exists (lazy re-init if env was late). */
+  private getTransporter(): Transporter | null {
+    if (this.transporter) return this.transporter
+    this.initTransporter()
+    return this.transporter
   }
 
   private loadTemplates() {
-    // Resolve templates across common deploy layouts (src, dist, cwd).
     const candidates = [
       path.join(__dirname, '../../templates'),
       path.join(__dirname, '../templates'),
@@ -145,7 +154,8 @@ class EmailService {
         createWebNotification: options.createWebNotification,
       })
 
-      console.log('[email] Sent to:', options.to)
+      if (success) console.log('[email] Sent to:', options.to)
+      else console.error('[email] sendEmailNotification returned false for:', options.to, 'kind:', options.kind)
       return success
     } catch (error) {
       console.error('[email] Failed:', error)
@@ -176,16 +186,90 @@ class EmailService {
         })
       : `<div style="font-family:sans-serif;padding:24px"><h2>Your verification code</h2><p>Hi ${userName},</p><p style="font-size:32px;font-weight:bold;letter-spacing:8px">${otp}</p><p>Expires in ${expirationMinutes} minutes. Do not share this code.</p></div>`
 
+    const subject = `Your Verdexis verification code`
+    const text = `Your Verdexis verification code is ${otp}. It expires in ${expirationMinutes} minutes. Do not share this code.`
+
+    // Critical path: send OTP directly via SMTP (do not depend on notificationService wrappers).
+    const direct = await this.sendOtpDirect(to, subject, text, html)
+    if (direct) return true
+
+    console.warn('[email] Direct OTP SMTP failed; falling back to notificationService for', to)
     return this.send({
       to,
-      subject: `Your Verdexis verification code: ${otp}`,
+      subject,
       html,
-      text: `Your OTP is ${otp}. It expires in ${expirationMinutes} minutes.`,
+      text,
       userId,
       kind: 'otp',
       title: 'Verification Code',
       createWebNotification: false,
     })
+  }
+
+  /**
+   * Direct Nodemailer send for verification codes.
+   * Uses the same SMTP env as production Mailgun; logs real provider errors.
+   */
+  private async sendOtpDirect(to: string, subject: string, text: string, html: string): Promise<boolean> {
+    const transporter = this.getTransporter()
+    if (!transporter) {
+      console.error('[email] OTP direct send aborted: no SMTP transporter', {
+        hostSet: Boolean(env.SMTP_HOST),
+        userSet: Boolean(env.SMTP_USER),
+        passSet: Boolean(env.SMTP_PASS),
+      })
+      return false
+    }
+
+    const fromAddress = (env.EMAIL_FROM_ADDRESS || env.SMTP_FROM || env.SMTP_USER || '').trim()
+    const fromName = (env.EMAIL_FROM_NAME || env.SMTP_FROM_NAME || 'Verdexis').trim()
+    if (!fromAddress) {
+      console.error('[email] OTP direct send aborted: EMAIL_FROM_ADDRESS / SMTP_FROM missing')
+      return false
+    }
+
+    const from = `${fromName} <${fromAddress}>`
+    const envelopeFrom = (env.SMTP_USER || fromAddress).trim()
+    const replyTo = (env.EMAIL_REPLY_TO || env.SMTP_REPLY_TO || '').trim() || undefined
+
+    try {
+      const info = await transporter.sendMail({
+        from,
+        to,
+        replyTo,
+        subject,
+        text,
+        html,
+        headers: {
+          'X-Mailer': 'Verdexis',
+          'Auto-Submitted': 'no',
+          ...(replyTo ? { 'Reply-To': replyTo } : {}),
+        },
+        envelope: { from: envelopeFrom, to },
+      })
+      console.log('[email] OTP sent directly', {
+        to,
+        messageId: info.messageId,
+        response: info.response,
+        accepted: info.accepted,
+        rejected: info.rejected,
+      })
+      return true
+    } catch (error) {
+      const err = error as { message?: string; code?: string; response?: string; responseCode?: number; command?: string }
+      console.error('[email] OTP direct SMTP error', {
+        to,
+        message: err?.message,
+        code: err?.code,
+        response: err?.response,
+        responseCode: err?.responseCode,
+        command: err?.command,
+        fromAddress,
+        envelopeFrom,
+        host: env.SMTP_HOST,
+      })
+      return false
+    }
   }
 
   async sendWelcome(to: string, userName: string, userId?: string): Promise<boolean> {
@@ -327,9 +411,6 @@ class EmailService {
     })
   }
 
-  /**
-   * Security alerts: new login, password change, suspicious activity, etc.
-   */
   async sendSecurityAlert(
     to: string,
     userName: string,
