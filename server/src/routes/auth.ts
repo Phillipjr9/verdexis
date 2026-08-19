@@ -184,11 +184,28 @@ router.post('/signup', authLimiter, async (req, res) => {
   try {
     const parsed = signupSchema.safeParse(req.body)
     if (!parsed.success) {
-      res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() })
+      res.status(400).json({
+        error: 'Invalid input',
+        code: 'SIGNUP_VALIDATION_FAILED',
+        message: 'Please check the form fields and try again.',
+        details: { ...parsed.error.flatten(), retryable: false },
+      })
       return
     }
     const { email, password, name, phone, address } = parsed.data
     const normalizedEmail = email.trim().toLowerCase()
+
+    const signupStartedAt = Date.now()
+    const emailPrefix = normalizedEmail.split('@')[0]?.slice(0, 3) || '???'
+
+    function logSignupError(code: string, detail: Record<string, unknown>) {
+      console.error('[auth] signup error', {
+        code,
+        emailPrefix,
+        elapsedMs: Date.now() - signupStartedAt,
+        ...detail,
+      })
+    }
 
     /**
      * Compensating transaction: remove OTP rows + user atomically.
@@ -196,25 +213,36 @@ router.post('/signup', authLimiter, async (req, res) => {
      * leave a phantom "already registered" account without a verification path.
      * (Email I/O cannot run inside the DB transaction — rollback is explicit.)
      */
-    async function rollbackUnverifiedSignup(userId: string, reason: string): Promise<boolean> {
+    async function rollbackUnverifiedSignup(userId: string, reason: string): Promise<{ ok: boolean; method?: string; error?: string }> {
       try {
         await prisma.$transaction(async (tx) => {
           await tx.otp.deleteMany({ where: { userId } })
           await tx.user.delete({ where: { id: userId } })
         })
-        console.warn(`[auth] Transaction rollback: purged unverified signup user ${userId} (${reason})`)
-        return true
+        console.warn('[auth] Transaction rollback succeeded', { userId, reason, method: 'transaction' })
+        return { ok: true, method: 'transaction' }
       } catch (err) {
-        console.error(`[auth] Transaction rollback FAILED for user ${userId} (${reason}):`, err)
+        const message = err instanceof Error ? err.message : String(err)
+        console.error('[auth] Transaction rollback failed, trying sequential purge', { userId, reason, error: message })
         try {
           await prisma.otp.deleteMany({ where: { userId } })
           await prisma.user.delete({ where: { id: userId } })
-          console.warn(`[auth] Fallback sequential purge succeeded for ${userId}`)
-          return true
+          console.warn('[auth] Fallback sequential purge succeeded', { userId, reason })
+          return { ok: true, method: 'sequential' }
         } catch (err2) {
-          console.error(`[auth] Fallback purge also failed for ${userId}:`, err2)
-          return false
+          const message2 = err2 instanceof Error ? err2.message : String(err2)
+          console.error('[auth] Fallback purge failed — orphan user may remain', { userId, reason, error: message2 })
+          return { ok: false, error: message2 }
         }
+      }
+    }
+
+    function smtpConfigHints() {
+      return {
+        smtpHostConfigured: Boolean(env.SMTP_HOST),
+        smtpUserConfigured: Boolean(env.SMTP_USER),
+        smtpPassConfigured: Boolean(env.SMTP_PASS),
+        emailFromConfigured: Boolean(env.EMAIL_FROM_ADDRESS || env.SMTP_USER),
       }
     }
 
@@ -223,12 +251,22 @@ router.post('/signup', authLimiter, async (req, res) => {
       existing = await getUserByEmail(normalizedEmail)
     } catch (dbError) {
       if (!isDbUnavailableError(dbError as Error)) throw dbError
-      res.status(503).json({ error: 'Database unavailable' })
+      res.status(503).json({
+        error: 'Database unavailable',
+        code: 'SIGNUP_DB_UNAVAILABLE',
+        message: 'The database is temporarily unavailable. Please try again shortly.',
+        details: { retryable: true },
+      })
       return
     }
 
     if (existing?.emailVerified) {
-      res.status(409).json({ error: 'Email already registered' })
+      res.status(409).json({
+        error: 'Email already registered',
+        code: 'SIGNUP_EMAIL_TAKEN',
+        message: 'An account with this email is already registered. Please log in or reset your password.',
+        details: { retryable: false },
+      })
       return
     }
 
@@ -277,7 +315,12 @@ router.post('/signup', authLimiter, async (req, res) => {
             emailVerifiedAt: null,
           })
         } else {
-          res.status(409).json({ error: 'Email already registered' })
+          res.status(409).json({
+            error: 'Email already registered',
+            code: 'SIGNUP_EMAIL_TAKEN',
+            message: 'An account with this email is already registered. Please log in or reset your password.',
+            details: { retryable: false },
+          })
           return
         }
       } else {
@@ -288,32 +331,77 @@ router.post('/signup', authLimiter, async (req, res) => {
     try {
       const otpResult = await otpService.create(user.id, 'email_verification')
       if (otpResult.error || !otpResult.code) {
-        await rollbackUnverifiedSignup(user.id, `otp-create-failed: ${otpResult.error || 'no-code'}`)
+        const rollback = await rollbackUnverifiedSignup(user.id, `otp-create-failed: ${otpResult.error || 'no-code'}`)
+        logSignupError('SIGNUP_OTP_CREATE_FAILED', {
+          userId: user.id,
+          otpError: otpResult.error || 'no-code',
+          rollbackOk: rollback.ok,
+          rollbackMethod: rollback.method,
+          rollbackError: rollback.error,
+        })
         res.status(429).json({
-          error: otpResult.error || 'Could not create verification code',
+          error: 'Could not create verification code',
+          code: 'SIGNUP_OTP_CREATE_FAILED',
           message: otpResult.error || 'Please wait a moment and try again.',
+          details: {
+            reason: otpResult.error || 'rate_limited_or_unavailable',
+            accountSaved: !rollback.ok,
+            retryable: true,
+          },
         })
         return
       }
 
       const emailSent = await emailService.sendOTP(user.email, user.name, otpResult.code, 10, user.id)
       if (!emailSent) {
-        console.error('[auth] Signup OTP email failed to send to', user.email)
-        const rolledBack = await rollbackUnverifiedSignup(user.id, 'otp-email-send-failed')
+        const rollback = await rollbackUnverifiedSignup(user.id, 'otp-email-send-failed')
+        logSignupError('SIGNUP_EMAIL_SEND_FAILED', {
+          userId: user.id,
+          rollbackOk: rollback.ok,
+          rollbackMethod: rollback.method,
+          rollbackError: rollback.error,
+          ...smtpConfigHints(),
+        })
         res.status(500).json({
           error: 'Verification email failed',
-          message: rolledBack
+          code: 'SIGNUP_EMAIL_SEND_FAILED',
+          message: rollback.ok
             ? 'Unable to send verification code. No account was saved — please try again in a moment.'
-            : 'Unable to send verification code. Please try again or contact support.',
+            : 'Unable to send verification code. Your account may need support to clear before retrying.',
+          details: {
+            reason: 'smtp_or_provider_failure',
+            accountSaved: !rollback.ok,
+            rollback: rollback.ok ? rollback.method : 'failed',
+            retryable: rollback.ok,
+            hint: rollback.ok
+              ? 'Check SMTP credentials on the server, then retry signup.'
+              : 'Contact support to remove the incomplete registration for this email.',
+          },
         })
         return
       }
     } catch (signupOtpErr) {
-      console.error('[auth] Failed to create/send signup verification OTP:', signupOtpErr)
-      await rollbackUnverifiedSignup(user.id, 'otp-exception')
+      const errMsg = signupOtpErr instanceof Error ? signupOtpErr.message : String(signupOtpErr)
+      const rollback = await rollbackUnverifiedSignup(user.id, 'otp-exception')
+      logSignupError('SIGNUP_OTP_EXCEPTION', {
+        userId: user.id,
+        error: errMsg,
+        rollbackOk: rollback.ok,
+        rollbackMethod: rollback.method,
+        ...smtpConfigHints(),
+      })
       res.status(500).json({
         error: 'Verification email failed',
-        message: 'Unable to send verification code. No account was saved — please try again or contact support.',
+        code: 'SIGNUP_OTP_EXCEPTION',
+        message: rollback.ok
+          ? 'Unable to send verification code. No account was saved — please try again or contact support.'
+          : 'Unable to complete signup. Please contact support if this persists.',
+        details: {
+          reason: 'unexpected_error',
+          accountSaved: !rollback.ok,
+          rollback: rollback.ok ? rollback.method : 'failed',
+          retryable: rollback.ok,
+        },
       })
       return
     }
@@ -338,12 +426,23 @@ router.post('/signup', authLimiter, async (req, res) => {
       message: 'Account created. Check your email for a 6-digit verification code.',
     })
   } catch (e) {
-    console.error('[auth] Signup failed:', e)
+    const errMsg = e instanceof Error ? e.message : String(e)
+    console.error('[auth] Signup failed:', { error: errMsg, stack: e instanceof Error ? e.stack : undefined })
     if (isDbUnavailableError(e as Error)) {
-      res.status(503).json({ error: 'Database unavailable' })
+      res.status(503).json({
+        error: 'Database unavailable',
+        code: 'SIGNUP_DB_UNAVAILABLE',
+        message: 'The database is temporarily unavailable. Please try again shortly.',
+        details: { retryable: true },
+      })
       return
     }
-    res.status(500).json({ error: 'Signup failed' })
+    res.status(500).json({
+      error: 'Signup failed',
+      code: 'SIGNUP_UNEXPECTED',
+      message: 'Something went wrong during signup. Please try again.',
+      details: { retryable: true },
+    })
   }
 })
 
