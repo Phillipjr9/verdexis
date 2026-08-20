@@ -123,10 +123,8 @@ export default function AdminUserDetail() {
               <p className="text-xs text-[#737373] mt-1">
                 ID: {user.id}
                 {user.investmentId ? ` · ${user.investmentId}` : ''}
-                {' · '}
-                Role: {user.role}
-                {' · '}
-                KYC: {user.kycStatus}
+                {' · '}Role: {user.role}
+                {' · '}KYC: {user.kycStatus}
               </p>
             </section>
 
@@ -179,16 +177,9 @@ export default function AdminUserDetail() {
                 <input value={moneyAmount} onChange={(e) => setMoneyAmount(e.target.value)} placeholder="Amount" type="number" className={inputCls} />
                 <input value={moneyCurrency} onChange={(e) => setMoneyCurrency(e.target.value.toUpperCase())} placeholder="USD" className={inputCls} />
               </div>
-              <select
-                aria-label="Reason"
-                value={moneyReason}
-                onChange={(e) => setMoneyReason(e.target.value)}
-                className={`${inputCls} mb-2`}
-              >
+              <select aria-label="Reason" value={moneyReason} onChange={(e) => setMoneyReason(e.target.value)} className={`${inputCls} mb-2`}>
                 {(moneyKind === 'deposit' ? DEPOSIT_REASONS : DEDUCT_REASONS).map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
-                  </option>
+                  <option key={r.value} value={r.value}>{r.label}</option>
                 ))}
               </select>
               <input value={moneyNote} onChange={(e) => setMoneyNote(e.target.value)} placeholder="Note (optional)" className={`${inputCls} mb-2`} />
@@ -200,15 +191,14 @@ export default function AdminUserDetail() {
             <div className="mb-6">
               <AdminWithdrawalConfig userId={user.id} userEmail={user.email} onChange={load} />
               <p className="mt-3 text-xs text-[#737373]">
-                Incoming deposit destinations (wire/ACH/crypto for this user):{' '}
+                Incoming deposit destinations (wire/ACH/crypto):{' '}
                 <Link
                   to={`/admin/deposit-addresses?userId=${encodeURIComponent(user.id)}&email=${encodeURIComponent(user.email)}`}
                   className="text-[#0C8B44] hover:underline"
                 >
                   Edit deposit addresses →
                 </Link>
-                {' · '}
-                Withdrawal fee rate:{' '}
+                {' · '}Withdrawal fee rate:{' '}
                 <Link to="/admin/settings" className="text-[#0C8B44] hover:underline">
                   Platform settings →
                 </Link>
