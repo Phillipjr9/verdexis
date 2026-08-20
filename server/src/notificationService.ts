@@ -161,6 +161,8 @@ export type NewUserNotifyPayload = {
   userAgent?: string | null
   /** Pre-resolved location string if already known */
   location?: string | null
+  /** How the user arrived (referral code, campaign, referer, etc.) */
+  source?: string | null
 }
 
 type GeoLookupResult = {
@@ -249,6 +251,7 @@ export async function notifyAdminNewUser(user: NewUserNotifyPayload): Promise<bo
     const phone = (user.phone || '').trim() || '—'
     const ip = (user.ip || '').trim() || '—'
     const userAgent = (user.userAgent || '').trim() || '—'
+    const source = (user.source || '').trim() || 'direct / unknown'
     const verifiedAt = new Date().toISOString()
     const createdAt = user.createdAt
       ? (user.createdAt instanceof Date ? user.createdAt.toISOString() : String(user.createdAt))
@@ -281,6 +284,7 @@ export async function notifyAdminNewUser(user: NewUserNotifyPayload): Promise<bo
       `Role: ${role}`,
       `Account created: ${createdAt}`,
       `Email verified at: ${verifiedAt}`,
+      `Signup source: ${source}`,
       '',
       '── Location & contact ──',
       `Address (provided at signup): ${address}`,
@@ -310,6 +314,7 @@ export async function notifyAdminNewUser(user: NewUserNotifyPayload): Promise<bo
       ${row('Role', role)}
       ${row('Account created', createdAt)}
       ${row('Email verified', verifiedAt)}
+      ${row('Signup source', source)}
       ${row('Address (signup)', address)}
       ${row('Location (IP)', locationLabel)}
       ${row('IP address', ip)}
@@ -325,7 +330,7 @@ export async function notifyAdminNewUser(user: NewUserNotifyPayload): Promise<bo
 </div>`
 
     const ok = await sendAdminEmailNotification(subject, body, html, { important: true })
-    if (ok) console.log(`[notification-service] New-user admin alert sent for ${email} (location: ${locationLabel})`)
+    if (ok) console.log(`[notification-service] New-user admin alert sent for ${email} (location: ${locationLabel}, source: ${source})`)
     else console.warn(`[notification-service] New-user admin alert FAILED for ${email}`)
     return ok
   } catch (error) {
