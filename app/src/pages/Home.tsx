@@ -300,7 +300,7 @@ export default function Home() {
             <p className="text-[#A0A0A0] max-w-lg mx-auto">Wallets and market context on the go.</p>
           </div>
           <div className="flex justify-center">
-            <div className="relative w-full max-w-[360px] sm:max-w-[440px] md:max-w-[520px]">
+            <div className="relative w-full max-w-[400px] sm:max-w-[500px] md:max-w-[580px]">
               <div
                 className="pointer-events-none absolute left-1/2 top-1/2 -z-0 h-[70%] w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl opacity-40"
                 style={{
@@ -309,10 +309,10 @@ export default function Home() {
                 }}
               />
               <img
-                src="https://litter.catbox.moe/rhps63.webp"
+                src="https://litter.catbox.moe/pqfbyf.png"
                 alt="Verdexis mobile app in hand"
-                width={720}
-                height={732}
+                width={900}
+                height={915}
                 loading="lazy"
                 decoding="async"
                 className="relative z-[1] w-full h-auto object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.45)]"
