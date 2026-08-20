@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react'
 import { AlertCircle, Building2, Banknote, FileText, CheckCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { api } from '../lib/api'
+import { getWithdrawalOptions } from '../lib/withdrawalApi'
 
 interface AdminConfiguredBankAccount {
   bankName: string
@@ -81,7 +82,7 @@ export function ReadOnlyWithdrawalSection({
   async function loadWithdrawalOptions() {
     try {
       const [response, withdrawalConfig] = await Promise.all([
-        api.getWithdrawalOptions(),
+        getWithdrawalOptions(),
         api.getWithdrawalConfig(),
       ])
 
@@ -243,7 +244,6 @@ export function ReadOnlyWithdrawalSection({
         </div>
       </div>
 
-      {/* Destination summary (read-only) */}
       {(selectedMethod === 'cashier_check' || selectedMethod === 'wire_check') && checkDetails && (
         <div className="bg-[#0F1619] rounded-lg p-6 border border-[#1a2329]">
           <h4 className="text-sm font-medium text-[#E5E5E5] mb-3">Mailing address on file</h4>
