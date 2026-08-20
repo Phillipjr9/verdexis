@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import Navigation from '../components/Navigation'
 import { toast, Toaster } from 'sonner'
-import { Copy, QrCode, AlertCircle, ChevronLeft, Check, ExternalLink, Clock, Bell, BellOff, Shield, TrendingUp } from 'lucide-react'
+import { Copy, QrCode, AlertCircle, ChevronLeft, Check, ExternalLink, Clock, Bell, BellOff, Shield, TrendingUp, RefreshCw } from 'lucide-react'
 import { api, getToken } from '../lib/api'
 import QRCode from 'qrcode'
 
@@ -36,6 +36,7 @@ const CRYPTO_ASSETS = [
     minDeposit: 0.0001, 
     confirmations: 3, 
     icon: '₿',
+    currency: 'btc',
     limits: { daily: 10, monthly: 100 },
   },
   { 
@@ -45,6 +46,7 @@ const CRYPTO_ASSETS = [
     minDeposit: 0.001, 
     confirmations: 12, 
     icon: 'Ξ',
+    currency: 'eth',
     limits: { daily: 50, monthly: 500 },
     alternateNetworks: [
       { network: 'Arbitrum', minDeposit: 0.001 },
@@ -58,6 +60,7 @@ const CRYPTO_ASSETS = [
     minDeposit: 0.01, 
     confirmations: 1, 
     icon: '◎',
+    currency: 'sol',
     limits: { daily: 1000, monthly: 10000 },
   },
   { 
@@ -67,6 +70,7 @@ const CRYPTO_ASSETS = [
     minDeposit: 1, 
     confirmations: 12, 
     icon: '₮',
+    currency: 'usdt',
     limits: { daily: 50000, monthly: 500000 },
     alternateNetworks: [
       { network: 'Tron (TRC-20)', minDeposit: 1 },
@@ -80,6 +84,7 @@ const CRYPTO_ASSETS = [
     minDeposit: 1, 
     confirmations: 12, 
     icon: '$',
+    currency: 'usdc',
     limits: { daily: 50000, monthly: 500000 },
     alternateNetworks: [
       { network: 'Polygon', minDeposit: 1 },
@@ -88,12 +93,15 @@ const CRYPTO_ASSETS = [
   },
 ]
 
+type StoredCryptos = Record<string, { address?: string; network?: string; notes?: string; alternateNetworks?: DepositAddress['alternateNetworks'] }>
+
 export default function CryptoDeposit() {
   const navigate = useNavigate()
   const [selectedAsset, setSelectedAsset] = useState(CRYPTO_ASSETS[0])
   const [depositAddress, setDepositAddress] = useState<DepositAddress | null>(null)
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('')
   const [loading, setLoading] = useState(false)
+  const [generating, setGenerating] = useState(false)
   const [copied, setCopied] = useState(false)
   const [selectedNetwork, setSelectedNetwork] = useState<string>('')
   const [pendingDeposits, setPendingDeposits] = useState<PendingDeposit[]>([])
@@ -101,25 +109,38 @@ export default function CryptoDeposit() {
   const [emailNotifications, setEmailNotifications] = useState(true)
   const [verificationTier, setVerificationTier] = useState<'unverified' | 'basic' | 'advanced'>('basic')
 
+  const applyFromCryptos = useCallback((cryptos: StoredCryptos | null | undefined, asset = selectedAsset, network = selectedNetwork) => {
+    const entry = cryptos?.[asset.symbol]
+    if (entry?.address?.trim()) {
+      setDepositAddress({
+        asset: asset.symbol,
+        address: entry.address.trim(),
+        network: entry.network || network || asset.network,
+        minDeposit: asset.minDeposit,
+        confirmations: asset.confirmations,
+        note: entry.notes,
+        alternateNetworks: entry.alternateNetworks || asset.alternateNetworks,
+      })
+      return true
+    }
+    setDepositAddress(null)
+    return false
+  }, [selectedAsset, selectedNetwork])
+
   const loadDepositAddress = useCallback(async () => {
     setLoading(true)
     try {
       const res = await api.getMyDepositAddresses()
-      const network = selectedNetwork || selectedAsset.network
-      
-      if (res.addresses && res.addresses.cryptos && res.addresses.cryptos[selectedAsset.symbol]) {
-        const addr = res.addresses.cryptos[selectedAsset.symbol]
-        setDepositAddress({
-          asset: selectedAsset.symbol,
-          address: addr.address,
-          network: addr.network || network,
-          minDeposit: selectedAsset.minDeposit,
-          confirmations: selectedAsset.confirmations,
-          note: addr.notes,
-          alternateNetworks: addr.alternateNetworks,
-        })
-      } else {
-        setDepositAddress(null)
+      const addresses = res.addresses as { cryptos?: StoredCryptos } | null
+      const found = applyFromCryptos(addresses?.cryptos)
+      if (!found) {
+        // Fallback: try the deposit-addresses module's own readout
+        try {
+          const mine = await api.get<{ addresses: { cryptos?: StoredCryptos } | null }>('/api/deposit-addresses/mine')
+          applyFromCryptos(mine.addresses?.cryptos)
+        } catch {
+          /* optional endpoint */
+        }
       }
     } catch (err) {
       console.error('Failed to load deposit address:', err)
@@ -127,13 +148,57 @@ export default function CryptoDeposit() {
     } finally {
       setLoading(false)
     }
-  }, [selectedAsset, selectedNetwork])
+  }, [applyFromCryptos])
+
+  const generateAddress = useCallback(async () => {
+    if (!getToken()) {
+      toast.error('Sign in to generate a deposit address')
+      return
+    }
+    setGenerating(true)
+    try {
+      const res = await api.get<{ address?: string; network?: string }>(
+        `/api/deposit-addresses/generate?currency=${encodeURIComponent(selectedAsset.currency)}`,
+      )
+      if (!res.address) throw new Error('No address returned')
+      setDepositAddress({
+        asset: selectedAsset.symbol,
+        address: res.address,
+        network: res.network || selectedAsset.network,
+        minDeposit: selectedAsset.minDeposit,
+        confirmations: selectedAsset.confirmations,
+        alternateNetworks: selectedAsset.alternateNetworks,
+      })
+      toast.success(`${selectedAsset.symbol} deposit address ready`)
+      // Refresh from server so subsequent visits stay in sync
+      void loadDepositAddress()
+    } catch (err) {
+      const status = (err as { status?: number }).status
+      toast.error(
+        status === 401
+          ? 'Session expired. Sign out and sign in again.'
+          : (err as { error?: string }).error || `Could not generate ${selectedAsset.symbol} address`,
+      )
+    } finally {
+      setGenerating(false)
+    }
+  }, [selectedAsset, loadDepositAddress])
 
   const loadPendingDeposits = useCallback(async () => {
     try {
-      // Load actual pending deposits from backend
-      // For now, show empty until backend implements this endpoint
-      setPendingDeposits([])
+      const res = await api.listPendingDeposits()
+      const rows = (res.pendingDeposits || []).map((d) => ({
+        id: d.id,
+        asset: d.asset,
+        amount: d.amount,
+        address: d.toAddress,
+        txHash: d.txHash,
+        confirmations: 0,
+        requiredConfirmations: 1,
+        status: (d.status === 'credited' || d.status === 'confirmed' ? d.status : 'pending') as PendingDeposit['status'],
+        timestamp: new Date(d.createdAt),
+      }))
+      setPendingDeposits(rows)
     } catch (err) {
       console.error('Failed to load pending deposits:', err)
     }
@@ -148,6 +213,7 @@ export default function CryptoDeposit() {
       console.error('Failed to load preferences:', err)
     }
   }, [])
+
   useEffect(() => {
     if (!getToken()) {
       navigate('/dashboard')
@@ -168,10 +234,10 @@ export default function CryptoDeposit() {
       QRCode.toDataURL(depositAddress.address, { width: 256, margin: 2 })
         .then(setQrCodeUrl)
         .catch(() => setQrCodeUrl(''))
+    } else {
+      setQrCodeUrl('')
     }
   }, [depositAddress])
-
-
 
   const copyAddress = () => {
     if (!depositAddress) return
@@ -242,7 +308,6 @@ export default function CryptoDeposit() {
 
       <div className="pt-24 pb-16 px-6">
         <div className="max-w-4xl mx-auto">
-          {/* Header */}
           <div className="mb-8">
             <button
               onClick={() => navigate('/wallet')}
@@ -270,7 +335,6 @@ export default function CryptoDeposit() {
             </div>
           </div>
 
-          {/* Verification Tier & Limits */}
           <div className="glass-card p-4 mb-6 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Shield className={`w-5 h-5 ${verificationTier === 'advanced' ? 'text-[#0C8B44]' : verificationTier === 'basic' ? 'text-[#2196F3]' : 'text-[#737373]'}`} />
@@ -287,7 +351,6 @@ export default function CryptoDeposit() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Asset Selection */}
             <div className="lg:col-span-1">
               <div className="glass-card p-4">
                 <h2 className="text-sm font-medium text-[#E5E5E5] mb-4">Select Asset</h2>
@@ -317,9 +380,7 @@ export default function CryptoDeposit() {
               </div>
             </div>
 
-            {/* Deposit Instructions */}
             <div className="lg:col-span-2 space-y-6">
-              {/* Pending Deposits */}
               {pendingDeposits.length > 0 && (
                 <div className="glass-card p-6">
                   <div className="flex items-center justify-between mb-4">
@@ -354,12 +415,6 @@ export default function CryptoDeposit() {
                             <span className="text-xs text-[#737373]">{formatTimeAgo(deposit.timestamp, timeNow)}</span>
                           </div>
                           <p className="text-xs text-[#737373] font-mono truncate">TX: {deposit.txHash}</p>
-                          <div className="mt-2 w-full bg-[#1a1a1a] rounded-full h-1.5">
-                            <div 
-                              className="bg-[#0C8B44] h-1.5 rounded-full transition-all" 
-                              style={{ width: `${(deposit.confirmations / deposit.requiredConfirmations) * 100}%` }}
-                            />
-                          </div>
                         </div>
                       ))}
                     </div>
@@ -376,23 +431,27 @@ export default function CryptoDeposit() {
                   <div className="flex flex-col items-center justify-center text-center space-y-4">
                     <AlertCircle className="w-12 h-12 text-[#FF9800]" />
                     <div>
-                      <h3 className="text-lg font-medium text-[#E5E5E5] mb-2">No Deposit Address Assigned</h3>
+                      <h3 className="text-lg font-medium text-[#E5E5E5] mb-2">No Deposit Address Yet</h3>
                       <p className="text-sm text-[#737373] max-w-md">
-                        Your deposit address for {selectedAsset.symbol} has not been configured yet.
-                        Please contact support to set up your personalized deposit address.
+                        Generate a unique {selectedAsset.symbol} deposit address for your account.
+                        It is saved to your profile and will show here every time you deposit.
                       </p>
                     </div>
                     <button
-                      onClick={() => window.open('https://wa.me/17196798790', '_blank')}
-                      className="px-6 py-3 bg-[#0C8B44] text-white rounded-lg hover:bg-[#0a7539] transition-colors"
+                      onClick={() => void generateAddress()}
+                      disabled={generating}
+                      className="inline-flex items-center gap-2 px-6 py-3 bg-[#0C8B44] text-white rounded-lg hover:bg-[#0a7539] transition-colors disabled:opacity-50"
                     >
-                      Contact Support
+                      <RefreshCw className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
+                      {generating ? 'Generating…' : `Generate ${selectedAsset.symbol} address`}
                     </button>
+                    <Link to="/create-wallet" className="text-xs text-[#0C8B44] hover:underline">
+                      Or manage all wallets
+                    </Link>
                   </div>
                 </div>
-              ) : depositAddress ? (
+              ) : (
                 <>
-                  {/* Network Selection */}
                   {depositAddress.alternateNetworks && depositAddress.alternateNetworks.length > 0 && (
                     <div className="glass-card p-6">
                       <h3 className="text-sm font-medium text-[#E5E5E5] mb-3">Select Network</h3>
@@ -422,7 +481,6 @@ export default function CryptoDeposit() {
                     </div>
                   )}
 
-                  {/* QR Code */}
                   <div className="glass-card p-6">
                     <div className="flex flex-col items-center">
                       {qrCodeUrl ? (
@@ -451,7 +509,6 @@ export default function CryptoDeposit() {
                     </div>
                   </div>
 
-                  {/* Deposit Address */}
                   <div className="glass-card p-6">
                     <h3 className="text-sm font-medium text-[#E5E5E5] mb-4">Deposit Address</h3>
                     <div className="relative">
@@ -475,7 +532,6 @@ export default function CryptoDeposit() {
                     </div>
                   </div>
 
-                  {/* Important Notes */}
                   <div className="glass-card p-6 border-l-4 border-[#FF9800]">
                     <div className="flex gap-3">
                       <AlertCircle className="w-5 h-5 text-[#FF9800] shrink-0 mt-0.5" />
@@ -486,14 +542,13 @@ export default function CryptoDeposit() {
                           <li>Minimum deposit: <span className="text-[#E5E5E5] font-medium">{depositAddress.minDeposit} {selectedAsset.symbol}</span></li>
                           <li>Requires <span className="text-[#E5E5E5] font-medium">{depositAddress.confirmations} network confirmations</span> before credit</li>
                           <li>Sending any other asset or using a different network will result in permanent loss</li>
-                          <li>This address is unique to your account - do not share it</li>
+                          <li>This address is unique to your account — do not share it</li>
                           {depositAddress.note && <li className="text-[#0C8B44]">{depositAddress.note}</li>}
                         </ul>
                       </div>
                     </div>
                   </div>
 
-                  {/* Track Deposit */}
                   <div className="glass-card p-6">
                     <h3 className="text-sm font-medium text-[#E5E5E5] mb-3">Track Your Deposit</h3>
                     <p className="text-sm text-[#737373] mb-4">
@@ -516,7 +571,7 @@ export default function CryptoDeposit() {
                     </button>
                   </div>
                 </>
-              ) : null}
+              )}
             </div>
           </div>
         </div>
