@@ -14,12 +14,17 @@ export interface UserCryptoOverride {
 
 export interface UserWireOverride {
   beneficiaryName: string
+  beneficiaryAddress?: string
   bankName: string
+  bankAddress?: string
   routingNumber?: string
   swiftCode?: string
+  iban?: string
   accountNumber: string
   reference?: string
   notes?: string
+  /** When true/undefined, ACH deposit tab also shows these bank details. */
+  showForAch?: boolean
 }
 
 export interface UserWalletOverride {
