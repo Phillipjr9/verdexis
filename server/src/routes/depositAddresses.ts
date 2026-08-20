@@ -8,8 +8,91 @@ const router = Router()
 
 const SUPPORTED_CURRENCIES = ['btc', 'bitcoin', 'eth', 'ethereum', 'sol', 'solana', 'matic', 'polygon', 'usdc', 'usdt', 'dai']
 
-const addressCache = new Map<string, { address: string; timestamp: number }>()
-const CACHE_TTL = 24 * 60 * 60 * 1000
+const SYMBOL_BY_CURRENCY: Record<string, string> = {
+  btc: 'BTC',
+  bitcoin: 'BTC',
+  eth: 'ETH',
+  ethereum: 'ETH',
+  sol: 'SOL',
+  solana: 'SOL',
+  matic: 'MATIC',
+  polygon: 'MATIC',
+  usdc: 'USDC',
+  usdt: 'USDT',
+  dai: 'DAI',
+}
+
+type CryptoOverride = { currency: string; network: string; address: string; memo?: string; notes?: string }
+
+type DepositAddressesBlob = {
+  cryptos?: Record<string, CryptoOverride>
+  wire?: unknown
+  notes?: string
+  updatedAt?: string
+}
+
+function parsePrefs(raw: string | null | undefined): Record<string, unknown> {
+  if (!raw) return {}
+  try {
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {}
+  } catch {
+    return {}
+  }
+}
+
+function getDepositBlob(prefs: Record<string, unknown>): DepositAddressesBlob {
+  const current = prefs.depositAddresses
+  if (current && typeof current === 'object') return current as DepositAddressesBlob
+  return { cryptos: {} }
+}
+
+/** Persist a generated address onto the user prefs.depositAddresses. Returns the full blob. */
+async function mergeGeneratedAddress(
+  userId: string,
+  currency: string,
+  network: string,
+  address: string,
+): Promise<DepositAddressesBlob> {
+  const symbol = SYMBOL_BY_CURRENCY[currency.toLowerCase()] || currency.toUpperCase()
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { prefs: true } })
+  const prefs = parsePrefs(user?.prefs)
+  const current = getDepositBlob(prefs)
+  const cryptos = { ...(current.cryptos || {}) }
+
+  // Keep an existing address if one is already assigned (admin override or prior generate).
+  if (!cryptos[symbol]?.address?.trim()) {
+    cryptos[symbol] = { currency: symbol, network, address }
+  }
+
+  const blob: DepositAddressesBlob = {
+    ...current,
+    cryptos,
+    updatedAt: new Date().toISOString(),
+  }
+  prefs.depositAddresses = blob
+  await prisma.user.update({ where: { id: userId }, data: { prefs: JSON.stringify(prefs) } })
+  return blob
+}
+
+/** Read deposit addresses already stored on the user (admin + generated). */
+router.get('/mine', requireAuth, async (req: AuthedRequest, res) => {
+  const userId = req.userId
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
+  try {
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { prefs: true } })
+    const prefs = parsePrefs(user?.prefs)
+    const addresses = getDepositBlob(prefs)
+    const hasAny = Boolean(addresses.cryptos && Object.keys(addresses.cryptos).length)
+    res.json({ addresses: hasAny ? addresses : null })
+  } catch (err) {
+    console.error('[deposit-addresses] mine error:', err)
+    res.status(500).json({ error: 'Failed to fetch addresses' })
+  }
+})
 
 router.get('/', requireAuth, async (req: AuthedRequest, res) => {
   const userId = req.userId
@@ -39,39 +122,6 @@ router.get('/', requireAuth, async (req: AuthedRequest, res) => {
   }
 })
 
-const SYMBOL_BY_CURRENCY: Record<string, string> = {
-  btc: 'BTC',
-  bitcoin: 'BTC',
-  eth: 'ETH',
-  ethereum: 'ETH',
-  sol: 'SOL',
-  solana: 'SOL',
-  matic: 'MATIC',
-  polygon: 'MATIC',
-  usdc: 'USDC',
-  usdt: 'USDT',
-  dai: 'DAI',
-}
-
-type CryptoOverride = { currency: string; network: string; address: string; memo?: string; notes?: string }
-
-async function mergeGeneratedAddress(userId: string, currency: string, network: string, address: string) {
-  const symbol = SYMBOL_BY_CURRENCY[currency.toLowerCase()] || currency.toUpperCase()
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { prefs: true } })
-  let prefs: Record<string, unknown> = {}
-  try { if (user?.prefs) prefs = JSON.parse(user.prefs) } catch { prefs = {} }
-
-  const current = (prefs.depositAddresses && typeof prefs.depositAddresses === 'object')
-    ? prefs.depositAddresses as { cryptos?: Record<string, CryptoOverride>; wire?: unknown; notes?: string }
-    : { cryptos: {} as Record<string, CryptoOverride> }
-  const cryptos = { ...(current.cryptos || {}) }
-  if (cryptos[symbol]?.address) return
-
-  cryptos[symbol] = { currency: symbol, network, address }
-  prefs.depositAddresses = { ...current, cryptos, updatedAt: new Date().toISOString() }
-  await prisma.user.update({ where: { id: userId }, data: { prefs: JSON.stringify(prefs) } })
-}
-
 router.get('/generate', requireAuth, async (req: AuthedRequest, res) => {
   const userId = req.userId
   if (!userId) {
@@ -86,16 +136,45 @@ router.get('/generate', requireAuth, async (req: AuthedRequest, res) => {
   }
 
   try {
+    const symbol = SYMBOL_BY_CURRENCY[currency] || currency.toUpperCase()
+
+    // Prefer an address already stored on the user (admin or previous generate).
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { prefs: true } })
+    const prefs = parsePrefs(user?.prefs)
+    const existing = getDepositBlob(prefs).cryptos?.[symbol]
+    if (existing?.address?.trim()) {
+      const qrCodeUrl = addressGenerator.generateQRCode(existing.address)
+      res.json({
+        address: existing.address,
+        currency: currency,
+        network: existing.network || 'Unknown',
+        chainId: '',
+        qrCodeUrl,
+        cached: true,
+        persisted: true,
+      })
+      return
+    }
+
     const generated = addressGenerator.generateAddress(userId, currency)
     const qrCodeUrl = addressGenerator.generateQRCode(generated.address)
-    const cacheKey = `${userId}-${currency}`
-    const cached = addressCache.get(cacheKey)
-    const isCached = Boolean(cached && Date.now() - cached.timestamp < CACHE_TTL)
-    if (!isCached) {
-      addressCache.set(cacheKey, { address: generated.address, timestamp: Date.now() })
-    }
-    res.json({ ...generated, qrCodeUrl, cached: isCached })
-    await mergeGeneratedAddress(userId, generated.currency, generated.network, generated.address)
+
+    // CRITICAL: persist BEFORE responding so the address sticks to the user
+    // and shows up on /deposit/crypto via GET /api/wallet/me/deposit-addresses.
+    const blob = await mergeGeneratedAddress(
+      userId,
+      generated.currency,
+      generated.network,
+      generated.address,
+    )
+
+    res.json({
+      ...generated,
+      qrCodeUrl,
+      cached: false,
+      persisted: true,
+      addresses: blob,
+    })
   } catch (err) {
     console.error('[deposit-addresses] generate error:', err)
     res.status(400).json({ error: (err as Error).message })
@@ -125,15 +204,12 @@ router.put('/save', requireAuth, async (req: AuthedRequest, res) => {
   }
 
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { prefs: true } })
-  let prefs: Record<string, unknown> = {}
-  try { if (user?.prefs) prefs = JSON.parse(user.prefs) } catch { prefs = {} }
-
-  const current = (prefs.depositAddresses && typeof prefs.depositAddresses === 'object')
-    ? prefs.depositAddresses as { cryptos?: Record<string, CryptoOverride>; wire?: unknown; notes?: string }
-    : { cryptos: {} as Record<string, CryptoOverride> }
+  const prefs = parsePrefs(user?.prefs)
+  const current = getDepositBlob(prefs)
   const cryptos = { ...(current.cryptos || {}) }
   for (const [symbol, row] of Object.entries(parsed.data.cryptos)) {
     const key = symbol.toUpperCase()
+    // Do not overwrite an existing admin/generated address with a weaker client copy.
     if (cryptos[key]?.address) continue
     cryptos[key] = {
       currency: row.currency.toUpperCase(),
@@ -143,9 +219,14 @@ router.put('/save', requireAuth, async (req: AuthedRequest, res) => {
       notes: row.notes,
     }
   }
-  prefs.depositAddresses = { ...current, cryptos, updatedAt: new Date().toISOString() }
+  const blob: DepositAddressesBlob = {
+    ...current,
+    cryptos,
+    updatedAt: new Date().toISOString(),
+  }
+  prefs.depositAddresses = blob
   await prisma.user.update({ where: { id: userId }, data: { prefs: JSON.stringify(prefs) } })
-  res.json({ addresses: prefs.depositAddresses })
+  res.json({ addresses: blob })
 })
 
 const linkWalletSchema = z.object({
