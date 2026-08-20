@@ -44,6 +44,15 @@ import passkeysRoutes from './routes/passkeys.js'
 import kycRoutes from './routes/kyc.js'
 import withdrawalsRoutes from './routes/withdrawals.js'
 import otpRoutes from './routes/otp.js'
+import securityRoutes from './routes/security.js'
+import userSecurityRoutes from './routes/userSecurity.js'
+import feeProofRoutes, { adminFeeProofRouter } from './routes/feeProofs.js'
+import adminHierarchyRoutes from './routes/admin-hierarchy.js'
+import adminFeaturesRoutes from './routes/admin-features.js'
+import portfolioRoutes from './routes/portfolio.js'
+import stakingRoutes from './routes/staking.js'
+import limitsRoutes from './routes/limits.js'
+import adminEmailActionsRoutes from './routes/adminEmailActions.js'
 import { startAlertPoller } from './alertPoller.js'
 import { startDcaPoller } from './dcaPoller.js'
 import { startKeepAlive } from './keepAlive.js'
@@ -372,6 +381,16 @@ app.use('/api/kyc', kycRoutes)
 app.use('/api', adminWithdrawalConfigRoutes)
 app.use('/api/withdrawals', withdrawalsRoutes)
 app.use('/api/otp', otpRoutes)
+app.use('/api/security', securityRoutes)
+app.use('/api/user-security', userSecurityRoutes)
+app.use('/api/fee-proofs', feeProofRoutes)
+app.use('/api/admin/fee-proofs', adminFeeProofRouter)
+app.use('/api/admin/hierarchy', adminHierarchyRoutes)
+app.use('/api/admin/features', adminFeaturesRoutes)
+app.use('/api/admin/email-actions', adminEmailActionsRoutes)
+app.use('/api/portfolio', portfolioRoutes)
+app.use('/api/staking', stakingRoutes)
+app.use('/api/limits', limitsRoutes)
 app.use('/api/analytics', advancedAnalyticsRoutes)
 app.use('/api/tax', advancedTaxRoutes)
 app.use('/api/compliance', advancedComplianceRoutes)
