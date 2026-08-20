@@ -1,1 +1,1 @@
-export { default } from './auth.full.js'
+PLACEHOLDER_WILL_REPLACE
