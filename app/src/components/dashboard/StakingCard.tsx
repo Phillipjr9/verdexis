@@ -70,6 +70,8 @@ export default function StakingCard() {
                     src={logo}
                     alt={p.asset}
                     className="w-9 h-9 rounded-lg shrink-0"
+                    loading="lazy"
+                    decoding="async"
                     onError={cryptoIconErrorFallback(initial, (p.asset || '').toLowerCase())}
                   />
                 ) : (
