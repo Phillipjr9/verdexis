@@ -309,7 +309,7 @@ export default function Home() {
                 }}
               />
               <img
-                src="https://litter.catbox.moe/zeq00v.webp"
+                src="https://litter.catbox.moe/rhps63.webp"
                 alt="Verdexis mobile app in hand"
                 width={720}
                 height={732}
