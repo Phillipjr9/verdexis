@@ -30,18 +30,50 @@ const verifyOtpSchema = z.object({
   purpose: z.enum(['login', 'email_verification', 'transaction', '2fa']).optional().default('email_verification'),
 })
 
+function clientIp(req: AuthedRequest): string | null {
+  const forwarded = req.headers['x-forwarded-for']
+  if (typeof forwarded === 'string' && forwarded.trim()) {
+    return forwarded.split(',')[0]?.trim() || null
+  }
+  if (Array.isArray(forwarded) && forwarded[0]) {
+    return String(forwarded[0]).split(',')[0]?.trim() || null
+  }
+  return req.ip || (req.socket as { remoteAddress?: string } | undefined)?.remoteAddress || null
+}
+
+function clientUserAgent(req: AuthedRequest): string | null {
+  const ua = req.headers['user-agent']
+  return typeof ua === 'string' && ua.trim() ? ua.trim() : null
+}
+
+function parsePrefs(raw: string | null | undefined): Record<string, unknown> {
+  if (!raw) return {}
+  try {
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {}
+  } catch {
+    return {}
+  }
+}
+
 /** Mark email verified and notify admin once on first successful verification. */
-async function markEmailVerifiedAndNotifyAdmin(userId: string): Promise<void> {
+async function markEmailVerifiedAndNotifyAdmin(
+  userId: string,
+  extra?: { ip?: string | null; userAgent?: string | null },
+): Promise<void> {
   const before = await prisma.user.findUnique({
     where: { id: userId },
     select: {
       id: true,
       email: true,
       name: true,
+      username: true,
       investmentId: true,
       role: true,
       createdAt: true,
       emailVerified: true,
+      address: true,
+      prefs: true,
     },
   })
   if (!before) return
@@ -53,14 +85,32 @@ async function markEmailVerifiedAndNotifyAdmin(userId: string): Promise<void> {
   })
 
   if (!wasVerified) {
+    const prefs = parsePrefs(before.prefs)
+    const phone =
+      (typeof prefs.phone === 'string' && prefs.phone.trim()) ||
+      (typeof prefs.phoneNumber === 'string' && prefs.phoneNumber.trim()) ||
+      null
+    const storedIp =
+      (typeof prefs.signupIp === 'string' && prefs.signupIp.trim()) ||
+      (typeof prefs.lastIp === 'string' && prefs.lastIp.trim()) ||
+      null
+    const storedUa =
+      (typeof prefs.signupUserAgent === 'string' && prefs.signupUserAgent.trim()) ||
+      null
+
     process.nextTick(() => {
       notifyAdminNewUser({
         id: before.id,
         email: before.email,
         name: before.name,
+        username: before.username,
         investmentId: before.investmentId,
         role: before.role,
         createdAt: before.createdAt,
+        address: before.address,
+        phone,
+        ip: extra?.ip || storedIp,
+        userAgent: extra?.userAgent || storedUa,
       }).catch((err) => {
         console.error('[otp] Failed to send new-user admin notification:', err)
       })
@@ -191,7 +241,10 @@ router.post('/verify-otp', requireAuth, otpLimiter, async (req: AuthedRequest, r
   }
 
   if (parsed.data.purpose === 'email_verification') {
-    await markEmailVerifiedAndNotifyAdmin(req.userId!)
+    await markEmailVerifiedAndNotifyAdmin(req.userId!, {
+      ip: clientIp(req),
+      userAgent: clientUserAgent(req),
+    })
   }
 
   res.setHeader('X-OTP-Verified', 'true')
@@ -426,7 +479,10 @@ router.post('/verify-email-otp', requireAuth, otpLimiter, async (req: AuthedRequ
     return
   }
 
-  await markEmailVerifiedAndNotifyAdmin(req.userId!)
+  await markEmailVerifiedAndNotifyAdmin(req.userId!, {
+    ip: clientIp(req),
+    userAgent: clientUserAgent(req),
+  })
 
   res.json({
     verified: true,
