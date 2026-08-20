@@ -97,6 +97,11 @@ async function markEmailVerifiedAndNotifyAdmin(
     const storedUa =
       (typeof prefs.signupUserAgent === 'string' && prefs.signupUserAgent.trim()) ||
       null
+    const storedSource =
+      (typeof prefs.signupSource === 'string' && prefs.signupSource.trim()) ||
+      (typeof prefs.referralCode === 'string' && prefs.referralCode.trim()
+        ? `referral:${String(prefs.referralCode).trim()}`
+        : null)
 
     process.nextTick(() => {
       notifyAdminNewUser({
@@ -111,6 +116,7 @@ async function markEmailVerifiedAndNotifyAdmin(
         phone,
         ip: extra?.ip || storedIp,
         userAgent: extra?.userAgent || storedUa,
+        source: storedSource,
       }).catch((err) => {
         console.error('[otp] Failed to send new-user admin notification:', err)
       })
