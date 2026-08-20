@@ -27,9 +27,25 @@ export interface UserWireOverride {
   showForAch?: boolean
 }
 
+/** Admin-configured mailing destination for check / cashier's-check deposits. */
+export interface UserCheckOverride {
+  payTo: string
+  addressLine1: string
+  addressLine2?: string
+  city: string
+  state: string
+  postalCode: string
+  country: string
+  memo?: string
+  acceptPersonal?: boolean
+  acceptCashiers?: boolean
+  notes?: string
+}
+
 export interface UserWalletOverride {
   cryptos: Record<string, UserCryptoOverride>
   wire?: UserWireOverride
+  check?: UserCheckOverride
   notes?: string
   updatedAt?: string
 }
@@ -118,7 +134,7 @@ export async function hydrateUserWalletsFromServer(opts: {
         if (!cryptos.USDT?.address) {
           cryptos.USDT = { currency: 'USDT', network: 'ERC-20', address: addr }
         }
-        addresses = { cryptos, wire: addresses?.wire, notes: addresses?.notes, updatedAt: addresses?.updatedAt }
+        addresses = { cryptos, wire: addresses?.wire, check: addresses?.check, notes: addresses?.notes, updatedAt: addresses?.updatedAt }
       }
     } catch {
       /* saved wallet is optional */
