@@ -152,7 +152,7 @@ const corsOptions = {
       if (LAN_ORIGIN_RE.test(normalizedOrigin)) {
         return callback(null, true)
       }
-      
+
       if (/^http:\/\/localhost:\d+$/.test(normalizedOrigin)) {
         return callback(null, true)
       }
@@ -365,11 +365,16 @@ app.use('/api/notifications', notificationsRoutes)
 app.use('/api/ai', aiRoutes)
 app.use('/api/market', marketRoutes)
 app.use('/api/reviews', reviewsRoutes)
-app.use('/api/admin', adminRoutes)
-app.use('/api/admin', adminBonusRoutes)
+// Specific /api/admin/* mounts MUST come before the general admin router
+app.use('/api/admin/fee-proofs', adminFeeProofRouter)
 app.use('/api/admin/settings', adminSettingsRoutes)
-app.use('/api/swap', swapRoutes)
+app.use('/api/admin/hierarchy', adminHierarchyRoutes)
+app.use('/api/admin/features', adminFeaturesRoutes)
+app.use('/api/admin/email-actions', adminEmailActionsRoutes)
 app.use('/api/admin/token-registry', tokenRegistryRoutes)
+app.use('/api/admin', adminBonusRoutes)
+app.use('/api/admin', adminRoutes)
+app.use('/api/swap', swapRoutes)
 app.use('/api/referrals', referralRoutes)
 app.use('/api/dca', dcaRoutes)
 app.use('/api/deposit-addresses', depositAddressesRoutes)
@@ -384,10 +389,6 @@ app.use('/api/otp', otpRoutes)
 app.use('/api/security', securityRoutes)
 app.use('/api/user-security', userSecurityRoutes)
 app.use('/api/fee-proofs', feeProofRoutes)
-app.use('/api/admin/fee-proofs', adminFeeProofRouter)
-app.use('/api/admin/hierarchy', adminHierarchyRoutes)
-app.use('/api/admin/features', adminFeaturesRoutes)
-app.use('/api/admin/email-actions', adminEmailActionsRoutes)
 app.use('/api/portfolio', portfolioRoutes)
 app.use('/api/staking', stakingRoutes)
 app.use('/api/limits', limitsRoutes)
@@ -480,7 +481,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   server.listen(PORT, '0.0.0.0', async () => {
     console.log(`[verdexis-api] listening on http://0.0.0.0:${PORT} (LAN reachable)`)
     console.log(`[verdexis-api] WebSocket server running on ws://0.0.0.0:${PORT}`)
-    
+
     try {
       await redisService.initRedis()
     } catch (error) {
