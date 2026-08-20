@@ -12,7 +12,7 @@ async function fetchJsonRpc(url: string, method: string, params: unknown[]) {
   let json: any
   try {
     json = JSON.parse(text)
-  } catch (error) {
+  } catch {
     throw new Error(`Non-JSON response from Alchemy: ${text}`)
   }
 
@@ -54,9 +54,13 @@ export function resolveWithdrawalChain(input: {
   destinationAddress: string
   chain?: string
 }): { chain: 'solana' | 'ethereum' | 'bitcoin' | 'bsc' | undefined; detectedWalletType: WalletAddressType } {
-  const explicitChain = input.chain === 'solana' || input.chain === 'ethereum' || input.chain === 'bitcoin' || input.chain === 'bsc'
-    ? input.chain
-    : undefined
+  const explicitChain =
+    input.chain === 'solana' ||
+    input.chain === 'ethereum' ||
+    input.chain === 'bitcoin' ||
+    input.chain === 'bsc'
+      ? input.chain
+      : undefined
 
   if (explicitChain) {
     return { chain: explicitChain, detectedWalletType: detectWalletAddressType(input.destinationAddress) }
@@ -97,15 +101,16 @@ export function buildExternalWalletTransferMessage(input: {
   chain?: string
   tone?: 'funding' | 'withdrawal'
 }): string {
-  const chainName = input.chain?.toLowerCase() === 'solana'
-    ? 'Solana'
-    : input.chain?.toLowerCase() === 'bitcoin'
-      ? 'Bitcoin'
-      : input.chain?.toLowerCase() === 'bsc'
-        ? 'BSC'
-        : input.chain?.toLowerCase() === 'ethereum'
-          ? 'Ethereum'
-          : 'the configured network'
+  const chainName =
+    input.chain?.toLowerCase() === 'solana'
+      ? 'Solana'
+      : input.chain?.toLowerCase() === 'bitcoin'
+        ? 'Bitcoin'
+        : input.chain?.toLowerCase() === 'bsc'
+          ? 'BSC'
+          : input.chain?.toLowerCase() === 'ethereum'
+            ? 'Ethereum'
+            : 'the configured network'
 
   const prefix = 'Transfer queued.'
 
@@ -138,8 +143,8 @@ const BSC_USDT_CONTRACT = '0x55d398326f99059ff775485246999027b3197955'
 const BNB_TOKEN_CONTRACT = (env.BNB_TOKEN_ADDRESS ?? '0x4734Fe024B9Cb0BBFcd26Ed467a1e0F891aC8888').trim()
 
 const ETHEREUM_CUSTOM_TOKEN = env.ETHEREUM_TOKEN_ADDRESS ?? ''
-const BSC_CUSTOM_TOKEN      = env.BSC_TOKEN_ADDRESS ?? ''
-const CUSTOM_TOKEN_SYMBOL   = (env.ETHEREUM_TOKEN_SYMBOL ?? 'VDX').toUpperCase()
+const BSC_CUSTOM_TOKEN = env.BSC_TOKEN_ADDRESS ?? ''
+const CUSTOM_TOKEN_SYMBOL = (env.ETHEREUM_TOKEN_SYMBOL ?? 'VDX').toUpperCase()
 
 export function buildWithdrawalTransferPlan(input: {
   asset: string
@@ -154,30 +159,48 @@ export function buildWithdrawalTransferPlan(input: {
     destinationAddress: input.destinationAddress,
     chain: input.chain,
   })
-  const chain = resolved.chain
-    ?? (resolved.detectedWalletType === 'solana' ? 'solana'
-      : resolved.detectedWalletType === 'ethereum' ? 'ethereum'
-      : resolved.detectedWalletType === 'bitcoin' ? 'bitcoin'
-      : asset === 'SOL' ? 'solana'
-      : asset === 'ETH' ? 'ethereum'
-      : asset === 'BNB' ? 'bsc'
-      : asset === 'BTC' ? 'bitcoin'
-      : 'bitcoin')
+  const chain =
+    resolved.chain ??
+    (resolved.detectedWalletType === 'solana'
+      ? 'solana'
+      : resolved.detectedWalletType === 'ethereum'
+        ? 'ethereum'
+        : resolved.detectedWalletType === 'bitcoin'
+          ? 'bitcoin'
+          : asset === 'SOL'
+            ? 'solana'
+            : asset === 'ETH'
+              ? 'ethereum'
+              : asset === 'BNB'
+                ? 'bsc'
+                : asset === 'BTC'
+                  ? 'bitcoin'
+                  : 'bitcoin')
 
   const useBnbContract = asset === 'BNB' && chain === 'bsc' && Boolean(BNB_TOKEN_CONTRACT)
-  const isNative = asset === 'SOL' || asset === 'ETH' || asset === 'BTC' || (asset === 'BNB' && !useBnbContract)
-  const tokenAddress = input.tokenAddress || (
-    asset === 'USDC' && chain === 'solana'   ? SOLANA_USDC_MINT :
-    asset === 'USDC' && chain === 'ethereum' ? ETHEREUM_USDC_CONTRACT :
-    asset === 'USDC' && chain === 'bsc'      ? BSC_USDC_CONTRACT :
-    asset === 'USDT' && chain === 'solana'   ? SOLANA_USDT_MINT :
-    asset === 'USDT' && chain === 'ethereum' ? ETHEREUM_USDT_CONTRACT :
-    asset === 'USDT' && chain === 'bsc'      ? BSC_USDT_CONTRACT :
-    asset === 'BNB' && chain === 'bsc' && BNB_TOKEN_CONTRACT ? BNB_TOKEN_CONTRACT :
-    asset === CUSTOM_TOKEN_SYMBOL && chain === 'ethereum' && ETHEREUM_CUSTOM_TOKEN ? ETHEREUM_CUSTOM_TOKEN :
-    asset === CUSTOM_TOKEN_SYMBOL && chain === 'bsc'      && BSC_CUSTOM_TOKEN      ? BSC_CUSTOM_TOKEN :
-    undefined
-  )
+  const isNative =
+    asset === 'SOL' || asset === 'ETH' || asset === 'BTC' || (asset === 'BNB' && !useBnbContract)
+  const tokenAddress =
+    input.tokenAddress ||
+    (asset === 'USDC' && chain === 'solana'
+      ? SOLANA_USDC_MINT
+      : asset === 'USDC' && chain === 'ethereum'
+        ? ETHEREUM_USDC_CONTRACT
+        : asset === 'USDC' && chain === 'bsc'
+          ? BSC_USDC_CONTRACT
+          : asset === 'USDT' && chain === 'solana'
+            ? SOLANA_USDT_MINT
+            : asset === 'USDT' && chain === 'ethereum'
+              ? ETHEREUM_USDT_CONTRACT
+              : asset === 'USDT' && chain === 'bsc'
+                ? BSC_USDT_CONTRACT
+                : asset === 'BNB' && chain === 'bsc' && BNB_TOKEN_CONTRACT
+                  ? BNB_TOKEN_CONTRACT
+                  : asset === CUSTOM_TOKEN_SYMBOL && chain === 'ethereum' && ETHEREUM_CUSTOM_TOKEN
+                    ? ETHEREUM_CUSTOM_TOKEN
+                    : asset === CUSTOM_TOKEN_SYMBOL && chain === 'bsc' && BSC_CUSTOM_TOKEN
+                      ? BSC_CUSTOM_TOKEN
+                      : undefined)
 
   return {
     chain,
@@ -190,26 +213,66 @@ export function buildWithdrawalTransferPlan(input: {
   }
 }
 
-async function getSolanaWalletRuntime() {
-  const splToken = await import('@solana/spl-token')
-  const web3 = await import('@solana/web3.js')
+/**
+ * Load Solana web3 + SPL token helpers at runtime.
+ * Use `any` for @solana/spl-token so TypeScript does not fail on older
+ * package type defs while we depend on modern ATA helper exports.
+ */
+async function getSolanaWalletRuntime(): Promise<{
+  Connection: any
+  Keypair: any
+  PublicKey: any
+  SystemProgram: any
+  Transaction: any
+  LAMPORTS_PER_SOL: number
+  sendAndConfirmTransaction: any
+  clusterApiUrl: any
+  createAssociatedTokenAccountInstruction: any
+  createTransferCheckedInstruction: any
+  getAssociatedTokenAddress: any
+  getMint: any
+}> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const splToken: any = await import('@solana/spl-token')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const web3: any = await import('@solana/web3.js')
 
-  const splTokenModule = splToken.default || splToken
-  const web3Module = web3.default || web3
+  const spl = splToken?.default ?? splToken
+  const w3 = web3?.default ?? web3
+
+  const createAssociatedTokenAccountInstruction =
+    spl.createAssociatedTokenAccountInstruction ??
+    splToken.createAssociatedTokenAccountInstruction
+  const createTransferCheckedInstruction =
+    spl.createTransferCheckedInstruction ?? splToken.createTransferCheckedInstruction
+  const getAssociatedTokenAddress =
+    spl.getAssociatedTokenAddress ?? splToken.getAssociatedTokenAddress
+  const getMint = spl.getMint ?? splToken.getMint
+
+  if (
+    !createAssociatedTokenAccountInstruction ||
+    !createTransferCheckedInstruction ||
+    !getAssociatedTokenAddress ||
+    !getMint
+  ) {
+    throw new Error(
+      'Installed @solana/spl-token is missing ATA helpers. Upgrade to @solana/spl-token >= 0.3.',
+    )
+  }
 
   return {
-    Connection: web3Module.Connection,
-    Keypair: web3Module.Keypair,
-    PublicKey: web3Module.PublicKey,
-    SystemProgram: web3Module.SystemProgram,
-    Transaction: web3Module.Transaction,
-    LAMPORTS_PER_SOL: web3Module.LAMPORTS_PER_SOL,
-    sendAndConfirmTransaction: web3Module.sendAndConfirmTransaction,
-    clusterApiUrl: web3Module.clusterApiUrl,
-    createAssociatedTokenAccountInstruction: splTokenModule.createAssociatedTokenAccountInstruction || (splToken as any).createAssociatedTokenAccountInstruction,
-    createTransferCheckedInstruction: splTokenModule.createTransferCheckedInstruction || (splToken as any).createTransferCheckedInstruction,
-    getAssociatedTokenAddress: splTokenModule.getAssociatedTokenAddress || (splToken as any).getAssociatedTokenAddress,
-    getMint: splTokenModule.getMint || (splToken as any).getMint,
+    Connection: w3.Connection,
+    Keypair: w3.Keypair,
+    PublicKey: w3.PublicKey,
+    SystemProgram: w3.SystemProgram,
+    Transaction: w3.Transaction,
+    LAMPORTS_PER_SOL: w3.LAMPORTS_PER_SOL,
+    sendAndConfirmTransaction: w3.sendAndConfirmTransaction,
+    clusterApiUrl: w3.clusterApiUrl,
+    createAssociatedTokenAccountInstruction,
+    createTransferCheckedInstruction,
+    getAssociatedTokenAddress,
+    getMint,
   }
 }
 
@@ -240,7 +303,20 @@ async function executeSolanaWithdrawal(plan: WithdrawalTransferPlan): Promise<Wi
 
   try {
     const runtime = await getSolanaWalletRuntime()
-    const { Connection, Keypair, PublicKey, SystemProgram, Transaction, LAMPORTS_PER_SOL, sendAndConfirmTransaction, clusterApiUrl, createAssociatedTokenAccountInstruction, createTransferCheckedInstruction, getAssociatedTokenAddress, getMint } = runtime
+    const {
+      Connection,
+      Keypair,
+      PublicKey,
+      SystemProgram,
+      Transaction,
+      LAMPORTS_PER_SOL,
+      sendAndConfirmTransaction,
+      clusterApiUrl,
+      createAssociatedTokenAccountInstruction,
+      createTransferCheckedInstruction,
+      getAssociatedTokenAddress,
+      getMint,
+    } = runtime
 
     const connection = new Connection(env.SOLANA_RPC_ENDPOINT || clusterApiUrl('mainnet-beta'), 'confirmed')
     const signer = Keypair.fromSecretKey(Uint8Array.from(Buffer.from(privateKey.trim(), 'base64')))
@@ -303,7 +379,9 @@ async function executeSolanaWithdrawal(plan: WithdrawalTransferPlan): Promise<Wi
       )
     }
 
-    const signature = await sendAndConfirmTransaction(connection, tx, [signer], { commitment: 'confirmed' })
+    const signature = await sendAndConfirmTransaction(connection, tx, [signer], {
+      commitment: 'confirmed',
+    })
     return {
       status: 'completed',
       txHash: signature,
@@ -317,30 +395,40 @@ async function executeSolanaWithdrawal(plan: WithdrawalTransferPlan): Promise<Wi
   }
 }
 
-async function executeBitcoinWithdrawal(plan: WithdrawalTransferPlan): Promise<WithdrawalTransferResult> {
+async function executeBitcoinWithdrawal(
+  _plan: WithdrawalTransferPlan,
+): Promise<WithdrawalTransferResult> {
   const enabled = env.BTC_WITHDRAWAL_ENABLED
   if (!enabled) {
     return {
       status: 'pending',
-      message: 'Bitcoin withdrawal is not configured on this server. Your request has been queued for manual processing by an administrator.',
+      message:
+        'Bitcoin withdrawal is not configured on this server. Your request has been queued for manual processing by an administrator.',
     }
   }
 
   return {
     status: 'pending',
-    message: 'Bitcoin withdrawals require manual processing. An administrator will review and process your request.',
+    message:
+      'Bitcoin withdrawals require manual processing. An administrator will review and process your request.',
   }
 }
 
-async function executeEthereumWithdrawal(plan: WithdrawalTransferPlan): Promise<WithdrawalTransferResult> {
+async function executeEthereumWithdrawal(
+  plan: WithdrawalTransferPlan,
+): Promise<WithdrawalTransferResult> {
   const chainKey = plan.chain === 'bsc' ? 'BSC' : 'ETHEREUM'
-  const privateKey = env[`${chainKey}_WITHDRAWAL_PRIVATE_KEY` as keyof typeof env] as string | undefined
+  const privateKey = env[`${chainKey}_WITHDRAWAL_PRIVATE_KEY` as keyof typeof env] as
+    | string
+    | undefined
   if (!privateKey) {
     return buildTemporaryFundingTransferResult(plan)
   }
 
   const paymasterPolicyId = env.ALCHEMY_PAYMASTER_POLICY_ID
-  const rpcUrl = env[`${chainKey}_RPC_ENDPOINT` as keyof typeof env] as string | undefined || (chainKey === 'ETHEREUM' ? 'https://ethereum.publicnode.com' : undefined)
+  const rpcUrl =
+    (env[`${chainKey}_RPC_ENDPOINT` as keyof typeof env] as string | undefined) ||
+    (chainKey === 'ETHEREUM' ? 'https://ethereum.publicnode.com' : undefined)
   if (!rpcUrl) {
     return {
       status: 'pending',
@@ -361,7 +449,14 @@ async function executeEthereumWithdrawal(plan: WithdrawalTransferPlan): Promise<
         : {
             to: plan.tokenAddress as string,
             value: '0x0',
-            data: new Contract(plan.tokenAddress as string, ['function transfer(address,uint256) returns (bool)'], wallet).interface.encodeFunctionData('transfer', [plan.destinationAddress, parseUnits(plan.amount.toString(), plan.decimals ?? 18)]),
+            data: new Contract(
+              plan.tokenAddress as string,
+              ['function transfer(address,uint256) returns (bool)'],
+              wallet,
+            ).interface.encodeFunctionData('transfer', [
+              plan.destinationAddress,
+              parseUnits(plan.amount.toString(), plan.decimals ?? 18),
+            ]),
           }
 
       const preparePayload = {
@@ -411,16 +506,19 @@ async function executeEthereumWithdrawal(plan: WithdrawalTransferPlan): Promise<
     } catch (error) {
       return {
         status: 'pending',
-        message: error instanceof Error ? error.message : `${plan.chain === 'bsc' ? 'BSC' : 'Ethereum'} withdrawal failed via Alchemy Wallet API`,
+        message:
+          error instanceof Error
+            ? error.message
+            : `${plan.chain === 'bsc' ? 'BSC' : 'Ethereum'} withdrawal failed via Alchemy Wallet API`,
       }
     }
   }
 
   try {
-    const wallet = new Wallet(privateKey, provider)
+    const wallet2 = new Wallet(privateKey, provider)
 
     if (plan.isNative) {
-      const tx = await wallet.sendTransaction({
+      const tx = await wallet2.sendTransaction({
         to: plan.destinationAddress,
         value: BigInt(Math.round(plan.amount * 1_000_000_000_000_000_000)),
       })
@@ -439,9 +537,18 @@ async function executeEthereumWithdrawal(plan: WithdrawalTransferPlan): Promise<
       }
     }
 
-    const contract = new Contract(plan.tokenAddress as string, ['function transfer(address,uint256) returns (bool)'], wallet)
+    const contract = new Contract(
+      plan.tokenAddress as string,
+      ['function transfer(address,uint256) returns (bool)'],
+      wallet2,
+    )
     const value = parseUnits(plan.amount.toString(), plan.decimals ?? 18)
-    const tx = await (contract['transfer'] as (to: string, amount: bigint) => Promise<{ hash: string; wait: () => Promise<unknown> }>)(plan.destinationAddress, value)
+    const tx = await (
+      contract['transfer'] as (
+        to: string,
+        amount: bigint,
+      ) => Promise<{ hash: string; wait: () => Promise<unknown> }>
+    )(plan.destinationAddress, value)
     await tx.wait()
 
     return {
@@ -452,7 +559,10 @@ async function executeEthereumWithdrawal(plan: WithdrawalTransferPlan): Promise<
   } catch (error) {
     return {
       status: 'pending',
-      message: error instanceof Error ? error.message : `${plan.chain === 'bsc' ? 'BSC' : 'Ethereum'} withdrawal failed`,
+      message:
+        error instanceof Error
+          ? error.message
+          : `${plan.chain === 'bsc' ? 'BSC' : 'Ethereum'} withdrawal failed`,
     }
   }
 }
