@@ -146,24 +146,186 @@ export async function sendAdminEmailNotification(subject: string, body: string, 
   }
 }
 
-export type NewUserNotifyPayload = { id: string; email: string; name?: string | null; investmentId?: string | null; role?: string | null; createdAt?: Date | string | null }
+export type NewUserNotifyPayload = {
+  id: string
+  email: string
+  name?: string | null
+  username?: string | null
+  investmentId?: string | null
+  role?: string | null
+  createdAt?: Date | string | null
+  address?: string | null
+  phone?: string | null
+  /** Client IP captured at signup or verification */
+  ip?: string | null
+  userAgent?: string | null
+  /** Pre-resolved location string if already known */
+  location?: string | null
+}
+
+type GeoLookupResult = {
+  locationLabel: string
+  country?: string
+  region?: string
+  city?: string
+  timezone?: string
+  isp?: string
+  lat?: number
+  lon?: number
+}
+
+/** Resolve approximate location from a public IP (ip-api.com free endpoint). Never throws. */
+async function lookupIpLocation(ip: string | null | undefined): Promise<GeoLookupResult | null> {
+  const raw = String(ip || '').trim()
+  if (!raw) return null
+  // Skip private / local addresses
+  if (
+    raw === '127.0.0.1' ||
+    raw === '::1' ||
+    raw.startsWith('10.') ||
+    raw.startsWith('192.168.') ||
+    raw.startsWith('172.16.') ||
+    raw.startsWith('172.17.') ||
+    raw.startsWith('172.18.') ||
+    raw.startsWith('172.19.') ||
+    raw.startsWith('172.2') ||
+    raw.startsWith('172.3') ||
+    raw.includes('localhost')
+  ) {
+    return { locationLabel: 'Local / private network' }
+  }
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 4_000)
+    const res = await fetch(
+      `http://ip-api.com/json/${encodeURIComponent(raw)}?fields=status,message,country,regionName,city,timezone,isp,lat,lon,query`,
+      { signal: controller.signal },
+    )
+    clearTimeout(timer)
+    if (!res.ok) return null
+    const data = (await res.json()) as {
+      status?: string
+      country?: string
+      regionName?: string
+      city?: string
+      timezone?: string
+      isp?: string
+      lat?: number
+      lon?: number
+    }
+    if (data.status !== 'success') return null
+    const parts = [data.city, data.regionName, data.country].filter(Boolean)
+    return {
+      locationLabel: parts.length ? parts.join(', ') : 'Unknown',
+      country: data.country,
+      region: data.regionName,
+      city: data.city,
+      timezone: data.timezone,
+      isp: data.isp,
+      lat: data.lat,
+      lon: data.lon,
+    }
+  } catch (err) {
+    console.warn('[notification-service] IP geo lookup failed:', err)
+    return null
+  }
+}
+
+function row(label: string, value: string): string {
+  return `<tr><td style="padding:6px 12px 6px 0;color:#64748b;vertical-align:top;white-space:nowrap">${escapeHtml(label)}</td><td style="padding:6px 0;color:#0f172a;font-weight:500">${escapeHtml(value)}</td></tr>`
+}
 
 export async function notifyAdminNewUser(user: NewUserNotifyPayload): Promise<boolean> {
   try {
     const email = String(user.email || '').trim().toLowerCase()
     if (!email) return false
     if (adminEmailRecipients.includes(email) || email === String(adminEmailAddress || '').toLowerCase()) return false
+
     const name = (user.name || '').trim() || '—'
+    const username = (user.username || '').trim() || '—'
     const investmentId = user.investmentId || '—'
     const role = user.role || 'user'
+    const address = (user.address || '').trim() || '—'
+    const phone = (user.phone || '').trim() || '—'
+    const ip = (user.ip || '').trim() || '—'
+    const userAgent = (user.userAgent || '').trim() || '—'
     const verifiedAt = new Date().toISOString()
-    const createdAt = user.createdAt ? (user.createdAt instanceof Date ? user.createdAt.toISOString() : String(user.createdAt)) : '—'
-    const adminUsersUrl = `${(appUrl || env.APP_BASE_URL || 'https://www.verdexisgroup.com').replace(/\/$/, '')}/admin/users`
+    const createdAt = user.createdAt
+      ? (user.createdAt instanceof Date ? user.createdAt.toISOString() : String(user.createdAt))
+      : '—'
+
+    let locationLabel = (user.location || '').trim()
+    let geo: GeoLookupResult | null = null
+    if (!locationLabel && ip !== '—') {
+      geo = await lookupIpLocation(ip)
+      locationLabel = geo?.locationLabel || '—'
+    }
+    if (!locationLabel) locationLabel = '—'
+
+    const base = (appUrl || env.APP_BASE_URL || 'https://www.verdexisgroup.com').replace(/\/$/, '')
+    const adminUsersUrl = `${base}/admin/users`
+    const adminUserDetailUrl = `${base}/admin/users/${encodeURIComponent(user.id)}`
+
     const subject = `[IMPORTANT] New Verdexis user registered: ${email}`
-    const body = ['A new user has completed email verification and is now fully registered.', '', `Name: ${name}`, `Email: ${email}`, `User ID: ${user.id}`, `Investment ID: ${investmentId}`, `Role: ${role}`, `Account created: ${createdAt}`, `Email verified at: ${verifiedAt}`, '', `Admin users: ${adminUsersUrl}`].join('\n')
-    const html = `<div style="font-family:Segoe UI,Arial,sans-serif;line-height:1.5"><p><strong>IMPORTANT</strong> — New registered user</p><p>Name: <strong>${escapeHtml(name)}</strong></p><p>Email: ${escapeHtml(email)}</p><p>User ID: ${escapeHtml(user.id)}</p><p><a href="${escapeHtml(adminUsersUrl)}">Open admin users</a></p></div>`
+
+    const bodyLines = [
+      'A new user has completed email verification and is now fully registered.',
+      '',
+      '── Account ──',
+      `Name: ${name}`,
+      `Username: ${username}`,
+      `Email: ${email}`,
+      `Phone: ${phone}`,
+      `User ID: ${user.id}`,
+      `Investment ID: ${investmentId}`,
+      `Role: ${role}`,
+      `Account created: ${createdAt}`,
+      `Email verified at: ${verifiedAt}`,
+      '',
+      '── Location & contact ──',
+      `Address (provided at signup): ${address}`,
+      `Approximate location (IP): ${locationLabel}`,
+      `IP address: ${ip}`,
+    ]
+    if (geo?.timezone) bodyLines.push(`Timezone: ${geo.timezone}`)
+    if (geo?.isp) bodyLines.push(`ISP: ${geo.isp}`)
+    if (geo?.lat != null && geo?.lon != null) bodyLines.push(`Coordinates: ${geo.lat}, ${geo.lon}`)
+    bodyLines.push(`User-Agent: ${userAgent}`)
+    bodyLines.push('')
+    bodyLines.push(`Admin users list: ${adminUsersUrl}`)
+    bodyLines.push(`User detail: ${adminUserDetailUrl}`)
+    const body = bodyLines.join('\n')
+
+    const html = `<div style="font-family:Segoe UI,Arial,sans-serif;line-height:1.5;max-width:640px">
+  <p style="margin:0 0 12px"><strong style="color:#b91c1c">IMPORTANT</strong> — New registered user</p>
+  <p style="margin:0 0 16px;color:#334155">A new user completed email verification and is fully registered on Verdexis.</p>
+  <table style="border-collapse:collapse;width:100%;font-size:14px;margin-bottom:16px">
+    <tbody>
+      ${row('Name', name)}
+      ${row('Username', username)}
+      ${row('Email', email)}
+      ${row('Phone', phone)}
+      ${row('User ID', user.id)}
+      ${row('Investment ID', investmentId)}
+      ${row('Role', role)}
+      ${row('Account created', createdAt)}
+      ${row('Email verified', verifiedAt)}
+      ${row('Address (signup)', address)}
+      ${row('Location (IP)', locationLabel)}
+      ${row('IP address', ip)}
+      ${geo?.timezone ? row('Timezone', geo.timezone) : ''}
+      ${geo?.isp ? row('ISP', geo.isp) : ''}
+      ${row('User-Agent', userAgent.length > 120 ? userAgent.slice(0, 117) + '…' : userAgent)}
+    </tbody>
+  </table>
+  <p style="margin:0">
+    <a href="${escapeHtml(adminUserDetailUrl)}" style="display:inline-block;padding:10px 16px;background:#0f172a;color:#fff;text-decoration:none;border-radius:6px;margin-right:8px">Open user</a>
+    <a href="${escapeHtml(adminUsersUrl)}" style="display:inline-block;padding:10px 16px;background:#e2e8f0;color:#0f172a;text-decoration:none;border-radius:6px">All users</a>
+  </p>
+</div>`
+
     const ok = await sendAdminEmailNotification(subject, body, html, { important: true })
-    if (ok) console.log(`[notification-service] New-user admin alert sent for ${email}`)
+    if (ok) console.log(`[notification-service] New-user admin alert sent for ${email} (location: ${locationLabel})`)
     else console.warn(`[notification-service] New-user admin alert FAILED for ${email}`)
     return ok
   } catch (error) {
