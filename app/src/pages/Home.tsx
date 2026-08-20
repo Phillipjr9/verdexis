@@ -300,18 +300,22 @@ export default function Home() {
             <p className="text-[#A0A0A0] max-w-lg mx-auto">Wallets and market context on the go.</p>
           </div>
           <div className="flex justify-center">
-            <div
-              className="relative w-full max-w-[280px] sm:max-w-[320px] rounded-[2rem] overflow-hidden border border-[#ffffff12] shadow-[0_24px_80px_rgba(0,0,0,0.45)]"
-              style={{
-                background:
-                  'radial-gradient(ellipse at 50% 20%, rgba(12,139,68,0.18) 0%, rgba(15,22,25,0.95) 55%, rgba(10,15,17,1) 100%)',
-              }}
-            >
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#0C8B44]/10 via-transparent to-transparent" />
+            <div className="relative w-full max-w-[360px] sm:max-w-[440px] md:max-w-[520px]">
+              <div
+                className="pointer-events-none absolute left-1/2 top-1/2 -z-0 h-[70%] w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl opacity-40"
+                style={{
+                  background:
+                    'radial-gradient(ellipse at center, rgba(12,139,68,0.35) 0%, transparent 70%)',
+                }}
+              />
               <img
-                src="https://litter.catbox.moe/02h5s4.webp"
+                src="https://litter.catbox.moe/zeq00v.webp"
                 alt="Verdexis mobile app in hand"
-                className="relative z-[1] w-full h-auto object-contain object-center bg-transparent"
+                width={720}
+                height={732}
+                loading="lazy"
+                decoding="async"
+                className="relative z-[1] w-full h-auto object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.45)]"
               />
             </div>
           </div>
