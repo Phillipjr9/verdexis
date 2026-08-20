@@ -26,6 +26,8 @@ export default function TopMovers({ data }: { data: CryptoQuote[] }) {
             src={icon}
             alt={c.name}
             className="w-9 h-9 rounded-full object-cover shrink-0"
+            loading="lazy"
+            decoding="async"
             onError={cryptoIconErrorFallback((c.symbol || c.id || '?')[0]?.toUpperCase() || '?', c.id)}
           />
         ) : (
