@@ -34,8 +34,8 @@ export default function AdminDashboard() {
         setPendingReviewCount(reviewResult.reviews.length)
         setStatsError(null)
         try {
-          const w = await api.get('/api/wallet')
-          const usd = w.balances?.find((b: any) => b.currency === 'USD')
+          const w = await api.get('/api/wallet') as { balances?: Array<{ currency: string; balance: number }> }
+          const usd = w.balances?.find((b) => b.currency === 'USD')
           if (usd) setTreasuryBalance(usd.balance)
         } catch (e) {
           console.warn('Treasury balance load failed:', e)
@@ -64,8 +64,8 @@ export default function AdminDashboard() {
       toast.success(result.message)
       setTreasuryBalance(result.balance)
     } catch (error: unknown) {
-      const message = typeof error === 'object' && error !== null && 'error' in error ? (error as any).error : 'Failed to seed treasury'
-      toast.error(message)
+      const message = typeof error === 'object' && error !== null && 'error' in error ? (error as { error?: string }).error : 'Failed to seed treasury'
+      toast.error(message || 'Failed to seed treasury')
     } finally {
       setSeedLoading(false)
     }
@@ -88,12 +88,15 @@ export default function AdminDashboard() {
 
   const recentSignups = stats?.recentSignups ?? []
   const recentTx = stats?.recentTx ?? []
+  const treasuryLabel =
+    treasuryBalance !== null
+      ? `$${treasuryBalance.toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+      : '—'
 
   return (
     <div className="min-h-screen bg-[#070C0E]">
       <Navigation />
       <div className="max-w-[1600px] mx-auto px-6 py-8">
-        {/* Header Section */}
         <div className="mb-8">
           <div className="flex items-end justify-between mb-6">
             <div>
@@ -151,7 +154,6 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {/* Admin Console Summary */}
           <div className="rounded-2xl bg-[#0f1619]/60 border border-[#ffffff0d] p-6 mb-8">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
@@ -160,26 +162,7 @@ export default function AdminDashboard() {
               </div>
               <div className="rounded-2xl bg-[#0C8B44]/10 border border-[#0C8B44]/20 px-5 py-4">
                 <p className="text-xs uppercase tracking-[0.3em] text-[#A0A0A0]">Treasury</p>
-                <p className="text-3xl font-light text-[#0C8B44]">$999,999,993,615.3</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mt-6">
-              <div className="rounded-2xl bg-[#121a1f]/90 border border-[#ffffff08] p-5">
-                <p className="text-xs uppercase tracking-[0.25em] text-[#737373] mb-3">Send funds to user</p>
-                <div className="rounded-2xl bg-[#0C8B44]/10 border border-[#0C8B44]/20 p-4 text-sm text-[#E5E5E5]">RECIPIENT</div>
-              </div>
-              <div className="rounded-2xl bg-[#121a1f]/90 border border-[#ffffff08] p-5">
-                <p className="text-xs uppercase tracking-[0.25em] text-[#737373] mb-3">Withdraw from user</p>
-                <div className="rounded-2xl bg-[#FF9800]/10 border border-[#FF9800]/20 p-4 text-sm text-[#E5E5E5]">USER</div>
-              </div>
-              <div className="rounded-2xl bg-[#121a1f]/90 border border-[#ffffff08] p-5">
-                <p className="text-xs uppercase tracking-[0.25em] text-[#737373] mb-3">Governance</p>
-                <p className="text-sm text-[#A0A0A0]">Platform settings now live in the dedicated admin settings page.</p>
-              </div>
-              <div className="rounded-2xl bg-[#121a1f]/90 border border-[#ffffff08] p-5">
-                <p className="text-xs uppercase tracking-[0.25em] text-[#737373] mb-3">Total Net Worth</p>
-                <p className="text-2xl font-light text-[#E5E5E5]">$999,999,993,615.3</p>
+                <p className="text-3xl font-light text-[#0C8B44]">{treasuryLabel}</p>
               </div>
             </div>
 
@@ -214,27 +197,8 @@ export default function AdminDashboard() {
                 }))}
               />
             </div>
-
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mt-6">
-              <DashboardPanel
-                title="Pending deposit approvals"
-                subtitle=""
-                emptyText={statValues.pendingDeposits > 0 ? `There are ${statValues.pendingDeposits} pending deposit requests.` : 'No pending deposit requests. New user deposits will appear here for approval before they affect balances.'}
-              />
-              <DashboardPanel
-                title="On-chain deposit approvals"
-                subtitle=""
-                emptyText="Deposits initiated from a user’s connected self-custody wallet (MetaMask / WalletConnect / etc.) to the admin treasury address. Click the tx hash to verify on-chain, then approve to credit the user. No on-chain deposits awaiting verification."
-              />
-              <DashboardPanel
-                title="Pending withdrawal payouts"
-                subtitle=""
-                emptyText="Crypto withdrawal requests queued for manual payout. Send the funds to the user’s wallet address, then click Approve and paste the tx hash. No pending withdrawal requests."
-              />
-            </div>
           </div>
 
-          {/* Key Metrics Bar */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
             <MetricBadge icon={<Users className="w-4 h-4" />} label="Users" value={formatCompactNumber(statValues.users)} trend={`+${statValues.signups24h}`} color="green" />
             <MetricBadge icon={<ShieldCheck className="w-4 h-4" />} label="Admins" value={formatCompactNumber(statValues.admins)} trend="live" color="blue" />
@@ -245,7 +209,6 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Quick Actions & Operations */}
         <div className="grid grid-cols-1 xl:grid-cols-[1.25fr_0.75fr] gap-6 mb-8">
           <div className="space-y-6">
             <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
@@ -285,7 +248,7 @@ export default function AdminDashboard() {
                 <h3 className="text-sm font-semibold text-[#E5E5E5]">Admin Treasury</h3>
                 <Banknote className="w-5 h-5 text-[#0C8B44]" />
               </div>
-              <p className="text-3xl font-light text-[#0C8B44] mb-4">${treasuryBalance !== null ? treasuryBalance.toLocaleString('en-US') : '1.2M'}</p>
+              <p className="text-3xl font-light text-[#0C8B44] mb-4">{treasuryLabel}</p>
               <button
                 onClick={handleSeedTreasury}
                 disabled={seedLoading}
@@ -310,48 +273,38 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Pending Actions Section */}
+        {/* Live counts — no demo data */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
           <PendingSection
             title="Pending Deposits"
             icon={<Banknote className="w-4 h-4" />}
-            count={12}
+            count={statValues.pendingDeposits}
             color="orange"
-            items={[
-              { user: 'John Doe', amount: '$5,000', time: '2m ago' },
-              { user: 'Jane Smith', amount: '$3,500', time: '15m ago' },
-              { user: 'Bob Johnson', amount: '$2,200', time: '1h ago' },
-            ]}
+            emptyHint="No pending deposits. Approvals appear in the queue below."
             link="/admin/deposits"
           />
           <PendingSection
             title="KYC Pending"
             icon={<FileCheck2 className="w-4 h-4" />}
-            count={23}
+            count={statValues.kycPending}
             color="orange"
-            items={[
-              { user: 'Alice Brown', amount: 'Pending', time: '3h ago' },
-              { user: 'Charlie Davis', amount: 'Pending', time: '5h ago' },
-              { user: 'Diana Wilson', amount: 'Pending', time: '1d ago' },
-            ]}
+            emptyHint="No KYC reviews waiting."
             link="/admin/users?kycStatus=pending"
           />
           <PendingSection
             title="Accounts on Hold"
             icon={<Lock className="w-4 h-4" />}
-            count={5}
+            count={statValues.holds}
             color="red"
-            items={[
-              { user: 'Eve Martinez', amount: 'Hold', time: '2d ago' },
-              { user: 'Frank Garcia', amount: 'Hold', time: '3d ago' },
-              { user: 'Grace Lee', amount: 'Hold', time: '5d ago' },
-            ]}
-            link="/admin/users?hold=true"
+            emptyHint="No accounts currently on hold."
+            link="/admin/users"
           />
         </div>
 
-        {/* Recent Activity Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* Live approval queues */}
+        <AdminConsoleContent />
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8 mt-8">
           <ActivityCard
             title="Recent Signups"
             icon={<UserPlus className="w-4 h-4" />}
@@ -374,7 +327,6 @@ export default function AdminDashboard() {
           />
         </div>
 
-        {/* All Operations Grid */}
         <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
           <h2 className="text-sm font-semibold text-[#E5E5E5] mb-6 flex items-center gap-2">
             <Cog className="w-4 h-4 text-[#737373]" />
@@ -411,7 +363,7 @@ function MetricBadge({ icon, label, value, trend, color }: { icon: ReactNode; la
         <span className="text-[10px] uppercase tracking-wider text-[#737373]">{label}</span>
       </div>
       <p className="text-lg font-light text-[#E5E5E5]">{value}</p>
-      <p className={`text-xs mt-1 ${textColor}`}>{trend}</p>
+      {trend ? <p className={`text-xs mt-1 ${textColor}`}>{trend}</p> : null}
     </div>
   )
 }
@@ -439,7 +391,21 @@ function StatusItem({ label, status }: { label: string; status: 'healthy' | 'war
   )
 }
 
-function PendingSection({ title, icon, count, color, items, link }: { title: string; icon?: ReactNode; count: number; color: 'orange' | 'red'; items: Array<{ user: string; amount: string; time: string }>; link: string }) {
+function PendingSection({
+  title,
+  icon,
+  count,
+  color,
+  emptyHint,
+  link,
+}: {
+  title: string
+  icon?: ReactNode
+  count: number
+  color: 'orange' | 'red'
+  emptyHint: string
+  link: string
+}) {
   const bgColor = color === 'orange' ? 'bg-[#FF9800]/10 border-[#FF9800]/30' : 'bg-[#f44336]/10 border-[#f44336]/30'
   const textColor = color === 'orange' ? 'text-[#FF9800]' : 'text-[#f44336]'
   const iconDisplay = icon ?? (color === 'orange' ? <Hourglass className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />)
@@ -450,19 +416,11 @@ function PendingSection({ title, icon, count, color, items, link }: { title: str
           {iconDisplay}
           {title}
         </h3>
-        <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${textColor} bg-opacity-20 bg-current`}>{count}</span>
+        <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${textColor}`}>{count}</span>
       </div>
-      <div className="space-y-3">
-        {items.map((item, i) => (
-          <div key={`adm-row-${i}`} className="flex items-center justify-between py-2 border-t border-[#ffffff05]">
-            <div className="min-w-0">
-              <p className="text-sm text-[#E5E5E5] truncate">{item.user}</p>
-              <p className="text-xs text-[#737373]">{item.time}</p>
-            </div>
-            <p className="text-sm font-medium text-[#A0A0A0]">{item.amount}</p>
-          </div>
-        ))}
-      </div>
+      <p className="text-sm text-[#A0A0A0]">
+        {count > 0 ? `${count} item${count === 1 ? '' : 's'} need attention. Open to review.` : emptyHint}
+      </p>
     </Link>
   )
 }
@@ -511,6 +469,7 @@ function ActivityCard({ title, icon, items }: { title: string; icon: ReactNode; 
         {title}
       </h3>
       <div className="space-y-3">
+        {items.length === 0 && <p className="text-xs text-[#737373]">No recent activity.</p>}
         {items.map((item, i) => (
           <div key={`adm-row2-${i}`} className="flex items-center justify-between py-3 border-b border-[#ffffff05] last:border-0">
             <div className="min-w-0">
@@ -644,7 +603,7 @@ export function AdminConsoleContent({ onPendingDepositsLoaded }: { onPendingDepo
     }
   }
 
-  async function handleApproveOnchain(d: typeof onchain[number]) {
+  async function handleApproveOnchain(d: (typeof onchain)[number]) {
     const currencyInput = window.prompt(
       `Credit user as which currency?\n(Default: ${d.asset}. Type USD to credit cash equivalent instead.)`,
       d.asset,
@@ -673,7 +632,7 @@ export function AdminConsoleContent({ onPendingDepositsLoaded }: { onPendingDepo
     }
   }
 
-  async function handleRejectOnchain(d: typeof onchain[number]) {
+  async function handleRejectOnchain(d: (typeof onchain)[number]) {
     const note = window.prompt('Reason for rejection (shown to user)?', '') || ''
     setBusyOnchain(d.id)
     try {
@@ -718,7 +677,6 @@ export function AdminConsoleContent({ onPendingDepositsLoaded }: { onPendingDepo
 
   return (
     <>
-      {/* Pending Deposits Section */}
       <section className="mt-8 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-medium text-[#E5E5E5] flex items-center gap-2">
@@ -738,9 +696,7 @@ export function AdminConsoleContent({ onPendingDepositsLoaded }: { onPendingDepo
             {pendingDeposits.map((d) => (
               <div key={d.id} className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-[#1a1a1a]/50 border border-[#ffffff05]">
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm text-[#E5E5E5]">{d.user.name} <span className="text-[#737373]">·</span> <span className="text-[11px] text-[#737373]">{d.user.email}</span></p>
-                  </div>
+                  <p className="text-sm text-[#E5E5E5]">{d.user.name} <span className="text-[#737373]">·</span> <span className="text-[11px] text-[#737373]">{d.user.email}</span></p>
                   <p className="text-[11px] text-[#737373] truncate">{d.reference || 'No reference'}</p>
                 </div>
                 <div className="text-right">
