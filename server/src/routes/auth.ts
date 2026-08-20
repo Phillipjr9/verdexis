@@ -87,6 +87,32 @@ function buildPendingVerificationPayload(opts: {
   }
 }
 
+function clientIp(req: Request): string | null {
+  const forwarded = req.headers['x-forwarded-for']
+  if (typeof forwarded === 'string' && forwarded.trim()) {
+    return forwarded.split(',')[0]?.trim() || null
+  }
+  if (Array.isArray(forwarded) && forwarded[0]) {
+    return String(forwarded[0]).split(',')[0]?.trim() || null
+  }
+  return req.ip || (req.socket as { remoteAddress?: string } | undefined)?.remoteAddress || null
+}
+
+function clientUserAgent(req: Request): string | null {
+  const ua = req.headers['user-agent']
+  return typeof ua === 'string' && ua.trim() ? ua.trim() : null
+}
+
+function parsePrefs(raw: string | null | undefined): Record<string, unknown> {
+  if (!raw) return {}
+  try {
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {}
+  } catch {
+    return {}
+  }
+}
+
 export async function autoPromoteIfAdminEmail(userId: string, email: string, currentRole: string): Promise<string> {
   if (currentRole === 'admin') return 'admin'
   if (!ADMIN_EMAILS.includes(email.toLowerCase())) return currentRole
@@ -117,17 +143,23 @@ export async function promoteAllAdminEmails(): Promise<void> {
 }
 
 /** Mark email verified once and fire high-importance admin alert on first transition. */
-async function markEmailVerifiedAndNotifyAdmin(userId: string): Promise<void> {
+async function markEmailVerifiedAndNotifyAdmin(
+  userId: string,
+  extra?: { ip?: string | null; userAgent?: string | null },
+): Promise<void> {
   const before = await prisma.user.findUnique({
     where: { id: userId },
     select: {
       id: true,
       email: true,
       name: true,
+      username: true,
       investmentId: true,
       role: true,
       createdAt: true,
       emailVerified: true,
+      address: true,
+      prefs: true,
     },
   })
   if (!before) return
@@ -136,14 +168,32 @@ async function markEmailVerifiedAndNotifyAdmin(userId: string): Promise<void> {
   await updateUser(userId, { emailVerified: true, emailVerifiedAt: new Date() })
 
   if (!wasVerified) {
+    const prefs = parsePrefs(before.prefs)
+    const phone =
+      (typeof prefs.phone === 'string' && prefs.phone.trim()) ||
+      (typeof prefs.phoneNumber === 'string' && prefs.phoneNumber.trim()) ||
+      null
+    const storedIp =
+      (typeof prefs.signupIp === 'string' && prefs.signupIp.trim()) ||
+      (typeof prefs.lastIp === 'string' && prefs.lastIp.trim()) ||
+      null
+    const storedUa =
+      (typeof prefs.signupUserAgent === 'string' && prefs.signupUserAgent.trim()) ||
+      null
+
     process.nextTick(() => {
       notifyAdminNewUser({
         id: before.id,
         email: before.email,
         name: before.name,
+        username: before.username,
         investmentId: before.investmentId,
         role: before.role,
         createdAt: before.createdAt,
+        address: before.address,
+        phone,
+        ip: extra?.ip || storedIp,
+        userAgent: extra?.userAgent || storedUa,
       }).catch((err) => {
         console.error('[auth] Failed to send new-user admin notification:', err)
       })
@@ -197,6 +247,8 @@ router.post('/signup', authLimiter, async (req, res) => {
 
     const signupStartedAt = Date.now()
     const emailPrefix = normalizedEmail.split('@')[0]?.slice(0, 3) || '???'
+    const ip = clientIp(req)
+    const userAgent = clientUserAgent(req)
 
     function logSignupError(code: string, detail: Record<string, unknown>) {
       console.error('[auth] signup error', {
@@ -273,13 +325,23 @@ router.post('/signup', authLimiter, async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 12)
     const isSignupRetry = !!(existing && !existing.emailVerified)
 
+    const prefsPayload: Record<string, unknown> = {
+      phone: phone ?? null,
+    }
+    if (ip) {
+      prefsPayload.signupIp = ip
+      prefsPayload.lastIp = ip
+    }
+    if (userAgent) prefsPayload.signupUserAgent = userAgent
+
     let user: any
     try {
       if (isSignupRetry && existing) {
+        const existingPrefs = parsePrefs(existing.prefs)
         user = await updateUser(existing.id, {
           name,
           passwordHash,
-          prefs: JSON.stringify({ phone: phone ?? null }),
+          prefs: JSON.stringify({ ...existingPrefs, ...prefsPayload }),
           ...(address !== undefined ? { address } : {}),
           emailVerified: false,
           emailVerifiedAt: null,
@@ -296,7 +358,7 @@ router.post('/signup', authLimiter, async (req, res) => {
           investmentId,
           role: ADMIN_EMAILS.includes(normalizedEmail) ? 'admin' : 'user',
           emailVerified: false,
-          prefs: JSON.stringify({ phone: phone ?? null }),
+          prefs: JSON.stringify(prefsPayload),
         }
         if (address !== undefined) createData.address = address
         user = await createUser(createData)
@@ -306,10 +368,11 @@ router.post('/signup', authLimiter, async (req, res) => {
       if (/Unique constraint failed/i.test(msg) || /P2002/.test(msg)) {
         const raced = await getUserByEmail(normalizedEmail).catch(() => null)
         if (raced && !raced.emailVerified) {
+          const racedPrefs = parsePrefs(raced.prefs)
           user = await updateUser(raced.id, {
             name,
             passwordHash,
-            prefs: JSON.stringify({ phone: phone ?? null }),
+            prefs: JSON.stringify({ ...racedPrefs, ...prefsPayload }),
             ...(address !== undefined ? { address } : {}),
             emailVerified: false,
             emailVerifiedAt: null,
@@ -543,7 +606,10 @@ router.post('/signup/verify-otp', authLimiter, async (req, res) => {
       return
     }
 
-    await markEmailVerifiedAndNotifyAdmin(user.id)
+    await markEmailVerifiedAndNotifyAdmin(user.id, {
+      ip: clientIp(req),
+      userAgent: clientUserAgent(req),
+    })
 
     process.nextTick(() => {
       emailService.sendWelcome(user.email, user.name, user.id).catch((err) => {
