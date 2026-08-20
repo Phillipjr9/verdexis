@@ -30,6 +30,7 @@ const verifyOtpSchema = z.object({
   purpose: z.enum(['login', 'email_verification', 'transaction', '2fa']).optional().default('email_verification'),
 })
 
+/** Resolve client IP without touching req.socket (not typed on AuthedRequest). */
 function clientIp(req: AuthedRequest): string | null {
   const forwarded = req.headers['x-forwarded-for']
   if (typeof forwarded === 'string' && forwarded.trim()) {
@@ -38,7 +39,8 @@ function clientIp(req: AuthedRequest): string | null {
   if (Array.isArray(forwarded) && forwarded[0]) {
     return String(forwarded[0]).split(',')[0]?.trim() || null
   }
-  return req.ip || (req.socket as { remoteAddress?: string } | undefined)?.remoteAddress || null
+  const ip = typeof req.ip === 'string' ? req.ip.trim() : ''
+  return ip || null
 }
 
 function clientUserAgent(req: AuthedRequest): string | null {
