@@ -4,14 +4,27 @@ import { toast } from 'sonner'
 import Navigation from '../components/Navigation'
 import RequireAdmin from '../components/RequireAdmin'
 import { adminApi } from '../lib/adminApi'
-import { ArrowLeft, Gift, CheckCircle, Clock, XCircle } from 'lucide-react'
+import { ArrowLeft, Gift, CheckCircle, Clock, XCircle, Settings2, Power } from 'lucide-react'
+
+type ReferralSettings = {
+  enabled: boolean
+  referrerBonusUsd: number
+  refereeBonusUsd: number
+  minDepositUsd: number
+  note?: string
+}
 
 export default function AdminReferrals() {
-  return <RequireAdmin><AdminReferralsInner /></RequireAdmin>
+  return (
+    <RequireAdmin>
+      <AdminReferralsInner />
+    </RequireAdmin>
+  )
 }
 
 function AdminReferralsInner() {
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [stats, setStats] = useState<{
     totalReferrals: number
     activeReferrals: number
@@ -22,24 +35,103 @@ function AdminReferralsInner() {
   } | null>(null)
   const [referrals, setReferrals] = useState<any[]>([])
   const [filter, setFilter] = useState<'all' | 'active' | 'pending'>('all')
+  const [settings, setSettings] = useState<ReferralSettings>({
+    enabled: false,
+    referrerBonusUsd: 250,
+    refereeBonusUsd: 10,
+    minDepositUsd: 50,
+    note: '',
+  })
+  const [draft, setDraft] = useState<ReferralSettings>(settings)
+
+  const loadAll = async () => {
+    try {
+      const [statsResp, referralsResp, settingsResp] = await Promise.all([
+        adminApi.get('/referrals/stats'),
+        adminApi.get(`/referrals${filter !== 'all' ? `?status=${filter}` : ''}`),
+        adminApi.get('/referral-settings').catch(() => null),
+      ])
+      setStats(statsResp)
+      setReferrals(referralsResp.referrals || [])
+      if (settingsResp) {
+        const next: ReferralSettings = {
+          enabled: settingsResp.enabled === true,
+          referrerBonusUsd: Number(settingsResp.referrerBonusUsd) || 0,
+          refereeBonusUsd: Number(settingsResp.refereeBonusUsd) || 0,
+          minDepositUsd: Number(settingsResp.minDepositUsd) || 0,
+          note: settingsResp.note || '',
+        }
+        setSettings(next)
+        setDraft(next)
+      }
+    } catch {
+      toast.error('Failed to load referral data')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const [statsResp, referralsResp] = await Promise.all([
-          adminApi.get('/referrals/stats'),
-          adminApi.get(`/referrals${filter !== 'all' ? `?status=${filter}` : ''}`),
-        ])
-        setStats(statsResp)
-        setReferrals(referralsResp.referrals || [])
-      } catch (e) {
-        toast.error('Failed to load referral data')
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
+    setLoading(true)
+    loadAll()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter])
+
+  const saveSettings = async () => {
+    setSaving(true)
+    try {
+      const updated = await adminApi.put('/referral-settings', {
+        enabled: draft.enabled === true,
+        referrerBonusUsd: Math.max(0, Number(draft.referrerBonusUsd) || 0),
+        refereeBonusUsd: Math.max(0, Number(draft.refereeBonusUsd) || 0),
+        minDepositUsd: Math.max(0, Number(draft.minDepositUsd) || 0),
+        note: (draft.note || '').trim().slice(0, 500),
+      })
+      const next: ReferralSettings = {
+        enabled: updated.enabled === true,
+        referrerBonusUsd: Number(updated.referrerBonusUsd) || 0,
+        refereeBonusUsd: Number(updated.refereeBonusUsd) || 0,
+        minDepositUsd: Number(updated.minDepositUsd) || 0,
+        note: updated.note || '',
+      }
+      setSettings(next)
+      setDraft(next)
+      toast.success(next.enabled ? 'Referral program enabled' : 'Referral program disabled')
+    } catch {
+      toast.error('Failed to save referral settings')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const toggleEnabled = async () => {
+    const next = { ...draft, enabled: !draft.enabled }
+    setDraft(next)
+    setSaving(true)
+    try {
+      const updated = await adminApi.put('/referral-settings', next)
+      setSettings({
+        enabled: updated.enabled === true,
+        referrerBonusUsd: Number(updated.referrerBonusUsd) || 0,
+        refereeBonusUsd: Number(updated.refereeBonusUsd) || 0,
+        minDepositUsd: Number(updated.minDepositUsd) || 0,
+        note: updated.note || '',
+      })
+      setDraft({
+        enabled: updated.enabled === true,
+        referrerBonusUsd: Number(updated.referrerBonusUsd) || 0,
+        refereeBonusUsd: Number(updated.refereeBonusUsd) || 0,
+        minDepositUsd: Number(updated.minDepositUsd) || 0,
+        note: updated.note || '',
+      })
+      toast.success(updated.enabled ? 'Program is now ON' : 'Program is now OFF')
+    } catch {
+      toast.error('Failed to toggle program')
+      setDraft(settings)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const cancelReferral = async (referralId: string) => {
     if (!confirm('Are you sure you want to cancel this referral?')) return
@@ -48,7 +140,7 @@ function AdminReferralsInner() {
       toast.success('Referral cancelled')
       const updatedReferrals = await adminApi.get(`/referrals${filter !== 'all' ? `?status=${filter}` : ''}`)
       setReferrals(updatedReferrals.referrals || [])
-    } catch (e) {
+    } catch {
       toast.error('Failed to cancel referral')
     }
   }
@@ -58,14 +150,116 @@ function AdminReferralsInner() {
       <Navigation />
       <div className="max-w-[1400px] mx-auto px-6 py-8">
         <Link to="/admin" className="inline-flex items-center gap-2 text-xs text-[#A0A0A0] hover:text-[#0C8B44] mb-4">
-          <ArrowLeft className="w-4 h-4" />Back to admin
+          <ArrowLeft className="w-4 h-4" />
+          Back to admin
         </Link>
 
-        <div className="mb-8">
-          <h1 className="text-3xl font-light text-[#E5E5E5] flex items-center gap-3 mb-2">
-            <Gift className="w-8 h-8 text-[#0C8B44]" />Referral Program Management
-          </h1>
-          <p className="text-sm text-[#737373]">Monitor and manage the referral program</p>
+        <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-light text-[#E5E5E5] flex items-center gap-3 mb-2">
+              <Gift className="w-8 h-8 text-[#0C8B44]" />
+              Referral Program Management
+            </h1>
+            <p className="text-sm text-[#737373]">
+              Enable or disable the program anytime. New signups only link when the program is ON.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={toggleEnabled}
+            disabled={saving}
+            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+              draft.enabled
+                ? 'bg-[#0C8B44]/20 text-[#0C8B44] border border-[#0C8B44]/40 hover:bg-[#0C8B44]/30'
+                : 'bg-red-500/15 text-red-400 border border-red-500/30 hover:bg-red-500/25'
+            }`}
+          >
+            <Power className="w-4 h-4" />
+            {draft.enabled ? 'Program ON' : 'Program OFF'}
+          </button>
+        </div>
+
+        {/* Settings panel */}
+        <div className="rounded-xl bg-[#0f1619]/50 border border-[#ffffff08] p-6 mb-8">
+          <div className="flex items-center gap-2 mb-4">
+            <Settings2 className="w-4 h-4 text-[#0C8B44]" />
+            <h2 className="text-sm font-medium text-[#E5E5E5]">Program settings</h2>
+            <span
+              className={`ml-2 text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                settings.enabled ? 'bg-[#0C8B44]/15 text-[#0C8B44]' : 'bg-red-500/15 text-red-400'
+              }`}
+            >
+              {settings.enabled ? 'Active' : 'Disabled'}
+            </span>
+          </div>
+          <p className="text-xs text-[#737373] mb-4">
+            When disabled, new users will not be linked to a referrer and deposit activation will not create bonuses.
+            Existing pending/active referrals are left as-is.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+            <label className="block">
+              <span className="text-[10px] uppercase tracking-wider text-[#737373]">Referrer bonus (USD)</span>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={draft.referrerBonusUsd}
+                onChange={(e) => setDraft((d) => ({ ...d, referrerBonusUsd: Number(e.target.value) }))}
+                className="mt-1 w-full px-3 py-2 rounded-lg bg-[#0a0e10] border border-[#ffffff12] text-sm text-[#E5E5E5] focus:outline-none focus:border-[#0C8B44]"
+              />
+            </label>
+            <label className="block">
+              <span className="text-[10px] uppercase tracking-wider text-[#737373]">Referee bonus (USD)</span>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={draft.refereeBonusUsd}
+                onChange={(e) => setDraft((d) => ({ ...d, refereeBonusUsd: Number(e.target.value) }))}
+                className="mt-1 w-full px-3 py-2 rounded-lg bg-[#0a0e10] border border-[#ffffff12] text-sm text-[#E5E5E5] focus:outline-none focus:border-[#0C8B44]"
+              />
+            </label>
+            <label className="block">
+              <span className="text-[10px] uppercase tracking-wider text-[#737373]">Min first deposit (USD)</span>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={draft.minDepositUsd}
+                onChange={(e) => setDraft((d) => ({ ...d, minDepositUsd: Number(e.target.value) }))}
+                className="mt-1 w-full px-3 py-2 rounded-lg bg-[#0a0e10] border border-[#ffffff12] text-sm text-[#E5E5E5] focus:outline-none focus:border-[#0C8B44]"
+              />
+            </label>
+            <label className="block md:col-span-2 lg:col-span-1">
+              <span className="text-[10px] uppercase tracking-wider text-[#737373]">Internal note</span>
+              <input
+                type="text"
+                maxLength={500}
+                value={draft.note || ''}
+                onChange={(e) => setDraft((d) => ({ ...d, note: e.target.value }))}
+                placeholder="Optional"
+                className="mt-1 w-full px-3 py-2 rounded-lg bg-[#0a0e10] border border-[#ffffff12] text-sm text-[#E5E5E5] focus:outline-none focus:border-[#0C8B44]"
+              />
+            </label>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={saveSettings}
+              disabled={saving}
+              className="px-4 py-2 rounded-lg bg-[#0C8B44] text-white text-xs font-medium hover:bg-[#0a7539] disabled:opacity-50 transition-colors"
+            >
+              {saving ? 'Saving…' : 'Save settings'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setDraft(settings)}
+              disabled={saving}
+              className="px-4 py-2 rounded-lg bg-[#ffffff08] text-[#A0A0A0] text-xs hover:bg-[#ffffff12] transition-colors"
+            >
+              Reset
+            </button>
+          </div>
         </div>
 
         {/* Stats */}
@@ -106,6 +300,7 @@ function AdminReferralsInner() {
               {(['all', 'active', 'pending'] as const).map((f) => (
                 <button
                   key={f}
+                  type="button"
                   onClick={() => setFilter(f)}
                   className={`px-3 py-1 text-xs rounded-lg transition-colors ${
                     filter === f
@@ -168,7 +363,7 @@ function AdminReferralsInner() {
                       </td>
                       <td className="px-6 py-4">
                         {r.firstDepositAmount ? (
-                          <p className="text-[#E5E5E5]">${r.firstDepositAmount.toFixed(2)}</p>
+                          <p className="text-[#E5E5E5]">${Number(r.firstDepositAmount).toFixed(2)}</p>
                         ) : (
                           <p className="text-xs text-[#737373]">—</p>
                         )}
@@ -178,16 +373,9 @@ function AdminReferralsInner() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex gap-2">
-                          {r.status === 'active' && r.referrerBonusUsd ? (
-                            <button
-                              onClick={() => {/* Award bonus endpoint */ }}
-                              className="px-3 py-1 text-xs bg-[#0C8B44]/20 text-[#0C8B44] rounded-lg hover:bg-[#0C8B44]/30 transition-colors"
-                            >
-                              Award $250
-                            </button>
-                          ) : null}
                           {r.status !== 'cancelled' ? (
                             <button
+                              type="button"
                               onClick={() => cancelReferral(r.id)}
                               className="px-3 py-1 text-xs bg-red-500/20 text-red-500 rounded-lg hover:bg-red-500/30 transition-colors"
                             >
