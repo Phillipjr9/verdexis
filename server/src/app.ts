@@ -27,6 +27,7 @@ import aiRoutes from './routes/ai.js'
 import marketRoutes from './routes/market.js'
 import reviewsRoutes from './routes/reviews.js'
 import adminRoutes from './routes/admin.js'
+import adminReferralProgramRoutes from './routes/admin-referral-program.js'
 import adminEmailActionsRoutes from './routes/adminEmailActions.js'
 import referralRoutes from './routes/referral.js'
 import dcaRoutes from './routes/dca.js'
@@ -329,6 +330,7 @@ app.use('/api/ai', aiRoutes)
 app.use('/api/market', marketRoutes)
 app.use('/api/reviews', reviewsRoutes)
 app.use('/api/admin/email-actions', adminEmailActionsRoutes)
+app.use('/api/admin', adminReferralProgramRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/referrals', referralRoutes)
 app.use('/api/dca', dcaRoutes)
