@@ -6,6 +6,7 @@ import {
   getUserReferrals,
   creditReferralBonus,
   activateReferralOnDeposit,
+  readReferralSettings,
 } from '../referrals.js'
 
 const router = Router()
@@ -63,15 +64,24 @@ router.post('/confirm-deposit', requireAuth, async (req: AuthedRequest, res) => 
     return
   }
   const { amount } = req.body as { amount?: number }
-
-  if (!amount || amount < 50) {
-    res.status(400).json({ error: 'Deposit amount must be at least $50' })
+  const settings = await readReferralSettings()
+  if (!settings.enabled) {
+    res.status(400).json({ error: 'Referral program is currently disabled' })
+    return
+  }
+  const minDeposit = settings.minDepositUsd
+  if (!amount || amount < minDeposit) {
+    res.status(400).json({ error: `Deposit amount must be at least $${minDeposit}` })
     return
   }
 
   try {
-    await activateReferralOnDeposit(userId, amount)
-    res.json({ success: true, message: 'Referral activated and bonuses created' })
+    const result = await activateReferralOnDeposit(userId, amount)
+    if (!result.activated) {
+      res.status(400).json({ error: result.reason || 'Could not activate referral', result })
+      return
+    }
+    res.json({ success: true, message: 'Referral activated and bonuses created', result })
   } catch (e) {
     res.status(500).json({ error: 'Failed to activate referral' })
   }
