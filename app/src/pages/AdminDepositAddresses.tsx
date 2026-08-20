@@ -12,6 +12,7 @@ interface CryptoAddress {
   address: string
   memo?: string
   notes?: string
+  assignedBy?: string
 }
 
 interface DepositAddresses {
@@ -61,11 +62,11 @@ export default function AdminDepositAddresses() {
     try {
       const res = await api.getUserDepositAddresses(userId)
       if (res.addresses) {
-        setAddresses(res.addresses)
-        // Generate QR codes for existing addresses
-        if (res.addresses.cryptos) {
-          for (const [symbol, addr] of Object.entries(res.addresses.cryptos)) {
-            generateQR(symbol, addr.address)
+        setAddresses(res.addresses as DepositAddresses)
+        const cryptos = (res.addresses as DepositAddresses).cryptos
+        if (cryptos) {
+          for (const [symbol, addr] of Object.entries(cryptos)) {
+            if (addr.address) generateQR(symbol, addr.address)
           }
         }
       }
@@ -117,7 +118,6 @@ export default function AdminDepositAddresses() {
       },
     }))
 
-    // Auto-generate QR when address changes
     if (field === 'address' && value) {
       generateQR(symbol, value)
     }
@@ -149,7 +149,8 @@ export default function AdminDepositAddresses() {
     setSaving(true)
     try {
       await api.updateUserDepositAddresses(userId, addresses)
-      toast.success('Deposit addresses saved successfully')
+      toast.success('Deposit addresses saved — user-generated wallets were overwritten where changed')
+      await loadAddresses()
     } catch (err) {
       console.error('Failed to save addresses:', err)
       toast.error('Failed to save deposit addresses')
@@ -175,7 +176,6 @@ export default function AdminDepositAddresses() {
 
       <div className="pt-24 pb-16 px-6">
         <div className="max-w-5xl mx-auto">
-          {/* Header */}
           <div className="mb-8">
             <button
               onClick={() => navigate('/admin')}
@@ -190,6 +190,9 @@ export default function AdminDepositAddresses() {
                 </h1>
                 <p className="text-sm text-[#737373] mt-1">
                   {userEmail || `User ID: ${userId}`}
+                </p>
+                <p className="text-xs text-[#0C8B44] mt-2">
+                  You can edit or replace any address the user generated. Saving overwrites their deposit addresses permanently.
                 </p>
               </div>
               <button
@@ -207,7 +210,6 @@ export default function AdminDepositAddresses() {
             </div>
           </div>
 
-          {/* Crypto Addresses */}
           <div className="glass-card p-6 mb-6">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-light text-[#E5E5E5]">Cryptocurrency Addresses</h2>
@@ -245,7 +247,14 @@ export default function AdminDepositAddresses() {
                     <div key={symbol} className="p-6 bg-[#0a0e10] border border-[#ffffff08] rounded-lg">
                       <div className="flex items-start justify-between mb-4">
                         <div>
-                          <h3 className="text-lg font-medium text-[#E5E5E5]">{symbol}</h3>
+                          <h3 className="text-lg font-medium text-[#E5E5E5] flex items-center gap-2">
+                            {symbol}
+                            {addr.assignedBy === 'admin' ? (
+                              <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-[#0C8B44]/20 text-[#0C8B44]">Admin</span>
+                            ) : addr.address ? (
+                              <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-[#ffffff15] text-[#A0A0A0]">User generated</span>
+                            ) : null}
+                          </h3>
                           <p className="text-sm text-[#737373]">{crypto?.name}</p>
                         </div>
                         <button
@@ -335,7 +344,6 @@ export default function AdminDepositAddresses() {
             )}
           </div>
 
-          {/* General Notes */}
           <div className="glass-card p-6">
             <h2 className="text-xl font-light text-[#E5E5E5] mb-4">General Notes</h2>
             <textarea
