@@ -312,7 +312,7 @@ export default function Home() {
                 src="https://litter.catbox.moe/pqfbyf.png"
                 alt="Verdexis mobile app in hand"
                 width={900}
-                height={915}
+                height={914}
                 loading="lazy"
                 decoding="async"
                 className="relative z-[1] w-full h-auto object-contain drop-shadow-[0_20px_50px_rgba(0,0,0,0.45)]"
