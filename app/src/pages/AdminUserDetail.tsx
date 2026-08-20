@@ -43,52 +43,47 @@ const btnGhost =
   'inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-[#1a1a1a] border border-[#ffffff12] text-[#E5E5E5] hover:border-[#0C8B44]/40 disabled:opacity-50'
 
 export default function AdminUserDetail() {
-  const { userId } = useParams<{ userId: string }>()
+  // App route is /admin/users/:id — accept either param name for safety
+  const params = useParams<{ id?: string; userId?: string }>()
+  const userId = params.id || params.userId
+
   const [data, setData] = useState<AdminUserDetailResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [proofs, setProofs] = useState<FeeProof[]>([])
   const [sessions, setSessions] = useState<AdminUserSession[]>([])
 
-  // Wallet edit
   const [wCurrency, setWCurrency] = useState('USD')
   const [wBalance, setWBalance] = useState('')
   const [wAvailable, setWAvailable] = useState('')
 
-  // Hold form
   const [holdType, setHoldType] = useState<'all' | 'withdraw' | 'transfer'>('all')
   const [holdReason, setHoldReason] = useState('suspicious_activity')
   const [holdNote, setHoldNote] = useState('')
 
-  // Deposit / deduct
   const [moneyKind, setMoneyKind] = useState<'deposit' | 'deduct'>('deposit')
   const [moneyCurrency, setMoneyCurrency] = useState('USD')
   const [moneyAmount, setMoneyAmount] = useState('')
   const [moneyReason, setMoneyReason] = useState('manual_bank_wire')
   const [moneyNote, setMoneyNote] = useState('')
 
-  // Limits
   const [dailyWithdraw, setDailyWithdraw] = useState('')
   const [monthlyWithdraw, setMonthlyWithdraw] = useState('')
   const [dailyTransfer, setDailyTransfer] = useState('')
   const [monthlyTransfer, setMonthlyTransfer] = useState('')
 
-  // Fee
   const [feeAmount, setFeeAmount] = useState('')
   const [feeType, setFeeType] = useState('admin_fee')
   const [feeNote, setFeeNote] = useState('')
 
-  // Holding adjust
   const [hSymbol, setHSymbol] = useState('BTC')
   const [hName, setHName] = useState('Bitcoin')
   const [hSide, setHSide] = useState<'buy' | 'sell'>('buy')
   const [hAmount, setHAmount] = useState('')
   const [hPrice, setHPrice] = useState('')
 
-  // Password
   const [newPassword, setNewPassword] = useState('')
 
-  // Email
   const [emailSubject, setEmailSubject] = useState('')
   const [emailBody, setEmailBody] = useState('')
   const [emailTemplate, setEmailTemplate] = useState('none')
@@ -487,7 +482,6 @@ export default function AdminUserDetail() {
               </span>
             </div>
 
-            {/* Quick actions */}
             <div className="flex flex-wrap gap-2 mb-8">
               <button type="button" disabled={busy} onClick={toggleSuspend} className={btnGhost}>
                 <Ban className="w-3.5 h-3.5" /> {user.suspended ? 'Unsuspend' : 'Suspend'}
@@ -510,7 +504,6 @@ export default function AdminUserDetail() {
               ))}
             </div>
 
-            {/* Hold form */}
             {!user.holdActive && (
               <section className="rounded-2xl bg-[#0f1619]/60 border border-[#ffffff08] p-5 mb-6">
                 <h2 className="text-sm font-medium text-[#E5E5E5] mb-3 flex items-center gap-2">
@@ -555,7 +548,6 @@ export default function AdminUserDetail() {
             )}
 
             <div className="grid md:grid-cols-2 gap-6 mb-6">
-              {/* Wallet */}
               <section className="rounded-2xl bg-[#0f1619]/60 border border-[#ffffff08] p-5">
                 <h2 className="text-sm font-medium text-[#E5E5E5] mb-3 flex items-center gap-2">
                   <Wallet className="w-4 h-4 text-[#0C8B44]" /> Wallet balances
@@ -574,31 +566,15 @@ export default function AdminUserDetail() {
                   ))}
                 </ul>
                 <div className="grid grid-cols-3 gap-2">
-                  <input
-                    value={wCurrency}
-                    onChange={(e) => setWCurrency(e.target.value.toUpperCase())}
-                    placeholder="USD"
-                    className={inputCls}
-                  />
-                  <input
-                    value={wBalance}
-                    onChange={(e) => setWBalance(e.target.value)}
-                    placeholder="Balance"
-                    className={inputCls}
-                  />
-                  <input
-                    value={wAvailable}
-                    onChange={(e) => setWAvailable(e.target.value)}
-                    placeholder="Available"
-                    className={inputCls}
-                  />
+                  <input value={wCurrency} onChange={(e) => setWCurrency(e.target.value.toUpperCase())} placeholder="USD" className={inputCls} />
+                  <input value={wBalance} onChange={(e) => setWBalance(e.target.value)} placeholder="Balance" className={inputCls} />
+                  <input value={wAvailable} onChange={(e) => setWAvailable(e.target.value)} placeholder="Available" className={inputCls} />
                 </div>
                 <button type="button" disabled={busy} onClick={saveWallet} className={`mt-2 ${btnPrimary}`}>
                   Save wallet
                 </button>
               </section>
 
-              {/* Deposit / deduct */}
               <section className="rounded-2xl bg-[#0f1619]/60 border border-[#ffffff08] p-5">
                 <h2 className="text-sm font-medium text-[#E5E5E5] mb-3 flex items-center gap-2">
                   <DollarSign className="w-4 h-4 text-[#0C8B44]" /> Deposit / deduct
@@ -630,40 +606,17 @@ export default function AdminUserDetail() {
                   </button>
                 </div>
                 <div className="grid grid-cols-2 gap-2 mb-2">
-                  <input
-                    value={moneyCurrency}
-                    onChange={(e) => setMoneyCurrency(e.target.value.toUpperCase())}
-                    placeholder="Currency"
-                    className={inputCls}
-                  />
-                  <input
-                    value={moneyAmount}
-                    onChange={(e) => setMoneyAmount(e.target.value)}
-                    placeholder="Amount"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    className={inputCls}
-                  />
+                  <input value={moneyCurrency} onChange={(e) => setMoneyCurrency(e.target.value.toUpperCase())} placeholder="Currency" className={inputCls} />
+                  <input value={moneyAmount} onChange={(e) => setMoneyAmount(e.target.value)} placeholder="Amount" type="number" min="0" step="0.01" className={inputCls} />
                 </div>
-                <select
-                  aria-label="Reason"
-                  value={moneyReason}
-                  onChange={(e) => setMoneyReason(e.target.value)}
-                  className={`${inputCls} mb-2`}
-                >
+                <select aria-label="Reason" value={moneyReason} onChange={(e) => setMoneyReason(e.target.value)} className={`${inputCls} mb-2`}>
                   {(moneyKind === 'deposit' ? DEPOSIT_REASONS : DEDUCT_REASONS).map((r) => (
                     <option key={r.value} value={r.value}>
                       {r.label}
                     </option>
                   ))}
                 </select>
-                <input
-                  value={moneyNote}
-                  onChange={(e) => setMoneyNote(e.target.value)}
-                  placeholder="Note (optional)"
-                  className={`${inputCls} mb-2`}
-                />
+                <input value={moneyNote} onChange={(e) => setMoneyNote(e.target.value)} placeholder="Note (optional)" className={`${inputCls} mb-2`} />
                 <button type="button" disabled={busy} onClick={submitMoney} className={btnPrimary}>
                   {moneyKind === 'deposit' ? 'Credit deposit' : 'Apply deduct'}
                 </button>
@@ -671,7 +624,6 @@ export default function AdminUserDetail() {
             </div>
 
             <div className="grid md:grid-cols-2 gap-6 mb-6">
-              {/* Limits */}
               <section className="rounded-2xl bg-[#0f1619]/60 border border-[#ffffff08] p-5">
                 <h2 className="text-sm font-medium text-[#E5E5E5] mb-3">Withdraw / transfer limits</h2>
                 <p className="text-[11px] text-[#737373] mb-2">Leave blank for no limit.</p>
@@ -686,7 +638,6 @@ export default function AdminUserDetail() {
                 </button>
               </section>
 
-              {/* Fee */}
               <section className="rounded-2xl bg-[#0f1619]/60 border border-[#ffffff08] p-5">
                 <h2 className="text-sm font-medium text-[#E5E5E5] mb-3">Charge fee (USD)</h2>
                 <div className="grid grid-cols-2 gap-2 mb-2">
@@ -707,7 +658,6 @@ export default function AdminUserDetail() {
             </div>
 
             <div className="grid md:grid-cols-2 gap-6 mb-6">
-              {/* Holdings */}
               <section className="rounded-2xl bg-[#0f1619]/60 border border-[#ffffff08] p-5">
                 <h2 className="text-sm font-medium text-[#E5E5E5] mb-3 flex items-center gap-2">
                   <Layers className="w-4 h-4 text-[#0C8B44]" /> Holdings
@@ -741,19 +691,12 @@ export default function AdminUserDetail() {
                 </button>
               </section>
 
-              {/* Security: password + sessions */}
               <section className="rounded-2xl bg-[#0f1619]/60 border border-[#ffffff08] p-5">
                 <h2 className="text-sm font-medium text-[#E5E5E5] mb-3 flex items-center gap-2">
                   <KeyRound className="w-4 h-4 text-[#0C8B44]" /> Security
                 </h2>
                 <div className="flex gap-2 mb-3">
-                  <input
-                    type="text"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="New password (8+)"
-                    className={inputCls}
-                  />
+                  <input type="text" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password (8+)" className={inputCls} />
                   <button type="button" disabled={busy} onClick={setPassword} className={btnPrimary}>
                     Set password
                   </button>
@@ -778,42 +721,24 @@ export default function AdminUserDetail() {
               </section>
             </div>
 
-            {/* Email */}
             <section className="rounded-2xl bg-[#0f1619]/60 border border-[#ffffff08] p-5 mb-6">
               <h2 className="text-sm font-medium text-[#E5E5E5] mb-3 flex items-center gap-2">
                 <Mail className="w-4 h-4 text-[#0C8B44]" /> Email user
               </h2>
-              <select
-                aria-label="Email template"
-                value={emailTemplate}
-                onChange={(e) => applyEmailTemplate(e.target.value)}
-                className={`${inputCls} mb-2`}
-              >
+              <select aria-label="Email template" value={emailTemplate} onChange={(e) => applyEmailTemplate(e.target.value)} className={`${inputCls} mb-2`}>
                 {EMAIL_TEMPLATES.map((t) => (
                   <option key={t.value} value={t.value}>
                     {t.label}
                   </option>
                 ))}
               </select>
-              <input
-                value={emailSubject}
-                onChange={(e) => setEmailSubject(e.target.value)}
-                placeholder="Subject"
-                className={`${inputCls} mb-2`}
-              />
-              <textarea
-                value={emailBody}
-                onChange={(e) => setEmailBody(e.target.value)}
-                placeholder="Body"
-                rows={4}
-                className={`${inputCls} mb-2`}
-              />
+              <input value={emailSubject} onChange={(e) => setEmailSubject(e.target.value)} placeholder="Subject" className={`${inputCls} mb-2`} />
+              <textarea value={emailBody} onChange={(e) => setEmailBody(e.target.value)} placeholder="Body" rows={4} className={`${inputCls} mb-2`} />
               <button type="button" disabled={busy} onClick={sendEmail} className={btnPrimary}>
                 Send email
               </button>
             </section>
 
-            {/* Transactions */}
             <section className="rounded-2xl bg-[#0f1619]/60 border border-[#ffffff08] p-5 mb-6">
               <h2 className="text-sm font-medium text-[#E5E5E5] mb-3">Recent transactions</h2>
               <div className="overflow-x-auto">
@@ -838,12 +763,7 @@ export default function AdminUserDetail() {
                         <td className="py-2">{new Date(t.createdAt).toLocaleString()}</td>
                         <td className="py-2 text-right">
                           {t.status === 'completed' && !t.reversedFromId && (
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={() => reverseTx(t.id)}
-                              className="text-[10px] text-[#F57C00] hover:underline"
-                            >
+                            <button type="button" disabled={busy} onClick={() => reverseTx(t.id)} className="text-[10px] text-[#F57C00] hover:underline">
                               Reverse
                             </button>
                           )}
@@ -862,7 +782,6 @@ export default function AdminUserDetail() {
               </div>
             </section>
 
-            {/* Fee proofs */}
             <section className="rounded-2xl bg-[#0f1619]/60 border border-[#ffffff08] p-5">
               <h2 className="text-sm font-medium text-[#E5E5E5] mb-3 flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-[#0C8B44]" /> Fee proofs
@@ -870,35 +789,20 @@ export default function AdminUserDetail() {
               <ul className="space-y-3">
                 {proofs.length === 0 && <li className="text-xs text-[#737373]">No fee proofs for this user</li>}
                 {proofs.map((p) => (
-                  <li
-                    key={p.id}
-                    className="flex flex-wrap items-center justify-between gap-2 text-xs border border-[#ffffff08] rounded-lg px-3 py-2"
-                  >
+                  <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 text-xs border border-[#ffffff08] rounded-lg px-3 py-2">
                     <div>
                       <span className="text-[#E5E5E5]">
                         {p.kind || 'fee'} · ${p.feeUsd}
                       </span>
                       <span className="text-[#737373] ml-2">{p.status}</span>
-                      {p.feeProof && (
-                        <p className="text-[#737373] mt-0.5 truncate max-w-md">{p.feeProof}</p>
-                      )}
+                      {p.feeProof && <p className="text-[#737373] mt-0.5 truncate max-w-md">{p.feeProof}</p>}
                     </div>
                     {p.status === 'pending' && (
                       <div className="flex gap-2">
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => verifyProof(p.id)}
-                          className="px-2 py-1 rounded bg-[#0C8B44] text-white disabled:opacity-50"
-                        >
+                        <button type="button" disabled={busy} onClick={() => verifyProof(p.id)} className="px-2 py-1 rounded bg-[#0C8B44] text-white disabled:opacity-50">
                           Verify
                         </button>
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => rejectProof(p.id)}
-                          className="px-2 py-1 rounded bg-[#f44336]/20 text-[#f44336] disabled:opacity-50"
-                        >
+                        <button type="button" disabled={busy} onClick={() => rejectProof(p.id)} className="px-2 py-1 rounded bg-[#f44336]/20 text-[#f44336] disabled:opacity-50">
                           Reject
                         </button>
                       </div>
