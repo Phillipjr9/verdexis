@@ -1,1 +1,1 @@
-// SEE ARTIFACT - content too large for this test
+RESTORE_FROM_COMMIT_2400c03
