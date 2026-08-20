@@ -309,8 +309,8 @@ export default function Home() {
             >
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#0C8B44]/10 via-transparent to-transparent" />
               <img
-                src="/assets/ui-mobile-wallet.png"
-                alt="Verdexis wallet on mobile"
+                src="https://litter.catbox.moe/02h5s4.webp"
+                alt="Verdexis mobile app in hand"
                 className="relative z-[1] w-full h-auto object-contain object-center bg-transparent"
               />
             </div>
