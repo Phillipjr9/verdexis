@@ -22,13 +22,22 @@ const SYMBOL_BY_CURRENCY: Record<string, string> = {
   dai: 'DAI',
 }
 
-type CryptoOverride = { currency: string; network: string; address: string; memo?: string; notes?: string }
+type CryptoOverride = {
+  currency: string
+  network: string
+  address: string
+  memo?: string
+  notes?: string
+  assignedBy?: 'admin' | 'user'
+  assignedAt?: string
+}
 
 type DepositAddressesBlob = {
   cryptos?: Record<string, CryptoOverride>
   wire?: unknown
   notes?: string
   updatedAt?: string
+  updatedBy?: string
 }
 
 function parsePrefs(raw: string | null | undefined): Record<string, unknown> {
@@ -60,9 +69,14 @@ async function mergeGeneratedAddress(
   const current = getDepositBlob(prefs)
   const cryptos = { ...(current.cryptos || {}) }
 
-  // Keep an existing address if one is already assigned (admin override or prior generate).
-  if (!cryptos[symbol]?.address?.trim()) {
-    cryptos[symbol] = { currency: symbol, network, address }
+  const existing = cryptos[symbol]
+  // Never overwrite an admin-assigned address from the user generate path.
+  if (existing?.assignedBy === 'admin') {
+    return current
+  }
+  // Keep an existing address if one is already assigned.
+  if (!existing?.address?.trim()) {
+    cryptos[symbol] = { currency: symbol, network, address, assignedBy: 'user' }
   }
 
   const blob: DepositAddressesBlob = {
@@ -152,6 +166,7 @@ router.get('/generate', requireAuth, async (req: AuthedRequest, res) => {
         qrCodeUrl,
         cached: true,
         persisted: true,
+        assignedBy: existing.assignedBy || 'user',
       })
       return
     }
@@ -159,8 +174,7 @@ router.get('/generate', requireAuth, async (req: AuthedRequest, res) => {
     const generated = addressGenerator.generateAddress(userId, currency)
     const qrCodeUrl = addressGenerator.generateQRCode(generated.address)
 
-    // CRITICAL: persist BEFORE responding so the address sticks to the user
-    // and shows up on /deposit/crypto via GET /api/wallet/me/deposit-addresses.
+    // Persist BEFORE responding so the address sticks to the user.
     const blob = await mergeGeneratedAddress(
       userId,
       generated.currency,
@@ -173,6 +187,7 @@ router.get('/generate', requireAuth, async (req: AuthedRequest, res) => {
       qrCodeUrl,
       cached: false,
       persisted: true,
+      assignedBy: 'user',
       addresses: blob,
     })
   } catch (err) {
@@ -209,14 +224,17 @@ router.put('/save', requireAuth, async (req: AuthedRequest, res) => {
   const cryptos = { ...(current.cryptos || {}) }
   for (const [symbol, row] of Object.entries(parsed.data.cryptos)) {
     const key = symbol.toUpperCase()
-    // Do not overwrite an existing admin/generated address with a weaker client copy.
-    if (cryptos[key]?.address) continue
+    const existing = cryptos[key]
+    // Never overwrite admin-assigned or any existing address from the user save path.
+    if (existing?.address) continue
+    if (existing?.assignedBy === 'admin') continue
     cryptos[key] = {
       currency: row.currency.toUpperCase(),
       network: row.network,
       address: row.address,
       memo: row.memo,
       notes: row.notes,
+      assignedBy: 'user',
     }
   }
   const blob: DepositAddressesBlob = {
