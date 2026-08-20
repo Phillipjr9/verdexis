@@ -30,11 +30,41 @@ export function CryptoDepositAddresses() {
   const [loading, setLoading] = useState<string | 'all' | null>(null)
   const [qrSymbol, setQrSymbol] = useState<string | null>(null)
 
+  async function loadFromServer() {
+    try {
+      const res = await api.getMyDepositAddresses()
+      const addresses = res.addresses as {
+        cryptos?: Record<string, { address?: string; network?: string }>
+      } | null
+      const cryptos = addresses?.cryptos
+      if (!cryptos) return
+      setRows((curr) =>
+        curr.map((row) => {
+          const entry = cryptos[row.symbol]
+          if (!entry?.address?.trim()) return row
+          // Prefer keeping explicit admin tag from local override if present
+          const profile = getProfile()
+          const override = profile?.email ? userWallets.get(profile.email) : null
+          const isAdmin = Boolean(override?.cryptos?.[row.symbol]?.address)
+          return {
+            ...row,
+            address: entry.address.trim(),
+            network: entry.network || row.network,
+            source: isAdmin ? 'admin' : 'generated',
+          }
+        }),
+      )
+    } catch {
+      /* offline / unauth */
+    }
+  }
+
   async function load() {
     const profile = getProfile()
     if (profile?.email) {
       await hydrateUserWalletsFromServer({ email: profile.email })
     }
+    await loadFromServer()
     applyOverrides()
   }
 
@@ -52,6 +82,8 @@ export function CryptoDepositAddresses() {
             source: 'admin',
           }
         }
+        // Keep server-generated address if we already have one
+        if (row.address && row.source === 'generated') return row
         return row
       }),
     )
@@ -64,11 +96,11 @@ export function CryptoDepositAddresses() {
     return () => window.removeEventListener(USER_WALLETS_EVENT, onChange)
   }, [])
 
-  function persist(next: CoinRow[]) {
+  async function persist(next: CoinRow[]) {
     const profile = getProfile()
     if (!profile?.email) return
     const existing = userWallets.get(profile.email) || { cryptos: {} }
-    const cryptos = { ...existing.cryptos }
+    const cryptos: Record<string, { currency: string; network: string; address: string }> = { ...existing.cryptos }
     for (const row of next) {
       if (!row.address) continue
       if (cryptos[row.symbol]?.address && row.source !== 'generated') continue
@@ -79,7 +111,11 @@ export function CryptoDepositAddresses() {
       }
     }
     userWallets.set(profile.email, { ...existing, cryptos })
-    void api.put('/api/deposit-addresses/save', { cryptos }).catch(() => undefined)
+    try {
+      await api.put('/api/deposit-addresses/save', { cryptos })
+    } catch {
+      toast.error('Address generated locally but failed to save to your account. Try again while signed in.')
+    }
   }
 
   async function generateOne(symbol: string, currency: string): Promise<string | null> {
@@ -112,15 +148,13 @@ export function CryptoDepositAddresses() {
     try {
       const address = await generateOne(symbol, currency)
       if (!address) throw new Error('No address returned')
-      setRows((curr) => {
-        const next = curr.map((row) =>
-          row.symbol === symbol && row.source !== 'admin'
-            ? { ...row, address, source: 'generated' as const }
-            : row,
-        )
-        persist(next)
-        return next
-      })
+      const next = rows.map((row) =>
+        row.symbol === symbol && row.source !== 'admin'
+          ? { ...row, address, source: 'generated' as const }
+          : row,
+      )
+      setRows(next)
+      await persist(next)
       toast.success(`${symbol} address ready`)
     } catch (err) {
       const status = (err as { status?: number }).status
@@ -147,15 +181,13 @@ export function CryptoDepositAddresses() {
         const address = await generateOne(coin.symbol, coin.currency)
         if (address) generated[coin.symbol] = address
       }
-      setRows((curr) => {
-        const next = curr.map((row) => {
-          if (row.source === 'admin') return row
-          const address = generated[row.symbol]
-          return address ? { ...row, address, source: 'generated' as const } : row
-        })
-        persist(next)
-        return next
+      const next = rows.map((row) => {
+        if (row.source === 'admin') return row
+        const address = generated[row.symbol]
+        return address ? { ...row, address, source: 'generated' as const } : row
       })
+      setRows(next)
+      await persist(next)
       toast.success('A unique address was created for each crypto')
     } catch (err) {
       const status = (err as { status?: number }).status
@@ -183,7 +215,7 @@ export function CryptoDepositAddresses() {
             Crypto wallets
           </h2>
           <p className="text-sm text-[#737373] mt-1">
-            Each coin has its own deposit address. Generate yours here. An admin can still change any address on your profile.
+            Each coin has its own deposit address. Generate yours here — it is saved to your account and used on the Deposit page.
           </p>
         </div>
         <button
@@ -193,7 +225,7 @@ export function CryptoDepositAddresses() {
           className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0C8B44] px-4 py-2.5 text-sm text-white hover:bg-[#0a7539] disabled:opacity-50"
         >
           <RefreshCw className={`w-4 h-4 ${loading === 'all' ? 'animate-spin' : ''}`} />
-          {loading === 'all' ? 'Generating\u2026' : 'Generate all wallets'}
+          {loading === 'all' ? 'Generating…' : 'Generate all wallets'}
         </button>
       </div>
       <div className="space-y-3">
@@ -232,7 +264,7 @@ export function CryptoDepositAddresses() {
                       onClick={() => void handleGenerate(row.symbol, COINS.find((c) => c.symbol === row.symbol)!.currency)}
                       className="mt-3 text-sm text-[#0C8B44] hover:underline disabled:opacity-50"
                     >
-                      {loading === row.symbol ? 'Generating\u2026' : `Generate ${row.symbol} address`}
+                      {loading === row.symbol ? 'Generating…' : `Generate ${row.symbol} address`}
                     </button>
                   )}
                   {qrSymbol === row.symbol && row.address && (
