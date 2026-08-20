@@ -26,7 +26,7 @@ export default function Footer() {
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-8 mb-10 pb-10 border-b border-[#ffffff05]">
           <div className="max-w-sm">
             <div className="flex items-center gap-2 mb-3">
-              <img src="/assets/logo-icon-transparent.png" alt="Verdexis" className="w-7 h-7 object-contain" onError={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.display = 'none' }} />
+              <img src="/assets/logo-icon-transparent.png" alt="Verdexis" className="w-7 h-7 object-contain" loading="lazy" decoding="async" onError={(e) => { const t = e.currentTarget as HTMLImageElement; t.style.display = 'none' }} />
               <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#0C8B44] to-[#00E676] items-center justify-center hidden">
                 <span className="text-white text-xs font-bold">V</span>
               </div>
