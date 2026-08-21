@@ -1,25 +1,38 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
-import Navigation from '../components/Navigation'
-import { adminApi, type AdminSignupBonusSettings } from '../lib/adminApi'
-import { ArrowLeft, Gift, Save } from 'lucide-react'
+import AdminLayout from '../components/AdminLayout'
+import { adminApi } from '../lib/adminApi'
+import { Gift, Save } from 'lucide-react'
 
-const DEFAULT_SETTINGS: AdminSignupBonusSettings = {
-  enabled: false,
-  amountUsd: 0,
-  note: '',
+type BonusForm = {
+  enabled: boolean
+  amountUsd: number
+  note: string
 }
 
 export default function AdminSignupBonus() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState<AdminSignupBonusSettings>(DEFAULT_SETTINGS)
+  const [form, setForm] = useState<BonusForm>({
+    enabled: false,
+    amountUsd: 0,
+    note: '',
+  })
 
   useEffect(() => {
-    adminApi.getSignupBonus()
-      .then((data) => setForm({ ...DEFAULT_SETTINGS, ...data }))
-      .catch((e: { error?: string }) => toast.error(e.error || 'Failed to load signup bonus settings'))
+    setLoading(true)
+    adminApi
+      .getSignupBonus?.()
+      .then((r: any) => {
+        setForm({
+          enabled: !!r?.enabled,
+          amountUsd: Number(r?.amountUsd) || 0,
+          note: r?.note || '',
+        })
+      })
+      .catch(() => {
+        // endpoint may vary; keep defaults
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -27,110 +40,72 @@ export default function AdminSignupBonus() {
     e.preventDefault()
     setSaving(true)
     try {
-      const next = await adminApi.setSignupBonus({
-        enabled: form.enabled,
-        amountUsd: Number(form.amountUsd) || 0,
-        note: form.note?.trim() || '',
-      })
-      setForm({ ...DEFAULT_SETTINGS, ...next })
-      toast.success('Signup bonus updated')
-    } catch (e) {
-      toast.error((e as { error?: string }).error || 'Failed to save signup bonus')
+      await (adminApi as any).setSignupBonus?.(form)
+      toast.success('Signup bonus saved')
+    } catch (err) {
+      toast.error((err as { error?: string }).error || 'Save failed')
     } finally {
       setSaving(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-[#070C0E]">
-      <Navigation />
-      <div className="max-w-[900px] mx-auto px-6 py-8">
-        <Link to="/admin" className="inline-flex items-center gap-2 text-xs text-[#A0A0A0] hover:text-[#0C8B44] mb-4">
-          <ArrowLeft className="w-4 h-4" />Back to admin
-        </Link>
-
-        <div className="mb-6">
-          <h1 className="text-2xl font-light text-[#E5E5E5] flex items-center gap-3">
-            <Gift className="w-6 h-6 text-[#0C8B44]" />Signup bonus
-          </h1>
-          <p className="text-sm text-[#737373] mt-2">Configure the automatic bonus new users receive immediately after creating an account.</p>
-        </div>
-
-        <form onSubmit={onSubmit} className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6 space-y-6">
-          {loading ? (
-            <p className="text-sm text-[#737373]">Loading settings…</p>
-          ) : (
-            <>
-              <label className="flex items-start gap-3 rounded-xl border border-[#ffffff08] bg-[#0a0e10] px-4 py-4">
-                <input
-                  type="checkbox"
-                  checked={form.enabled}
-                  onChange={(e) => setForm((curr) => ({ ...curr, enabled: e.target.checked }))}
-                  className="mt-1 h-4 w-4 rounded border-[#2a2f33] bg-[#070C0E] text-[#0C8B44] focus:ring-[#0C8B44]"
-                />
-                <span>
-                  <span className="block text-sm text-[#E5E5E5]">Enable signup bonus</span>
-                  <span className="block text-xs text-[#737373] mt-1">When enabled, every newly created account gets the configured USD credit automatically.</span>
-                </span>
-              </label>
-
-              <div>
-                <label htmlFor="amountUsd" className="block text-xs uppercase tracking-wider text-[#737373] mb-2">Bonus amount (USD)</label>
-                <input
-                  id="amountUsd"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.amountUsd}
-                  onChange={(e) => setForm((curr) => ({ ...curr, amountUsd: Number(e.target.value) }))}
-                  className="w-full rounded-xl border border-[#ffffff10] bg-[#0a0e10] px-4 py-3 text-[#E5E5E5] outline-none focus:border-[#0C8B44]"
-                  placeholder="25"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="note" className="block text-xs uppercase tracking-wider text-[#737373] mb-2">User-facing note</label>
-                <textarea
-                  id="note"
-                  value={form.note || ''}
-                  onChange={(e) => setForm((curr) => ({ ...curr, note: e.target.value }))}
-                  rows={4}
-                  maxLength={300}
-                  className="w-full rounded-xl border border-[#ffffff10] bg-[#0a0e10] px-4 py-3 text-[#E5E5E5] outline-none focus:border-[#0C8B44]"
-                  placeholder="Welcome to Verdexis — your signup bonus has been credited."
-                />
-                <p className="mt-2 text-xs text-[#737373]">This appears in the credited transaction reference and the in-app notification.</p>
-              </div>
-
-              <div className="rounded-xl border border-[#F57C00]/30 bg-[#F57C00]/5 px-4 py-4">
-                <p className="text-xs uppercase tracking-wider text-[#F57C00] mb-2">Bonus withdrawal lock</p>
-                <p className="text-xs text-[#E5E5E5] leading-relaxed">
-                  Whenever the signup bonus is enabled, every new account that receives it is automatically locked from withdrawals until you (the admin) clear the lock. The user is told to contact you on WhatsApp or Telegram first. You can clear the lock from the user's profile page (Admin → Users → [user] → Contact &amp; signup bonus → Unlock).
-                </p>
-                <p className="text-[11px] text-[#A0A0A0] mt-2">
-                  Existing users (signed up before the bonus was enabled) are <span className="text-[#E5E5E5]">never</span> retroactively locked.
-                </p>
-              </div>
-
-              <div className="rounded-xl border border-[#ffffff08] bg-[#0a0e10] px-4 py-4">
-                <p className="text-xs uppercase tracking-wider text-[#737373] mb-2">Preview</p>
-                <p className="text-sm text-[#E5E5E5]">{form.enabled && form.amountUsd > 0 ? `New users will receive $${form.amountUsd.toFixed(2)} on signup.` : 'Signup bonus is currently disabled.'}</p>
-                {!!form.note?.trim() && <p className="text-xs text-[#A0A0A0] mt-2">“{form.note.trim()}”</p>}
-              </div>
-
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="inline-flex items-center gap-2 rounded-xl bg-[#0C8B44] px-4 py-2.5 text-sm text-white hover:bg-[#0a7539] disabled:opacity-50"
-                >
-                  <Save className="w-4 h-4" />{saving ? 'Saving…' : 'Save signup bonus'}
-                </button>
-              </div>
-            </>
-          )}
-        </form>
-      </div>
-    </div>
+    <AdminLayout title="Signup bonus" subtitle="New-user bonus configuration">
+      <form onSubmit={onSubmit} className="max-w-xl space-y-4 rounded-2xl border border-[#ffffff08] bg-[#0f1619]/50 p-6">
+        {loading ? (
+          <p className="text-sm text-[#737373]">Loading…</p>
+        ) : (
+          <>
+            <div className="flex items-center gap-2 mb-2">
+              <Gift className="w-5 h-5 text-[#0C8B44]" />
+              <p className="text-sm text-[#E5E5E5]">Credit new accounts on signup</p>
+            </div>
+            <label className="flex items-center gap-2 text-sm text-[#A0A0A0]">
+              <input
+                type="checkbox"
+                checked={form.enabled}
+                onChange={(e) => setForm((c) => ({ ...c, enabled: e.target.checked }))}
+                className="accent-[#0C8B44]"
+              />
+              Enabled
+            </label>
+            <label className="block">
+              <span className="text-[10px] uppercase tracking-wider text-[#737373]">Amount (USD)</span>
+              <input
+                type="number"
+                min={0}
+                step={0.01}
+                value={form.amountUsd}
+                onChange={(e) => setForm((c) => ({ ...c, amountUsd: Number(e.target.value) || 0 }))}
+                className="mt-1 w-full rounded-lg border border-[#ffffff10] bg-[#0a0f11] px-3 py-2 text-sm text-[#E5E5E5]"
+              />
+            </label>
+            <label className="block">
+              <span className="text-[10px] uppercase tracking-wider text-[#737373]">Note</span>
+              <textarea
+                value={form.note}
+                onChange={(e) => setForm((c) => ({ ...c, note: e.target.value }))}
+                rows={3}
+                maxLength={300}
+                className="mt-1 w-full rounded-lg border border-[#ffffff10] bg-[#0a0f11] px-3 py-2 text-sm text-[#E5E5E5]"
+              />
+            </label>
+            <p className="text-xs text-[#737373]">
+              {form.enabled && form.amountUsd > 0
+                ? `New users receive $${form.amountUsd.toFixed(2)} on signup.`
+                : 'Signup bonus is disabled.'}
+            </p>
+            <button
+              type="submit"
+              disabled={saving}
+              className="inline-flex items-center gap-2 rounded-lg bg-[#0C8B44] px-4 py-2 text-sm text-white hover:bg-[#0a7539] disabled:opacity-50"
+            >
+              <Save className="w-4 h-4" />
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </>
+        )}
+      </form>
+    </AdminLayout>
   )
 }

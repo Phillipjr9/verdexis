@@ -32,6 +32,7 @@ export type AdminUserDetailResponse = any
 export type AdminSavedWallet = any
 export type AdminWalletLink = any
 export type AdminSessionStats = any
+export type AdminAuditLog = any
 
 export const DEPOSIT_REASONS = [
   { value: 'manual_bank_wire', label: 'Manual deposit — bank wire' },
@@ -63,8 +64,7 @@ export const KYC_STATUSES = [
   { value: 'rejected' as const, label: 'Rejected' },
 ]
 export const FEE_TYPES = [
-  { value: 'maintenance', label: 'Maintenance' },
-  { value: 'wire', label: 'Wire' },
+  { value: 'trading', label: 'Trading fee' },
   { value: 'withdrawal', label: 'Withdrawal fee' },
   { value: 'other', label: 'Other' },
 ]
@@ -83,8 +83,10 @@ export const adminApi = {
   stats: () => request<AdminStats>('/api/admin/stats'),
   listUsers: (params: Record<string, unknown> = {}) => {
     const q = new URLSearchParams()
-    Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== null && v !== '') q.set(k, String(v)) })
-    return request<{ users: AdminUserSummary[]; total: number; page: number; limit: number }>(`/api/admin/users?${q}`)
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') q.set(k, String(v))
+    })
+    return request<{ users: AdminUserSummary[]; total: number }>(`/api/admin/users?${q.toString()}`)
   },
   getUser: (id: string) => request<AdminUserDetailResponse>(`/api/admin/users/${id}`),
   deposit: (userId: string, input: unknown) =>
@@ -144,4 +146,81 @@ export const adminApi = {
     request(`/api/admin/users/${userId}/withdrawal-check`, { method: 'POST', body: JSON.stringify(input) }),
   removeUserWithdrawalCheck: (userId: string) =>
     request(`/api/admin/users/${userId}/withdrawal-check`, { method: 'DELETE' }),
+
+  listPendingDeposits: () =>
+    request<{ deposits: any[] }>('/api/admin/features/compliance/deposits?days=90').then((r) => ({
+      deposits: (r.deposits || []).filter((d: any) => d.status === 'pending').map((d: any) => ({
+        ...d,
+        currency: d.asset,
+        reference: d.note || d.txHash || '',
+        user: d.user || { id: d.userId, name: '—', email: '—' },
+      })),
+    })),
+  listOnchainDeposits: (status = 'pending') =>
+    request<{ deposits: any[] }>('/api/admin/features/compliance/deposits?days=90').then((r) => ({
+      pendingDeposits: (r.deposits || [])
+        .filter((d: any) => !status || d.status === status)
+        .map((d: any) => ({
+          ...d,
+          fromAddress: d.fromAddress || '',
+          toAddress: d.toAddress || '',
+          user: d.user || { id: d.userId, name: '—', email: '—' },
+        })),
+    })),
+  listPendingWithdrawals: () =>
+    request<{ withdrawals: any[] }>('/api/withdrawals/admin/pending'),
+  approveDeposit: (id: string) =>
+    request(`/api/deposits/${id}/confirm`, { method: 'POST', body: JSON.stringify({}) }),
+  rejectDeposit: (id: string, reason?: string) =>
+    request(`/api/admin/pending-deposits/${id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: 'other', note: reason || '' }),
+    }),
+  approveOnchainDeposit: (id: string, input: { currency?: string; amount?: number; note?: string }) =>
+    request(`/api/deposits/${id}/confirm`, { method: 'POST', body: JSON.stringify(input || {}) }),
+  rejectOnchainDeposit: (id: string, note?: string) =>
+    request(`/api/admin/pending-deposits/${id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason: 'other', note: note || '' }),
+    }),
+  approveWithdrawal: (id: string, txHash: string) =>
+    request(`/api/withdrawals/admin/${id}/approve`, {
+      method: 'PUT',
+      body: JSON.stringify({ txHash }),
+    }),
+  rejectWithdrawal: (id: string, reason?: string) =>
+    request(`/api/withdrawals/admin/${id}/reject`, {
+      method: 'PUT',
+      body: JSON.stringify({ reason: reason || '' }),
+    }),
+  listPendingReviews: () =>
+    request<{ reviews: any[] }>('/api/admin/reviews/pending'),
+  approveReview: (id: string) =>
+    request(`/api/admin/reviews/${id}/approve`, { method: 'POST', body: JSON.stringify({}) }),
+  rejectReview: (id: string) =>
+    request(`/api/admin/reviews/${id}/reject`, { method: 'POST', body: JSON.stringify({}) }),
+  audit: (params: Record<string, unknown> = {}) => {
+    const q = new URLSearchParams()
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') q.set(k, String(v))
+    })
+    return request<{ audit: AdminAuditLog[] }>(`/api/admin/audit?${q.toString()}`)
+  },
+  auditCsvUrl: (params: Record<string, unknown> = {}) => {
+    const q = new URLSearchParams()
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') q.set(k, String(v))
+    })
+    q.set('format', 'csv')
+    return `${BASE}/api/compliance/audit-trail/export?${q.toString()}`
+  },
+  broadcast: (input: { kind: string; title: string; body?: string }) =>
+    request<{ count: number }>('/api/admin/broadcast', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  createUser: (input: unknown) =>
+    request('/api/admin/users', { method: 'POST', body: JSON.stringify(input) }),
+  bulkUsers: (input: unknown) =>
+    request('/api/admin/users/bulk', { method: 'POST', body: JSON.stringify(input) }),
 }
