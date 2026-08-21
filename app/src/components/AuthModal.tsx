@@ -18,6 +18,14 @@ type Mode = 'login' | 'signup' | 'forgot' | 'otp'
 
 export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: AuthModalProps) {
   const navigate = useNavigate()
+  const goAfterAuth = (user?: { role?: string } | null) => {
+    const role = user?.role
+    const dest = role === 'admin' ? '/admin' : '/dashboard'
+    // Hard navigation avoids stuck modal / race with onClose -> navigate('/')
+    window.setTimeout(() => {
+      window.location.assign(dest)
+    }, 50)
+  }
   const [mode, setMode] = useState<Mode>(defaultMode)
   const [showPassword, setShowPassword] = useState(false)
   const [form, setForm] = useState({ email: '', password: '', confirmPassword: '', firstName: '', lastName: '', phone: '', address: '' })
@@ -30,9 +38,6 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
   const [otpMessage, setOtpMessage] = useState('')
   const [resendLoading, setResendLoading] = useState(false)
 
-  // Lock body scroll while the modal is open so the fixed overlay always
-  // sits centered in the current viewport (prevents the user from having
-  // to scroll the page down to find the modal on long pages).
   useEffect(() => {
     if (!isOpen) return
     const prevOverflow = document.body.style.overflow
@@ -94,7 +99,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
         onClose()
         window.dispatchEvent(new Event('storage'))
         window.dispatchEvent(new Event('verdexis:profile'))
-        navigate('/dashboard', { replace: true })
+        goAfterAuth(res.user)
         return
       }
 
@@ -106,7 +111,6 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
         const safeLastName = sanitizeDisplayText(form.lastName, 40)
         setForm((current) => ({ ...current, email: safeEmail, phone: safePhone, address: safeAddress, firstName: safeFirstName, lastName: safeLastName }))
 
-        // basic client-side validations
         if (!safeEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(safeEmail)) {
           setError('Enter a valid email address')
           setLoading(false)
@@ -131,7 +135,6 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
             return
           }
         }
-        // Require address on signup
         if (!safeAddress || safeAddress.length < 5) {
           setError('Please enter your street address')
           setLoading(false)
@@ -168,7 +171,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
         onClose()
         window.dispatchEvent(new Event('storage'))
         window.dispatchEvent(new Event('verdexis:profile'))
-        navigate('/dashboard', { replace: true })
+        goAfterAuth(result.user)
         return
       }
 
@@ -203,7 +206,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
       onClose()
       window.dispatchEvent(new Event('storage'))
       window.dispatchEvent(new Event('verdexis:profile'))
-      navigate('/dashboard', { replace: true })
+      goAfterAuth(r.user)
       return
     } catch (err) {
         const e = err as ApiError
@@ -261,7 +264,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
       onClose()
       window.dispatchEvent(new Event('storage'))
       window.dispatchEvent(new Event('verdexis:profile'))
-      navigate('/dashboard', { replace: true })
+      goAfterAuth(user)
     } catch (err: any) {
       const msg = err?.error || err?.message || 'Passkey authentication failed'
       setError(msg)
@@ -270,18 +273,10 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
   }
 
   return createPortal(
-    // overflow-y-auto + items-start sm:items-center keeps the modal scrollable
-    // from the top of the viewport on short / mobile screens — previously the
-    // form bled below the fold and users had to scroll the whole page to see
-    // the submit button. p-4 keeps a margin all around so the close button
-    // never touches the viewport edge.
     <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center p-4 overflow-y-auto">
-      {/* Backdrop */}
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Modal */}
       <div className="relative w-full max-w-md glass-card overflow-hidden my-auto" style={{ background: 'rgba(15,22,25,0.95)', backdropFilter: 'blur(24px)' }}>
-        {/* Close button */}
         <button
           type="button"
           aria-label="Close"
@@ -292,7 +287,6 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
         </button>
 
         <div className="p-5 sm:p-8">
-          {/* Header */}
           <div className="text-center mb-4 sm:mb-8">
             <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-[#0C8B44] to-[#00E676] flex items-center justify-center mx-auto mb-3 sm:mb-4 overflow-hidden">
               {mode === 'login' ? (
@@ -328,7 +322,6 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
             </p>
           </div>
 
-          {/* Form (placed above OAuth so email/password are visible without scrolling on mobile) */}
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === 'otp' && (
               <div>
@@ -360,62 +353,6 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
                 >
                   {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><Shield className="w-4 h-4" /> {pendingFlow === 'signup' ? 'Verify & Create Account' : 'Verify & Sign In'}</>}
                 </button>
-                {pendingFlow === 'signup' && (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      setError('')
-                      if (!form.email) {
-                        setError('Email is missing from the signup form.')
-                        return
-                      }
-                      setResendLoading(true)
-                      try {
-                        const res = await api.signupResendOtp(form.email)
-                        setPendingToken(res.pendingToken)
-                        setOtpMessage(res.message || `A new code was sent to ${res.email}`)
-                        toast.success('Verification code resent')
-                      } catch (err) {
-                        const e = err as ApiError
-                        setError(e.error || 'Could not resend verification code.')
-                      } finally {
-                        setResendLoading(false)
-                      }
-                    }}
-                    disabled={resendLoading}
-                    className="w-full mt-2 py-3.5 text-sm text-[#E5E5E5] bg-[#1a1a1a] border border-[#ffffff08] rounded-xl hover:bg-[#252525] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {resendLoading ? 'Resending…' : 'Resend code'}
-                  </button>
-                )}
-                {pendingFlow === 'login' && (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      setError('')
-                      if (!pendingToken) {
-                        setError('No pending session available to resend code.')
-                        return
-                      }
-                      setResendLoading(true)
-                      try {
-                        const res = await api.loginResendOtp(pendingToken)
-                        setPendingToken(res.pendingToken)
-                        setOtpMessage(res.message || `A new code was sent to ${res.email}`)
-                        toast.success('Verification code resent')
-                      } catch (err) {
-                        const e = err as ApiError
-                        setError(e.error || 'Could not resend verification code.')
-                      } finally {
-                        setResendLoading(false)
-                      }
-                    }}
-                    disabled={resendLoading}
-                    className="w-full mt-2 py-3.5 text-sm text-[#E5E5E5] bg-[#1a1a1a] border border-[#ffffff08] rounded-xl hover:bg-[#252525] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {resendLoading ? 'Resending…' : 'Resend code'}
-                  </button>
-                )}
                 <button
                   type="button"
                   onClick={() => { setMode('login'); setError(''); setOtpCode(''); setPendingToken(''); setPendingFlow('login'); setOtpMessage('') }}
@@ -477,48 +414,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
                   spellCheck={false}
                 />
               </div>
-              {mode === 'signup' && (
-                <p className="mt-2 text-[11px] text-[#A3A3A3] leading-relaxed">
-                  Please use a real email you can access (like Gmail, Outlook, Yahoo, etc.) for account verification and security alerts.
-                </p>
-              )}
             </div>
-
-            {mode === 'signup' && (
-              <div>
-                <label className="text-xs text-[#737373] mb-1.5 block">Phone number</label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#737373]" />
-                  <input
-                    type="tel"
-                    value={form.phone}
-                    onChange={(e) => setForm({ ...form, phone: sanitizeText(e.target.value, '').replace(/[^\d+()\-\s.]/g, '') })}
-                    className="w-full pl-10 pr-4 py-3 bg-[#1a1a1a] border border-[#ffffff08] rounded-xl text-sm text-[#E5E5E5] placeholder-[#737373] focus:outline-none focus:border-[#0C8B44] transition-colors"
-                    placeholder="+1 555 123 4567"
-                    autoComplete="tel"
-                    required
-                  />
-                </div>
-                <p className="mt-2 text-[11px] text-[#A3A3A3] leading-relaxed">
-                  Required. Used by our team to contact you for account verification and important security notices.
-                </p>
-              </div>
-            )}
-
-            {mode === 'signup' && (
-              <div>
-                <label className="text-xs text-[#737373] mb-1.5 block">Street address</label>
-                <AddressAutocomplete
-                  value={form.address}
-                  onChange={(address) => setForm({ ...form, address: sanitizeDisplayText(address, 200) })}
-                  placeholder="Start typing your address…"
-                  required
-                />
-                <p className="mt-2 text-[11px] text-[#A3A3A3] leading-relaxed">
-                  Required. Start typing and select your address from the suggestions for faster, accurate entry.
-                </p>
-              </div>
-            )}
 
             {mode !== 'forgot' && (
               <div>
@@ -550,31 +446,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
                   Forgot password?
                 </button>
               )}
-              {mode === 'signup' && form.password.length > 0 && <PasswordStrength password={form.password} />}
             </div>
-            )}
-
-            {mode === 'signup' && (
-              <div>
-                <label className="text-xs text-[#737373] mb-1.5 block">Confirm password</label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#737373]" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={form.confirmPassword}
-                    onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
-                    className="w-full pl-10 pr-12 py-3 bg-[#1a1a1a] border border-[#ffffff08] rounded-xl text-sm text-[#E5E5E5] placeholder-[#737373] focus:outline-none focus:border-[#0C8B44] transition-colors"
-                    placeholder="Repeat password"
-                    required
-                  />
-                </div>
-              </div>
-            )}
-
-            {mode === 'forgot' && resetSent && (
-              <div className="p-3 rounded-lg bg-[#0C8B44]/10 border border-[#0C8B44]/30 text-sm text-[#00E676]">
-                If an account exists for that email, a reset link is on its way.
-              </div>
             )}
 
             {error && (
@@ -585,7 +457,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
 
             <button
               type="submit"
-              disabled={loading || (mode === 'signup' && (form.password.length < 8 || form.password !== form.confirmPassword || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)))}
+              disabled={loading}
               className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#0C8B44] text-white text-sm font-medium rounded-xl hover:bg-[#0a7539] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
@@ -599,42 +471,27 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
             </button>
 
             {mode === 'login' && (
-              <>
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-[#ffffff08]" />
-                  </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-[rgba(15,22,25,0.95)] px-2 text-[#737373]">Or</span>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handlePasskeyLogin}
-                  className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#1a1a1a] border border-[#ffffff15] text-[#E5E5E5] text-sm font-medium rounded-xl hover:bg-[#252525] hover:border-[#0C8B44]/30 transition-colors"
-                >
-                  <Fingerprint className="w-5 h-5" />
-                  Sign in with passkey
-                </button>
-              </>
+              <button
+                type="button"
+                onClick={handlePasskeyLogin}
+                className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#1a1a1a] border border-[#ffffff15] text-[#E5E5E5] text-sm font-medium rounded-xl hover:bg-[#252525] transition-colors"
+              >
+                <Fingerprint className="w-5 h-5" />
+                Sign in with passkey
+              </button>
             )}
             </>
             )}
           </form>
 
-          {/* Switch mode */}
           {mode !== 'otp' && <p className="text-center text-sm text-[#737373] mt-6">
             {mode === 'forgot' ? (
-              <button
-                onClick={goBackToLogin}
-                className="inline-flex items-center gap-1 text-[#0C8B44] hover:text-[#00E676] transition-colors font-medium"
-              >
-                <ArrowLeft className="w-3 h-3" /> Back to sign in
+              <button onClick={goBackToLogin} className="text-[#0C8B44] hover:text-[#00E676] transition-colors font-medium">
+                Back to sign in
               </button>
             ) : mode === 'login' ? (
               <>
-                Don&apos;t have an account?{' '}
+                Don't have an account?{' '}
                 <button onClick={switchMode} className="text-[#0C8B44] hover:text-[#00E676] transition-colors font-medium">
                   Sign up free
                 </button>
@@ -648,49 +505,9 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
               </>
             )}
           </p>}
-
-          {/* Trust indicators */}
-          <div className="flex items-center justify-center gap-4 mt-6 pt-6 border-t border-[#ffffff08]">
-            <span className="flex items-center gap-1 text-xs text-[#737373]" title="All traffic encrypted with TLS 1.3">
-              <Lock className="w-3 h-3" /> TLS 1.3
-            </span>
-            <span className="flex items-center gap-1 text-xs text-[#737373]" title="Data at rest encrypted with AES-256">
-              <Shield className="w-3 h-3" /> AES-256
-            </span>
-            <span className="flex items-center gap-1 text-xs text-[#737373]">
-              <Fingerprint className="w-3 h-3" /> 2FA Ready
-            </span>
-          </div>
         </div>
       </div>
     </div>,
     document.body
-  )
-}
-
-function PasswordStrength({ password }: { password: string }) {
-  const checks = [password.length >= 8, /[a-z]/.test(password), /[A-Z]/.test(password), /\d/.test(password), /[^A-Za-z0-9]/.test(password)]
-  const score = checks.filter(Boolean).length
-  const labels = ['Too weak', 'Weak', 'Fair', 'Good', 'Strong', 'Excellent']
-  const colors = ['#f44336', '#f44336', '#F57C00', '#FFC107', '#9CCC65', '#0C8B44']
-  const tone = colors[score]
-  const tips: string[] = []
-  if (!checks[0]) tips.push('8+ characters')
-  if (!checks[1]) tips.push('lowercase')
-  if (!checks[2]) tips.push('UPPERCASE')
-  if (!checks[3]) tips.push('a digit')
-  if (!checks[4]) tips.push('a symbol')
-  return (
-    <div className="mt-2">
-      <div className="flex gap-1">
-        {[0, 1, 2, 3, 4].map((i) => (
-          <div key={`auth-skel-${i}`} className="h-1 flex-1 rounded-full transition-colors" style={{ background: i < score ? tone : '#1a1a1a' }} />
-        ))}
-      </div>
-      <p className="mt-1.5 text-[11px]" style={{ color: tone }}>
-        {labels[score]}
-        {tips.length > 0 && <span className="text-[#737373]"> · add {tips.join(', ')}</span>}
-      </p>
-    </div>
   )
 }
