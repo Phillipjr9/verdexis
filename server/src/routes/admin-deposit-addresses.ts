@@ -1,10 +1,10 @@
 import { Router } from 'express'
 import { prisma } from '../db.js'
-import type { AuthedRequest } from '../auth.js'
+import { requireAuth, requireAdmin, type AuthedRequest } from '../auth.js'
 
 const router: Router = Router()
 
-router.get('/users/:id/deposit-addresses', async (req: AuthedRequest, res) => {
+router.get('/users/:id/deposit-addresses', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.params.id },
     select: { id: true, prefs: true },
@@ -23,7 +23,7 @@ router.get('/users/:id/deposit-addresses', async (req: AuthedRequest, res) => {
   res.json({ addresses })
 })
 
-router.put('/users/:id/deposit-addresses', async (req: AuthedRequest, res) => {
+router.put('/users/:id/deposit-addresses', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.params.id },
     select: { id: true, prefs: true },
@@ -46,7 +46,7 @@ router.put('/users/:id/deposit-addresses', async (req: AuthedRequest, res) => {
   res.json({ ok: true, addresses: prefs.depositAddresses })
 })
 
-router.delete('/users/:id/deposit-addresses', async (req: AuthedRequest, res) => {
+router.delete('/users/:id/deposit-addresses', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.params.id },
     select: { id: true, prefs: true },
