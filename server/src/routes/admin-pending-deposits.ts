@@ -11,12 +11,12 @@ import { Router } from 'express'
 import { prisma } from '../db.js'
 import { requireAuth, requireAdmin, type AuthedRequest } from '../auth.js'
 import { recordLedgerTransaction } from '../services/ledger.js'
+import { sendDepositNotification } from '../notificationService.js'
 
 const router: Router = Router()
 
 router.get('/pending-deposits', requireAuth, requireAdmin, async (_req, res) => {
   try {
-    // status/kind are free-form strings in schema — match common variants
     const pendingStatuses = ['pending', 'Pending', 'PENDING', 'awaiting_approval', 'submitted']
     const [txRows, onchain] = await Promise.all([
       prisma.transaction.findMany({
@@ -113,6 +113,9 @@ router.post('/pending-deposits/:id/approve', requireAuth, requireAdmin, async (r
           data: { status: 'completed' },
         })
       })
+      await sendDepositNotification(tx.userId, tx.amount, tx.currency, 'credited').catch((e) =>
+        console.error('[admin] user deposit email failed', e),
+      )
       res.json({ ok: true, source: 'transaction', id })
       return
     }
@@ -127,19 +130,23 @@ router.post('/pending-deposits/:id/approve', requireAuth, requireAdmin, async (r
       return
     }
 
+    const body = (req.body || {}) as { currency?: string; amount?: number; note?: string }
+    const creditAsset = (body.currency || pending.asset || '').toUpperCase() || pending.asset
+    const creditAmount = typeof body.amount === 'number' && body.amount > 0 ? body.amount : pending.amount
+
     await prisma.$transaction(async (client) => {
       const ledger = await recordLedgerTransaction({
         tx: client,
         userId: pending.userId,
-        asset: pending.asset,
-        amount: pending.amount,
+        asset: creditAsset,
+        amount: creditAmount,
         entryType: 'debit',
         kind: 'deposit',
         eventType: 'deposit_onchain_approve',
         sourceType: 'pending_deposit',
         sourceId: pending.id,
         externalRef: `approve-pending:${pending.id}`,
-        description: `On-chain deposit ${pending.txHash}`,
+        description: body.note || `On-chain deposit ${pending.txHash}`,
         reference: pending.txHash,
         subType: 'admin_approve',
         recordTransaction: true,
@@ -155,6 +162,9 @@ router.post('/pending-deposits/:id/approve', requireAuth, requireAdmin, async (r
       })
     })
 
+    await sendDepositNotification(pending.userId, creditAmount, creditAsset, 'credited').catch((e) =>
+      console.error('[admin] user deposit email failed', e),
+    )
     res.json({ ok: true, source: 'onchain', id })
   } catch (e) {
     console.error('[admin] approve pending deposit', e)
@@ -169,7 +179,7 @@ router.post('/pending-deposits/:id/reject', requireAuth, requireAdmin, async (re
       ? req.body.note
       : typeof req.body?.reason === 'string'
         ? req.body.reason
-        : ''
+        : 'Rejected by admin'
   try {
     const tx = await prisma.transaction.findUnique({ where: { id } })
     if (tx && String(tx.kind).toLowerCase() === 'deposit' && String(tx.status).toLowerCase() === 'pending') {
@@ -182,6 +192,9 @@ router.post('/pending-deposits/:id/reject', requireAuth, requireAdmin, async (re
             : `${tx.reference || 'Deposit'} (rejected)`,
         },
       })
+      await sendDepositNotification(tx.userId, tx.amount, tx.currency, 'rejected').catch((e) =>
+        console.error('[admin] user deposit reject email failed', e),
+      )
       res.json({ ok: true, source: 'transaction', id })
       return
     }
@@ -202,6 +215,9 @@ router.post('/pending-deposits/:id/reject', requireAuth, requireAdmin, async (re
         note: note || pending.note || 'Rejected by admin',
       },
     })
+    await sendDepositNotification(pending.userId, pending.amount, pending.asset, 'rejected').catch((e) =>
+      console.error('[admin] user deposit reject email failed', e),
+    )
     res.json({ ok: true, source: 'onchain', id })
   } catch (e) {
     console.error('[admin] reject pending deposit', e)
