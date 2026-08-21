@@ -1,6 +1,6 @@
 /**
  * Restores wallet.ts and admin-pending-deposits.ts if corrupted (PLACEHOLDER / SEE_FILE / empty).
- * Prefers local base64 parts scripts/wallet.restore.b64.N then single file then GitHub raw.
+ * Order: local wallet.part.N.ts → local b64 parts → GitHub raw.
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -26,6 +26,18 @@ async function download(url) {
   const res = await fetch(url)
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`)
   return res.text()
+}
+
+function fromLocalParts() {
+  const parts = []
+  for (let i = 0; i < 16; i++) {
+    const p = path.join(__dirname, `wallet.part.${i}.ts`)
+    if (!fs.existsSync(p)) break
+    parts.push(fs.readFileSync(p, 'utf8'))
+  }
+  if (!parts.length) return null
+  const text = parts.join('')
+  return isUsable(text) ? text : null
 }
 
 function fromLocalB64() {
@@ -55,8 +67,8 @@ function fromLocalB64() {
 async function main() {
   let wallet = fs.existsSync(walletPath) ? fs.readFileSync(walletPath, 'utf8') : ''
   if (!isUsable(wallet)) {
-    console.warn('[restore-wallet] wallet.ts unusable; trying local b64 then download')
-    wallet = fromLocalB64() || ''
+    console.warn('[restore-wallet] wallet.ts unusable; trying local parts / b64 / download')
+    wallet = fromLocalParts() || fromLocalB64() || ''
     if (!isUsable(wallet)) {
       wallet = await download(GOOD_WALLET)
     }
