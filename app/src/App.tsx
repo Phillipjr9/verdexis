@@ -57,6 +57,7 @@ const Help = withLazyErrorBoundary(() => import('./pages/Help'), 'Help')
 const AssetDetail = withLazyErrorBoundary(() => import('./pages/AssetDetail'), 'Asset Detail')
 const Activity = withLazyErrorBoundary(() => import('./pages/Activity'), 'Activity')
 const AdminDashboard = withLazyErrorBoundary(() => import('./pages/AdminDashboard'), 'Admin Dashboard')
+const AdminQueues = withLazyErrorBoundary(() => import('./pages/AdminQueues'), 'Admin Queues')
 const AdminDeposits = withLazyErrorBoundary(() => import('./pages/AdminDeposits'), 'Admin Deposits')
 const AdminUsers = withLazyErrorBoundary(() => import('./pages/AdminUsers'), 'Admin Users')
 const AdminUserDetail = withLazyErrorBoundary(() => import('./pages/AdminUserDetail'), 'Admin User Detail')
@@ -210,6 +211,7 @@ function RoutedPages() {
           <Route path="/asset/:id" element={<AssetDetail />} />
           <Route path="/coin/:id" element={<AssetDetail />} />
           <Route path="/admin" element={<RequireAdmin><AdminDashboard /></RequireAdmin>} />
+          <Route path="/admin/queues" element={<RequireAdmin><AdminQueues /></RequireAdmin>} />
           <Route path="/admin/users" element={<RequireAdmin><AdminUsers /></RequireAdmin>} />
           <Route path="/admin/users/:id" element={<RequireAdmin><AdminUserDetail /></RequireAdmin>} />
           <Route path="/admin/audit" element={<RequireAdmin><AdminAudit /></RequireAdmin>} />
@@ -229,7 +231,7 @@ function RoutedPages() {
           <Route path="/screener" element={<Screener />} />
           <Route path="/leaderboard" element={<RequireAuth><Leaderboard /></RequireAuth>} />
           <Route path="/referral" element={<RequireAuth><Referral /></RequireAuth>} />
-          <Route path="/learn" element={<LearnCenter />} />
+          <Route path="/learn" element={<LearnCenter /></RequireAuth>} />
           <Route path="/kyc" element={<RequireAuth><KYC /></RequireAuth>} />
           <Route path="/achievements" element={<RequireAuth><Achievements /></RequireAuth>} />
           <Route path="/loyalty" element={<RequireAuth><Loyalty /></RequireAuth>} />
