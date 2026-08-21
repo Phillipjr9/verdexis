@@ -1,6 +1,6 @@
 /**
  * Restores wallet.ts and admin-pending-deposits.ts if corrupted (PLACEHOLDER / SEE_FILE / empty).
- * Prefers local base64 snapshot (scripts/wallet.restore.b64 or .b64.0+.b64.1), then GitHub raw.
+ * Prefers local base64 parts scripts/wallet.restore.b64.N then single file then GitHub raw.
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -9,9 +9,6 @@ import { fileURLToPath } from 'node:url'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const walletPath = path.join(__dirname, '../src/routes/wallet.ts')
 const apdPath = path.join(__dirname, '../src/routes/admin-pending-deposits.ts')
-const localB64 = path.join(__dirname, 'wallet.restore.b64')
-const localB64_0 = path.join(__dirname, 'wallet.restore.b64.0')
-const localB64_1 = path.join(__dirname, 'wallet.restore.b64.1')
 
 function isUsable(text, min = 500) {
   if (!text || text.length < min) return false
@@ -33,13 +30,19 @@ async function download(url) {
 
 function fromLocalB64() {
   try {
+    const single = path.join(__dirname, 'wallet.restore.b64')
     let b64 = ''
-    if (fs.existsSync(localB64)) {
-      b64 = fs.readFileSync(localB64, 'utf8')
-    } else if (fs.existsSync(localB64_0) && fs.existsSync(localB64_1)) {
-      b64 = fs.readFileSync(localB64_0, 'utf8') + fs.readFileSync(localB64_1, 'utf8')
+    if (fs.existsSync(single)) {
+      b64 = fs.readFileSync(single, 'utf8')
     } else {
-      return null
+      const parts = []
+      for (let i = 0; i < 32; i++) {
+        const p = path.join(__dirname, `wallet.restore.b64.${i}`)
+        if (!fs.existsSync(p)) break
+        parts.push(fs.readFileSync(p, 'utf8'))
+      }
+      if (!parts.length) return null
+      b64 = parts.join('')
     }
     b64 = b64.replace(/\s+/g, '')
     const text = Buffer.from(b64, 'base64').toString('utf8')
