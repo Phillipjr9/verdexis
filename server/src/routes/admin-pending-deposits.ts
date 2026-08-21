@@ -16,18 +16,31 @@ const router: Router = Router()
 
 router.get('/pending-deposits', requireAuth, requireAdmin, async (_req, res) => {
   try {
+    // status/kind are free-form strings in schema — match common variants
+    const pendingStatuses = ['pending', 'Pending', 'PENDING', 'awaiting_approval', 'submitted']
     const [txRows, onchain] = await Promise.all([
       prisma.transaction.findMany({
-        where: { kind: 'deposit', status: 'pending' },
+        where: {
+          OR: [
+            { kind: 'deposit', status: { in: pendingStatuses } },
+            { kind: 'Deposit', status: { in: pendingStatuses } },
+          ],
+        },
         include: { user: { select: { id: true, email: true, name: true } } },
         orderBy: { createdAt: 'asc' },
         take: 200,
+      }).catch((e) => {
+        console.error('[admin] list pending tx deposits failed', e)
+        return []
       }),
       prisma.pendingDeposit.findMany({
-        where: { status: 'pending' },
+        where: { status: { in: pendingStatuses } },
         include: { user: { select: { id: true, email: true, name: true } } },
         orderBy: { createdAt: 'asc' },
         take: 200,
+      }).catch((e) => {
+        console.error('[admin] list pending on-chain deposits failed', e)
+        return []
       }),
     ])
 
@@ -66,7 +79,7 @@ router.get('/pending-deposits', requireAuth, requireAdmin, async (_req, res) => 
       })),
     ].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
 
-    res.json({ deposits })
+    res.json({ deposits, count: deposits.length })
   } catch (e) {
     console.error('[admin] list pending deposits', e)
     res.status(500).json({ error: e instanceof Error ? e.message : 'Failed to list pending deposits' })
@@ -77,7 +90,7 @@ router.post('/pending-deposits/:id/approve', requireAuth, requireAdmin, async (r
   const id = req.params.id
   try {
     const tx = await prisma.transaction.findUnique({ where: { id } })
-    if (tx && tx.kind === 'deposit' && tx.status === 'pending') {
+    if (tx && String(tx.kind).toLowerCase() === 'deposit' && String(tx.status).toLowerCase() === 'pending') {
       await prisma.$transaction(async (client) => {
         await recordLedgerTransaction({
           tx: client,
@@ -109,7 +122,7 @@ router.post('/pending-deposits/:id/approve', requireAuth, requireAdmin, async (r
       res.status(404).json({ error: 'Pending deposit not found' })
       return
     }
-    if (pending.status !== 'pending') {
+    if (String(pending.status).toLowerCase() !== 'pending') {
       res.status(400).json({ error: `Deposit already ${pending.status}` })
       return
     }
@@ -159,7 +172,7 @@ router.post('/pending-deposits/:id/reject', requireAuth, requireAdmin, async (re
         : ''
   try {
     const tx = await prisma.transaction.findUnique({ where: { id } })
-    if (tx && tx.kind === 'deposit' && tx.status === 'pending') {
+    if (tx && String(tx.kind).toLowerCase() === 'deposit' && String(tx.status).toLowerCase() === 'pending') {
       await prisma.transaction.update({
         where: { id },
         data: {
@@ -178,7 +191,7 @@ router.post('/pending-deposits/:id/reject', requireAuth, requireAdmin, async (re
       res.status(404).json({ error: 'Pending deposit not found' })
       return
     }
-    if (pending.status !== 'pending') {
+    if (String(pending.status).toLowerCase() !== 'pending') {
       res.status(400).json({ error: `Deposit already ${pending.status}` })
       return
     }
