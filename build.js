@@ -17,6 +17,7 @@ try {
 
   console.log('Patching wallet deposit alerts...');
   execSync('node scripts/patch-wallet-deposit-alerts.mjs', { cwd: serverDir, stdio: 'inherit' });
+  execSync('node scripts/patch-user-money-emails.mjs', { cwd: serverDir, stdio: 'inherit' });
 
   console.log('Building server bundle...');
   execSync('npm run build', { cwd: serverDir, stdio: 'inherit' });
