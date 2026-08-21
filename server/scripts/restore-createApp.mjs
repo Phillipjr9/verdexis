@@ -4,7 +4,13 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const out = path.join(__dirname, '../src/createApp.ts')
-const PART_COUNT = 7
+
+if (fs.existsSync(out) && fs.statSync(out).size > 15000) {
+  console.log('[restore-createApp] using committed createApp.ts (', fs.statSync(out).size, 'bytes)')
+  process.exit(0)
+}
+
+const PART_COUNT = 6
 const parts = []
 for (let i = 0; i < PART_COUNT; i++) {
   const p = path.join(__dirname, `createApp.b64.${i}`)
