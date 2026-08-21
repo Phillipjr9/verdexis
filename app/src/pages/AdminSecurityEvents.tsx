@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import AdminLayout from '../components/AdminLayout'
-import { adminApi } from '../lib/adminApi'
+import { adminSecurityApi } from '../lib/adminSecurityApi'
 import { Shield } from 'lucide-react'
 
 export default function AdminSecurityEvents() {
@@ -11,7 +11,7 @@ export default function AdminSecurityEvents() {
   useEffect(() => {
     const load = async () => {
       try {
-        const result = await (adminApi as any).get?.('/security/events')
+        const result = await adminSecurityApi.listEvents({ days: 30 })
         setEvents(result?.events || [])
       } catch {
         toast.error('Failed to load security events')
@@ -49,7 +49,7 @@ export default function AdminSecurityEvents() {
                 {events.map((event) => (
                   <tr key={event.id} className="border-b border-[#ffffff08]">
                     <td className="px-6 py-4 text-[#E5E5E5]">{event.type || event.name || '—'}</td>
-                    <td className="px-6 py-4 text-[#A0A0A0]">{event.userEmail || event.userId || '—'}</td>
+                    <td className="px-6 py-4 text-[#A0A0A0]">{event.user?.email || event.userEmail || event.userId || '—'}</td>
                     <td className="px-6 py-4 text-[#A0A0A0]">{event.severity || '—'}</td>
                     <td className="px-6 py-4 text-[#A0A0A0]">{event.resolved ? 'Yes' : 'No'}</td>
                     <td className="px-6 py-4 text-[#A0A0A0]">
