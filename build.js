@@ -12,6 +12,9 @@ try {
   console.log('Installing server dependencies...');
   execSync('npm install --include=dev', { cwd: serverDir, stdio: 'inherit' });
 
+  console.log('Restoring server createApp.ts...');
+  execSync('node scripts/restore-createApp.mjs', { cwd: serverDir, stdio: 'inherit' });
+
   console.log('Building server bundle...');
   execSync('npm run build', { cwd: serverDir, stdio: 'inherit' });
 
