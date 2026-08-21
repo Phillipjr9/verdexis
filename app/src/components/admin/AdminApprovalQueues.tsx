@@ -5,7 +5,10 @@ import { adminApi } from '../../lib/adminApi'
 import { adminPendingDepositsApi } from '../../lib/adminPendingDepositsApi'
 import { Banknote, Link2 as LinkIcon, ArrowUpRight } from 'lucide-react'
 
-/** Live approval queues: fiat deposits, on-chain deposits, withdrawals. */
+/** Live approval queues: fiat deposits, on-chain deposits, withdrawals.
+ *  Deposit approve/reject is one-click (credits user + emails them).
+ *  Withdrawal approve still asks for tx hash (payout proof).
+ */
 export function AdminApprovalQueues({
   onPendingDepositsLoaded,
 }: {
@@ -35,7 +38,9 @@ export function AdminApprovalQueues({
         setPendingDeposits(r.deposits)
         onPendingDepositsLoaded?.(r.deposits.length)
       })
-      .catch(() => {})
+      .catch((e) => {
+        toast.error((e as { error?: string }).error || 'Failed to load pending deposits')
+      })
       .finally(() => setPendingLoading(false))
   }
 
@@ -44,7 +49,9 @@ export function AdminApprovalQueues({
     adminPendingDepositsApi
       .listOnchainDeposits('pending')
       .then((r) => setOnchain(r.pendingDeposits))
-      .catch(() => {})
+      .catch((e) => {
+        toast.error((e as { error?: string }).error || 'Failed to load on-chain deposits')
+      })
       .finally(() => setOnchainLoading(false))
   }
 
@@ -53,7 +60,9 @@ export function AdminApprovalQueues({
     adminApi
       .listPendingWithdrawals()
       .then((r) => setPendingWithdrawals(r.withdrawals))
-      .catch(() => {})
+      .catch((e) => {
+        toast.error((e as { error?: string }).error || 'Failed to load withdrawals')
+      })
       .finally(() => setWithdrawalsLoading(false))
   }
 
@@ -69,11 +78,12 @@ export function AdminApprovalQueues({
     return () => clearInterval(t)
   }, [])
 
+  /** One-click: credit submitted amount/currency, email user. */
   async function handleApprove(id: string) {
     setBusyTx(id)
     try {
       await adminPendingDepositsApi.approveDeposit(id)
-      toast.success('Deposit approved — funds credited to user')
+      toast.success('Deposit approved — user credited and emailed')
       refreshPending()
     } catch (e) {
       toast.error((e as { error?: string }).error || 'Approval failed')
@@ -83,11 +93,11 @@ export function AdminApprovalQueues({
   }
 
   async function handleReject(id: string) {
-    const reason = window.prompt('Reason for rejection (shown to user)?', '') || ''
+    if (!window.confirm('Reject this deposit? The user will be notified by email.')) return
     setBusyTx(id)
     try {
-      await adminPendingDepositsApi.rejectDeposit(id, reason)
-      toast.success('Deposit rejected')
+      await adminPendingDepositsApi.rejectDeposit(id, 'Rejected by admin')
+      toast.success('Deposit rejected — user notified')
       refreshPending()
     } catch (e) {
       toast.error((e as { error?: string }).error || 'Rejection failed')
@@ -96,31 +106,15 @@ export function AdminApprovalQueues({
     }
   }
 
+  /** One-click: credit the submitted asset + amount, email user. */
   async function handleApproveOnchain(d: (typeof onchain)[number]) {
-    const currencyInput = window.prompt(
-      `Credit user as which currency?\n(Default: ${d.asset}. Type USD to credit cash equivalent instead.)`,
-      d.asset,
-    )
-    if (currencyInput === null) return
-    const amountInput = window.prompt(
-      `Credit how much ${currencyInput}?\n(Default: ${d.amount} — the on-chain amount.)`,
-      String(d.amount),
-    )
-    if (amountInput === null) return
-    const amount = Number(amountInput)
-    if (!Number.isFinite(amount) || amount <= 0) {
-      toast.error('Invalid amount')
-      return
-    }
-    const note = window.prompt('Optional note for the audit log / user notification:', '') || undefined
     setBusyOnchain(d.id)
     try {
       await adminPendingDepositsApi.approveOnchainDeposit(d.id, {
-        currency: currencyInput.trim().toUpperCase(),
-        amount,
-        note,
+        currency: String(d.asset || d.currency || '').toUpperCase(),
+        amount: Number(d.amount),
       })
-      toast.success(`Credited ${amount} ${currencyInput} to ${d.user.email}`)
+      toast.success(`Credited ${d.amount} ${d.asset || d.currency} to ${d.user?.email || 'user'}`)
       refreshOnchain()
     } catch (e) {
       toast.error((e as { error?: string }).error || 'Approval failed')
@@ -130,11 +124,11 @@ export function AdminApprovalQueues({
   }
 
   async function handleRejectOnchain(d: (typeof onchain)[number]) {
-    const note = window.prompt('Reason for rejection (shown to user)?', '') || ''
+    if (!window.confirm('Reject this on-chain deposit? The user will be notified by email.')) return
     setBusyOnchain(d.id)
     try {
-      await adminPendingDepositsApi.rejectOnchainDeposit(d.id, note)
-      toast.success('On-chain deposit rejected')
+      await adminPendingDepositsApi.rejectOnchainDeposit(d.id, 'Rejected by admin')
+      toast.success('On-chain deposit rejected — user notified')
       refreshOnchain()
     } catch (e) {
       toast.error((e as { error?: string }).error || 'Rejection failed')
@@ -159,11 +153,11 @@ export function AdminApprovalQueues({
   }
 
   async function handleRejectWithdrawal(id: string) {
-    const reason = window.prompt('Reason for rejection (shown to user)?', '') || ''
+    if (!window.confirm('Reject this withdrawal? Balance will be refunded and the user emailed.')) return
     setBusyWithdrawal(id)
     try {
-      await adminApi.rejectWithdrawal(id, reason)
-      toast.success('Withdrawal rejected — balance refunded to user')
+      await adminApi.rejectWithdrawal(id, 'Rejected by admin')
+      toast.success('Withdrawal rejected — balance refunded, user notified')
       refreshWithdrawals()
     } catch (e) {
       toast.error((e as { error?: string }).error || 'Rejection failed')
@@ -201,8 +195,8 @@ export function AdminApprovalQueues({
               >
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-[#E5E5E5]">
-                    {d.user.name} <span className="text-[#737373]">·</span>{' '}
-                    <span className="text-[11px] text-[#737373]">{d.user.email}</span>
+                    {d.user?.name || '—'} <span className="text-[#737373]">·</span>{' '}
+                    <span className="text-[11px] text-[#737373]">{d.user?.email || '—'}</span>
                   </p>
                   <p className="text-[11px] text-[#737373] truncate">{d.reference || 'No reference'}</p>
                 </div>
@@ -262,15 +256,15 @@ export function AdminApprovalQueues({
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Link to={`/admin/users/${d.user.id}`} className="text-sm text-[#E5E5E5] hover:text-[#0C8B44]">
-                      {d.user.name}
+                    <Link to={`/admin/users/${d.user?.id || ''}`} className="text-sm text-[#E5E5E5] hover:text-[#0C8B44]">
+                      {d.user?.name || '—'}
                     </Link>
                     <span className="text-[#737373]">·</span>
-                    <span className="text-[11px] text-[#737373]">{d.user.email}</span>
+                    <span className="text-[11px] text-[#737373]">{d.user?.email || '—'}</span>
                   </div>
                   <p className="text-[11px] text-[#737373] truncate font-mono mt-1">
-                    from {d.fromAddress.slice(0, 10)}…{d.fromAddress.slice(-6)} → {d.toAddress.slice(0, 10)}…
-                    {d.toAddress.slice(-6)}
+                    from {(d.fromAddress || '').slice(0, 10)}…{(d.fromAddress || '').slice(-6)} → {(d.toAddress || '').slice(0, 10)}…
+                    {(d.toAddress || '').slice(-6)}
                   </p>
                 </div>
                 <div className="text-right">
@@ -329,11 +323,11 @@ export function AdminApprovalQueues({
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Link to={`/admin/users/${w.user.id}`} className="text-sm text-[#E5E5E5] hover:text-[#0C8B44]">
-                      {w.user.name}
+                    <Link to={`/admin/users/${w.user?.id || ''}`} className="text-sm text-[#E5E5E5] hover:text-[#0C8B44]">
+                      {w.user?.name || '—'}
                     </Link>
                     <span className="text-[#737373]">·</span>
-                    <span className="text-[11px] text-[#737373]">{w.user.email}</span>
+                    <span className="text-[11px] text-[#737373]">{w.user?.email || '—'}</span>
                   </div>
                   <p className="text-[11px] text-[#737373] font-mono mt-1 truncate">
                     Send to: {w.walletLink?.address ?? 'unknown'}
