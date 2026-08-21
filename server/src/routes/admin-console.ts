@@ -7,6 +7,7 @@ import { z } from 'zod'
 import bcrypt from 'bcryptjs'
 import { prisma } from '../db.js'
 import { requireAuth, requireAdmin, type AuthedRequest } from '../auth.js'
+import { generateTransactionId } from '../utils/transactionIdGenerator.js'
 
 const router: Router = Router()
 
@@ -158,6 +159,7 @@ router.post('/users', requireAuth, requireAdmin, async (req: AuthedRequest, res)
   if (parsed.data.initialUsdBalance) {
     await prisma.transaction.create({
       data: {
+        transactionId: generateTransactionId(),
         userId: user.id,
         kind: 'deposit',
         currency: 'USD',
@@ -168,7 +170,14 @@ router.post('/users', requireAuth, requireAdmin, async (req: AuthedRequest, res)
     }).catch(() => {})
   }
   await writeAudit(req.userId!, 'user.create', user.id, { email: user.email, role: user.role })
-  res.status(201).json({ user: { id: user.id, email: user.email, name: user.name, investmentId: (user as any).investmentId } })
+  res.status(201).json({
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      investmentId: (user as { investmentId?: string | null }).investmentId,
+    },
+  })
 })
 
 router.post('/users/bulk', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
@@ -213,7 +222,7 @@ router.post('/users/bulk', requireAuth, requireAdmin, async (req: AuthedRequest,
         await prisma.user.delete({ where: { id } })
         count++
       } else if (parsed.data.action === 'revoke') {
-        await prisma.session.deleteMany({ where: { userId: id } }).catch(() => {})
+        await prisma.userSession.deleteMany({ where: { userId: id } }).catch(() => {})
         count++
       }
     } catch (e) {
