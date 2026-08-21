@@ -4,15 +4,15 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const out = path.join(__dirname, '../src/createApp.ts')
+const PART_COUNT = 7
 const parts = []
-for (let i = 0; ; i++) {
+for (let i = 0; i < PART_COUNT; i++) {
   const p = path.join(__dirname, `createApp.b64.${i}`)
-  if (!fs.existsSync(p)) break
+  if (!fs.existsSync(p)) {
+    console.error('[restore-createApp] missing', p)
+    process.exit(1)
+  }
   parts.push(fs.readFileSync(p, 'utf8').trim())
-}
-if (!parts.length) {
-  console.error('[restore-createApp] no b64 parts found')
-  process.exit(1)
 }
 const buf = Buffer.concat(parts.map((p) => Buffer.from(p, 'base64')))
 fs.writeFileSync(out, buf)
