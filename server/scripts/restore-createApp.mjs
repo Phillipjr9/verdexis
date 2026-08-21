@@ -10,9 +10,27 @@ if (fs.existsSync(out) && fs.statSync(out).size > 15000) {
   process.exit(0)
 }
 
-const PART_COUNT = 6
+const single = path.join(__dirname, 'createApp.full.b64')
+let b64 = ''
+if (fs.existsSync(single)) {
+  b64 = fs.readFileSync(single, 'utf8').trim()
+} else {
+  for (let i = 0; ; i++) {
+    const p = path.join(__dirname, `createApp.full.b64.${i}`)
+    if (!fs.existsSync(p)) break
+    b64 += fs.readFileSync(p, 'utf8').trim()
+  }
+}
+
+if (b64) {
+  const buf = Buffer.from(b64, 'base64')
+  fs.writeFileSync(out, buf)
+  console.log('[restore-createApp] wrote', out, buf.length, 'bytes')
+  process.exit(0)
+}
+
 const parts = []
-for (let i = 0; i < PART_COUNT; i++) {
+for (let i = 0; i < 6; i++) {
   const p = path.join(__dirname, `createApp.b64.${i}`)
   if (!fs.existsSync(p)) {
     console.error('[restore-createApp] missing', p)
@@ -22,4 +40,4 @@ for (let i = 0; i < PART_COUNT; i++) {
 }
 const buf = Buffer.concat(parts.map((p) => Buffer.from(p, 'base64')))
 fs.writeFileSync(out, buf)
-console.log('[restore-createApp] wrote', out, buf.length, 'bytes')
+console.log('[restore-createApp] wrote (legacy parts)', out, buf.length, 'bytes')
