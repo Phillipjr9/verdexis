@@ -113,7 +113,6 @@ const PublicInformation = withLazyErrorBoundary(() => import('./pages/PublicInfo
 
 export default function App() {
   useKeyboardShortcuts()
-  // Development helper: capture duplicate-key React warnings and print stack traces
   if (typeof window !== 'undefined' && import.meta.env.DEV) {
     const _orig = console.error.bind(console)
     console.error = (...args: any[]) => {
@@ -162,7 +161,6 @@ export default function App() {
   )
 }
 
-// Wrapper component for route-specific styling.
 function RoutedPages() {
   const location = useLocation()
   return (
@@ -189,7 +187,6 @@ function RoutedPages() {
           <Route path="/goals" element={<RequireAuth><Goals /></RequireAuth>} />
           <Route path="/legal" element={<Legal />} />
           <Route path="/about" element={<About />} />
-          {/* Products page removed from public site - keep page file for internal features if needed */}
           <Route path="/privacy" element={<PublicInformation />} />
           <Route path="/terms" element={<PublicInformation />} />
           <Route path="/cookies" element={<PublicInformation />} />
@@ -231,7 +228,7 @@ function RoutedPages() {
           <Route path="/screener" element={<Screener />} />
           <Route path="/leaderboard" element={<RequireAuth><Leaderboard /></RequireAuth>} />
           <Route path="/referral" element={<RequireAuth><Referral /></RequireAuth>} />
-          <Route path="/learn" element={<LearnCenter /></RequireAuth>} />
+          <Route path="/learn" element={<LearnCenter />} />
           <Route path="/kyc" element={<RequireAuth><KYC /></RequireAuth>} />
           <Route path="/achievements" element={<RequireAuth><Achievements /></RequireAuth>} />
           <Route path="/loyalty" element={<RequireAuth><Loyalty /></RequireAuth>} />
