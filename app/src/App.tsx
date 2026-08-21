@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { Routes, Route, useLocation } from 'react-router-dom'
+import { Analytics as VercelAnalytics } from '@vercel/analytics/react'
 import ScrollToTop from './components/ScrollToTop'
 import DocumentTitle from './components/DocumentTitle'
 import CookieBanner from './components/CookieBanner'
@@ -157,6 +158,7 @@ export default function App() {
       <SessionTimeoutWarning />
       <Toaster position="top-right" theme="dark" richColors />
       <TxModalHost />
+      <VercelAnalytics />
     </ErrorBoundary>
   )
 }
