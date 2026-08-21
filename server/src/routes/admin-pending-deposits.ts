@@ -1,11 +1,5 @@
 /**
- * Admin queue for user deposit requests.
- *
- * Two storage paths exist in the product:
- *   1. Transaction rows with kind=deposit + status=pending  (wire / ACH / wallet form)
- *   2. PendingDeposit rows                                  (on-chain hash submissions)
- *
- * This router lists and resolves both so the admin console is the single approval surface.
+ * Admin queue for user deposit requests (Transaction + PendingDeposit).
  */
 import { Router } from 'express'
 import { prisma } from '../db.js'
@@ -16,37 +10,40 @@ import { sendDepositNotification } from '../notificationService.js'
 const router: Router = Router()
 
 function isPendingStatus(s: string | null | undefined): boolean {
-  return ['pending', 'awaiting_approval', 'submitted'].includes(String(s || '').toLowerCase())
+  const v = String(s || '').toLowerCase()
+  return v === 'pending' || v === 'awaiting_approval' || v === 'submitted' || v === 'review' || v === 'awaiting'
 }
 
 router.get('/pending-deposits', requireAuth, requireAdmin, async (_req, res) => {
   try {
-    const pendingStatuses = ['pending', 'Pending', 'PENDING', 'awaiting_approval', 'submitted']
-    const [txRows, onchain] = await Promise.all([
-      prisma.transaction.findMany({
-        where: {
-          OR: [
-            { kind: 'deposit', status: { in: pendingStatuses } },
-            { kind: 'Deposit', status: { in: pendingStatuses } },
-          ],
-        },
+    const pendingStatuses = ['pending', 'Pending', 'PENDING', 'awaiting_approval', 'submitted', 'review', 'awaiting']
+
+    let txRows: any[] = []
+    try {
+      const candidates = await prisma.transaction.findMany({
+        where: { status: { in: pendingStatuses } },
         include: { user: { select: { id: true, email: true, name: true } } },
         orderBy: { createdAt: 'asc' },
-        take: 200,
-      }).catch((e) => {
-        console.error('[admin] list pending tx deposits failed', e)
-        return []
-      }),
-      prisma.pendingDeposit.findMany({
+        take: 500,
+      })
+      txRows = candidates.filter((t) => String(t.kind || '').toLowerCase().includes('deposit'))
+    } catch (e) {
+      console.error('[admin] list pending tx deposits failed', e)
+      txRows = []
+    }
+
+    let onchain: any[] = []
+    try {
+      onchain = await prisma.pendingDeposit.findMany({
         where: { status: { in: pendingStatuses } },
         include: { user: { select: { id: true, email: true, name: true } } },
         orderBy: { createdAt: 'asc' },
         take: 200,
-      }).catch((e) => {
-        console.error('[admin] list pending on-chain deposits failed', e)
-        return []
-      }),
-    ])
+      })
+    } catch (e) {
+      console.error('[admin] list pending on-chain deposits failed', e)
+      onchain = []
+    }
 
     const deposits = [
       ...txRows.map((t) => ({
@@ -83,7 +80,8 @@ router.get('/pending-deposits', requireAuth, requireAdmin, async (_req, res) => 
       })),
     ].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
 
-    res.json({ deposits, count: deposits.length })
+    console.log(`[admin] pending-deposits list: tx=${txRows.length} onchain=${onchain.length} total=${deposits.length}`)
+    res.json({ deposits, count: deposits.length, txCount: txRows.length, onchainCount: onchain.length })
   } catch (e) {
     console.error('[admin] list pending deposits', e)
     res.status(500).json({ error: e instanceof Error ? e.message : 'Failed to list pending deposits' })
@@ -94,7 +92,7 @@ router.post('/pending-deposits/:id/approve', requireAuth, requireAdmin, async (r
   const id = req.params.id
   try {
     const tx = await prisma.transaction.findUnique({ where: { id } })
-    if (tx && String(tx.kind).toLowerCase() === 'deposit' && isPendingStatus(tx.status)) {
+    if (tx && String(tx.kind).toLowerCase().includes('deposit') && isPendingStatus(tx.status)) {
       await prisma.$transaction(async (client) => {
         await recordLedgerTransaction({
           tx: client,
@@ -112,10 +110,7 @@ router.post('/pending-deposits/:id/approve', requireAuth, requireAdmin, async (r
           subType: 'admin_approve',
           recordTransaction: false,
         })
-        await client.transaction.update({
-          where: { id: tx.id },
-          data: { status: 'completed' },
-        })
+        await client.transaction.update({ where: { id: tx.id }, data: { status: 'completed' } })
       })
       await sendDepositNotification(tx.userId, tx.amount, tx.currency, 'credited').catch((e) =>
         console.error('[admin] user deposit email failed', e),
@@ -159,9 +154,10 @@ router.post('/pending-deposits/:id/approve', requireAuth, requireAdmin, async (r
         where: { id: pending.id },
         data: {
           status: 'completed',
-          creditedTxId: (ledger as { transaction?: { id?: string }; entry?: { id?: string } }).transaction?.id
-            ?? (ledger as { entry?: { id?: string } }).entry?.id
-            ?? undefined,
+          creditedTxId:
+            (ledger as { transaction?: { id?: string }; entry?: { id?: string } }).transaction?.id ??
+            (ledger as { entry?: { id?: string } }).entry?.id ??
+            undefined,
         },
       })
     })
@@ -186,7 +182,7 @@ router.post('/pending-deposits/:id/reject', requireAuth, requireAdmin, async (re
         : 'Rejected by admin'
   try {
     const tx = await prisma.transaction.findUnique({ where: { id } })
-    if (tx && String(tx.kind).toLowerCase() === 'deposit' && isPendingStatus(tx.status)) {
+    if (tx && String(tx.kind).toLowerCase().includes('deposit') && isPendingStatus(tx.status)) {
       await prisma.transaction.update({
         where: { id },
         data: {
@@ -214,10 +210,7 @@ router.post('/pending-deposits/:id/reject', requireAuth, requireAdmin, async (re
     }
     await prisma.pendingDeposit.update({
       where: { id },
-      data: {
-        status: 'rejected',
-        note: note || pending.note || 'Rejected by admin',
-      },
+      data: { status: 'rejected', note: note || pending.note || 'Rejected by admin' },
     })
     await sendDepositNotification(pending.userId, pending.amount, pending.asset, 'rejected').catch((e) =>
       console.error('[admin] user deposit reject email failed', e),
