@@ -1,5 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom'
 import AuthModal from '../components/AuthModal'
+import { getToken } from '../lib/api'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -8,7 +9,15 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-[#070C0E]">
-      <AuthModal isOpen onClose={() => navigate('/')} defaultMode={mode} />
+      <AuthModal
+        isOpen
+        onClose={() => {
+          // If auth already succeeded, AuthModal handles navigation itself.
+          if (getToken()) return
+          navigate('/', { replace: true })
+        }}
+        defaultMode={mode}
+      />
     </div>
   )
 }
