@@ -1,21 +1,38 @@
 node_modules/
-**/node_modules/
 dist/
-**/dist/
+build/
 .env
 .env.local
 .env.*.local
 *.log
 .DS_Store
+coverage/
+.turbo/
 
-# Server
-server/prisma/dev.db
-server/prisma/dev.db-journal
-
-# Editor / OS
-.vscode/
-.idea/
-Thumbs.db
-.vercel
-.env*.local
-.env*
+# Local / agent / scan junk
+*.md
+docs/
+.agent.md
+.kalai/
+.amazonq/
+.snapshots/
+subagent-sessions/
+scans/
+*.err
+*_snyk.json
+*_snyk.err
+snyk-report.json
+all_snyk*
+**/dev.db
+**/dev.db.backup
+**/*.dump
+**/*.bak
+**/*.original
+**/*.fixed
+**/.env.backup
+server/dist/
+server/tmp_*
+server/tsc_errors.txt
+*.tgz
+.rebuild-trigger
+.firebase/
