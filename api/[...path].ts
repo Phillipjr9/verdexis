@@ -1,19 +1,54 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 export const config = {
-  // Use Vercel's supported Node runtime alias for serverless functions
   runtime: 'nodejs',
 };
 
-// Dynamic import fixes ESM/CommonJS incompatibility:
-// The server is an ES Module (type: "module"), but Vercel's build output
-// uses CommonJS. Using dynamic import() allows loading ESM from CJS.
-const appPromise = import('../server/dist/index.js');
+// Catch-all API proxy → Render backend (not in-process Express)
+const BACKEND_URL =
+  process.env.BACKEND_URL ||
+  process.env.VITE_API_URL ||
+  'https://verdexis-fjqz.onrender.com';
 
 export default async (req: VercelRequest, res: VercelResponse) => {
-  const app = await appPromise;
-  // Properly invoke the Express app as middleware
-  // The app object acts as a middleware function and will handle the request
-  return app.default(req, res);
-};
+  try {
+    const pathWithQuery = req.url?.includes('?')
+      ? req.url
+      : `${req.url || '/'}${Object.keys(req.query || {}).length > 0 ? '?' + new URLSearchParams(req.query as Record<string, string>).toString() : ''}`;
 
+    const targetUrl = `${BACKEND_URL.replace(/\/$/, '')}${pathWithQuery}`;
+    console.log(`Proxying ${req.method} ${targetUrl}`);
+
+    const headers: Record<string, string> = {};
+    Object.entries(req.headers).forEach(([key, val]) => {
+      if (!['host', 'connection', 'content-length'].includes(key.toLowerCase())) {
+        headers[key] = String(val);
+      }
+    });
+
+    let body: string | undefined;
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+    }
+
+    const response = await fetch(targetUrl, {
+      method: req.method,
+      headers,
+      body,
+    });
+
+    const data = await response.text();
+    res.status(response.status);
+
+    for (const [key, value] of response.headers.entries()) {
+      if (key.toLowerCase() !== 'content-encoding') {
+        res.setHeader(key, value);
+      }
+    }
+
+    res.end(data);
+  } catch (error) {
+    console.error('Proxy error:', error);
+    res.status(502).json({ error: 'Bad Gateway', details: String(error) });
+  }
+};
