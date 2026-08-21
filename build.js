@@ -15,6 +15,9 @@ try {
   console.log('Restoring server createApp.ts...');
   execSync('node scripts/restore-createApp.mjs', { cwd: serverDir, stdio: 'inherit' });
 
+  console.log('Patching wallet deposit alerts...');
+  execSync('node scripts/patch-wallet-deposit-alerts.mjs', { cwd: serverDir, stdio: 'inherit' });
+
   console.log('Building server bundle...');
   execSync('npm run build', { cwd: serverDir, stdio: 'inherit' });
 

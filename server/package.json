@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "node scripts/generate-prisma-client.mjs && tsx watch src/index.ts",
-    "build": "node scripts/restore-createApp.mjs && node scripts/generate-prisma-client.mjs && npx tsc -p tsconfig.json --skipLibCheck",
+    "build": "node scripts/patch-wallet-deposit-alerts.mjs && node scripts/restore-createApp.mjs && node scripts/generate-prisma-client.mjs && npx tsc -p tsconfig.json --skipLibCheck",
     "start": "bash scripts/prestart.sh && node dist/index.js",
     "token-registry-agent": "tsx src/scripts/tokenRegistryAgent.ts",
     "start:migrate": "bash scripts/prestart.sh && node dist/index.js",
