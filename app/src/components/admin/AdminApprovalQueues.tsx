@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { adminApi } from '../../lib/adminApi'
+import { adminPendingDepositsApi } from '../../lib/adminPendingDepositsApi'
 import { Banknote, Link2 as LinkIcon, ArrowUpRight } from 'lucide-react'
 
 /** Live approval queues: fiat deposits, on-chain deposits, withdrawals. */
@@ -11,12 +12,12 @@ export function AdminApprovalQueues({
   onPendingDepositsLoaded?: (n: number) => void
 } = {}) {
   const [pendingDeposits, setPendingDeposits] = useState<
-    Awaited<ReturnType<typeof adminApi.listPendingDeposits>>['deposits']
+    Awaited<ReturnType<typeof adminPendingDepositsApi.listPendingDeposits>>['deposits']
   >([])
   const [pendingLoading, setPendingLoading] = useState(true)
   const [busyTx, setBusyTx] = useState<string | null>(null)
   const [onchain, setOnchain] = useState<
-    Awaited<ReturnType<typeof adminApi.listOnchainDeposits>>['pendingDeposits']
+    Awaited<ReturnType<typeof adminPendingDepositsApi.listOnchainDeposits>>['pendingDeposits']
   >([])
   const [onchainLoading, setOnchainLoading] = useState(true)
   const [busyOnchain, setBusyOnchain] = useState<string | null>(null)
@@ -28,7 +29,7 @@ export function AdminApprovalQueues({
 
   const refreshPending = () => {
     setPendingLoading(true)
-    adminApi
+    adminPendingDepositsApi
       .listPendingDeposits()
       .then((r) => {
         setPendingDeposits(r.deposits)
@@ -40,7 +41,7 @@ export function AdminApprovalQueues({
 
   const refreshOnchain = () => {
     setOnchainLoading(true)
-    adminApi
+    adminPendingDepositsApi
       .listOnchainDeposits('pending')
       .then((r) => setOnchain(r.pendingDeposits))
       .catch(() => {})
@@ -71,7 +72,7 @@ export function AdminApprovalQueues({
   async function handleApprove(id: string) {
     setBusyTx(id)
     try {
-      await adminApi.approveDeposit(id)
+      await adminPendingDepositsApi.approveDeposit(id)
       toast.success('Deposit approved — funds credited to user')
       refreshPending()
     } catch (e) {
@@ -85,7 +86,7 @@ export function AdminApprovalQueues({
     const reason = window.prompt('Reason for rejection (shown to user)?', '') || ''
     setBusyTx(id)
     try {
-      await adminApi.rejectDeposit(id, reason)
+      await adminPendingDepositsApi.rejectDeposit(id, reason)
       toast.success('Deposit rejected')
       refreshPending()
     } catch (e) {
@@ -114,7 +115,7 @@ export function AdminApprovalQueues({
     const note = window.prompt('Optional note for the audit log / user notification:', '') || undefined
     setBusyOnchain(d.id)
     try {
-      await adminApi.approveOnchainDeposit(d.id, {
+      await adminPendingDepositsApi.approveOnchainDeposit(d.id, {
         currency: currencyInput.trim().toUpperCase(),
         amount,
         note,
@@ -132,7 +133,7 @@ export function AdminApprovalQueues({
     const note = window.prompt('Reason for rejection (shown to user)?', '') || ''
     setBusyOnchain(d.id)
     try {
-      await adminApi.rejectOnchainDeposit(d.id, note)
+      await adminPendingDepositsApi.rejectOnchainDeposit(d.id, note)
       toast.success('On-chain deposit rejected')
       refreshOnchain()
     } catch (e) {
