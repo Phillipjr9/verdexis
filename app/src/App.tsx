@@ -37,7 +37,7 @@ const withLazyErrorBoundary = <P extends object>(
 
 // Create all lazy-loaded components with error boundaries
 const Home = withLazyErrorBoundary(() => import('./pages/Home'), 'Home')
-const Dashboard = withLazyErrorBoundary(() => import('./pages/Dashboard'), 'Dashboard')
+const Dashboard = withLazyErrorBoundary(() => import('./pages/DashboardEntry'), 'Dashboard')
 const Trading = withLazyErrorBoundary(() => import('./pages/Trading'), 'Trading')
 const Markets = withLazyErrorBoundary(() => import('./pages/Markets'), 'Markets')
 const AIAssistant = withLazyErrorBoundary(() => import('./pages/AIAssistant'), 'AI Assistant')
