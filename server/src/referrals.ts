@@ -91,8 +91,8 @@ export async function linkReferrer(
   referralCode?: string,
 ): Promise<{ linked: boolean; reason?: string }> {
   if (!referralCode?.trim()) return { linked: false, reason: 'no_code' }
-  // Always record referrer→referee for attribution (admin visibility).
-  // Bonuses still require the program to be enabled + qualifying deposit.
+  // Always record referrer→referee for attribution (admin can see who referred whom).
+  // Bonuses still require the program enabled + qualifying deposit.
   const code = referralCode.trim().toUpperCase()
   const referrer = await prisma.user.findUnique({
     where: { referralCode: code },
@@ -113,10 +113,12 @@ export async function linkReferrer(
       status: 'pending',
     },
   })
-  await prisma.user.update({
-    where: { id: newUserId },
-    data: { referrerId: referrer.id },
-  }).catch(() => {})
+  await prisma.user
+    .update({
+      where: { id: newUserId },
+      data: { referrerId: referrer.id },
+    })
+    .catch(() => {})
   return { linked: true }
 }
 
@@ -164,21 +166,22 @@ export async function activateReferralOnDeposit(
   return { activated: true }
 }
 
-export async function getUserReferralSummary(userId: string): Promise<{
-  referralCode: string | null
-  totalEarned: number
-  activeReferrals: number
-  pendingReferrals: number
-}> {
-  const [code, activeReferrals, pendingReferrals, bonuses] = await Promise.all([
+export async function getReferralDashboard(userId: string) {
+  const [code, list, bonuses] = await Promise.all([
     ensureUserReferralCode(userId).catch(() => null),
-    prisma.referral.count({ where: { referrerId: userId, status: 'active' } }),
-    prisma.referral.count({ where: { referrerId: userId, status: 'pending' } }),
+    prisma.referral.findMany({
+      where: { referrerId: userId },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    }),
     prisma.referralBonus.findMany({
-      where: { userId, status: { in: ['paid', 'credited', 'pending'] } },
-      select: { amount: true, status: true },
-    }).catch(() => [] as Array<{ amount: number; status: string }>),
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    }),
   ])
+  const activeReferrals = list.filter((r) => r.status === 'active').length
+  const pendingReferrals = list.filter((r) => r.status === 'pending').length
   const totalEarned = bonuses
     .filter((b) => b.status === 'paid' || b.status === 'credited')
     .reduce((s, b) => s + Number(b.amount || 0), 0)
@@ -187,22 +190,21 @@ export async function getUserReferralSummary(userId: string): Promise<{
     totalEarned,
     activeReferrals,
     pendingReferrals,
+    referrals: list,
+    bonuses,
   }
 }
 
 export async function creditReferralBonus(
   bonusId: string,
   paymentMethod = 'trading_credit',
-): Promise<{ credited: boolean; transactionId?: string }> {
+): Promise<{ success: boolean; result?: unknown }> {
   const bonus = await prisma.referralBonus.findUnique({ where: { id: bonusId } })
   if (!bonus) throw new Error('Bonus not found')
   if (bonus.status === 'paid' || bonus.status === 'credited') {
-    return { credited: true, transactionId: bonus.creditedTransactionId || undefined }
+    return { success: true, result: { alreadyCredited: true, transactionId: bonus.creditedTransactionId } }
   }
-  const amount = Number(bonus.amount)
-  if (!(amount > 0)) throw new Error('Invalid bonus amount')
   const transactionId = generateTransactionId()
-  // Credit via ledger if available paths exist; mark bonus paid
   await prisma.referralBonus.update({
     where: { id: bonusId },
     data: {
@@ -212,7 +214,7 @@ export async function creditReferralBonus(
       paymentMethod,
     },
   })
-  return { credited: true, transactionId }
+  return { success: true, result: { transactionId } }
 }
 
 export { REFERRAL_SETTINGS_KEY, DEFAULT_SETTINGS as DEFAULT_REFERRAL_SETTINGS }
