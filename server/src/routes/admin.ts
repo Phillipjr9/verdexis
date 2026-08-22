@@ -6,7 +6,12 @@ import { prisma } from '../db.js'
 import { requireAuth, requireAdmin, type AuthedRequest } from '../auth.js'
 import { sendEmailNotification } from '../notificationService.js'
 import { idempotency } from '../idempotency.js'
-import { creditReferralBonus, activateReferralOnDeposit } from '../referrals.js'
+import {
+  creditReferralBonus,
+  activateReferralOnDeposit,
+  readReferralSettings,
+  writeReferralSettings,
+} from '../referrals.js'
 import { recordLedgerTransaction } from '../services/ledger.js'
 
 const router = Router()
@@ -41,10 +46,6 @@ function getIdempotencyKey(req: AuthedRequest): string | undefined {
   const h = req.headers['idempotency-key']
   if (typeof h === 'string' && h.trim()) return h.trim().slice(0, 200)
   return undefined
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>').replace(/"/g, '"')
 }
 
 const DEPOSIT_REASONS = [
@@ -94,6 +95,14 @@ const transferSchema = z.object({
   note: z.string().max(500).optional(),
   allowNegative: z.boolean().default(false),
   notify: z.boolean().default(true),
+})
+
+const referralSettingsSchema = z.object({
+  enabled: z.boolean(),
+  referrerBonusUsd: z.number().min(0).max(1_000_000),
+  refereeBonusUsd: z.number().min(0).max(1_000_000),
+  minDepositUsd: z.number().min(0).max(1_000_000),
+  note: z.string().max(500).optional().or(z.literal('')),
 })
 
 router.get('/stats', async (_req, res) => {
@@ -659,6 +668,43 @@ router.get('/signup-bonus', async (_req, res) => {
     res.json(JSON.parse(row.value))
   } catch {
     res.json({ enabled: false, amountUsd: 0, note: '' })
+  }
+})
+
+/** GET /api/admin/referral-settings */
+router.get('/referral-settings', async (_req, res) => {
+  try {
+    const settings = await readReferralSettings()
+    res.json(settings)
+  } catch (e) {
+    console.error('[admin] referral-settings get', e)
+    res.status(500).json({ error: e instanceof Error ? e.message : 'Failed to load referral settings' })
+  }
+})
+
+/** PUT /api/admin/referral-settings — enable/disable program */
+router.put('/referral-settings', async (req: AuthedRequest, res) => {
+  try {
+    const parsed = referralSettingsSchema.safeParse(req.body)
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() })
+      return
+    }
+    const updated = await writeReferralSettings(
+      {
+        enabled: parsed.data.enabled === true,
+        referrerBonusUsd: parsed.data.referrerBonusUsd,
+        refereeBonusUsd: parsed.data.refereeBonusUsd,
+        minDepositUsd: parsed.data.minDepositUsd,
+        note: (parsed.data.note || '').trim(),
+      },
+      req.userId!,
+    )
+    await audit(req.userId!, 'referral.settings.update', null, updated)
+    res.json(updated)
+  } catch (e) {
+    console.error('[admin] referral-settings put', e)
+    res.status(500).json({ error: e instanceof Error ? e.message : 'Failed to save referral settings' })
   }
 })
 
