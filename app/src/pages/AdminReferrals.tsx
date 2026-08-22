@@ -161,7 +161,7 @@ function AdminReferralsInner() {
               Referral Program Management
             </h1>
             <p className="text-sm text-[#737373]">
-              Enable or disable the program anytime. New signups only link when the program is ON.
+              Signups always record who referred whom. Bonuses only pay when the program is ON and the referee meets the min deposit.
             </p>
           </div>
           <button
@@ -193,7 +193,7 @@ function AdminReferralsInner() {
             </span>
           </div>
           <p className="text-xs text-[#737373] mb-4">
-            When disabled, new users will not be linked to a referrer and deposit activation will not create bonuses.
+            When disabled, new signups still attribute the referrer (so you can see who invited whom), but deposit activation will not create bonuses.
             Existing pending/active referrals are left as-is.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
@@ -295,7 +295,7 @@ function AdminReferralsInner() {
         {/* Filter and List */}
         <div className="rounded-xl bg-[#0f1619]/50 border border-[#ffffff08] overflow-hidden">
           <div className="bg-[#0a0e10] border-b border-[#ffffff08] px-6 py-4 flex items-center gap-4">
-            <p className="text-sm font-medium text-[#E5E5E5]">Referrals</p>
+            <p className="text-sm font-medium text-[#E5E5E5]">Who referred whom</p>
             <div className="flex gap-2">
               {(['all', 'active', 'pending'] as const).map((f) => (
                 <button
@@ -324,7 +324,8 @@ function AdminReferralsInner() {
                 <thead className="bg-[#0a0e10] border-b border-[#ffffff08]">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs uppercase tracking-wider text-[#737373] font-normal">Referrer</th>
-                    <th className="px-6 py-3 text-left text-xs uppercase tracking-wider text-[#737373] font-normal">Referee Email</th>
+                    <th className="px-6 py-3 text-left text-xs uppercase tracking-wider text-[#737373] font-normal">Code</th>
+                    <th className="px-6 py-3 text-left text-xs uppercase tracking-wider text-[#737373] font-normal">Referee</th>
                     <th className="px-6 py-3 text-left text-xs uppercase tracking-wider text-[#737373] font-normal">Status</th>
                     <th className="px-6 py-3 text-left text-xs uppercase tracking-wider text-[#737373] font-normal">Deposit</th>
                     <th className="px-6 py-3 text-left text-xs uppercase tracking-wider text-[#737373] font-normal">Joined</th>
@@ -336,10 +337,16 @@ function AdminReferralsInner() {
                     <tr key={r.id} className="border-b border-[#ffffff08] hover:bg-[#0a0e10]/30 transition-colors">
                       <td className="px-6 py-4">
                         <p className="text-[#E5E5E5] font-medium">{r.referrer?.name || r.referrer?.email || 'Unknown'}</p>
-                        <p className="text-xs text-[#737373]">{r.referrer?.id}</p>
+                        <p className="text-xs text-[#737373]">{r.referrer?.email || r.referrer?.id}</p>
                       </td>
                       <td className="px-6 py-4">
-                        <p className="text-[#E5E5E5]">{r.refereeEmail}</p>
+                        <span className="font-mono text-xs text-[#0C8B44] tracking-wide">
+                          {r.referrer?.referralCode || '—'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className="text-[#E5E5E5]">{r.referee?.name || r.refereeEmail || '—'}</p>
+                        <p className="text-xs text-[#737373]">{r.refereeEmail || r.referee?.email || ''}</p>
                       </td>
                       <td className="px-6 py-4">
                         <span
@@ -369,7 +376,11 @@ function AdminReferralsInner() {
                         )}
                       </td>
                       <td className="px-6 py-4 text-sm text-[#A0A0A0]">
-                        {r.firstDepositAt ? new Date(r.firstDepositAt).toLocaleDateString() : '—'}
+                        {r.createdAt
+                          ? new Date(r.createdAt).toLocaleDateString()
+                          : r.firstDepositAt
+                            ? new Date(r.firstDepositAt).toLocaleDateString()
+                            : '—'}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex gap-2">
