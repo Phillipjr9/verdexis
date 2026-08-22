@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminApi, type AdminStats } from '../lib/adminApi'
+import { api } from '../lib/api'
 import { AdminDashboardCharts } from '../components/dashboard/AdminDashboardCharts'
 import {
   Users,
@@ -15,42 +16,75 @@ import {
   BarChart3,
   Inbox,
   Hourglass,
+  Wallet,
+  TrendingUp,
+  Activity,
+  ArrowLeftRight,
 } from 'lucide-react'
+
+type WalletBalanceRow = {
+  currency?: string
+  symbol?: string
+  balance?: number
+  available?: number
+  locked?: number
+}
 
 export default function AdminDashboard() {
   const [showCharts, setShowCharts] = useState(false)
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [pendingReviewCount, setPendingReviewCount] = useState<number | null>(null)
   const [statsError, setStatsError] = useState<string | null>(null)
+  const [walletBalances, setWalletBalances] = useState<WalletBalanceRow[]>([])
+  const [walletError, setWalletError] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
-    Promise.allSettled([adminApi.stats(), adminApi.listPendingReviews()])
-      .then(([statsSettled, reviewSettled]) => {
-        if (!active) return
-        if (statsSettled.status === 'fulfilled') {
-          setStats(statsSettled.value)
-          setStatsError(null)
-        } else {
-          const err = statsSettled.reason
-          const status =
-            typeof err === 'object' && err !== null && 'status' in err
-              ? Number((err as { status?: number }).status)
-              : undefined
-          if (status !== 401 && status !== 403) {
-            const message =
-              typeof err === 'object' && err !== null && 'error' in err
-                ? String((err as { error?: string }).error)
-                : 'Unable to load dashboard data'
-            setStatsError(message)
-          }
+    Promise.allSettled([
+      adminApi.stats(),
+      adminApi.listPendingReviews(),
+      api.getWallet(),
+    ]).then(([statsSettled, reviewSettled, walletSettled]) => {
+      if (!active) return
+
+      if (statsSettled.status === 'fulfilled') {
+        setStats(statsSettled.value)
+        setStatsError(null)
+      } else {
+        const err = statsSettled.reason
+        const status =
+          typeof err === 'object' && err !== null && 'status' in err
+            ? Number((err as { status?: number }).status)
+            : undefined
+        if (status !== 401 && status !== 403) {
+          const message =
+            typeof err === 'object' && err !== null && 'error' in err
+              ? String((err as { error?: string }).error)
+              : 'Unable to load dashboard data'
+          setStatsError(message)
         }
-        if (reviewSettled.status === 'fulfilled') {
-          setPendingReviewCount(reviewSettled.value.reviews?.length ?? 0)
-        } else {
-          setPendingReviewCount(0)
-        }
-      })
+      }
+
+      if (reviewSettled.status === 'fulfilled') {
+        setPendingReviewCount(reviewSettled.value.reviews?.length ?? 0)
+      } else {
+        setPendingReviewCount(0)
+      }
+
+      if (walletSettled.status === 'fulfilled') {
+        const body = walletSettled.value as { balances?: WalletBalanceRow[] }
+        setWalletBalances(Array.isArray(body.balances) ? body.balances : [])
+        setWalletError(null)
+      } else {
+        const err = walletSettled.reason
+        const message =
+          typeof err === 'object' && err !== null && 'error' in err
+            ? String((err as { error?: string }).error)
+            : 'Unable to load wallet balance'
+        setWalletError(message)
+        setWalletBalances([])
+      }
+    })
     return () => {
       active = false
     }
@@ -75,12 +109,26 @@ export default function AdminDashboard() {
   const recentTx = stats?.recentTx ?? []
   const issues = s.kycPending + s.holds + s.pendingDeposits
 
+  const usdRow =
+    walletBalances.find((b) => (b.currency || '').toUpperCase() === 'USD') ||
+    walletBalances[0]
+  const availableUsd = Number(usdRow?.available ?? usdRow?.balance ?? 0)
+  const totalUsd = Number(usdRow?.balance ?? availableUsd)
+  const lockedUsd = Math.max(0, totalUsd - availableUsd)
+
   return (
     <AdminLayout
       title="Overview"
-      subtitle="Work queues first, then platform pulse"
+      subtitle="Balance, work queues, and platform pulse"
       actions={
         <>
+          <Link
+            to="/admin/transfer"
+            className="px-4 py-2.5 bg-[#0C8B44] text-white text-sm font-medium rounded-lg hover:bg-[#0a7539] transition-colors inline-flex items-center gap-2"
+          >
+            <ArrowLeftRight className="w-4 h-4" />
+            Transfer funds
+          </Link>
           <Link
             to="/admin/queues"
             className="px-4 py-2.5 bg-[#0C8B44]/10 border border-[#0C8B44]/30 text-[#0C8B44] text-sm font-medium rounded-lg hover:bg-[#0C8B44]/20 transition-colors inline-flex items-center gap-2"
@@ -111,6 +159,66 @@ export default function AdminDashboard() {
         </div>
       )}
 
+      {/* Admin treasury / wallet balance */}
+      <div className="mb-6 rounded-2xl border border-[#0C8B44]/30 bg-gradient-to-br from-[#0C8B44]/15 to-[#0a0f11] p-5 md:p-6">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 text-[#0C8B44] mb-2">
+              <Wallet className="w-5 h-5" />
+              <span className="text-xs uppercase tracking-wider font-medium">Your admin balance</span>
+            </div>
+            <p className="text-3xl md:text-4xl font-light text-[#E5E5E5] tracking-tight">
+              {money(availableUsd)}
+            </p>
+            <p className="text-sm text-[#A0A0A0] mt-1">
+              Available to transfer or credit users
+              {lockedUsd > 0 && (
+                <span className="text-[#FF9800]"> · {money(lockedUsd)} locked</span>
+              )}
+            </p>
+            {walletError && (
+              <p className="text-xs text-[#f44336] mt-2">{walletError}</p>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              to="/admin/transfer"
+              className="px-4 py-2 rounded-lg bg-[#0C8B44] text-white text-sm font-medium hover:bg-[#0a7539]"
+            >
+              Transfer to user
+            </Link>
+            <Link
+              to="/admin/users"
+              className="px-4 py-2 rounded-lg border border-[#ffffff15] text-[#E5E5E5] text-sm hover:bg-[#ffffff08]"
+            >
+              Manage users
+            </Link>
+            <Link
+              to="/admin/wallets"
+              className="px-4 py-2 rounded-lg border border-[#ffffff15] text-[#E5E5E5] text-sm hover:bg-[#ffffff08]"
+            >
+              Platform wallets
+            </Link>
+          </div>
+        </div>
+
+        {walletBalances.length > 1 && (
+          <div className="mt-4 pt-4 border-t border-[#ffffff10] grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {walletBalances.slice(0, 8).map((b) => {
+              const cur = (b.currency || b.symbol || '?').toUpperCase()
+              const avail = Number(b.available ?? b.balance ?? 0)
+              return (
+                <div key={cur} className="rounded-xl bg-[#0a0f11]/60 border border-[#ffffff08] p-3">
+                  <p className="text-[10px] uppercase tracking-wider text-[#737373]">{cur}</p>
+                  <p className="text-sm text-[#E5E5E5] mt-1">{money(avail, cur === 'USD' ? 'USD' : undefined)}</p>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Platform pulse */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
         <MetricBadge icon={<Users className="w-4 h-4" />} label="Users" value={fmt(s.users)} hint={`+${s.signups24h} today`} color="green" />
         <MetricBadge icon={<ShieldCheck className="w-4 h-4" />} label="Admins" value={fmt(s.admins)} hint="live" color="blue" />
@@ -120,6 +228,14 @@ export default function AdminDashboard() {
         <MetricBadge icon={<AlertCircle className="w-4 h-4" />} label="Open issues" value={fmt(issues)} hint={issues > 0 ? 'action' : 'clear'} color="red" />
       </div>
 
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        <MetricBadge icon={<TrendingUp className="w-4 h-4" />} label="Holdings" value={fmt(s.holdings)} hint="open positions" color="blue" />
+        <MetricBadge icon={<Activity className="w-4 h-4" />} label="Trades" value={fmt(s.trades)} hint="all time" color="green" />
+        <MetricBadge icon={<AlertCircle className="w-4 h-4" />} label="Alerts" value={fmt(s.alerts)} hint={s.alerts > 0 ? 'check' : 'clear'} color="orange" />
+        <MetricBadge icon={<FileCheck2 className="w-4 h-4" />} label="KYC pending" value={fmt(s.kycPending)} hint={s.kycPending > 0 ? 'review' : 'clear'} color="orange" />
+      </div>
+
+      {/* Work queues */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <QueueCard to="/admin/queues" title="Pending deposits" count={s.pendingDeposits} icon={<Banknote className="w-4 h-4" />} color="orange" />
         <QueueCard to="/admin/users?kycStatus=pending" title="KYC pending" count={s.kycPending} icon={<FileCheck2 className="w-4 h-4" />} color="orange" />
@@ -132,7 +248,11 @@ export default function AdminDashboard() {
         <Link to="/admin/queues" className="text-[#0C8B44] hover:underline">
           Queues
         </Link>
-        . Sidebar keeps navigation in one place.
+        . Use{' '}
+        <Link to="/admin/transfer" className="text-[#0C8B44] hover:underline">
+          Transfer
+        </Link>{' '}
+        to move balance to users.
       </p>
 
       {showCharts && (
@@ -149,7 +269,7 @@ export default function AdminDashboard() {
         <ActivityPanel
           title="Recent signups"
           empty="No recent signups."
-          items={recentSignups.slice(0, 6).map((u) => ({
+          items={recentSignups.slice(0, 6).map((u: { name?: string; email: string; createdAt: string; role?: string }) => ({
             primary: u.name || u.email,
             secondary: u.email,
             meta: relTime(u.createdAt),
@@ -159,7 +279,7 @@ export default function AdminDashboard() {
         <ActivityPanel
           title="Recent transactions"
           empty="No activity yet."
-          items={recentTx.slice(0, 6).map((tx) => ({
+          items={recentTx.slice(0, 6).map((tx: { kind: string; amount: number; createdAt: string; user?: { email?: string } }) => ({
             primary: tx.kind.toUpperCase(),
             secondary: tx.user?.email || 'System',
             meta: relTime(tx.createdAt),
@@ -289,11 +409,14 @@ function fmt(n: number) {
   return String(n)
 }
 
-function money(n: number) {
+function money(n: number, currency = 'USD') {
+  if (currency !== 'USD') {
+    return `${n.toLocaleString('en-US', { maximumFractionDigits: 6 })} ${currency}`
+  }
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
-    maximumFractionDigits: 0,
+    maximumFractionDigits: 2,
   }).format(n)
 }
 
