@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Mail, Lock, Eye, EyeOff, ArrowRight, Shield, Fingerprint, KeyRound } from 'lucide-react'
 import { toast } from 'sonner'
@@ -41,6 +41,11 @@ function AuthModal({ isOpen, onClose, defaultMode = 'login' }: AuthModalProps) {
   const [pendingFlow, setPendingFlow] = useState<'login' | 'signup'>('login')
   const [otpCode, setOtpCode] = useState('')
   const [otpMessage, setOtpMessage] = useState('')
+  const [referralHint, setReferralHint] = useState<{
+    status: 'idle' | 'checking' | 'valid' | 'invalid'
+    message: string
+  }>({ status: 'idle', message: '' })
+  const referralValidateTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Prefill referral code from invite link (?ref= / ?referral=)
   useEffect(() => {
@@ -48,13 +53,22 @@ function AuthModal({ isOpen, onClose, defaultMode = 'login' }: AuthModalProps) {
       const params = new URLSearchParams(window.location.search)
       const code = (params.get('ref') || params.get('referral') || params.get('referralCode') || '').trim()
       if (code) {
-        setForm((f) => ({ ...f, referralCode: code }))
+        const normalized = code.trim().toUpperCase().replace(/\s+/g, '')
+        setForm((f) => ({ ...f, referralCode: normalized }))
         if (defaultMode !== 'login') setMode('signup')
       }
     } catch {
       /* ignore */
     }
   }, [defaultMode])
+
+  // Validate prefilled referral code when modal opens
+  useEffect(() => {
+    if (!isOpen || mode !== 'signup') return
+    const code = form.referralCode.trim()
+    if (code) scheduleReferralValidate(code)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, mode])
 
   useEffect(() => {
     if (!isOpen) return
@@ -68,6 +82,57 @@ function AuthModal({ isOpen, onClose, defaultMode = 'login' }: AuthModalProps) {
       document.body.style.paddingRight = prevPaddingRight
     }
   }, [isOpen])
+
+  const normalizeClientReferralCode = (raw: string) => {
+    let code = raw.trim().toUpperCase().replace(/\s+/g, '')
+    if (/^VERDX[0-9A-F]{6}$/.test(code)) code = `VERDX-${code.slice(5)}`
+    return code
+  }
+
+  const isClientReferralFormatOk = (raw: string) => {
+    const code = normalizeClientReferralCode(raw)
+    if (!code) return true // empty is optional
+    if (/^VERDX-[0-9A-F]{6}$/.test(code)) return true
+    return /^[A-Z0-9][A-Z0-9-]{3,31}$/.test(code)
+  }
+
+  const scheduleReferralValidate = (raw: string) => {
+    if (referralValidateTimer.current) clearTimeout(referralValidateTimer.current)
+    const code = normalizeClientReferralCode(raw)
+    if (!code) {
+      setReferralHint({ status: 'idle', message: '' })
+      return
+    }
+    if (!isClientReferralFormatOk(code)) {
+      setReferralHint({
+        status: 'invalid',
+        message: 'Invalid format — use VERDX-XXXXXX (e.g. VERDX-A1B2C3)',
+      })
+      return
+    }
+    setReferralHint({ status: 'checking', message: 'Checking code…' })
+    referralValidateTimer.current = setTimeout(async () => {
+      try {
+        const res = await api.validateReferralCode(code)
+        if (res.valid) {
+          setReferralHint({
+            status: 'valid',
+            message: res.referrerName
+              ? `Valid — invited by ${res.referrerName}`
+              : 'Valid referral code',
+          })
+        } else {
+          setReferralHint({
+            status: 'invalid',
+            message: res.message || 'Referral code not found',
+          })
+        }
+      } catch {
+        // Network errors: don't block signup; format already ok
+        setReferralHint({ status: 'idle', message: '' })
+      }
+    }, 400)
+  }
 
   if (!isOpen) return null
 
@@ -165,14 +230,26 @@ function AuthModal({ isOpen, onClose, defaultMode = 'login' }: AuthModalProps) {
           setLoading(false)
           return
         }
+        const refCode = form.referralCode.trim()
+        if (refCode && !isClientReferralFormatOk(refCode)) {
+          setError('Invalid referral code format. Use VERDX-XXXXXX or leave blank.')
+          setLoading(false)
+          return
+        }
+        if (refCode && referralHint.status === 'invalid') {
+          setError(referralHint.message || 'Invalid referral code')
+          setLoading(false)
+          return
+        }
       }
 
       let result
       if (mode === 'signup') {
         const name = `${form.firstName} ${form.lastName}`.trim() || safeEmail
+        const normalizedRef = normalizeClientReferralCode(form.referralCode) || undefined
         result = await api.signup(safeEmail, pwd, name, form.phone.trim(), form.address.trim(), {
-          referralCode: form.referralCode.trim() || undefined,
-          ref: form.referralCode.trim() || undefined,
+          referralCode: normalizedRef,
+          ref: normalizedRef,
         })
       } else {
         result = await api.login(safeEmail, pwd)
@@ -213,6 +290,7 @@ function AuthModal({ isOpen, onClose, defaultMode = 'login' }: AuthModalProps) {
     setPendingFlow('login')
     setOtpCode('')
     setOtpMessage('')
+    setReferralHint({ status: 'idle', message: '' })
   }
 
   const goForgot = () => {
@@ -418,16 +496,45 @@ function AuthModal({ isOpen, onClose, defaultMode = 'login' }: AuthModalProps) {
                       type="text"
                       name="referralCode"
                       value={form.referralCode}
-                      onChange={(e) => setForm({ ...form, referralCode: e.target.value.toUpperCase() })}
-                      className="w-full px-4 py-3 bg-[#1a1a1a] border border-[#ffffff08] rounded-xl text-sm text-[#E5E5E5] tracking-wide"
-                      placeholder="e.g. VERDX-ABC123"
+                      onChange={(e) => {
+                        const next = e.target.value.toUpperCase().slice(0, 32)
+                        setForm({ ...form, referralCode: next })
+                        scheduleReferralValidate(next)
+                      }}
+                      onBlur={() => {
+                        const n = normalizeClientReferralCode(form.referralCode)
+                        if (n !== form.referralCode) setForm((f) => ({ ...f, referralCode: n }))
+                      }}
+                      className={`w-full px-4 py-3 bg-[#1a1a1a] border rounded-xl text-sm text-[#E5E5E5] tracking-wide ${
+                        referralHint.status === 'valid'
+                          ? 'border-[#0C8B44]/50'
+                          : referralHint.status === 'invalid'
+                            ? 'border-red-500/40'
+                            : 'border-[#ffffff08]'
+                      }`}
+                      placeholder="e.g. VERDX-A1B2C3"
                       autoCapitalize="characters"
                       autoCorrect="off"
                       spellCheck={false}
+                      maxLength={32}
                     />
-                    <p className="mt-1.5 text-[11px] text-[#525252]">
-                      Have an invite? Enter your referrer's code so we can credit them.
-                    </p>
+                    {referralHint.message ? (
+                      <p
+                        className={`mt-1.5 text-[11px] ${
+                          referralHint.status === 'valid'
+                            ? 'text-[#0C8B44]'
+                            : referralHint.status === 'invalid'
+                              ? 'text-red-400'
+                              : 'text-[#737373]'
+                        }`}
+                      >
+                        {referralHint.message}
+                      </p>
+                    ) : (
+                      <p className="mt-1.5 text-[11px] text-[#525252]">
+                        Have an invite? Enter your referrer&apos;s code so we can credit them.
+                      </p>
+                    )}
                   </div>
                 )}
 
@@ -483,7 +590,7 @@ function AuthModal({ isOpen, onClose, defaultMode = 'login' }: AuthModalProps) {
                 </button>
               ) : mode === 'login' ? (
                 <>
-                  Don't have an account?{' '}
+                  Don&apos;t have an account?{' '}
                   <button onClick={switchMode} className="text-[#0C8B44] font-medium">
                     Sign up free
                   </button>
