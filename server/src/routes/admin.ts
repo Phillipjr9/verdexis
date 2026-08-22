@@ -708,4 +708,121 @@ router.put('/referral-settings', async (req: AuthedRequest, res) => {
   }
 })
 
+/** GET /api/admin/referrals/stats — aggregate referral metrics */
+router.get('/referrals/stats', async (_req, res) => {
+  try {
+    const [totalReferrals, activeReferrals, pendingReferrals, bonuses] = await Promise.all([
+      prisma.referral.count(),
+      prisma.referral.count({ where: { status: 'active' } }),
+      prisma.referral.count({ where: { status: 'pending' } }),
+      prisma.referralBonus.findMany({ select: { amount: true, status: true } }),
+    ])
+    const totalBonusesAwarded = bonuses
+      .filter((b) => b.status === 'paid' || b.status === 'credited')
+      .reduce((s, b) => s + Number(b.amount || 0), 0)
+    const totalBonusesPending = bonuses
+      .filter((b) => b.status === 'pending')
+      .reduce((s, b) => s + Number(b.amount || 0), 0)
+    const conversionRate =
+      totalReferrals > 0 ? `${((activeReferrals / totalReferrals) * 100).toFixed(1)}%` : '0%'
+    res.json({
+      totalReferrals,
+      activeReferrals,
+      pendingReferrals,
+      conversionRate,
+      totalBonusesAwarded,
+      totalBonusesPending,
+    })
+  } catch (e) {
+    console.error('[admin] referrals stats', e)
+    res.status(500).json({ error: e instanceof Error ? e.message : 'Failed to load referral stats' })
+  }
+})
+
+/** GET /api/admin/referrals — list who referred whom */
+router.get('/referrals', async (req: AuthedRequest, res) => {
+  try {
+    const status = String(req.query.status || 'all').toLowerCase()
+    const where: Record<string, unknown> = {}
+    if (status === 'active' || status === 'pending' || status === 'cancelled') {
+      where.status = status
+    }
+    const referrals = await prisma.referral.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+      include: {
+        referrer: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            referralCode: true,
+          },
+        },
+        referee: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+          },
+        },
+      },
+    })
+    res.json({
+      referrals: referrals.map((r) => ({
+        id: r.id,
+        status: r.status,
+        refereeEmail: r.refereeEmail || r.referee?.email || null,
+        referee: r.referee
+          ? { id: r.referee.id, email: r.referee.email, name: r.referee.name }
+          : null,
+        referrer: r.referrer
+          ? {
+              id: r.referrer.id,
+              email: r.referrer.email,
+              name: r.referrer.name,
+              referralCode: r.referrer.referralCode,
+            }
+          : null,
+        firstDepositAmount: r.firstDepositAmount,
+        firstDepositAt: r.firstDepositAt,
+        referrerBonusUsd: r.referrerBonusUsd,
+        refereeBonusUsd: r.refereeBonusUsd,
+        createdAt: r.createdAt,
+      })),
+      count: referrals.length,
+    })
+  } catch (e) {
+    console.error('[admin] referrals list', e)
+    res.status(500).json({ error: e instanceof Error ? e.message : 'Failed to list referrals' })
+  }
+})
+
+/** POST /api/admin/referrals/:id/cancel */
+router.post('/referrals/:id/cancel', async (req: AuthedRequest, res) => {
+  try {
+    const id = req.params.id
+    const reason = String(req.body?.reason || 'admin_action').slice(0, 200)
+    const existing = await prisma.referral.findUnique({ where: { id } })
+    if (!existing) {
+      res.status(404).json({ error: 'Referral not found' })
+      return
+    }
+    if (existing.status === 'cancelled') {
+      res.json({ referral: existing, alreadyCancelled: true })
+      return
+    }
+    const referral = await prisma.referral.update({
+      where: { id },
+      data: { status: 'cancelled' },
+    })
+    await audit(req.userId!, 'referral.cancel', existing.refereeId, { referralId: id, reason })
+    res.json({ referral })
+  } catch (e) {
+    console.error('[admin] referral cancel', e)
+    res.status(500).json({ error: e instanceof Error ? e.message : 'Failed to cancel referral' })
+  }
+})
+
 export default router
