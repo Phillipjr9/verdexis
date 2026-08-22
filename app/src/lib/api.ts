@@ -292,6 +292,46 @@ export const api = {
     const q = params ? '?' + new URLSearchParams(params).toString() : ''
     return request<{ transactions: unknown[]; total?: number }>(`/api/wallet/transactions${q}`)
   },
+
+  // Public testimonials (homepage carousel) — GET is unauthenticated
+  listReviews: () =>
+    request<{
+      reviews: {
+        id: string
+        rating: number
+        text: string
+        authorName: string
+        authorAvatar: string | null
+        createdAt: string
+      }[]
+    }>('/api/reviews'),
+  getMyReview: () =>
+    request<{
+      review: {
+        id: string
+        rating: number
+        text: string
+        authorName: string
+        authorAvatar: string | null
+        approved: boolean
+        createdAt: string
+        updatedAt: string
+      } | null
+    }>('/api/reviews/me'),
+  upsertReview: (payload: { rating: number; text: string }) =>
+    request<{
+      review: {
+        id: string
+        rating: number
+        text: string
+        authorName: string
+        authorAvatar: string | null
+        approved: boolean
+        createdAt: string
+        updatedAt: string
+      }
+    }>('/api/reviews', { method: 'POST', body: JSON.stringify(payload) }),
+  deleteMyReview: () => request<{ ok: boolean }>('/api/reviews/me', { method: 'DELETE' }),
 }
 
 /** Compatibility alias used by older call sites */
