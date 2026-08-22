@@ -21,7 +21,9 @@
     "init-super-admin": "tsx scripts/create-super-admin.mjs",
     "create-admin": "tsx scripts/create-admin.mjs",
     "test-admin-hierarchy": "tsx scripts/test-admin-hierarchy.mjs",
-    "worker": "tsx src/worker.ts"
+    "worker": "tsx src/worker.ts",
+    "test": "tsx --test src/**/*.test.ts",
+    "test:wallet": "tsx --test src/routes/wallet.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
