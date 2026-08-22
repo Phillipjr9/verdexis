@@ -10,9 +10,10 @@ import { hydrateDensity } from './lib/density'
 import { initUpdatePrompt } from './lib/updatePrompt'
 import { unregisterServiceWorker } from './lib/serviceWorker'
 
+// Sentry must init before React so the first paint errors are captured
+initErrorReporting()
 initTheme()
 hydrateDensity()
-initErrorReporting()
 initAnalytics() // no-op unless cookies accepted AND VITE_PLAUSIBLE_DOMAIN set
 initUpdatePrompt()
 unregisterServiceWorker()
