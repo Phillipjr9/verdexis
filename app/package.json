@@ -51,6 +51,7 @@
     "@simplewebauthn/browser": "^13.3.0",
     "@supabase/supabase-js": "^2.36.0",
     "@types/three": "^0.184.0",
+    "@vercel/analytics": "^2.0.1",
     "@walletconnect/ethereum-provider": "^2.23.10",
     "@walletconnect/modal": "^2.7.0",
     "@web3icons/react": "^4.1.17",
