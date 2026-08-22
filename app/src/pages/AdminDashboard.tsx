@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import AdminLayout from '../components/AdminLayout'
 import { adminApi, type AdminStats } from '../lib/adminApi'
@@ -20,6 +20,7 @@ import {
   TrendingUp,
   Activity,
   ArrowLeftRight,
+  History,
 } from 'lucide-react'
 
 type WalletBalanceRow = {
@@ -27,7 +28,20 @@ type WalletBalanceRow = {
   symbol?: string
   balance?: number
   available?: number
-  locked?: number
+}
+
+type RecentTx = {
+  id: string
+  transactionId?: string
+  userId?: string
+  kind: string
+  currency?: string
+  amount: number
+  status?: string
+  reference?: string | null
+  subType?: string | null
+  createdAt: string
+  user?: { id?: string; email?: string; name?: string | null }
 }
 
 export default function AdminDashboard() {
@@ -37,54 +51,53 @@ export default function AdminDashboard() {
   const [statsError, setStatsError] = useState<string | null>(null)
   const [walletBalances, setWalletBalances] = useState<WalletBalanceRow[]>([])
   const [walletError, setWalletError] = useState<string | null>(null)
+  const [txFilter, setTxFilter] = useState<'all' | 'deposit' | 'transfer' | 'withdrawal' | 'other'>('all')
 
   useEffect(() => {
     let active = true
-    Promise.allSettled([
-      adminApi.stats(),
-      adminApi.listPendingReviews(),
-      api.getWallet(),
-    ]).then(([statsSettled, reviewSettled, walletSettled]) => {
-      if (!active) return
+    Promise.allSettled([adminApi.stats(), adminApi.listPendingReviews(), api.getWallet()]).then(
+      ([statsSettled, reviewSettled, walletSettled]) => {
+        if (!active) return
 
-      if (statsSettled.status === 'fulfilled') {
-        setStats(statsSettled.value)
-        setStatsError(null)
-      } else {
-        const err = statsSettled.reason
-        const status =
-          typeof err === 'object' && err !== null && 'status' in err
-            ? Number((err as { status?: number }).status)
-            : undefined
-        if (status !== 401 && status !== 403) {
+        if (statsSettled.status === 'fulfilled') {
+          setStats(statsSettled.value)
+          setStatsError(null)
+        } else {
+          const err = statsSettled.reason
+          const status =
+            typeof err === 'object' && err !== null && 'status' in err
+              ? Number((err as { status?: number }).status)
+              : undefined
+          if (status !== 401 && status !== 403) {
+            const message =
+              typeof err === 'object' && err !== null && 'error' in err
+                ? String((err as { error?: string }).error)
+                : 'Unable to load dashboard data'
+            setStatsError(message)
+          }
+        }
+
+        if (reviewSettled.status === 'fulfilled') {
+          setPendingReviewCount(reviewSettled.value.reviews?.length ?? 0)
+        } else {
+          setPendingReviewCount(0)
+        }
+
+        if (walletSettled.status === 'fulfilled') {
+          const body = walletSettled.value as { balances?: WalletBalanceRow[] }
+          setWalletBalances(Array.isArray(body.balances) ? body.balances : [])
+          setWalletError(null)
+        } else {
+          const err = walletSettled.reason
           const message =
             typeof err === 'object' && err !== null && 'error' in err
               ? String((err as { error?: string }).error)
-              : 'Unable to load dashboard data'
-          setStatsError(message)
+              : 'Unable to load wallet balance'
+          setWalletError(message)
+          setWalletBalances([])
         }
       }
-
-      if (reviewSettled.status === 'fulfilled') {
-        setPendingReviewCount(reviewSettled.value.reviews?.length ?? 0)
-      } else {
-        setPendingReviewCount(0)
-      }
-
-      if (walletSettled.status === 'fulfilled') {
-        const body = walletSettled.value as { balances?: WalletBalanceRow[] }
-        setWalletBalances(Array.isArray(body.balances) ? body.balances : [])
-        setWalletError(null)
-      } else {
-        const err = walletSettled.reason
-        const message =
-          typeof err === 'object' && err !== null && 'error' in err
-            ? String((err as { error?: string }).error)
-            : 'Unable to load wallet balance'
-        setWalletError(message)
-        setWalletBalances([])
-      }
-    })
+    )
     return () => {
       active = false
     }
@@ -106,20 +119,30 @@ export default function AdminDashboard() {
   }
 
   const recentSignups = stats?.recentSignups ?? []
-  const recentTx = stats?.recentTx ?? []
+  const recentTx: RecentTx[] = Array.isArray(stats?.recentTx) ? stats.recentTx : []
   const issues = s.kycPending + s.holds + s.pendingDeposits
 
   const usdRow =
-    walletBalances.find((b) => (b.currency || '').toUpperCase() === 'USD') ||
-    walletBalances[0]
+    walletBalances.find((b) => (b.currency || '').toUpperCase() === 'USD') || walletBalances[0]
   const availableUsd = Number(usdRow?.available ?? usdRow?.balance ?? 0)
   const totalUsd = Number(usdRow?.balance ?? availableUsd)
   const lockedUsd = Math.max(0, totalUsd - availableUsd)
 
+  const filteredTx = useMemo(() => {
+    if (txFilter === 'all') return recentTx
+    if (txFilter === 'other') {
+      return recentTx.filter((tx) => !['deposit', 'transfer', 'withdrawal', 'withdraw'].includes(tx.kind))
+    }
+    if (txFilter === 'withdrawal') {
+      return recentTx.filter((tx) => tx.kind === 'withdrawal' || tx.kind === 'withdraw')
+    }
+    return recentTx.filter((tx) => tx.kind === txFilter)
+  }, [recentTx, txFilter])
+
   return (
     <AdminLayout
       title="Overview"
-      subtitle="Balance, work queues, and platform pulse"
+      subtitle="Balance, transactions, and platform pulse"
       actions={
         <>
           <Link
@@ -159,7 +182,7 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Admin treasury / wallet balance */}
+      {/* Admin balance */}
       <div className="mb-6 rounded-2xl border border-[#0C8B44]/30 bg-gradient-to-br from-[#0C8B44]/15 to-[#0a0f11] p-5 md:p-6">
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
           <div>
@@ -167,58 +190,25 @@ export default function AdminDashboard() {
               <Wallet className="w-5 h-5" />
               <span className="text-xs uppercase tracking-wider font-medium">Your admin balance</span>
             </div>
-            <p className="text-3xl md:text-4xl font-light text-[#E5E5E5] tracking-tight">
-              {money(availableUsd)}
-            </p>
+            <p className="text-3xl md:text-4xl font-light text-[#E5E5E5] tracking-tight">{money(availableUsd)}</p>
             <p className="text-sm text-[#A0A0A0] mt-1">
               Available to transfer or credit users
-              {lockedUsd > 0 && (
-                <span className="text-[#FF9800]"> · {money(lockedUsd)} locked</span>
-              )}
+              {lockedUsd > 0 && <span className="text-[#FF9800]"> · {money(lockedUsd)} locked</span>}
             </p>
-            {walletError && (
-              <p className="text-xs text-[#f44336] mt-2">{walletError}</p>
-            )}
+            {walletError && <p className="text-xs text-[#f44336] mt-2">{walletError}</p>}
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link
-              to="/admin/transfer"
-              className="px-4 py-2 rounded-lg bg-[#0C8B44] text-white text-sm font-medium hover:bg-[#0a7539]"
-            >
+            <Link to="/admin/transfer" className="px-4 py-2 rounded-lg bg-[#0C8B44] text-white text-sm font-medium hover:bg-[#0a7539]">
               Transfer to user
             </Link>
-            <Link
-              to="/admin/users"
-              className="px-4 py-2 rounded-lg border border-[#ffffff15] text-[#E5E5E5] text-sm hover:bg-[#ffffff08]"
-            >
+            <Link to="/admin/users" className="px-4 py-2 rounded-lg border border-[#ffffff15] text-[#E5E5E5] text-sm hover:bg-[#ffffff08]">
               Manage users
-            </Link>
-            <Link
-              to="/admin/wallets"
-              className="px-4 py-2 rounded-lg border border-[#ffffff15] text-[#E5E5E5] text-sm hover:bg-[#ffffff08]"
-            >
-              Platform wallets
             </Link>
           </div>
         </div>
-
-        {walletBalances.length > 1 && (
-          <div className="mt-4 pt-4 border-t border-[#ffffff10] grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {walletBalances.slice(0, 8).map((b) => {
-              const cur = (b.currency || b.symbol || '?').toUpperCase()
-              const avail = Number(b.available ?? b.balance ?? 0)
-              return (
-                <div key={cur} className="rounded-xl bg-[#0a0f11]/60 border border-[#ffffff08] p-3">
-                  <p className="text-[10px] uppercase tracking-wider text-[#737373]">{cur}</p>
-                  <p className="text-sm text-[#E5E5E5] mt-1">{money(avail, cur === 'USD' ? 'USD' : undefined)}</p>
-                </div>
-              )
-            })}
-          </div>
-        )}
       </div>
 
-      {/* Platform pulse */}
+      {/* Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
         <MetricBadge icon={<Users className="w-4 h-4" />} label="Users" value={fmt(s.users)} hint={`+${s.signups24h} today`} color="green" />
         <MetricBadge icon={<ShieldCheck className="w-4 h-4" />} label="Admins" value={fmt(s.admins)} hint="live" color="blue" />
@@ -235,7 +225,6 @@ export default function AdminDashboard() {
         <MetricBadge icon={<FileCheck2 className="w-4 h-4" />} label="KYC pending" value={fmt(s.kycPending)} hint={s.kycPending > 0 ? 'review' : 'clear'} color="orange" />
       </div>
 
-      {/* Work queues */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <QueueCard to="/admin/queues" title="Pending deposits" count={s.pendingDeposits} icon={<Banknote className="w-4 h-4" />} color="orange" />
         <QueueCard to="/admin/users?kycStatus=pending" title="KYC pending" count={s.kycPending} icon={<FileCheck2 className="w-4 h-4" />} color="orange" />
@@ -243,17 +232,124 @@ export default function AdminDashboard() {
         <QueueCard to="/admin/reviews" title="Testimonials" count={pendingReviewCount ?? 0} icon={<Hourglass className="w-4 h-4" />} color="orange" />
       </div>
 
-      <p className="text-xs text-[#737373] mb-6">
-        Full approve/reject flows live on{' '}
-        <Link to="/admin/queues" className="text-[#0C8B44] hover:underline">
-          Queues
-        </Link>
-        . Use{' '}
-        <Link to="/admin/transfer" className="text-[#0C8B44] hover:underline">
-          Transfer
-        </Link>{' '}
-        to move balance to users.
-      </p>
+      {/* Transaction history table */}
+      <div className="mb-6 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 border-b border-[#ffffff08]">
+          <h2 className="text-sm font-semibold text-[#E5E5E5] flex items-center gap-2">
+            <History className="w-4 h-4 text-[#0C8B44]" />
+            Transaction history
+            <span className="text-xs font-normal text-[#737373]">({filteredTx.length})</span>
+          </h2>
+          <div className="flex flex-wrap gap-1.5">
+            {(['all', 'deposit', 'transfer', 'withdrawal', 'other'] as const).map((f) => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setTxFilter(f)}
+                className={`px-2.5 py-1 rounded-lg text-xs capitalize transition-colors ${
+                  txFilter === f
+                    ? 'bg-[#0C8B44]/20 text-[#0C8B44] border border-[#0C8B44]/40'
+                    : 'bg-[#ffffff06] text-[#A0A0A0] border border-transparent hover:text-[#E5E5E5]'
+                }`}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm min-w-[720px]">
+            <thead>
+              <tr className="text-[10px] uppercase tracking-wider text-[#737373] border-b border-[#ffffff08]">
+                <th className="px-4 py-3 font-medium">Time</th>
+                <th className="px-4 py-3 font-medium">Type</th>
+                <th className="px-4 py-3 font-medium">User</th>
+                <th className="px-4 py-3 font-medium text-right">Amount</th>
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Reference</th>
+                <th className="px-4 py-3 font-medium">Txn ID</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredTx.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-4 py-8 text-center text-xs text-[#737373]">
+                    No transactions yet.
+                  </td>
+                </tr>
+              ) : (
+                filteredTx.map((tx) => {
+                  const positive = tx.amount >= 0
+                  const kind = (tx.kind || 'other').toLowerCase()
+                  return (
+                    <tr
+                      key={tx.id}
+                      className="border-b border-[#ffffff05] hover:bg-[#ffffff04] transition-colors"
+                    >
+                      <td className="px-4 py-3 whitespace-nowrap text-xs text-[#A0A0A0]">
+                        <div>{relTime(tx.createdAt)}</div>
+                        <div className="text-[10px] text-[#555]">{fmtDate(tx.createdAt)}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex px-2 py-0.5 rounded-full text-[10px] uppercase tracking-wider font-medium ${
+                            kind === 'deposit'
+                              ? 'bg-[#4CAF50]/15 text-[#4CAF50]'
+                              : kind === 'transfer'
+                                ? 'bg-[#2196F3]/15 text-[#2196F3]'
+                                : kind === 'withdrawal' || kind === 'withdraw'
+                                  ? 'bg-[#FF9800]/15 text-[#FF9800]'
+                                  : 'bg-[#ffffff10] text-[#A0A0A0]'
+                          }`}
+                        >
+                          {tx.subType ? `${kind} · ${tx.subType}` : kind}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 min-w-[140px]">
+                        <div className="truncate text-[#E5E5E5] text-xs">{tx.user?.name || '—'}</div>
+                        <div className="truncate text-[10px] text-[#737373]">{tx.user?.email || tx.userId || '—'}</div>
+                      </td>
+                      <td
+                        className={`px-4 py-3 text-right font-medium whitespace-nowrap ${
+                          positive ? 'text-[#4CAF50]' : 'text-[#f44336]'
+                        }`}
+                      >
+                        {positive ? '+' : ''}
+                        {money(tx.amount, tx.currency || 'USD')}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`text-[10px] uppercase tracking-wider ${
+                            tx.status === 'completed'
+                              ? 'text-[#4CAF50]'
+                              : tx.status === 'pending'
+                                ? 'text-[#FF9800]'
+                                : 'text-[#A0A0A0]'
+                          }`}
+                        >
+                          {tx.status || '—'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 max-w-[200px]">
+                        <span className="block truncate text-xs text-[#A0A0A0]" title={tx.reference || ''}>
+                          {tx.reference || '—'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <code className="text-[10px] text-[#737373] font-mono">
+                          {(tx.transactionId || tx.id || '').slice(0, 18)}
+                          {(tx.transactionId || tx.id || '').length > 18 ? '…' : ''}
+                        </code>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       {showCharts && (
         <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6 mb-6">
@@ -277,13 +373,13 @@ export default function AdminDashboard() {
           }))}
         />
         <ActivityPanel
-          title="Recent transactions"
+          title="Quick activity"
           empty="No activity yet."
-          items={recentTx.slice(0, 6).map((tx: { kind: string; amount: number; createdAt: string; user?: { email?: string } }) => ({
-            primary: tx.kind.toUpperCase(),
+          items={recentTx.slice(0, 6).map((tx) => ({
+            primary: (tx.kind || '').toUpperCase(),
             secondary: tx.user?.email || 'System',
             meta: relTime(tx.createdAt),
-            badge: `${tx.kind === 'deposit' ? '+' : '-'}${money(Math.abs(tx.amount))}`,
+            badge: `${tx.amount >= 0 ? '+' : ''}${money(tx.amount)}`,
           }))}
         />
       </div>
@@ -410,7 +506,7 @@ function fmt(n: number) {
 }
 
 function money(n: number, currency = 'USD') {
-  if (currency !== 'USD') {
+  if (currency && currency.toUpperCase() !== 'USD') {
     return `${n.toLocaleString('en-US', { maximumFractionDigits: 6 })} ${currency}`
   }
   return new Intl.NumberFormat('en-US', {
@@ -428,6 +524,16 @@ function relTime(value: string | Date) {
   const hours = Math.round(mins / 60)
   if (hours < 24) return `${hours}h ago`
   return `${Math.round(hours / 24)}d ago`
+}
+
+function fmtDate(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value)
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 export { AdminApprovalQueues as AdminConsoleContent } from '../components/admin/AdminApprovalQueues'
