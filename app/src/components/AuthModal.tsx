@@ -32,6 +32,7 @@ function AuthModal({ isOpen, onClose, defaultMode = 'login' }: AuthModalProps) {
     lastName: '',
     phone: '',
     address: '',
+    referralCode: '',
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -40,6 +41,20 @@ function AuthModal({ isOpen, onClose, defaultMode = 'login' }: AuthModalProps) {
   const [pendingFlow, setPendingFlow] = useState<'login' | 'signup'>('login')
   const [otpCode, setOtpCode] = useState('')
   const [otpMessage, setOtpMessage] = useState('')
+
+  // Prefill referral code from invite link (?ref= / ?referral=)
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const code = (params.get('ref') || params.get('referral') || params.get('referralCode') || '').trim()
+      if (code) {
+        setForm((f) => ({ ...f, referralCode: code }))
+        if (defaultMode !== 'login') setMode('signup')
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [defaultMode])
 
   useEffect(() => {
     if (!isOpen) return
@@ -155,7 +170,10 @@ function AuthModal({ isOpen, onClose, defaultMode = 'login' }: AuthModalProps) {
       let result
       if (mode === 'signup') {
         const name = `${form.firstName} ${form.lastName}`.trim() || safeEmail
-        result = await api.signup(safeEmail, pwd, name, form.phone.trim(), form.address.trim())
+        result = await api.signup(safeEmail, pwd, name, form.phone.trim(), form.address.trim(), {
+          referralCode: form.referralCode.trim() || undefined,
+          ref: form.referralCode.trim() || undefined,
+        })
       } else {
         result = await api.login(safeEmail, pwd)
       }
@@ -391,6 +409,28 @@ function AuthModal({ isOpen, onClose, defaultMode = 'login' }: AuthModalProps) {
                   </div>
                 )}
 
+                {mode === 'signup' && (
+                  <div>
+                    <label className="text-xs text-[#737373] mb-1.5 block">
+                      Referral code <span className="text-[#525252]">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="referralCode"
+                      value={form.referralCode}
+                      onChange={(e) => setForm({ ...form, referralCode: e.target.value.toUpperCase() })}
+                      className="w-full px-4 py-3 bg-[#1a1a1a] border border-[#ffffff08] rounded-xl text-sm text-[#E5E5E5] tracking-wide"
+                      placeholder="e.g. VERDX-ABC123"
+                      autoCapitalize="characters"
+                      autoCorrect="off"
+                      spellCheck={false}
+                    />
+                    <p className="mt-1.5 text-[11px] text-[#525252]">
+                      Have an invite? Enter your referrer's code so we can credit them.
+                    </p>
+                  </div>
+                )}
+
                 {error && (
                   <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-400">
                     {error}
@@ -443,7 +483,7 @@ function AuthModal({ isOpen, onClose, defaultMode = 'login' }: AuthModalProps) {
                 </button>
               ) : mode === 'login' ? (
                 <>
-                  Don&apos;t have an account?{' '}
+                  Don't have an account?{' '}
                   <button onClick={switchMode} className="text-[#0C8B44] font-medium">
                     Sign up free
                   </button>
