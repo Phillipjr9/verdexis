@@ -1,10 +1,18 @@
 import { Router } from 'express'
 import crypto from 'node:crypto'
-import { z } from 'zod'
 import { prisma } from '../db.js'
-import { requireAuth, requireAdmin, type AuthedRequest } from '../auth.js'
+import { requireAuth, type AuthedRequest } from '../auth.js'
 import { idempotency } from '../idempotency.js'
 import { recordLedgerTransaction } from '../services/ledger.js'
+import {
+  mapBalances,
+  clampTransactionLimit,
+  normalizeEmail,
+  evaluateTransferGate,
+  buildTransferKeyBase,
+  parseWithdrawalFeeRate,
+  transferBodySchema,
+} from './walletHelpers.js'
 
 const router = Router()
 
@@ -30,13 +38,7 @@ router.get('/', requireAuth, async (req: AuthedRequest, res) => {
       }),
     ])
     res.json({
-      balances: balances.map((b) => ({
-        currency: b.currency,
-        symbol: b.currency === 'USD' ? '$' : b.currency,
-        balance: Number(b.balance),
-        available: Number(b.available),
-        locked: Number(b.balance) - Number(b.available),
-      })),
+      balances: mapBalances(balances),
       transactions,
     })
   } catch (e) {
@@ -48,7 +50,7 @@ router.get('/', requireAuth, async (req: AuthedRequest, res) => {
 router.get('/transactions', requireAuth, async (req: AuthedRequest, res) => {
   try {
     const userId = req.userId!
-    const take = Math.min(100, Math.max(1, Number(req.query.limit) || 50))
+    const take = clampTransactionLimit(req.query.limit)
     const transactions = await prisma.transaction.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
@@ -62,7 +64,7 @@ router.get('/transactions', requireAuth, async (req: AuthedRequest, res) => {
 
 router.get('/lookup-recipient', requireAuth, async (req: AuthedRequest, res) => {
   try {
-    const email = String(req.query.email || '').trim().toLowerCase()
+    const email = normalizeEmail(req.query.email)
     if (!email) {
       res.status(400).json({ error: 'email required' })
       return
@@ -81,17 +83,10 @@ router.get('/lookup-recipient', requireAuth, async (req: AuthedRequest, res) => 
   }
 })
 
-const transferSchema = z.object({
-  recipientEmail: z.string().email(),
-  currency: z.string().min(1).max(10),
-  amount: z.number().positive(),
-  note: z.string().max(500).optional(),
-})
-
 router.post('/transfer', requireAuth, idempotency(), async (req: AuthedRequest, res) => {
   try {
     const userId = req.userId!
-    const parsed = transferSchema.safeParse(req.body)
+    const parsed = transferBodySchema.safeParse(req.body)
     if (!parsed.success) {
       res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() })
       return
@@ -102,47 +97,42 @@ router.post('/transfer', requireAuth, idempotency(), async (req: AuthedRequest, 
       where: { email: { equals: parsed.data.recipientEmail.trim(), mode: 'insensitive' } },
       select: { id: true, email: true, name: true, suspended: true, holdActive: true },
     })
-    if (!recipient) {
-      res.status(404).json({ error: 'Recipient not found' })
-      return
-    }
-    if (recipient.id === userId) {
-      res.status(400).json({ error: 'Cannot transfer to yourself' })
-      return
-    }
-    if (recipient.suspended) {
-      res.status(400).json({ error: 'Recipient account is suspended' })
-      return
-    }
 
     const sender = await prisma.user.findUnique({
       where: { id: userId },
       select: { holdActive: true, holdType: true, email: true, name: true, suspended: true },
     })
-    if (!sender || sender.suspended) {
-      res.status(403).json({ error: 'Account not allowed to transfer' })
-      return
-    }
-    if (sender.holdActive && (sender.holdType === 'all' || sender.holdType === 'transfer')) {
-      res.status(403).json({ error: 'Transfers are on hold for this account' })
-      return
-    }
 
     const bal = await prisma.walletBalance.findUnique({
       where: { userId_currency: { userId, currency } },
     })
-    if (!bal || Number(bal.available) < amount) {
-      res.status(400).json({ error: 'Insufficient available balance' })
+    const available = bal ? Number(bal.available) : null
+
+    const gate = evaluateTransferGate({
+      senderId: userId,
+      sender,
+      recipient,
+      amount,
+      available,
+    })
+    if (!gate.ok) {
+      res.status(gate.status).json({ error: gate.error })
       return
     }
 
+    const recipientId = recipient!.id
     const clientKey = getIdempotencyKey(req)
-    const keyBase = clientKey
-      ? `user_transfer:${clientKey}`
-      : `user_transfer:${userId}:${recipient.id}:${currency}:${amount}:${crypto.randomUUID()}`
+    const keyBase = buildTransferKeyBase({
+      clientKey,
+      senderId: userId,
+      recipientId,
+      currency,
+      amount,
+      uuid: crypto.randomUUID(),
+    })
 
-    const outRef = `Transfer to ${recipient.email}${parsed.data.note ? ' — ' + parsed.data.note : ''}`
-    const inRef = `Transfer from ${sender.email}${parsed.data.note ? ' — ' + parsed.data.note : ''}`
+    const outRef = `Transfer to ${recipient!.email}${parsed.data.note ? ' — ' + parsed.data.note : ''}`
+    const inRef = `Transfer from ${sender!.email}${parsed.data.note ? ' — ' + parsed.data.note : ''}`
 
     await prisma.$transaction(async (tx) => {
       await recordLedgerTransaction({
@@ -165,7 +155,7 @@ router.post('/transfer', requireAuth, idempotency(), async (req: AuthedRequest, 
       })
       await recordLedgerTransaction({
         tx,
-        userId: recipient.id,
+        userId: recipientId,
         asset: currency,
         amount,
         entryType: 'debit',
@@ -184,7 +174,7 @@ router.post('/transfer', requireAuth, idempotency(), async (req: AuthedRequest, 
     })
 
     res.status(201).json({
-      recipient: { email: recipient.email, name: recipient.name },
+      recipient: { email: recipient!.email, name: recipient!.name },
       amount,
       currency,
     })
@@ -221,12 +211,7 @@ router.get('/me/deposit-addresses', requireAuth, async (_req, res) => {
 router.get('/withdrawal-fee-config', requireAuth, async (_req, res) => {
   try {
     const row = await prisma.appSetting.findUnique({ where: { key: 'withdrawal_fee' } })
-    if (!row?.value) {
-      res.json({ ratePct: 0 })
-      return
-    }
-    const parsed = JSON.parse(row.value)
-    res.json({ ratePct: Number(parsed.ratePct) || 0 })
+    res.json({ ratePct: parseWithdrawalFeeRate(row?.value) })
   } catch {
     res.json({ ratePct: 0 })
   }
