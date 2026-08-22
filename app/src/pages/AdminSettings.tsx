@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Navigation from '../components/Navigation'
-import { ArrowLeft, Settings, Save, Shield, Gift, Percent, RefreshCw } from 'lucide-react'
+import { ArrowLeft, Settings, Save, Shield, Gift, Percent, RefreshCw, Bug } from 'lucide-react'
 import { Toaster, toast } from 'sonner'
 import { adminApi } from '../lib/adminApi'
+import SentryTestButton from '../components/SentryTestButton'
 
 interface OtpAnalytics {
   totalUsers: number
@@ -382,6 +383,19 @@ export default function AdminSettings() {
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Diagnostics — admin only (this page is already behind RequireAdmin) */}
+          <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6 lg:col-span-2">
+            <div className="flex items-center gap-2 mb-1">
+              <Bug className="w-4 h-4 text-red-400" />
+              <h2 className="text-lg font-medium text-[#E5E5E5]">Diagnostics</h2>
+            </div>
+            <p className="text-xs text-[#737373] mb-4">
+              Trigger a controlled client-side exception to verify Sentry error tracking, session replay, and metrics.
+              The page ErrorBoundary will catch it and show the recovery UI; the event should appear in your Sentry project within a few seconds.
+            </p>
+            <SentryTestButton />
           </div>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
+import * as Sentry from '@sentry/react'
 
 interface Props {
   children: ReactNode
@@ -23,6 +24,17 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('[Verdexis] uncaught error', error, info)
+    try {
+      Sentry.withScope((scope) => {
+        if (this.props.scope) scope.setTag('error_boundary_scope', this.props.scope)
+        scope.setContext('react', {
+          componentStack: info.componentStack,
+        })
+        Sentry.captureException(error)
+      })
+    } catch {
+      /* Sentry not ready or unavailable */
+    }
   }
 
   componentDidUpdate(prevProps: Props) {
