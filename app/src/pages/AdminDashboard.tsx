@@ -21,6 +21,8 @@ import {
   Activity,
   ArrowLeftRight,
   History,
+  Search,
+  X,
 } from 'lucide-react'
 
 type WalletBalanceRow = {
@@ -52,6 +54,7 @@ export default function AdminDashboard() {
   const [walletBalances, setWalletBalances] = useState<WalletBalanceRow[]>([])
   const [walletError, setWalletError] = useState<string | null>(null)
   const [txFilter, setTxFilter] = useState<'all' | 'deposit' | 'transfer' | 'withdrawal' | 'other'>('all')
+  const [txSearch, setTxSearch] = useState('')
 
   useEffect(() => {
     let active = true
@@ -129,15 +132,38 @@ export default function AdminDashboard() {
   const lockedUsd = Math.max(0, totalUsd - availableUsd)
 
   const filteredTx = useMemo(() => {
-    if (txFilter === 'all') return recentTx
+    let rows = recentTx
     if (txFilter === 'other') {
-      return recentTx.filter((tx) => !['deposit', 'transfer', 'withdrawal', 'withdraw'].includes(tx.kind))
+      rows = rows.filter((tx) => !['deposit', 'transfer', 'withdrawal', 'withdraw'].includes(tx.kind))
+    } else if (txFilter === 'withdrawal') {
+      rows = rows.filter((tx) => tx.kind === 'withdrawal' || tx.kind === 'withdraw')
+    } else if (txFilter !== 'all') {
+      rows = rows.filter((tx) => tx.kind === txFilter)
     }
-    if (txFilter === 'withdrawal') {
-      return recentTx.filter((tx) => tx.kind === 'withdrawal' || tx.kind === 'withdraw')
-    }
-    return recentTx.filter((tx) => tx.kind === txFilter)
-  }, [recentTx, txFilter])
+
+    const q = txSearch.trim().toLowerCase()
+    if (!q) return rows
+
+    return rows.filter((tx) => {
+      const haystack = [
+        tx.id,
+        tx.transactionId,
+        tx.userId,
+        tx.kind,
+        tx.subType,
+        tx.status,
+        tx.currency,
+        tx.reference,
+        tx.user?.email,
+        tx.user?.name,
+        String(tx.amount),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+      return haystack.includes(q)
+    })
+  }, [recentTx, txFilter, txSearch])
 
   return (
     <AdminLayout
@@ -182,7 +208,6 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Admin balance */}
       <div className="mb-6 rounded-2xl border border-[#0C8B44]/30 bg-gradient-to-br from-[#0C8B44]/15 to-[#0a0f11] p-5 md:p-6">
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
           <div>
@@ -208,7 +233,6 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Metrics */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
         <MetricBadge icon={<Users className="w-4 h-4" />} label="Users" value={fmt(s.users)} hint={`+${s.signups24h} today`} color="green" />
         <MetricBadge icon={<ShieldCheck className="w-4 h-4" />} label="Admins" value={fmt(s.admins)} hint="live" color="blue" />
@@ -232,29 +256,54 @@ export default function AdminDashboard() {
         <QueueCard to="/admin/reviews" title="Testimonials" count={pendingReviewCount ?? 0} icon={<Hourglass className="w-4 h-4" />} color="orange" />
       </div>
 
-      {/* Transaction history table */}
       <div className="mb-6 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] overflow-hidden">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 border-b border-[#ffffff08]">
-          <h2 className="text-sm font-semibold text-[#E5E5E5] flex items-center gap-2">
-            <History className="w-4 h-4 text-[#0C8B44]" />
-            Transaction history
-            <span className="text-xs font-normal text-[#737373]">({filteredTx.length})</span>
-          </h2>
-          <div className="flex flex-wrap gap-1.5">
-            {(['all', 'deposit', 'transfer', 'withdrawal', 'other'] as const).map((f) => (
+        <div className="flex flex-col gap-3 p-4 border-b border-[#ffffff08]">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <h2 className="text-sm font-semibold text-[#E5E5E5] flex items-center gap-2">
+              <History className="w-4 h-4 text-[#0C8B44]" />
+              Transaction history
+              <span className="text-xs font-normal text-[#737373]">
+                ({filteredTx.length}
+                {txSearch.trim() || txFilter !== 'all' ? ` of ${recentTx.length}` : ''})
+              </span>
+            </h2>
+            <div className="flex flex-wrap gap-1.5">
+              {(['all', 'deposit', 'transfer', 'withdrawal', 'other'] as const).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setTxFilter(f)}
+                  className={`px-2.5 py-1 rounded-lg text-xs capitalize transition-colors ${
+                    txFilter === f
+                      ? 'bg-[#0C8B44]/20 text-[#0C8B44] border border-[#0C8B44]/40'
+                      : 'bg-[#ffffff06] text-[#A0A0A0] border border-transparent hover:text-[#E5E5E5]'
+                  }`}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#737373] pointer-events-none" />
+            <input
+              type="search"
+              value={txSearch}
+              onChange={(e) => setTxSearch(e.target.value)}
+              placeholder="Search by email, name, reference, txn ID, amount, type…"
+              className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-[#0a0f11] border border-[#ffffff10] text-sm text-[#E5E5E5] placeholder-[#555] focus:outline-none focus:border-[#0C8B44]/50"
+              aria-label="Search transactions"
+            />
+            {txSearch && (
               <button
-                key={f}
                 type="button"
-                onClick={() => setTxFilter(f)}
-                className={`px-2.5 py-1 rounded-lg text-xs capitalize transition-colors ${
-                  txFilter === f
-                    ? 'bg-[#0C8B44]/20 text-[#0C8B44] border border-[#0C8B44]/40'
-                    : 'bg-[#ffffff06] text-[#A0A0A0] border border-transparent hover:text-[#E5E5E5]'
-                }`}
+                onClick={() => setTxSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#737373] hover:text-[#E5E5E5]"
+                aria-label="Clear search"
               >
-                {f}
+                <X className="w-4 h-4" />
               </button>
-            ))}
+            )}
           </div>
         </div>
 
@@ -275,7 +324,9 @@ export default function AdminDashboard() {
               {filteredTx.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-8 text-center text-xs text-[#737373]">
-                    No transactions yet.
+                    {txSearch.trim() || txFilter !== 'all'
+                      ? 'No transactions match your search or filter.'
+                      : 'No transactions yet.'}
                   </td>
                 </tr>
               ) : (
@@ -283,10 +334,7 @@ export default function AdminDashboard() {
                   const positive = tx.amount >= 0
                   const kind = (tx.kind || 'other').toLowerCase()
                   return (
-                    <tr
-                      key={tx.id}
-                      className="border-b border-[#ffffff05] hover:bg-[#ffffff04] transition-colors"
-                    >
+                    <tr key={tx.id} className="border-b border-[#ffffff05] hover:bg-[#ffffff04] transition-colors">
                       <td className="px-4 py-3 whitespace-nowrap text-xs text-[#A0A0A0]">
                         <div>{relTime(tx.createdAt)}</div>
                         <div className="text-[10px] text-[#555]">{fmtDate(tx.createdAt)}</div>
@@ -310,11 +358,7 @@ export default function AdminDashboard() {
                         <div className="truncate text-[#E5E5E5] text-xs">{tx.user?.name || '—'}</div>
                         <div className="truncate text-[10px] text-[#737373]">{tx.user?.email || tx.userId || '—'}</div>
                       </td>
-                      <td
-                        className={`px-4 py-3 text-right font-medium whitespace-nowrap ${
-                          positive ? 'text-[#4CAF50]' : 'text-[#f44336]'
-                        }`}
-                      >
+                      <td className={`px-4 py-3 text-right font-medium whitespace-nowrap ${positive ? 'text-[#4CAF50]' : 'text-[#f44336]'}`}>
                         {positive ? '+' : ''}
                         {money(tx.amount, tx.currency || 'USD')}
                       </td>
