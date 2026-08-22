@@ -47,6 +47,7 @@
     "@reown/appkit": "^1.8.9",
     "@reown/appkit-adapter-ethers": "^1.8.9",
     "@scure/bip32": "^1.5.0",
+    "@sentry/react": "^10.70.0",
     "@simplewebauthn/browser": "^13.3.0",
     "@supabase/supabase-js": "^2.36.0",
     "@types/three": "^0.184.0",
