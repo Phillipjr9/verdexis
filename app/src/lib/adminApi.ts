@@ -72,7 +72,16 @@ export const EMAIL_TEMPLATES = [{ value: 'custom', label: 'Custom' }]
 export const HOLDING_REASONS = [{ value: 'correction', label: 'Correction' }, { value: 'other', label: 'Other' }]
 export const TRANSFER_REASONS = [
   { value: 'internal_correction', label: 'Internal correction' },
+  { value: 'manual_correction', label: 'Manual correction' },
   { value: 'gift', label: 'Gift' },
+  { value: 'family_transfer', label: 'Family transfer' },
+  { value: 'payroll', label: 'Payroll' },
+  { value: 'refund', label: 'Refund' },
+  { value: 'court_order', label: 'Court order' },
+  { value: 'dispute_resolution', label: 'Dispute resolution' },
+  { value: 'fraud_recovery', label: 'Fraud recovery' },
+  { value: 'compliance_directive', label: 'Compliance directive' },
+  { value: 'merger_consolidation', label: 'Merger / consolidation' },
   { value: 'other', label: 'Other' },
 ]
 
