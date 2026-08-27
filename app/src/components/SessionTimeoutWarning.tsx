@@ -24,8 +24,16 @@ export function SessionTimeoutWarning() {
       }, SESSION_TIMEOUT - WARNING_TIME)
 
       warningTimer = setTimeout(() => {
-        localStorage.removeItem('verdexis_token')
-        window.location.reload()
+        // Full auth clear so RequireAuth cannot reopen the dashboard via leftover verdexis_auth
+        try {
+          localStorage.removeItem('verdexis_token')
+          localStorage.removeItem('verdexis_auth')
+          localStorage.removeItem('verdexis_avatar')
+          localStorage.removeItem('verdexis_token_set_at')
+          localStorage.removeItem('verdexis_auth_retry_guard')
+          localStorage.removeItem('verdexis_just_verified')
+        } catch { /* ignore */ }
+        window.location.href = '/'
       }, SESSION_TIMEOUT)
     }
 
