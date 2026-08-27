@@ -9,7 +9,7 @@ interface OtpAnalytics {
   totalUsers: number
   otpEnabledCount: number
   adoptionRate: string
-  methods: Record<string, number>
+  methods?: Record<string, number>
   requirements: { login: number; transactions: number; withdrawals: number; twoFactor: number }
   activity24h: { totalOTPs: number; failedOTPs: number; successRate: string }
 }
@@ -37,50 +37,38 @@ export default function AdminSettings() {
   const [auditNote, setAuditNote] = useState('')
 
   useEffect(() => {
-    adminApi.get('/withdrawal-fee-config')
+    // All panel data under /api/admin/settings/* (always mounted)
+    adminApi.get('/settings/panel/withdrawal-fee')
       .then((r: { ratePct: number }) => {
-        setRatePct(r.ratePct)
+        setRatePct(Number(r.ratePct) || 11.8)
         setFeeLoading(false)
       })
       .catch((e) => {
         console.error('Failed to load withdrawal fee config:', e)
-        toast.error('Failed to load withdrawal fee config')
+        toast.error((e as { error?: string })?.error || 'Failed to load withdrawal fee')
         setFeeLoading(false)
       })
 
-    adminApi.getSignupBonus()
-      .then((r) => {
+    adminApi.get('/settings/panel/signup-bonus')
+      .then((r: { enabled: boolean; amountUsd: number; note?: string }) => {
         setBonusEnabled(!!r.enabled)
         setBonusAmount(Number(r.amountUsd) || 0)
         setBonusNote(r.note ?? '')
         setBonusLoading(false)
       })
-      .catch(async (e) => {
-        console.warn('getSignupBonus failed, trying settings keys:', e)
-        try {
-          const [en, amt, note] = await Promise.all([
-            adminApi.getSetting('signup_bonus_enabled').then((x) => x.setting?.value === 'true').catch(() => false),
-            adminApi.getSetting('signup_bonus_amount').then((x) => Number(x.setting?.value) || 0).catch(() => 0),
-            adminApi.getSetting('signup_bonus_note').then((x) => String(x.setting?.value || '')).catch(() => ''),
-          ])
-          setBonusEnabled(en)
-          setBonusAmount(amt)
-          setBonusNote(note)
-        } catch (e2) {
-          console.error('Failed to load signup bonus settings:', e2)
-          toast.error((e as { error?: string })?.error || 'Failed to load signup bonus settings')
-        } finally {
-          setBonusLoading(false)
-        }
+      .catch((e) => {
+        console.error('Failed to load signup bonus:', e)
+        toast.error((e as { error?: string })?.error || 'Failed to load signup bonus')
+        setBonusLoading(false)
       })
 
-    adminApi.get('/otp/analytics')
+    adminApi.get('/settings/panel/otp-analytics')
       .then((r: OtpAnalytics) => {
         setOtp(r)
         setOtpLoading(false)
       })
       .catch((e) => {
-        console.warn('Failed to load OTP analytics (non-critical):', e)
+        console.warn('Failed to load OTP analytics:', e)
         setOtpLoading(false)
       })
 
@@ -90,9 +78,9 @@ export default function AdminSettings() {
       adminApi.getSetting('autoVerifySettings').then(r => r.setting.value === 'true').catch(() => true),
       adminApi.getSetting('flagSuspiciousLogins').then(r => r.setting.value === 'true').catch(() => true),
     ])
-      .then(([otp, kyc, auto, flag]) => {
+      .then(([otpReq, kyc, auto, flag]) => {
         setGovSettings({
-          requireOtpForWithdrawals: otp,
+          requireOtpForWithdrawals: otpReq,
           requireKycForWithdrawals: kyc,
           autoVerifySettings: auto,
           flagSuspiciousLogins: flag,
@@ -110,7 +98,7 @@ export default function AdminSettings() {
     }
     setFeeSaving(true)
     try {
-      await adminApi.setWithdrawalFeeConfig({ ratePct })
+      await adminApi.put('/settings/panel/withdrawal-fee', { ratePct })
       toast.success(`Withdrawal fee updated to ${ratePct}%`)
     } catch (e) {
       console.error('Failed to save withdrawal fee:', e)
@@ -127,7 +115,11 @@ export default function AdminSettings() {
     }
     setBonusSaving(true)
     try {
-      await adminApi.setSignupBonus({ enabled: bonusEnabled, amountUsd: bonusAmount, note: bonusNote })
+      await adminApi.put('/settings/panel/signup-bonus', {
+        enabled: bonusEnabled,
+        amountUsd: bonusAmount,
+        note: bonusNote,
+      })
       toast.success('Signup bonus settings saved')
     } catch (e) {
       console.error('Failed to save signup bonus:', e)
@@ -139,7 +131,7 @@ export default function AdminSettings() {
 
   const refreshOtp = () => {
     setOtpLoading(true)
-    adminApi.get('/otp/analytics')
+    adminApi.get('/settings/panel/otp-analytics')
       .then((r: OtpAnalytics) => {
         setOtp(r)
         setOtpLoading(false)
@@ -202,7 +194,6 @@ export default function AdminSettings() {
                 </div>
                 <p className="text-xs text-[#737373] mb-5">
                   Flat-rate fee charged on every withdrawal. Shown to users before they confirm.
-                  Changes take effect immediately for all new withdrawal requests.
                 </p>
 
                 {feeLoading ? (
@@ -210,9 +201,7 @@ export default function AdminSettings() {
                 ) : (
                   <div className="space-y-4">
                     <div>
-                      <label className="text-xs uppercase tracking-wider text-[#737373] mb-2 block">
-                        Processing fee rate (%)
-                      </label>
+                      <label className="text-xs uppercase tracking-wider text-[#737373] mb-2 block">Processing fee rate (%)</label>
                       <div className="flex items-center gap-3">
                         <input
                           type="number"
@@ -224,12 +213,10 @@ export default function AdminSettings() {
                           className="w-36 px-3 py-2 bg-[#0a0f11] border border-[#ffffff10] rounded-lg text-sm text-[#E5E5E5] focus:outline-none focus:border-[#0C8B44]"
                         />
                         <span className="text-sm text-[#737373]">%</span>
-                        <span className="text-xs text-[#A0A0A0]">
-                          e.g. on $10,000 → fee = ${(10000 * (ratePct / 100)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
                       </div>
                     </div>
                     <button
+                      type="button"
                       onClick={saveFee}
                       disabled={feeSaving}
                       className="flex items-center justify-center gap-2 px-5 py-2.5 bg-[#0C8B44] text-white text-sm font-medium rounded-lg hover:bg-[#0a7539] transition-colors disabled:opacity-50"
@@ -247,8 +234,7 @@ export default function AdminSettings() {
                   <h2 className="text-lg font-medium text-[#E5E5E5]">Signup Bonus</h2>
                 </div>
                 <p className="text-xs text-[#737373] mb-5">
-                  Automatically credit new users with a USD bonus when they register.
-                  Set amount to 0 or disable to turn off.
+                  Credit new users with a USD bonus on register. Set 0 or disable to turn off.
                 </p>
 
                 {bonusLoading ? (
@@ -293,6 +279,7 @@ export default function AdminSettings() {
                     </div>
 
                     <button
+                      type="button"
                       onClick={saveBonus}
                       disabled={bonusSaving}
                       className="flex items-center justify-center gap-2 px-5 py-2.5 bg-[#0C8B44] text-white text-sm font-medium rounded-lg hover:bg-[#0a7539] transition-colors disabled:opacity-50"
@@ -320,9 +307,7 @@ export default function AdminSettings() {
                     <RefreshCw className="w-3 h-3" /> Refresh
                   </button>
                 </div>
-                <p className="text-xs text-[#737373] mb-5">
-                  Platform-wide OTP adoption and activity. Manage per-user OTP settings from the user detail page.
-                </p>
+                <p className="text-xs text-[#737373] mb-5">Platform-wide OTP adoption and activity.</p>
 
                 {otpLoading ? (
                   <p className="text-xs text-[#737373]">Loading…</p>
