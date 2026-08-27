@@ -44,6 +44,44 @@ function applyNeverTypeFix(src) {
   return src.replace('referrals.map((r) => ({', 'referrals.map((r: any) => ({')
 }
 
+function injectFeeRoutes(src) {
+  if (src.includes('withdrawal-fee-config')) return src
+  const fee = `
+
+const FEE_KEY = 'withdrawal_fee_percent'
+router.get('/withdrawal-fee-config', async (_req, res) => {
+  try {
+    let row = await prisma.appSetting.findUnique({ where: { key: FEE_KEY } })
+    if (!row) row = await prisma.appSetting.create({ data: { key: FEE_KEY, value: '11.8', updatedBy: 'system' } })
+    const ratePct = Number(row.value)
+    res.json({ ratePct: Number.isFinite(ratePct) ? ratePct : 11.8, key: FEE_KEY })
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : 'Failed to load fee' })
+  }
+})
+router.put('/withdrawal-fee-config', async (req, res) => {
+  try {
+    const ratePct = Number(req.body?.ratePct ?? req.body?.value)
+    if (!Number.isFinite(ratePct) || ratePct < 0 || ratePct > 100) {
+      res.status(400).json({ error: 'ratePct must be a number between 0 and 100' })
+      return
+    }
+    const value = String(ratePct)
+    const adminEmail = req.userId ?? 'admin'
+    const row = await prisma.appSetting.upsert({
+      where: { key: FEE_KEY },
+      create: { key: FEE_KEY, value, updatedBy: String(adminEmail) },
+      update: { value, updatedBy: String(adminEmail) },
+    })
+    res.json({ ratePct: Number(row.value), key: FEE_KEY })
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : 'Failed to save fee' })
+  }
+})
+`
+  return src.replace('export default router', fee + '\nexport default router')
+}
+
 function tryLocalParts() {
   const partsDir = path.join(__dirname, 'admin_ts_parts')
   if (fs.existsSync(partsDir)) {
@@ -93,6 +131,20 @@ async function fetchGood() {
 }
 
 async function main() {
+  if (fs.existsSync(out)) {
+    const existing = fs.readFileSync(out, 'utf8')
+    if (
+      existing.length >= MIN_BYTES &&
+      existing.includes('export default router') &&
+      existing.includes("router.get('/users'") &&
+      !existing.includes('Placeholder overwritten')
+    ) {
+      let src = injectFeeRoutes(applyNeverTypeFix(existing))
+      fs.writeFileSync(out, src)
+      console.log('[restore-admin] kept committed admin.ts', src.length, 'chars')
+      return
+    }
+  }
   let src = tryLocalParts()
   if (!src) {
     console.log('[restore-admin] fetching known-good admin.ts from', GOOD_COMMIT)
@@ -100,7 +152,7 @@ async function main() {
   } else {
     console.log('[restore-admin] using local parts/b64', src.length, 'chars')
   }
-  src = applyNeverTypeFix(src)
+  src = injectFeeRoutes(applyNeverTypeFix(src))
   fs.writeFileSync(out, src)
   console.log('[restore-admin] wrote', out, src.length, 'chars')
 }
