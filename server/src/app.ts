@@ -28,6 +28,7 @@ import marketRoutes from './routes/market.js'
 import reviewsRoutes from './routes/reviews.js'
 import adminRoutes from './routes/admin.js'
 import adminSignupBonusRoutes from './routes/admin-signup-bonus.js'
+import adminOtpAnalyticsRoutes from './routes/admin-otp-analytics.js'
 import adminEmailActionsRoutes from './routes/adminEmailActions.js'
 import referralRoutes from './routes/referral.js'
 import dcaRoutes from './routes/dca.js'
@@ -187,20 +188,42 @@ app.use((req, res, next) => {
   function convertBigInt(value: unknown): unknown {
     if (value === null || value === undefined) return value
     if (typeof value === 'bigint') return value.toString()
+    if (typeof value === 'number' && !Number.isFinite(value)) return null
     if (Array.isArray(value)) return value.map(convertBigInt)
     if (typeof value === 'object') {
-      if (value instanceof Date) return value
-      if (value instanceof Buffer) return value
-      const out: Record<string, unknown> = {}
-      for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-        out[k] = convertBigInt(v)
+      if (value instanceof Date) return value.toISOString()
+      if (typeof Buffer !== 'undefined' && Buffer.isBuffer(value)) return value.toString('base64')
+      try {
+        return JSON.parse(
+          JSON.stringify(value, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)),
+        )
+      } catch {
+        const out: Record<string, unknown> = {}
+        for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+          out[k] = convertBigInt(v)
+        }
+        return out
       }
-      return out
     }
     return value
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ;(res as any).json = (body: unknown) => origJson(convertBigInt(body))
+  ;(res as any).json = (body: unknown) => {
+    try {
+      return origJson(convertBigInt(body))
+    } catch (err) {
+      console.error('[verdexis-api] res.json serialize failed', err)
+      try {
+        return origJson(
+          JSON.parse(
+            JSON.stringify(body, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)),
+          ),
+        )
+      } catch {
+        return origJson({ error: 'Serialization failed' })
+      }
+    }
+  }
   next()
 })
 
@@ -333,6 +356,7 @@ app.use('/api/market', marketRoutes)
 app.use('/api/reviews', reviewsRoutes)
 app.use('/api/admin/email-actions', adminEmailActionsRoutes)
 app.use('/api/admin', adminSignupBonusRoutes) // GET/PUT /signup-bonus before generic admin router
+app.use('/api/admin', adminOtpAnalyticsRoutes) // GET /otp/analytics
 app.use('/api/admin', adminRoutes)
 app.use('/api/referrals', referralRoutes)
 app.use('/api/dca', dcaRoutes)
