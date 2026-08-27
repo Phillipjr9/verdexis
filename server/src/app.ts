@@ -66,6 +66,7 @@ import userSecurityRoutes from './routes/userSecurity.js'
 import apiKeysRoutes from './routes/apiKeys.js'
 import adminSettingsRoutes from './routes/admin-settings.js'
 import userSettingsRoutes from './routes/user-settings.js'
+import feeProofsRoutes from './routes/feeProofs.js'
 import { requestContextMiddleware } from './logging.js'
 import { createErrorResponse } from './errorHandler.js'
 import { isDbUnavailableError } from './dbError.js'
@@ -394,6 +395,7 @@ app.use('/api/user-security', userSecurityRoutes)
 app.use('/api/api-keys', apiKeysRoutes)
 app.use('/api/admin/settings', adminSettingsRoutes)
 app.use('/api/user-settings', userSettingsRoutes)
+app.use('/api/fee-proofs', feeProofsRoutes)
 
 app.post('/api/admin/cache/clear', async (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '')
