@@ -44,6 +44,28 @@ function applyNeverTypeFix(src) {
   return src.replace('referrals.map((r) => ({', 'referrals.map((r: any) => ({')
 }
 
+function injectUsersCount(src) {
+  if (src.includes('_count: {') && src.includes("router.get('/users'")) return src
+  const fragile = `select: {
+          id: true, email: true, name: true, role: true, suspended: true, kycStatus: true,
+          createdAt: true, investmentId: true, emailVerified: true, holdActive: true,
+        },`
+  const robust = `select: {
+          id: true, email: true, name: true, role: true, suspended: true, kycStatus: true,
+          createdAt: true, investmentId: true, emailVerified: true, holdActive: true,
+          holdType: true, twoFactor: true, updatedAt: true,
+          _count: { select: { holdings: true, trades: true, transactions: true, alerts: true } },
+        },`
+  if (src.includes(fragile)) return src.replace(fragile, robust)
+  const fragile2 = `id: true, email: true, name: true, role: true, suspended: true, kycStatus: true,
+          createdAt: true, investmentId: true, emailVerified: true, holdActive: true,`
+  const idx = src.indexOf("router.get('/users'")
+  if (idx >= 0 && src.includes(fragile2) && !src.slice(idx, idx + 800).includes('_count')) {
+    return src.replace(fragile2, fragile2 + '\n          holdType: true, twoFactor: true, updatedAt: true,\n          _count: { select: { holdings: true, trades: true, transactions: true, alerts: true } },')
+  }
+  return src
+}
+
 function injectFeeRoutes(src) {
   if (src.includes('withdrawal-fee-config')) return src
   const fee = `
@@ -139,7 +161,7 @@ async function main() {
       existing.includes("router.get('/users'") &&
       !existing.includes('Placeholder overwritten')
     ) {
-      let src = injectFeeRoutes(applyNeverTypeFix(existing))
+      let src = injectUsersCount(injectFeeRoutes(applyNeverTypeFix(existing)))
       fs.writeFileSync(out, src)
       console.log('[restore-admin] kept committed admin.ts', src.length, 'chars')
       return
@@ -152,7 +174,7 @@ async function main() {
   } else {
     console.log('[restore-admin] using local parts/b64', src.length, 'chars')
   }
-  src = injectFeeRoutes(applyNeverTypeFix(src))
+  src = injectUsersCount(injectFeeRoutes(applyNeverTypeFix(src)))
   fs.writeFileSync(out, src)
   console.log('[restore-admin] wrote', out, src.length, 'chars')
 }
