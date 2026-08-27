@@ -60,6 +60,7 @@ const AdminDashboard = withLazyErrorBoundary(() => import('./pages/AdminDashboar
 const AdminDeposits = withLazyErrorBoundary(() => import('./pages/AdminDeposits'), 'Admin Deposits')
 const AdminUsers = withLazyErrorBoundary(() => import('./pages/AdminUsers'), 'Admin Users')
 const AdminUserDetail = withLazyErrorBoundary(() => import('./pages/AdminUserDetail'), 'Admin User Detail')
+const AdminUserCreate = withLazyErrorBoundary(() => import('./pages/AdminUserCreate'), 'Admin Create User')
 const AdminAudit = withLazyErrorBoundary(() => import('./pages/AdminAudit'), 'Admin Audit')
 const AdminTransfer = withLazyErrorBoundary(() => import('./pages/AdminTransfer'), 'Admin Transfer')
 const AdminBroadcast = withLazyErrorBoundary(() => import('./pages/AdminBroadcast'), 'Admin Broadcast')
@@ -112,7 +113,6 @@ const PublicInformation = withLazyErrorBoundary(() => import('./pages/PublicInfo
 
 export default function App() {
   useKeyboardShortcuts()
-  // Development helper: capture duplicate-key React warnings and print stack traces
   if (typeof window !== 'undefined' && import.meta.env.DEV) {
     const _orig = console.error.bind(console)
     console.error = (...args: any[]) => {
@@ -161,7 +161,6 @@ export default function App() {
   )
 }
 
-// Wrapper component for route-specific styling.
 function RoutedPages() {
   const location = useLocation()
   return (
@@ -188,7 +187,6 @@ function RoutedPages() {
           <Route path="/goals" element={<RequireAuth><Goals /></RequireAuth>} />
           <Route path="/legal" element={<Legal />} />
           <Route path="/about" element={<About />} />
-          {/* Products page removed from public site - keep page file for internal features if needed */}
           <Route path="/privacy" element={<PublicInformation />} />
           <Route path="/terms" element={<PublicInformation />} />
           <Route path="/cookies" element={<PublicInformation />} />
@@ -211,6 +209,7 @@ function RoutedPages() {
           <Route path="/coin/:id" element={<AssetDetail />} />
           <Route path="/admin" element={<RequireAdmin><AdminDashboard /></RequireAdmin>} />
           <Route path="/admin/users" element={<RequireAdmin><AdminUsers /></RequireAdmin>} />
+          <Route path="/admin/users/new" element={<RequireAdmin><AdminUserCreate /></RequireAdmin>} />
           <Route path="/admin/users/:id" element={<RequireAdmin><AdminUserDetail /></RequireAdmin>} />
           <Route path="/admin/audit" element={<RequireAdmin><AdminAudit /></RequireAdmin>} />
           <Route path="/admin/reviews" element={<RequireAdmin><AdminReviews /></RequireAdmin>} />
