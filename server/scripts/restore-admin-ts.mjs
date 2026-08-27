@@ -2,6 +2,7 @@
 /**
  * Restores server/src/routes/admin.ts before tsc.
  * Prefers a full known-good file from GitHub history (always reliable on Vercel).
+ * Also injects admin credit/debit/transfer email notifications.
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -104,6 +105,107 @@ router.put('/withdrawal-fee-config', async (req, res) => {
   return src.replace('export default router', fee + '\nexport default router')
 }
 
+function injectEmailNotify(src) {
+  if (!src.includes("from '../services/transferNotifications.js'")) {
+    const needle = "from '../services/ledger.js'"
+    if (src.includes(needle)) {
+      src = src.replace(
+        needle,
+        needle +
+          "\nimport { notifyAdminFundedUser, notifyAdminDeductedUser, notifyPeerTransfer } from '../services/transferNotifications.js'",
+      )
+    }
+  }
+
+  const oldDep = `    if (parsed.data.notify) {
+      await prisma.notification.create({
+        data: {
+          userId, kind: 'deposit',
+          title: \\'\\${symbol}\\${parsed.data.amount.toLocaleString()} \\${parsed.data.currency} credited\\',
+          body: reference,
+        },
+      }).catch(() => {})
+    }`
+
+  // Use real template strings carefully via String.raw patterns matched from known-good admin.ts
+  const oldDepExact =
+    "    if (parsed.data.notify) {\n" +
+    "      await prisma.notification.create({\n" +
+    "        data: {\n" +
+    "          userId, kind: 'deposit',\n" +
+    "          title: `${symbol}${parsed.data.amount.toLocaleString()} ${parsed.data.currency} credited`,\n" +
+    "          body: reference,\n" +
+    "        },\n" +
+    "      }).catch(() => {})\n" +
+    "    }"
+
+  const newDepExact =
+    "    if (parsed.data.notify) {\n" +
+    "      await notifyAdminFundedUser({\n" +
+    "        userId,\n" +
+    "        email: user.email,\n" +
+    "        name: user.name,\n" +
+    "        amount: parsed.data.amount,\n" +
+    "        currency: parsed.data.currency,\n" +
+    "        note: parsed.data.note || reference,\n" +
+    "      }).catch((e) => console.warn('[admin] deposit email notify failed', e))\n" +
+    "    }"
+
+  if (src.includes(oldDepExact)) src = src.replace(oldDepExact, newDepExact)
+
+  const oldDedExact =
+    "    await audit(req.userId!, 'wallet.deduct', userId, parsed.data)\n" +
+    "    res.status(201).json(result)\n" +
+    "  } catch (e) {\n" +
+    "    console.error('[admin] deduct', e)"
+
+  const newDedExact =
+    "    if (parsed.data.notify) {\n" +
+    "      await notifyAdminDeductedUser({\n" +
+    "        userId,\n" +
+    "        email: user.email,\n" +
+    "        name: user.name,\n" +
+    "        amount: parsed.data.amount,\n" +
+    "        currency: parsed.data.currency,\n" +
+    "        note: parsed.data.note || reference,\n" +
+    "      }).catch((e) => console.warn('[admin] deduct email notify failed', e))\n" +
+    "    }\n" +
+    "    await audit(req.userId!, 'wallet.deduct', userId, parsed.data)\n" +
+    "    res.status(201).json(result)\n" +
+    "  } catch (e) {\n" +
+    "    console.error('[admin] deduct', e)"
+
+  if (src.includes(oldDedExact) && !src.includes('notifyAdminDeductedUser')) {
+    src = src.replace(oldDedExact, newDedExact)
+  }
+
+  const oldXferExact =
+    "    if (notify) {\n" +
+    "      await prisma.notification.create({\n" +
+    "        data: {\n" +
+    "          userId: toUserId, kind: 'deposit',\n" +
+    "          title: `${symbol}${amount.toLocaleString()} ${currency} received`,\n" +
+    "          body: inRef,\n" +
+    "        },\n" +
+    "      }).catch(() => {})\n" +
+    "    }"
+
+  const newXferExact =
+    "    if (notify) {\n" +
+    "      await notifyPeerTransfer({\n" +
+    "        sender: { id: fromUserId, email: from.email, name: from.name },\n" +
+    "        recipient: { id: toUserId, email: to.email, name: to.name },\n" +
+    "        amount,\n" +
+    "        currency,\n" +
+    "        note: note || null,\n" +
+    "      }).catch((e) => console.warn('[admin] transfer email notify failed', e))\n" +
+    "    }"
+
+  if (src.includes(oldXferExact)) src = src.replace(oldXferExact, newXferExact)
+
+  return src
+}
+
 function tryLocalParts() {
   const partsDir = path.join(__dirname, 'admin_ts_parts')
   if (fs.existsSync(partsDir)) {
@@ -161,7 +263,7 @@ async function main() {
       existing.includes("router.get('/users'") &&
       !existing.includes('Placeholder overwritten')
     ) {
-      let src = injectUsersCount(injectFeeRoutes(applyNeverTypeFix(existing)))
+      let src = injectEmailNotify(injectUsersCount(injectFeeRoutes(applyNeverTypeFix(existing))))
       fs.writeFileSync(out, src)
       console.log('[restore-admin] kept committed admin.ts', src.length, 'chars')
       return
@@ -174,7 +276,7 @@ async function main() {
   } else {
     console.log('[restore-admin] using local parts/b64', src.length, 'chars')
   }
-  src = injectUsersCount(injectFeeRoutes(applyNeverTypeFix(src)))
+  src = injectEmailNotify(injectUsersCount(injectFeeRoutes(applyNeverTypeFix(src))))
   fs.writeFileSync(out, src)
   console.log('[restore-admin] wrote', out, src.length, 'chars')
 }
