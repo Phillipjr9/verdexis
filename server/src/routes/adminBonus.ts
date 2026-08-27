@@ -1,6 +1,5 @@
 // Admin Bonus Management Endpoint
 // POST /api/admin/users/:id/bonus
-// Allows admins to give custom bonus amounts with withdrawal locks and processing fees
 
 import { Router } from 'express'
 import { z } from 'zod'
@@ -8,6 +7,7 @@ import { prisma } from '../db.js'
 import { requireAuth, requireAdmin, type AuthedRequest } from '../auth.js'
 import { idempotency } from '../idempotency.js'
 import { recordLedgerTransaction } from '../services/ledger.js'
+import { notifyAdminFundedUser } from '../services/transferNotifications.js'
 
 const router = Router()
 
@@ -19,11 +19,9 @@ const bonusSchema = z.object({
   amount: z.number().positive({ message: 'Bonus amount must be positive' }),
   note: z.string().max(500).optional(),
   notify: z.boolean().default(true),
-  
-  // Withdrawal lock settings
   lockWithdrawal: z.boolean().default(false),
-  processingFee: z.number().min(0).max(100).optional(), // Percentage (0-100%)
-  processingFeeFixed: z.number().min(0).optional(), // Fixed USD amount
+  processingFee: z.number().min(0).max(100).optional(),
+  processingFeeFixed: z.number().min(0).optional(),
   unlockMessage: z.string().max(1000).optional().default(
     'To withdraw your bonus, please contact support and pay the processing fee.'
   ),
@@ -67,7 +65,6 @@ router.post('/users/:id/bonus', idempotency(), async (req: AuthedRequest, res) =
   const operationKey = idempotencyKey
     ?? `admin_bonus:${userId}:${currency}:${amount}:${lockWithdrawal}:${processingFee ?? 0}:${processingFeeFixed ?? 0}:${note ?? ''}`
 
-  // Calculate processing fee amounts
   let feePercent = 0
   let feeFixed = 0
   if (lockWithdrawal) {
@@ -99,7 +96,6 @@ router.post('/users/:id/bonus', idempotency(), async (req: AuthedRequest, res) =
     const balance = ledgerResult.walletBalance
     const transaction = ledgerResult.transaction
 
-    // Set withdrawal lock in user prefs if enabled
     if (lockWithdrawal) {
       let prefs: Record<string, unknown> = {}
       try {
@@ -108,8 +104,7 @@ router.post('/users/:id/bonus', idempotency(), async (req: AuthedRequest, res) =
         prefs = {}
       }
 
-      // Store bonus lock info
-      const bonusLock = {
+      prefs.bonusLock = {
         active: true,
         amountUsd: currency === 'USD' ? amount : 0,
         currency,
@@ -122,8 +117,6 @@ router.post('/users/:id/bonus', idempotency(), async (req: AuthedRequest, res) =
         transactionId: transaction.id,
       }
 
-      prefs.bonusLock = bonusLock
-
       await tx.user.update({
         where: { id: userId },
         data: { prefs: JSON.stringify(prefs) },
@@ -133,26 +126,24 @@ router.post('/users/:id/bonus', idempotency(), async (req: AuthedRequest, res) =
     return { balance, transaction }
   })
 
-  // Send notification
   if (notify) {
     let notificationBody = `You've received ${symbol}${amount.toLocaleString()} ${currency}${note ? ': ' + note : ''}.`
-    
     if (lockWithdrawal) {
       const feeInfo: string[] = []
       if (feePercent > 0) feeInfo.push(`${feePercent}%`)
       if (feeFixed > 0) feeInfo.push(`$${feeFixed}`)
       const feeText = feeInfo.length > 0 ? ` (Processing fee: ${feeInfo.join(' + ')})` : ''
-      notificationBody += `\n\n⚠️ Withdrawal Lock Active${feeText}\n${unlockMessage}`
+      notificationBody += `\n\nWithdrawal Lock Active${feeText}\n${unlockMessage}`
     }
 
-    await prisma.notification.create({
-      data: {
-        userId,
-        kind: 'deposit',
-        title: `Credit received: ${symbol}${amount.toLocaleString()} ${currency}`,
-        body: notificationBody,
-      },
-    }).catch(() => { /* best-effort */ })
+    await notifyAdminFundedUser({
+      userId,
+      email: user.email,
+      name: user.name,
+      amount,
+      currency,
+      note: notificationBody,
+    }).catch((e) => console.warn('[adminBonus] email notify failed', e))
   }
 
   await audit(req.userId!, 'user.bonus.grant', userId, {
@@ -167,69 +158,54 @@ router.post('/users/:id/bonus', idempotency(), async (req: AuthedRequest, res) =
   res.status(201).json({
     balance: result.balance,
     transaction: result.transaction,
-    bonusLock: lockWithdrawal ? {
-      active: true,
-      requiresProcessingFee: feePercent > 0 || feeFixed > 0,
-      feePercent,
-      feeFixed,
-    } : null,
+    bonusLock: lockWithdrawal
+      ? {
+          active: true,
+          requiresProcessingFee: feePercent > 0 || feeFixed > 0,
+          feePercent,
+          feeFixed,
+        }
+      : null,
   })
 })
 
-// GET bonus lock status
 router.get('/users/:id/bonus-lock', async (req: AuthedRequest, res) => {
   const userId = req.params.id
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { prefs: true } })
-  
   if (!user) {
     res.status(404).json({ error: 'User not found' })
     return
   }
-
   let prefs: Record<string, unknown> = {}
   try {
     if (user.prefs) prefs = JSON.parse(user.prefs)
   } catch {
     prefs = {}
   }
-
-  const bonusLock = prefs.bonusLock || null
-  res.json({ bonusLock })
+  res.json({ bonusLock: prefs.bonusLock || null })
 })
 
-// POST unlock bonus (after processing fee paid)
 router.post('/users/:id/bonus/unlock', async (req: AuthedRequest, res) => {
   const userId = req.params.id
   const { note } = req.body as { note?: string }
-
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, prefs: true } })
   if (!user) {
     res.status(404).json({ error: 'User not found' })
     return
   }
-
   let prefs: Record<string, unknown> = {}
   try {
     if (user.prefs) prefs = JSON.parse(user.prefs)
   } catch {
     prefs = {}
   }
-
   const bonusLock = prefs.bonusLock as Record<string, unknown> | undefined
   if (!bonusLock || !bonusLock.active) {
     res.status(400).json({ error: 'No active bonus lock found' })
     return
   }
-
-  // Remove the lock
   delete prefs.bonusLock
-
-  await prisma.user.update({
-    where: { id: userId },
-    data: { prefs: JSON.stringify(prefs) },
-  })
-
-  // Send notification
+  await prisma.user.update({ where: { id: userId }, data: { prefs: JSON.stringify(prefs) } })
   await prisma.notification.create({
     data: {
       userId,
@@ -238,9 +214,7 @@ router.post('/users/:id/bonus/unlock', async (req: AuthedRequest, res) => {
       body: note || 'Your bonus has been unlocked. You can now withdraw funds.',
     },
   }).catch(() => {})
-
   await audit(req.userId!, 'user.bonus.unlock', userId, { note })
-
   res.json({ ok: true, message: 'Bonus unlocked successfully' })
 })
 
