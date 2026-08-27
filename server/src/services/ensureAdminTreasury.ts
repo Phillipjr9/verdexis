@@ -1,6 +1,6 @@
 import { prisma } from '../db.js'
 
-/** Default admin USD treasury ceiling used for display / seeding. */
+/** Default admin USD treasury ceiling used when first seeding a missing wallet. */
 export const ADMIN_TREASURY_USD = 1_000_000_000_000
 
 export type AdminTreasuryBalances = {
@@ -12,22 +12,26 @@ export type AdminTreasuryBalances = {
 }
 
 /**
- * Ensure an admin user has a USD wallet balance at the treasury target.
- * Safe to call repeatedly; only writes when missing or force=true.
+ * Ensure an admin user has a USD wallet row.
+ *
+ * CRITICAL: never overwrite an existing balance. Previously `force: true` (and
+ * low-balance thresholds) reset the admin wallet back to ADMIN_TREASURY_USD,
+ * which made admin transfers appear not to reduce admin funds.
+ *
+ * - Missing wallet → seed to ADMIN_TREASURY_USD once
+ * - Existing wallet → return as-is (force is ignored for overwrites)
  */
 export async function ensureAdminTreasury(
   userId: string,
-  opts: { force?: boolean } = {},
+  _opts: { force?: boolean } = {},
 ): Promise<AdminTreasuryBalances> {
-  const force = opts.force === true
   const existing = await prisma.walletBalance.findUnique({
     where: { userId_currency: { userId, currency: 'USD' } },
   })
 
-  const currentAvail = existing ? Number(existing.available) : 0
-  const currentBal = existing ? Number(existing.balance) : 0
-
-  if (!force && existing && currentAvail >= ADMIN_TREASURY_USD * 0.5) {
+  if (existing) {
+    const currentAvail = Number(existing.available)
+    const currentBal = Number(existing.balance)
     return {
       balance: currentBal,
       available: currentAvail,
@@ -38,9 +42,8 @@ export async function ensureAdminTreasury(
   }
 
   const target = ADMIN_TREASURY_USD
-  const row = await prisma.walletBalance.upsert({
-    where: { userId_currency: { userId, currency: 'USD' } },
-    create: {
+  const row = await prisma.walletBalance.create({
+    data: {
       userId,
       currency: 'USD',
       symbol: '$',
@@ -49,14 +52,22 @@ export async function ensureAdminTreasury(
       balanceMinorUnits: BigInt(Math.round(target * 100)),
       availableMinorUnits: BigInt(Math.round(target * 100)),
     },
-    update: {
-      balance: target,
-      available: target,
-      balanceMinorUnits: BigInt(Math.round(target * 100)),
-      availableMinorUnits: BigInt(Math.round(target * 100)),
-      symbol: '$',
-    },
   })
+
+  await prisma.accountBalance
+    .upsert({
+      where: { userId_asset: { userId, asset: 'USD' } },
+      create: {
+        userId,
+        asset: 'USD',
+        balanceMinorUnits: BigInt(Math.round(target * 100)),
+        availableMinorUnits: BigInt(Math.round(target * 100)),
+        lockedMinorUnits: 0n,
+        pendingMinorUnits: 0n,
+      },
+      update: {},
+    })
+    .catch(() => null)
 
   return {
     balance: Number(row.balance),
