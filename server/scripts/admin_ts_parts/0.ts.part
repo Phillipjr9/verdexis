@@ -1,0 +1,109 @@
+import { Router } from 'express'
+import crypto from 'node:crypto'
+import { z } from 'zod'
+import rateLimit from 'express-rate-limit'
+import { prisma } from '../db.js'
+import { requireAuth, requireAdmin, type AuthedRequest } from '../auth.js'
+import { sendEmailNotification } from '../notificationService.js'
+import { idempotency } from '../idempotency.js'
+import {
+  creditReferralBonus,
+  activateReferralOnDeposit,
+  readReferralSettings,
+  writeReferralSettings,
+} from '../referrals.js'
+import { recordLedgerTransaction } from '../services/ledger.js'
+import { ensureAdminTreasury, ADMIN_TREASURY_USD } from '../services/ensureAdminTreasury.js'
+
+const router = Router()
+
+const adminLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+router.use(adminLimiter)
+router.use(requireAuth)
+router.use(requireAdmin)
+
+async function audit(actorId: string, action: string, targetUserId: string | null, payload: unknown) {
+  try {
+    await prisma.adminAudit.create({
+      data: {
+        actorId,
+        action,
+        targetUserId: targetUserId ?? undefined,
+        payload: payload === undefined ? null : JSON.stringify(payload).slice(0, 4000),
+      },
+    })
+  } catch (e) {
+    console.error('[admin audit] failed:', e instanceof Error ? e.message : e)
+  }
+}
+
+function getIdempotencyKey(req: AuthedRequest): string | undefined {
+  const h = req.headers['idempotency-key']
+  if (typeof h === 'string' && h.trim()) return h.trim().slice(0, 200)
+  return undefined
+}
+
+const DEPOSIT_REASONS = [
+  'manual_bank_wire', 'manual_crypto', 'promo_credit', 'refund', 'chargeback_reversal',
+  'bonus_referral', 'compensation', 'correction_undercharge', 'other',
+] as const
+
+const DEDUCT_REASONS = [
+  'manual_bank_wire', 'manual_crypto', 'fee', 'chargeback', 'fraud_reversal',
+  'compliance_sanctions', 'correction_overcharge', 'court_order', 'other',
+] as const
+
+const TRANSFER_REASONS = [
+  'internal_correction', 'gift', 'family_transfer', 'payroll', 'refund', 'other',
+  'court_order', 'dispute_resolution', 'fraud_recovery', 'compliance_directive',
+  'merger_consolidation', 'manual_correction',
+] as const
+
+const depositSchema = z.object({
+  currency: z.string().min(1).max(10).transform((s) => s.toUpperCase()),
+  symbol: z.string().min(1).max(10).optional(),
+  amount: z.number().positive(),
+  reason: z.enum(DEPOSIT_REASONS).default('manual_bank_wire'),
+  note: z.string().max(500).optional(),
+  status: z.enum(['pending', 'completed']).default('completed'),
+  notify: z.boolean().default(true),
+  occurredAt: z.string().datetime().optional(),
+})
+
+const deductSchema = z.object({
+  currency: z.string().min(1).max(10).transform((s) => s.toUpperCase()),
+  symbol: z.string().min(1).max(10).optional(),
+  amount: z.number().positive(),
+  reason: z.enum(DEDUCT_REASONS).default('fee'),
+  note: z.string().max(500).optional(),
+  status: z.enum(['pending', 'completed', 'reversed']).default('completed'),
+  allowNegative: z.boolean().default(false),
+  notify: z.boolean().default(true),
+})
+
+const transferSchema = z.object({
+  fromUserId: z.string().min(1),
+  toUserId: z.string().min(1),
+  currency: z.string().min(1).max(10).transform((s) => s.toUpperCase()),
+  amount: z.number().positive(),
+  reason: z.enum(TRANSFER_REASONS).default('internal_correction'),
+  note: z.string().max(500).optional(),
+  allowNegative: z.boolean().default(false),
+  notify: z.boolean().default(true),
+})
+
+const referralSettingsSchema = z.object({
+  enabled: z.boolean(),
+  referrerBonusUsd: z.number().min(0).max(1_000_000),
+  refereeBonusUsd: z.number().min(0).max(1_000_000),
+  minDepositUsd: z.number().min(0).max(1_000_000),
+  note: z.string().max(500).optional().or(z.literal('')),
+})
+
+// PART0_CONTINUES_IN_1
