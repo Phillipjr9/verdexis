@@ -71,7 +71,7 @@ router.get('/', requireAuth, async (req: AuthedRequest, res) => {
   }
 
   res.json({ balances, transactions })
-}
+})
 
 router.get('/transactions', requireAuth, async (req: AuthedRequest, res) => {
   const userId = req.userId!
@@ -374,7 +374,6 @@ router.post('/convert', requireAuth, idempotency(), async (req: AuthedRequest, r
           symbol: toCurrency === 'USD' ? '$' : toCurrency,
           balance: toAmount,
           available: toAmount,
-          locked: 0,
         },
         update: { balance: nextDst, available: Number(dst?.available ?? 0) + toAmount },
       })
