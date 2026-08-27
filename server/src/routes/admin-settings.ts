@@ -152,10 +152,52 @@ router.get('/all', async (req: AuthedRequest, res) => {
   }
 })
 
+router.get('/logs', async (req: AuthedRequest, res) => {
+  try {
+    res.json({ logs: [] })
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to load logs' })
+  }
+})
+
+router.get('/summary', async (req: AuthedRequest, res) => {
+  try {
+    const settings = await prisma.appSetting.findMany()
+    const byCategory = {} as Record<string, { total: number; verified: number; failed: number }>
+    let verified = 0
+    let failed = 0
+    for (const setting of settings) {
+      const meta = getSettingMeta(setting.key)
+      const validation = validateSettingValue(setting.value, meta.type, meta.category)
+      const isValid = validation.valid
+      if (!byCategory[meta.category]) byCategory[meta.category] = { total: 0, verified: 0, failed: 0 }
+      byCategory[meta.category].total++
+      if (isValid) byCategory[meta.category].verified++
+      else byCategory[meta.category].failed++
+      if (isValid) verified++
+      else failed++
+    }
+    res.json({ total: settings.length, verified, failed, verificationRate: settings.length ? Math.round((verified / settings.length) * 100) : 0, byCategory })
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to load summary' })
+  }
+})
+
 router.get('/:key', async (req: AuthedRequest, res) => {
   try {
-    const setting = await prisma.appSetting.findUnique({ where: { key: req.params.key } })
-    if (!setting) return res.status(404).json({ error: 'Setting not found' })
+    await ensureDefaultSettings()
+    let setting = await prisma.appSetting.findUnique({ where: { key: req.params.key } })
+    if (!setting) {
+      const meta = getSettingMeta(req.params.key)
+      const defaults = Object.values(DEFAULT_SETTINGS).flat() as Array<{ key: string; value: string }>
+      const def = defaults.find(d => d.key === req.params.key)
+      if (!def) return res.status(404).json({ error: 'Setting not found' })
+      setting = await prisma.appSetting.upsert({
+        where: { key: req.params.key },
+        create: { key: req.params.key, value: def.value, updatedBy: 'system' },
+        update: {},
+      })
+    }
     const meta = getSettingMeta(setting.key)
     res.json({ setting: {
       id: setting.key,
@@ -177,19 +219,26 @@ router.get('/:key', async (req: AuthedRequest, res) => {
 
 router.post('/:key/save', async (req: AuthedRequest, res) => {
   const { value } = req.body
-  const adminEmail = (req as any).user?.email ?? 'unknown'
+  const adminEmail = (req as any).user?.email ?? req.userId ?? 'unknown'
+  const key = String(req.params.key || '').trim()
+  if (!key) {
+    res.status(400).json({ error: 'Setting key required' })
+    return
+  }
 
   try {
-    const setting = await prisma.appSetting.findUnique({ where: { key: req.params.key } })
-    if (!setting) return res.status(404).json({ error: 'Setting not found' })
-
-    const meta = getSettingMeta(setting.key)
-    const validation = validateSettingValue(value, meta.type, meta.category)
+    await ensureDefaultSettings()
+    const meta = getSettingMeta(key)
+    const validation = validateSettingValue(String(value ?? ''), meta.type, meta.category)
     if (!validation.valid) {
       return res.status(400).json({ error: validation.error || 'Invalid value' })
     }
 
-    const updated = await prisma.appSetting.update({ where: { key: req.params.key }, data: { value, updatedBy: adminEmail } })
+    const updated = await prisma.appSetting.upsert({
+      where: { key },
+      create: { key, value: String(value), updatedBy: String(adminEmail) },
+      update: { value: String(value), updatedBy: String(adminEmail) },
+    })
     res.json({ success: true, setting: {
       id: updated.key,
       key: updated.key,
@@ -234,35 +283,5 @@ router.post('/verify-all', async (req: AuthedRequest, res) => {
   }
 })
 
-router.get('/logs', async (req: AuthedRequest, res) => {
-  try {
-    res.json({ logs: [] })
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to load logs' })
-  }
-})
-
-router.get('/summary', async (req: AuthedRequest, res) => {
-  try {
-    const settings = await prisma.appSetting.findMany()
-    const byCategory = {} as Record<string, { total: number; verified: number; failed: number }>
-    let verified = 0
-    let failed = 0
-    for (const setting of settings) {
-      const meta = getSettingMeta(setting.key)
-      const validation = validateSettingValue(setting.value, meta.type, meta.category)
-      const isValid = validation.valid
-      if (!byCategory[meta.category]) byCategory[meta.category] = { total: 0, verified: 0, failed: 0 }
-      byCategory[meta.category].total++
-      if (isValid) byCategory[meta.category].verified++
-      else byCategory[meta.category].failed++
-      if (isValid) verified++
-      else failed++
-    }
-    res.json({ total: settings.length, verified, failed, verificationRate: settings.length ? Math.round((verified / settings.length) * 100) : 0, byCategory })
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to load summary' })
-  }
-})
 
 export default router
