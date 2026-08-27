@@ -33,6 +33,9 @@ try {
   console.log('Removing Wallet Quick start card if present...');
   execSync('node scripts/patch-remove-quick-start.mjs', { cwd: rootDir, stdio: 'inherit' });
 
+  console.log('Patching Wallet total balance / mask / signed tx history...');
+  execSync('node scripts/patch-wallet-balance-tx.mjs', { cwd: rootDir, stdio: 'inherit' });
+
   console.log('Running vite build...');
   execSync('npm run build', { cwd: appDir, stdio: 'inherit' });
 
