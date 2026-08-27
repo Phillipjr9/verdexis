@@ -8,6 +8,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { companyInfo } from '../config/company.js'
 import { customerEmailFooter, emailLinks, emailLogoUrl } from '../config/email.js'
+import { normalizeFromAddress, preferSupportReplyTo } from '../lib/emailFrom.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -230,7 +231,7 @@ class EmailService {
       return false
     }
 
-    const fromAddress = (env.EMAIL_FROM_ADDRESS || env.SMTP_FROM || env.SMTP_USER || '').trim()
+    const fromAddress = normalizeFromAddress((env.EMAIL_FROM_ADDRESS || env.SMTP_FROM || env.SMTP_USER || '').trim())
     const fromName = (env.EMAIL_FROM_NAME || env.SMTP_FROM_NAME || 'Verdexis').trim()
     if (!fromAddress) {
       console.error('[email] OTP direct send aborted: EMAIL_FROM_ADDRESS / SMTP_FROM missing')
@@ -238,8 +239,9 @@ class EmailService {
     }
 
     const from = `${fromName} <${fromAddress}>`
-    const envelopeFrom = (env.SMTP_USER || fromAddress).trim()
-    const replyTo = (env.EMAIL_REPLY_TO || env.SMTP_REPLY_TO || '').trim() || undefined
+    // Align envelope with verified domain (not www.) for SPF
+    const envelopeFrom = fromAddress
+    const replyTo = preferSupportReplyTo(fromAddress, (env.EMAIL_REPLY_TO || env.SMTP_REPLY_TO || '').trim()) || undefined
     const mail = {
       from,
       to,
@@ -269,6 +271,7 @@ class EmailService {
           response: info.response,
           accepted: info.accepted,
           rejected: info.rejected,
+          from: fromAddress,
         })
         return true
       } catch (error) {
