@@ -117,91 +117,75 @@ function injectEmailNotify(src) {
     }
   }
 
-  const oldDep = `    if (parsed.data.notify) {
-      await prisma.notification.create({
-        data: {
-          userId, kind: 'deposit',
-          title: \\'\\${symbol}\\${parsed.data.amount.toLocaleString()} \\${parsed.data.currency} credited\\',
-          body: reference,
-        },
-      }).catch(() => {})
-    }`
-
-  // Use real template strings carefully via String.raw patterns matched from known-good admin.ts
-  const oldDepExact =
-    "    if (parsed.data.notify) {\n" +
-    "      await prisma.notification.create({\n" +
-    "        data: {\n" +
-    "          userId, kind: 'deposit',\n" +
-    "          title: `${symbol}${parsed.data.amount.toLocaleString()} ${parsed.data.currency} credited`,\n" +
-    "          body: reference,\n" +
-    "        },\n" +
-    "      }).catch(() => {})\n" +
-    "    }"
-
-  const newDepExact =
-    "    if (parsed.data.notify) {\n" +
-    "      await notifyAdminFundedUser({\n" +
-    "        userId,\n" +
-    "        email: user.email,\n" +
-    "        name: user.name,\n" +
-    "        amount: parsed.data.amount,\n" +
-    "        currency: parsed.data.currency,\n" +
-    "        note: parsed.data.note || reference,\n" +
-    "      }).catch((e) => console.warn('[admin] deposit email notify failed', e))\n" +
-    "    }"
-
-  if (src.includes(oldDepExact)) src = src.replace(oldDepExact, newDepExact)
-
-  const oldDedExact =
-    "    await audit(req.userId!, 'wallet.deduct', userId, parsed.data)\n" +
-    "    res.status(201).json(result)\n" +
-    "  } catch (e) {\n" +
-    "    console.error('[admin] deduct', e)"
-
-  const newDedExact =
-    "    if (parsed.data.notify) {\n" +
-    "      await notifyAdminDeductedUser({\n" +
-    "        userId,\n" +
-    "        email: user.email,\n" +
-    "        name: user.name,\n" +
-    "        amount: parsed.data.amount,\n" +
-    "        currency: parsed.data.currency,\n" +
-    "        note: parsed.data.note || reference,\n" +
-    "      }).catch((e) => console.warn('[admin] deduct email notify failed', e))\n" +
-    "    }\n" +
-    "    await audit(req.userId!, 'wallet.deduct', userId, parsed.data)\n" +
-    "    res.status(201).json(result)\n" +
-    "  } catch (e) {\n" +
-    "    console.error('[admin] deduct', e)"
-
-  if (src.includes(oldDedExact) && !src.includes('notifyAdminDeductedUser')) {
-    src = src.replace(oldDedExact, newDedExact)
+  // Deposit: replace in-app-only notify with email+in-app helper
+  // IMPORTANT: do not use outer template literals containing ${symbol} — that crashes Node.
+  if (!src.includes('notifyAdminFundedUser({')) {
+    const depositNotifyRe =
+      /if \(parsed\.data\.notify\) \{\s*await prisma\.notification\.create\(\{[\s\S]*?kind: 'deposit',[\s\S]*?\}\)\.catch\(\(\) => \{\}\)\s*\}/
+    const depositReplacement =
+      "if (parsed.data.notify) {\n" +
+      "      await notifyAdminFundedUser({\n" +
+      "        userId,\n" +
+      "        email: user.email,\n" +
+      "        name: user.name,\n" +
+      "        amount: parsed.data.amount,\n" +
+      "        currency: parsed.data.currency,\n" +
+      "        note: parsed.data.note || reference,\n" +
+      "      }).catch((e) => console.warn('[admin] deposit email notify failed', e))\n" +
+      "    }"
+    if (depositNotifyRe.test(src)) {
+      src = src.replace(depositNotifyRe, depositReplacement)
+      console.log('[restore-admin] injected deposit email notify')
+    }
   }
 
-  const oldXferExact =
-    "    if (notify) {\n" +
-    "      await prisma.notification.create({\n" +
-    "        data: {\n" +
-    "          userId: toUserId, kind: 'deposit',\n" +
-    "          title: `${symbol}${amount.toLocaleString()} ${currency} received`,\n" +
-    "          body: inRef,\n" +
-    "        },\n" +
-    "      }).catch(() => {})\n" +
-    "    }"
+  // Deduct: add email notify before audit when missing
+  if (!src.includes('notifyAdminDeductedUser')) {
+    const deductAudit =
+      "    await audit(req.userId!, 'wallet.deduct', userId, parsed.data)\n" +
+      "    res.status(201).json(result)\n" +
+      "  } catch (e) {\n" +
+      "    console.error('[admin] deduct', e)"
+    const deductWithNotify =
+      "    if (parsed.data.notify) {\n" +
+      "      await notifyAdminDeductedUser({\n" +
+      "        userId,\n" +
+      "        email: user.email,\n" +
+      "        name: user.name,\n" +
+      "        amount: parsed.data.amount,\n" +
+      "        currency: parsed.data.currency,\n" +
+      "        note: parsed.data.note || reference,\n" +
+      "      }).catch((e) => console.warn('[admin] deduct email notify failed', e))\n" +
+      "    }\n" +
+      "    await audit(req.userId!, 'wallet.deduct', userId, parsed.data)\n" +
+      "    res.status(201).json(result)\n" +
+      "  } catch (e) {\n" +
+      "    console.error('[admin] deduct', e)"
+    if (src.includes(deductAudit)) {
+      src = src.replace(deductAudit, deductWithNotify)
+      console.log('[restore-admin] injected deduct email notify')
+    }
+  }
 
-  const newXferExact =
-    "    if (notify) {\n" +
-    "      await notifyPeerTransfer({\n" +
-    "        sender: { id: fromUserId, email: from.email, name: from.name },\n" +
-    "        recipient: { id: toUserId, email: to.email, name: to.name },\n" +
-    "        amount,\n" +
-    "        currency,\n" +
-    "        note: note || null,\n" +
-    "      }).catch((e) => console.warn('[admin] transfer email notify failed', e))\n" +
-    "    }"
-
-  if (src.includes(oldXferExact)) src = src.replace(oldXferExact, newXferExact)
+  // Admin transfer: email both sides
+  if (!src.includes('notifyPeerTransfer({')) {
+    const xferNotifyRe =
+      /if \(notify\) \{\s*await prisma\.notification\.create\(\{[\s\S]*?userId: toUserId, kind: 'deposit',[\s\S]*?\}\)\.catch\(\(\) => \{\}\)\s*\}/
+    const xferReplacement =
+      "if (notify) {\n" +
+      "      await notifyPeerTransfer({\n" +
+      "        sender: { id: fromUserId, email: from.email, name: from.name },\n" +
+      "        recipient: { id: toUserId, email: to.email, name: to.name },\n" +
+      "        amount,\n" +
+      "        currency,\n" +
+      "        note: note || null,\n" +
+      "      }).catch((e) => console.warn('[admin] transfer email notify failed', e))\n" +
+      "    }"
+    if (xferNotifyRe.test(src)) {
+      src = src.replace(xferNotifyRe, xferReplacement)
+      console.log('[restore-admin] injected transfer email notify')
+    }
+  }
 
   return src
 }
