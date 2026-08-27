@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../db.js'
 import { requireAuth, requireAdmin, type AuthedRequest } from '../auth.js'
+import { unlockSignupBonus, getSignupBonusStatus } from '../services/signupBonus.js'
 
 /**
  * Dedicated signup-bonus endpoints expected by AdminSignupBonus.tsx
@@ -84,6 +85,33 @@ router.put('/signup-bonus', requireAuth, requireAdmin, async (req: AuthedRequest
   } catch (error) {
     console.error('[signup-bonus] save failed:', error)
     res.status(500).json({ error: 'Failed to save signup bonus settings' })
+  }
+})
+
+/** Per-user bonus status (credited / locked). */
+router.get('/users/:userId/signup-bonus', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
+  try {
+    const status = await getSignupBonusStatus(String(req.params.userId))
+    res.json(status)
+  } catch (e) {
+    console.error('[signup-bonus] status failed', e)
+    res.status(500).json({ error: 'Failed to load bonus status' })
+  }
+})
+
+/** Unlock locked signup bonus so it becomes available. */
+router.post('/users/:userId/signup-bonus/unlock', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
+  try {
+    const adminId = String(req.userId ?? req.userEmail ?? 'admin')
+    const result = await unlockSignupBonus(String(req.params.userId), adminId)
+    if (!result.unlocked) {
+      res.status(400).json({ error: result.reason || 'Unlock failed', ...result })
+      return
+    }
+    res.json({ ok: true, ...result })
+  } catch (e) {
+    console.error('[signup-bonus] unlock failed', e)
+    res.status(500).json({ error: 'Failed to unlock signup bonus' })
   }
 })
 
