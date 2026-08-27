@@ -156,11 +156,32 @@ function UserPicker({ label, value, onChange }: { label: string; value: AdminUse
   const [open, setOpen] = useState(false)
   const display = useMemo(() => value ? `${value.name} <${value.email}>` : '', [value])
 
+  const [searchError, setSearchError] = useState<string | null>(null)
+  const [searching, setSearching] = useState(false)
+
   useEffect(() => {
-    if (!q || value) return
+    if (value) return
+    if (!q || q.trim().length < 1) {
+      setOptions([])
+      setSearchError(null)
+      return
+    }
     const t = setTimeout(() => {
-      adminApi.listUsers({ q, page: 1, limit: 8 }).then((r) => setOptions(r.users)).catch(() => {})
-    }, 200)
+      setSearching(true)
+      setSearchError(null)
+      adminApi.listUsers({ q: q.trim(), page: 1, limit: 12 })
+        .then((r) => {
+          setOptions(r.users || [])
+          if (!(r.users || []).length) setSearchError('No users matched that search')
+        })
+        .catch((err: any) => {
+          setOptions([])
+          const msg = err?.error || err?.message || 'Failed to search users'
+          setSearchError(String(msg))
+          toast.error(`User search failed: ${msg}`)
+        })
+        .finally(() => setSearching(false))
+    }, 250)
     return () => clearTimeout(t)
   }, [q, value])
 
@@ -192,15 +213,17 @@ function UserPicker({ label, value, onChange }: { label: string; value: AdminUse
         {open && options.length > 0 && (
           <div className="absolute z-10 mt-1 w-full max-h-60 overflow-auto rounded-lg bg-[#0f1619] border border-[#ffffff10] shadow-xl">
             {options.map((u) => (
-              <button type="button" key={u.id} onClick={() => { onChange(u); setOpen(false) }} className="w-full text-left px-3 py-2 hover:bg-[#0C8B44]/10">
-                <p className="text-sm text-[#E5E5E5]">{u.name}</p>
+              <button type="button" key={u.id} onClick={() => { onChange(u); setOpen(false); setQ('') }} className="w-full text-left px-3 py-2 hover:bg-[#0C8B44]/10">
+                <p className="text-sm text-[#E5E5E5]">{u.name || 'User'}</p>
                 <p className="text-[11px] text-[#737373]">{u.email}</p>
               </button>
             ))}
           </div>
         )}
       </div>
-      <p className="text-[10px] text-[#737373] mt-1">Currently selected: {display || 'none'}</p>
+      {searching && <p className="text-[10px] text-[#737373] mt-1">Searching…</p>}
+      {searchError && <p className="text-[10px] text-[#f44336] mt-1">{searchError}</p>}
+      <p className="text-[10px] text-[#737373] mt-1">Type name, email, or user ID to search. Currently selected: {display || 'none'}</p>
     </Field>
   )
 }
