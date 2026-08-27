@@ -3,6 +3,7 @@
  * CRITICAL: Never pass strings containing $' to String.replace replacement —
  * in JS, $' means "text after match" and truncates DEFAULT_WALLET (unterminated string).
  * Always use .replace(search, () => replacement).
+ * RESTORE_SCRIPT_VERSION=2
  */
 import fs from 'node:fs'
 import path from 'node:path'

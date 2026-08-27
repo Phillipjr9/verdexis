@@ -19,7 +19,16 @@ try {
   execSync('npm install --include=dev', { cwd: appDir, stdio: 'inherit' });
 
   console.log('Restoring portfolioStore.ts if needed...');
-  execSync('node scripts/restore-portfolio-store.mjs', { cwd: rootDir, stdio: 'inherit' });
+  {
+    const fs = require('fs');
+    const restorePath = path.join(rootDir, 'scripts/restore-portfolio-store.mjs');
+    const restoreSrc = fs.existsSync(restorePath) ? fs.readFileSync(restorePath, 'utf8') : '';
+    if (restoreSrc.trim() === 'PLACEHOLDER' || restoreSrc.trim().startsWith('PLACEHOLDER')) {
+      console.warn('WARNING: restore-portfolio-store.mjs is PLACEHOLDER — skipping (use a full restore script)');
+    } else {
+      execSync('node scripts/restore-portfolio-store.mjs', { cwd: rootDir, stdio: 'inherit' });
+    }
+  }
 
   console.log('Removing Wallet Quick start card if present...');
   execSync('node scripts/patch-remove-quick-start.mjs', { cwd: rootDir, stdio: 'inherit' });
