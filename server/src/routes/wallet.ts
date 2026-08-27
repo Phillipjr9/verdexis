@@ -14,6 +14,7 @@ import {
   transferBodySchema,
 } from './walletHelpers.js'
 import { notifyPeerTransfer } from '../services/transferNotifications.js'
+import walletUserExtrasRoutes from './wallet-user-extras.js'
 
 const router = Router()
 
@@ -42,9 +43,6 @@ router.get('/', requireAuth, async (req: AuthedRequest, res) => {
       'walletBalance',
     )
     balances = mapBalances(rows as any)
-    // Do NOT inject synthetic admin treasury into the personal /api/wallet response.
-    // Admins manage treasury via admin tools; users (and admins acting as users)
-    // should see real balances only.
   } catch (e) {
     console.warn('[wallet] balance load failed', e instanceof Error ? e.message : e)
     balances = []
@@ -430,7 +428,7 @@ router.post('/convert', requireAuth, idempotency(), async (req: AuthedRequest, r
         }
       }
       const { generateTransactionId } = await import('../utils/transactionIdGenerator.js')
-      const ref = `Convert ${fromCurrency} \u2192 ${toCurrency}`
+      const ref = `Convert ${fromCurrency} → ${toCurrency}`
       await tx.transaction.create({
         data: {
           transactionId: generateTransactionId(), userId, kind: 'transfer', currency: fromCurrency,
@@ -449,5 +447,7 @@ router.post('/convert', requireAuth, idempotency(), async (req: AuthedRequest, r
     res.status(e?.status || 500).json({ error: e?.message || 'Convert failed' })
   }
 })
+
+router.use(walletUserExtrasRoutes)
 
 export default router
