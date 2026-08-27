@@ -176,6 +176,57 @@ app.use(cookieParser())
 app.use(morgan(IS_PROD ? 'combined' : 'dev'))
 app.use(requestContextMiddleware)
 
+// Prisma returns BigInt for *MinorUnits fields — JSON.stringify throws without this.
+try {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ;(BigInt.prototype as any).toJSON = function toJSON(this: bigint) {
+    return this.toString()
+  }
+} catch {
+  /* already defined */
+}
+
+app.use((_req, res, next) => {
+  const origJson = res.json.bind(res)
+  function convertBigInt(value: unknown, seen = new WeakSet<object>()): unknown {
+    if (value === null || value === undefined) return value
+    if (typeof value === 'bigint') return value.toString()
+    if (typeof value === 'number' && !Number.isFinite(value)) return null
+    if (typeof value === 'string' || typeof value === 'boolean') return value
+    if (Array.isArray(value)) return value.map((v) => convertBigInt(v, seen))
+    if (typeof value === 'object') {
+      if (value instanceof Date) return value.toISOString()
+      if (typeof Buffer !== 'undefined' && Buffer.isBuffer(value)) return value.toString('base64')
+      if (seen.has(value as object)) return null
+      seen.add(value as object)
+      const out: Record<string, unknown> = {}
+      for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+        out[k] = convertBigInt(v, seen)
+      }
+      return out
+    }
+    return value
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ;(res as any).json = (body: unknown) => {
+    try {
+      return origJson(convertBigInt(body))
+    } catch (err) {
+      console.error('[verdexis-api] res.json serialize failed', err)
+      try {
+        return origJson(
+          JSON.parse(
+            JSON.stringify(body, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)),
+          ),
+        )
+      } catch {
+        return origJson({ error: 'Serialization failed' })
+      }
+    }
+  }
+  next()
+})
+
 function rateLimitKey(req: express.Request): string {
   const header = req.headers.authorization
   if (header?.startsWith('Bearer ')) {
