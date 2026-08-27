@@ -361,7 +361,7 @@ app.use('/api/tax', advancedTaxRoutes)
 app.use('/api/compliance', advancedComplianceRoutes)
 app.use('/api/notifications/advanced', advancedNotificationsRoutes)
 app.use('/api/security', securityRoutes)
-app.use('/api/admin/withdrawal-config', adminWithdrawalConfigRoutes)
+app.use('/api', adminWithdrawalConfigRoutes) // routes already prefix /admin/users/... and /withdrawal-options
 app.use('/api/user-security', userSecurityRoutes)
 app.use('/api/api-keys', apiKeysRoutes)
 app.use('/api/admin/settings', adminSettingsRoutes)
