@@ -4,7 +4,7 @@ export const config = {
   runtime: 'nodejs',
 };
 
-// Production API on Render (update if the service URL changes)
+// Production API on Render — keep in sync with live service URL
 const BACKEND_URL =
   process.env.VERDEXIS_BACKEND_URL ||
   process.env.BACKEND_URL ||
