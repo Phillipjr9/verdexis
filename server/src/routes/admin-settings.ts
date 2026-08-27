@@ -37,7 +37,7 @@ const DEFAULT_SETTINGS = {
     { key: 'maintenance_mode', value: 'false', type: 'boolean', category: 'general' },
     { key: 'signup_bonus_enabled', value: 'false', type: 'boolean', category: 'general' },
     { key: 'signup_bonus_amount', value: '0', type: 'number', category: 'general' },
-    { key: 'signup_bonus_note', value: '', type: 'string', category: 'general' },
+    { key: 'signup_bonus_note', value: '-', type: 'string', category: 'general' },
   ],
   governance: [
     { key: 'requireOtpForWithdrawals', value: 'true', type: 'boolean', category: 'governance' },
@@ -75,8 +75,9 @@ function validateSettingValue(value: string, type: string, category: string) {
         if (category === 'wallet' && value !== 'N/A' && !/^0x[a-fA-F0-9]{40}$/.test(value)) {
           return { valid: false, error: 'Must be a valid Ethereum address (0x...) or N/A' }
         }
-        // Allow empty for optional notes (e.g. signup_bonus_note)
-        if (value.length === 0 && keyLooksRequired(category)) return { valid: false, error: 'Cannot be empty' }
+        if (value.length === 0 && (category === 'wallet' || category === 'bank')) {
+          return { valid: false, error: 'Cannot be empty' }
+        }
         return { valid: true }
       }
       default:
@@ -85,10 +86,6 @@ function validateSettingValue(value: string, type: string, category: string) {
   } catch (error) {
     return { valid: false, error: error instanceof Error ? error.message : 'Validation failed' }
   }
-}
-
-function keyLooksRequired(category: string) {
-  return category === 'wallet' || category === 'bank'
 }
 
 async function ensureDefaultSettings() {
@@ -118,6 +115,31 @@ function buildFallbackSettings() {
   }))
 }
 
+async function upsertAppSetting(key: string, value: string, adminId: string) {
+  try {
+    return await prisma.appSetting.upsert({
+      where: { key },
+      create: { key, value, updatedBy: adminId },
+      update: { value, updatedBy: adminId },
+    })
+  } catch (e1) {
+    console.warn('[settings] upsert with updatedBy failed, retrying minimal', key, e1)
+    try {
+      return await prisma.appSetting.upsert({
+        where: { key },
+        create: { key, value },
+        update: { value },
+      })
+    } catch (e2) {
+      const existing = await prisma.appSetting.findUnique({ where: { key } }).catch(() => null)
+      if (existing) {
+        return await prisma.appSetting.update({ where: { key }, data: { value } })
+      }
+      return await prisma.appSetting.create({ data: { key, value } })
+    }
+  }
+}
+
 /** Admin Settings page panel APIs under /api/admin/settings/panel/* */
 router.get('/panel/withdrawal-fee', async (_req: AuthedRequest, res) => {
   try {
@@ -142,15 +164,12 @@ router.put('/panel/withdrawal-fee', async (req: AuthedRequest, res) => {
       return
     }
     const adminId = String(req.userId ?? 'admin')
-    const row = await prisma.appSetting.upsert({
-      where: { key: 'withdrawal_fee_percent' },
-      create: { key: 'withdrawal_fee_percent', value: String(ratePct), updatedBy: adminId },
-      update: { value: String(ratePct), updatedBy: adminId },
-    })
+    const row = await upsertAppSetting('withdrawal_fee_percent', String(ratePct), adminId)
     res.json({ ratePct: Number(row.value), key: 'withdrawal_fee_percent' })
   } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
     console.error('[settings] withdrawal-fee save', e)
-    res.status(500).json({ error: 'Failed to save fee' })
+    res.status(500).json({ error: 'Failed to save fee', detail: msg })
   }
 })
 
@@ -163,7 +182,7 @@ router.get('/panel/signup-bonus', async (_req: AuthedRequest, res) => {
     res.json({
       enabled: (map['signup_bonus_enabled'] ?? 'false') === 'true',
       amountUsd: Number(map['signup_bonus_amount'] ?? '0') || 0,
-      note: map['signup_bonus_note'] ?? '',
+      note: map['signup_bonus_note'] === '-' ? '' : (map['signup_bonus_note'] ?? ''),
     })
   } catch (e) {
     console.error('[settings] signup-bonus load', e)
@@ -171,39 +190,36 @@ router.get('/panel/signup-bonus', async (_req: AuthedRequest, res) => {
   }
 })
 
-router.put('/panel/signup-bonus', async (req: AuthedRequest, res) => {
+async function saveSignupBonus(req: AuthedRequest, res: import('express').Response) {
   try {
-    const enabled = Boolean(req.body?.enabled)
-    const amountUsd = Number(req.body?.amountUsd)
-    const note = String(req.body?.note ?? '')
+    const body = (req.body && typeof req.body === 'object') ? (req.body as Record<string, unknown>) : {}
+    const enabledRaw = body.enabled
+    const enabled =
+      enabledRaw === true ||
+      enabledRaw === 'true' ||
+      enabledRaw === 1 ||
+      enabledRaw === '1'
+    const amountUsd = Number(body.amountUsd ?? body.amount ?? 0)
+    const note = String(body.note ?? '')
     if (!Number.isFinite(amountUsd) || amountUsd < 0 || amountUsd > 1_000_000) {
       res.status(400).json({ error: 'amountUsd must be between 0 and 1000000' })
       return
     }
-    const adminId = String(req.userId ?? 'admin')
-    await prisma.$transaction([
-      prisma.appSetting.upsert({
-        where: { key: 'signup_bonus_enabled' },
-        create: { key: 'signup_bonus_enabled', value: enabled ? 'true' : 'false', updatedBy: adminId },
-        update: { value: enabled ? 'true' : 'false', updatedBy: adminId },
-      }),
-      prisma.appSetting.upsert({
-        where: { key: 'signup_bonus_amount' },
-        create: { key: 'signup_bonus_amount', value: String(amountUsd), updatedBy: adminId },
-        update: { value: String(amountUsd), updatedBy: adminId },
-      }),
-      prisma.appSetting.upsert({
-        where: { key: 'signup_bonus_note' },
-        create: { key: 'signup_bonus_note', value: note, updatedBy: adminId },
-        update: { value: note, updatedBy: adminId },
-      }),
-    ])
+    const adminId = String(req.userId ?? (req as any).userEmail ?? 'admin')
+    await ensureDefaultSettings()
+    await upsertAppSetting('signup_bonus_enabled', enabled ? 'true' : 'false', adminId)
+    await upsertAppSetting('signup_bonus_amount', String(amountUsd), adminId)
+    await upsertAppSetting('signup_bonus_note', note || '-', adminId)
     res.json({ enabled, amountUsd, note })
   } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
     console.error('[settings] signup-bonus save', e)
-    res.status(500).json({ error: 'Failed to save signup bonus settings' })
+    res.status(500).json({ error: 'Failed to save signup bonus settings', detail: msg })
   }
-})
+}
+
+router.put('/panel/signup-bonus', saveSignupBonus)
+router.post('/panel/signup-bonus', saveSignupBonus)
 
 router.get('/panel/otp-analytics', async (_req: AuthedRequest, res) => {
   try {
@@ -302,7 +318,6 @@ router.get('/:key', async (req: AuthedRequest, res) => {
     await ensureDefaultSettings()
     let setting = await prisma.appSetting.findUnique({ where: { key: req.params.key } })
     if (!setting) {
-      const meta = getSettingMeta(req.params.key)
       const defaults = Object.values(DEFAULT_SETTINGS).flat() as Array<{ key: string; value: string }>
       const def = defaults.find(d => d.key === req.params.key)
       if (!def) return res.status(404).json({ error: 'Setting not found' })
@@ -348,11 +363,7 @@ router.post('/:key/save', async (req: AuthedRequest, res) => {
       return res.status(400).json({ error: validation.error || 'Invalid value' })
     }
 
-    const updated = await prisma.appSetting.upsert({
-      where: { key },
-      create: { key, value: String(value), updatedBy: String(adminEmail) },
-      update: { value: String(value), updatedBy: String(adminEmail) },
-    })
+    const updated = await upsertAppSetting(key, String(value), String(adminEmail))
     res.json({ success: true, setting: {
       id: updated.key,
       key: updated.key,
@@ -363,8 +374,9 @@ router.post('/:key/save', async (req: AuthedRequest, res) => {
       verificationStatus: 'unknown',
     } })
   } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error)
     console.error('Failed to save setting:', error)
-    res.status(500).json({ error: 'Failed to save setting' })
+    res.status(500).json({ error: 'Failed to save setting', detail: msg })
   }
 })
 
