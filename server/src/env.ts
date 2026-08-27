@@ -1,5 +1,16 @@
 import { z } from 'zod'
 
+/** Strip www. so From domain matches Mailgun SPF (root domain). */
+function normalizeEmailFromDomain(email: string): string {
+  const v = String(email || '').trim()
+  const at = v.lastIndexOf('@')
+  if (at < 1) return v
+  const local = v.slice(0, at)
+  let domain = v.slice(at + 1).toLowerCase()
+  if (domain.startsWith('www.')) domain = domain.slice(4)
+  return `${local}@${domain}`
+}
+
 // When running tests, provide minimal defaults so env validation doesn't abort the test runner
 if (process.env.NODE_ENV === 'test') {
   process.env.DATABASE_URL = process.env.DATABASE_URL || 'file:memory?mode=memory&cache=shared'
@@ -26,27 +37,14 @@ const schema = z.object({
   PASSKEY_ORIGIN: z.string().optional(),
   ALERT_POLL_ENABLED: z.coerce.boolean().default(true),
   ALERT_POLL_INTERVAL_MS: z.coerce.number().int().min(15_000).default(60_000),
-  // Comma-separated list of emails that auto-promote to admin on next login.
   ADMIN_EMAILS: z.string().default('admin@verdexisgroup.com'),
   ADMIN_EMAIL: z.string().email().default('admin@verdexisgroup.com'),
-  // Optional seed password for the initial super-admin bootstrap.
   ADMIN_SEED_PASSWORD: z.string().optional(),
-  // Optional admin API secret for machine-to-machine admin calls (set in prod)
   ADMIN_API_SECRET: z.string().optional(),
-  // Optional Alpha Vantage API key for historical stock prices used by the
-  // admin "deposit + invest as <stock>" flow. Crypto prices come from the
-  // free CoinGecko endpoints and don't need a key.
   ALPHA_VANTAGE_KEY: z.string().optional(),
-  // Optional CoinGecko API key. Free "Demo" keys use header
-  // `x-cg-demo-api-key` against api.coingecko.com; Pro keys use
-  // `x-cg-pro-api-key` against pro-api.coingecko.com. Strongly recommended
-  // when deploying to a cloud host (Render/Railway/Fly) since CoinGecko
-  // aggressively rate-limits/blocks shared cloud egress IPs.
   COINGECKO_API_KEY: z.string().optional(),
   COINGECKO_API_TIER: z.enum(['demo', 'pro']).default('demo'),
-  // Optional Coinbase proxy for restricted networks (e.g., Render free tier)
   COINBASE_PROXY_URL: z.string().optional(),
-  // Optional blockchain RPC endpoints for custodial withdrawals.
   ETHEREUM_RPC_ENDPOINT: z.string().url().optional(),
   ETHEREUM_WITHDRAWAL_PRIVATE_KEY: optionalNonEmptyString,
   SOLANA_RPC_ENDPOINT: z.string().url().optional(),
@@ -59,65 +57,48 @@ const schema = z.object({
   ETHEREUM_TOKEN_ADDRESS: z.string().optional(),
   BSC_TOKEN_ADDRESS: z.string().optional(),
   ETHEREUM_TOKEN_SYMBOL: z.string().optional(),
-  // Optional Finnhub key (60 req/min free) for stock/forex/crypto news.
   FINNHUB_API_KEY: z.string().optional(),
-  // Optional Twelve Data key (800 req/day free) — used as a higher-volume
-  // fallback to Alpha Vantage for stock quotes / time series.
   TWELVE_DATA_API_KEY: z.string().optional(),
-  // Optional NewsAPI.org key — server-side aggregator used by the News page.
   NEWS_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
   VERCEL_AI_KEY: z.string().optional(),
-  // Self-ping keep-alive (defeats Render/Railway free-tier sleep).
-  // KEEP_ALIVE_URL overrides the auto-detected public URL. Set
-  // KEEP_ALIVE_ENABLED=false to disable. Interval defaults to 10 min
-  // (Render spins down after 15 min of no traffic).
   KEEP_ALIVE_ENABLED: z.coerce.boolean().default(true),
   KEEP_ALIVE_URL: z.string().optional(),
   KEEP_ALIVE_INTERVAL_MS: z.coerce.number().int().min(60_000).default(10 * 60_000),
-  // SMTP configuration for email notifications
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.string().optional(),
   SMTP_SECURE: z.string().optional(),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
-  SMTP_FROM: z.string().optional(),
+  SMTP_FROM: z.string().optional().transform((v) => (v ? normalizeEmailFromDomain(v) : v)),
   SMTP_FROM_NAME: z.string().optional(),
   SMTP_REPLY_TO: z.string().optional(),
   SMTP_UNSUBSCRIBE_URL: z.string().optional(),
   EMAIL_PROVIDER: z.string().optional(),
   EMAIL_API_KEY: z.string().optional(),
   EMAIL_FROM_NAME: z.string().default('Verdexis'),
-  // Customer transactional From (OTP, reset, welcome). Must match provider-authorized sender.
-  EMAIL_FROM_ADDRESS: z.string().email().default('no-reply@verdexisgroup.com'),
+  // Must match Mailgun verified domain WITHOUT www. (SPF lives on root domain)
+  EMAIL_FROM_ADDRESS: z.string().email().default('noreply@verdexisgroup.online').transform(normalizeEmailFromDomain),
   ADMIN_EMAIL_ADDRESS: z.string().email().default('admin@verdexisgroup.com'),
-  EMAIL_REPLY_TO: z.string().optional(),
-  // SMS configuration for OTP delivery
+  EMAIL_REPLY_TO: z.string().optional().transform((v) => (v ? normalizeEmailFromDomain(v) : v)),
   TWILIO_ACCOUNT_SID: z.string().optional(),
   TWILIO_AUTH_TOKEN: z.string().optional(),
   TWILIO_PHONE_NUMBER: z.string().optional(),
-  // AWS configuration for SNS SMS
   AWS_ACCESS_KEY_ID: z.string().optional(),
   AWS_SECRET_ACCESS_KEY: z.string().optional(),
   AWS_REGION: z.string().optional(),
-  // AWS Cognito for advanced auth
   AWS_COGNITO_USER_POOL_ID: z.string().optional(),
   AWS_COGNITO_CLIENT_ID: z.string().optional(),
   AWS_COGNITO_CLIENT_SECRET: z.string().optional(),
-  // AWS Lambda for serverless OTP
   AWS_LAMBDA_OTP_FUNCTION: z.string().optional(),
-  // AWS DynamoDB for OTP storage
   AWS_DYNAMODB_OTP_TABLE: z.string().optional(),
-  // Security features
   MAX_CONCURRENT_SESSIONS: z.coerce.number().default(5),
   SESSION_TIMEOUT_HOURS: z.coerce.number().default(24),
   TRUST_DEVICE_DAYS: z.coerce.number().default(30),
   OTP_CLEANUP_INTERVAL_HOURS: z.coerce.number().default(1),
-  // Fraud detection
   ENABLE_FRAUD_DETECTION: z.coerce.boolean().default(true),
   RISK_SCORE_THRESHOLD: z.coerce.number().default(60),
   AUTO_BLOCK_CRITICAL_RISK: z.coerce.boolean().default(true),
-  // Provider integrations
   BTCPAY_SERVER_URL: z.string().optional(),
   BTCPAY_API_KEY: z.string().optional(),
   BTCPAY_STORE_ID: z.string().optional(),
@@ -135,7 +116,6 @@ const schema = z.object({
   GOOGLE_GENAI_PROJECT_ID: z.string().optional(),
   GOOGLE_GENAI_LOCATION: z.string().default('us-central1'),
   GOOGLE_GENAI_MODEL: z.string().default('chat-bison@002'),
-  // Webhook notifications
   WEBHOOK_SECRET: z.string().optional(),
   SECURITY_WEBHOOK_URL: z.string().optional(),
 })
@@ -161,6 +141,12 @@ if (!parsed.success) {
   console.error('\nSee server/.env.example for the required variables.\n')
   process.exit(1)
 }
+
+// Keep process.env in sync so notificationService (reads process.env first) stays SPF-aligned
+if (parsed.data.EMAIL_FROM_ADDRESS) process.env.EMAIL_FROM_ADDRESS = parsed.data.EMAIL_FROM_ADDRESS
+if (parsed.data.SMTP_FROM) process.env.SMTP_FROM = parsed.data.SMTP_FROM
+if (parsed.data.EMAIL_REPLY_TO) process.env.EMAIL_REPLY_TO = parsed.data.EMAIL_REPLY_TO
+console.log('[env] EMAIL_FROM_ADDRESS =', parsed.data.EMAIL_FROM_ADDRESS)
 
 const envSummary = {
   NODE_ENV: parsed.data.NODE_ENV,
@@ -191,7 +177,6 @@ const envSummary = {
   BSC_TOKEN_ADDRESS_SET: !!parsed.data.BSC_TOKEN_ADDRESS,
   BNB_TOKEN_ADDRESS_SET: !!parsed.data.BNB_TOKEN_ADDRESS,
   AWS_COGNITO_USER_POOL_ID_SET: !!parsed.data.AWS_COGNITO_USER_POOL_ID,
-  // Email / SMTP (boolean flags only — never log credentials)
   SMTP_HOST_SET: !!parsed.data.SMTP_HOST,
   SMTP_USER_SET: !!parsed.data.SMTP_USER,
   SMTP_PASS_SET: !!parsed.data.SMTP_PASS,
