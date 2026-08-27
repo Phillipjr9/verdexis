@@ -18,6 +18,9 @@ try {
   console.log('Installing app dependencies...');
   execSync('npm install --include=dev', { cwd: appDir, stdio: 'inherit' });
 
+  console.log('Restoring portfolioStore.ts if needed...');
+  execSync('node scripts/restore-portfolio-store.mjs', { cwd: rootDir, stdio: 'inherit' });
+
   console.log('Running vite build...');
   execSync('npm run build', { cwd: appDir, stdio: 'inherit' });
 
