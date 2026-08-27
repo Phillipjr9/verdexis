@@ -14,6 +14,12 @@ interface OtpAnalytics {
   activity24h: { totalOTPs: number; failedOTPs: number; successRate: string }
 }
 
+function errMsg(e: unknown, fallback: string) {
+  const x = e as { error?: string; detail?: string; message?: string }
+  if (x?.error && x?.detail) return `${x.error}: ${x.detail}`
+  return x?.error || x?.message || fallback
+}
+
 export default function AdminSettings() {
   const [ratePct, setRatePct] = useState<number>(11.8)
   const [feeLoading, setFeeLoading] = useState(true)
@@ -37,7 +43,6 @@ export default function AdminSettings() {
   const [auditNote, setAuditNote] = useState('')
 
   useEffect(() => {
-    // All panel data under /api/admin/settings/* (always mounted)
     adminApi.get('/settings/panel/withdrawal-fee')
       .then((r: { ratePct: number }) => {
         setRatePct(Number(r.ratePct) || 11.8)
@@ -45,7 +50,7 @@ export default function AdminSettings() {
       })
       .catch((e) => {
         console.error('Failed to load withdrawal fee config:', e)
-        toast.error((e as { error?: string })?.error || 'Failed to load withdrawal fee')
+        toast.error(errMsg(e, 'Failed to load withdrawal fee'))
         setFeeLoading(false)
       })
 
@@ -58,7 +63,7 @@ export default function AdminSettings() {
       })
       .catch((e) => {
         console.error('Failed to load signup bonus:', e)
-        toast.error((e as { error?: string })?.error || 'Failed to load signup bonus')
+        toast.error(errMsg(e, 'Failed to load signup bonus'))
         setBonusLoading(false)
       })
 
@@ -102,7 +107,7 @@ export default function AdminSettings() {
       toast.success(`Withdrawal fee updated to ${ratePct}%`)
     } catch (e) {
       console.error('Failed to save withdrawal fee:', e)
-      toast.error((e as { error?: string }).error || 'Failed to save withdrawal fee')
+      toast.error(errMsg(e, 'Failed to save withdrawal fee'))
     } finally {
       setFeeSaving(false)
     }
@@ -115,15 +120,16 @@ export default function AdminSettings() {
     }
     setBonusSaving(true)
     try {
-      await adminApi.put('/settings/panel/signup-bonus', {
+      // POST is more reliable through some proxies than PUT
+      await adminApi.post('/settings/panel/signup-bonus', {
         enabled: bonusEnabled,
         amountUsd: bonusAmount,
-        note: bonusNote,
+        note: bonusNote || '',
       })
       toast.success('Signup bonus settings saved')
     } catch (e) {
       console.error('Failed to save signup bonus:', e)
-      toast.error((e as { error?: string }).error || 'Failed to save signup bonus')
+      toast.error(errMsg(e, 'Failed to save signup bonus'))
     } finally {
       setBonusSaving(false)
     }
@@ -150,7 +156,7 @@ export default function AdminSettings() {
       toast.success('Governance setting updated')
     } catch (error) {
       console.error('Failed to save governance setting:', error)
-      toast.error((error as { error?: string })?.error || 'Failed to save governance setting')
+      toast.error(errMsg(error, 'Failed to save governance setting'))
       setGovSettings((prev) => ({ ...prev, [key]: !value }))
     }
   }
@@ -341,7 +347,7 @@ export default function AdminSettings() {
                   />
                   <ToggleRow
                     label="Require KYC before withdrawals"
-                    enabled={govSettings.requireKycForWithdrawals}
+                    enabled={govSettings.autoVerifySettings ? govSettings.requireKycForWithdrawals : govSettings.requireKycForWithdrawals}
                     onToggle={(value) => setGovToggle('requireKycForWithdrawals', value)}
                   />
                   <ToggleRow
