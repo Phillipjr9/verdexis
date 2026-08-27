@@ -15,9 +15,10 @@ interface OtpAnalytics {
 }
 
 function errMsg(e: unknown, fallback: string) {
-  const x = e as { error?: string; detail?: string; message?: string }
+  const x = e as { error?: string; detail?: string; message?: string; status?: number }
   if (x?.error && x?.detail) return `${x.error}: ${x.detail}`
-  return x?.error || x?.message || fallback
+  if (x?.error) return x.status ? `${x.error} (${x.status})` : x.error
+  return x?.message || fallback
 }
 
 export default function AdminSettings() {
@@ -120,12 +121,21 @@ export default function AdminSettings() {
     }
     setBonusSaving(true)
     try {
-      // POST is more reliable through some proxies than PUT
-      await adminApi.post('/settings/panel/signup-bonus', {
+      const payload = {
         enabled: bonusEnabled,
         amountUsd: bonusAmount,
         note: bonusNote || '',
-      })
+      }
+      try {
+        await adminApi.put('/settings/panel/signup-bonus', payload)
+      } catch (e1) {
+        const status = (e1 as { status?: number })?.status
+        if (status === 404 || status === 405) {
+          await adminApi.post('/settings/panel/signup-bonus', payload)
+        } else {
+          throw e1
+        }
+      }
       toast.success('Signup bonus settings saved')
     } catch (e) {
       console.error('Failed to save signup bonus:', e)
@@ -347,7 +357,7 @@ export default function AdminSettings() {
                   />
                   <ToggleRow
                     label="Require KYC before withdrawals"
-                    enabled={govSettings.autoVerifySettings ? govSettings.requireKycForWithdrawals : govSettings.requireKycForWithdrawals}
+                    enabled={govSettings.requireKycForWithdrawals}
                     onToggle={(value) => setGovToggle('requireKycForWithdrawals', value)}
                   />
                   <ToggleRow
