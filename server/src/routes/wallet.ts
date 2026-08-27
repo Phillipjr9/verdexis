@@ -71,7 +71,7 @@ router.get('/', requireAuth, async (req: AuthedRequest, res) => {
   }
 
   res.json({ balances, transactions })
-})
+}
 
 router.get('/transactions', requireAuth, async (req: AuthedRequest, res) => {
   const userId = req.userId!
@@ -144,7 +144,7 @@ router.post('/transfer', requireAuth, idempotency(), async (req: AuthedRequest, 
       amount,
       available,
     })
-    if (!gate.ok) {
+    if (gate.ok === false) {
       res.status(gate.status).json({ error: gate.error })
       return
     }
@@ -402,7 +402,7 @@ router.post('/convert', requireAuth, idempotency(), async (req: AuthedRequest, r
         }
       }
       const { generateTransactionId } = await import('../utils/transactionIdGenerator.js')
-      const ref = `Convert ${fromCurrency} → ${toCurrency}`
+      const ref = `Convert ${fromCurrency} \u2192 ${toCurrency}`
       await tx.transaction.create({
         data: {
           transactionId: generateTransactionId(), userId, kind: 'transfer', currency: fromCurrency,
