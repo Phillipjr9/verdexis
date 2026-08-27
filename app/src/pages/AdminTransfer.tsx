@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import Navigation from '../components/Navigation'
@@ -154,6 +154,7 @@ function UserPicker({ label, value, onChange }: { label: string; value: AdminUse
   const [q, setQ] = useState('')
   const [options, setOptions] = useState<AdminUserSummary[]>([])
   const [open, setOpen] = useState(false)
+  const wrapRef = useRef<HTMLDivElement>(null)
   const display = useMemo(() => value ? `${value.name} <${value.email}>` : '', [value])
 
   const [searchError, setSearchError] = useState<string | null>(null)
@@ -169,10 +170,12 @@ function UserPicker({ label, value, onChange }: { label: string; value: AdminUse
     const t = setTimeout(() => {
       setSearching(true)
       setSearchError(null)
-      adminApi.listUsers({ q: q.trim(), page: 1, limit: 12 })
+      adminApi.listUsers({ q: q.trim(), page: 1, limit: 20, role: 'all' })
         .then((r) => {
-          setOptions(r.users || [])
-          if (!(r.users || []).length) setSearchError('No users matched that search')
+          const users = (r.users || []).filter((u) => u.role !== 'admin' || true)
+          setOptions(users)
+          setOpen(true)
+          if (!users.length) setSearchError('No users matched that search')
         })
         .catch((err: any) => {
           setOptions([])
@@ -184,6 +187,15 @@ function UserPicker({ label, value, onChange }: { label: string; value: AdminUse
     }, 250)
     return () => clearTimeout(t)
   }, [q, value])
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [])
 
   if (value) {
     return (
@@ -201,19 +213,32 @@ function UserPicker({ label, value, onChange }: { label: string; value: AdminUse
 
   return (
     <Field label={label}>
-      <div className="relative">
+      <div className="relative" ref={wrapRef}>
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#737373]" />
         <input
           value={q}
           onChange={(e) => { setQ(e.target.value); setOpen(true) }}
           onFocus={() => setOpen(true)}
+          autoComplete="off"
           placeholder="Search by name, email or ID…"
           className="w-full pl-9 pr-3 py-2 bg-[#0a0f11] border border-[#ffffff10] rounded-lg text-sm text-[#E5E5E5] focus:outline-none focus:border-[#0C8B44]"
         />
         {open && options.length > 0 && (
-          <div className="absolute z-10 mt-1 w-full max-h-60 overflow-auto rounded-lg bg-[#0f1619] border border-[#ffffff10] shadow-xl">
+          <div className="absolute z-20 mt-1 w-full max-h-60 overflow-auto rounded-lg bg-[#0f1619] border border-[#ffffff10] shadow-xl">
             {options.map((u) => (
-              <button type="button" key={u.id} onClick={() => { onChange(u); setOpen(false); setQ('') }} className="w-full text-left px-3 py-2 hover:bg-[#0C8B44]/10">
+              <button
+                type="button"
+                key={u.id}
+                // mousedown fires before input blur — required so selection sticks
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  onChange(u)
+                  setOpen(false)
+                  setQ('')
+                  setOptions([])
+                }}
+                className="w-full text-left px-3 py-2 hover:bg-[#0C8B44]/10"
+              >
                 <p className="text-sm text-[#E5E5E5]">{u.name || 'User'}</p>
                 <p className="text-[11px] text-[#737373]">{u.email}</p>
               </button>
