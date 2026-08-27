@@ -1,16 +1,6 @@
-// Pending withdrawal fee-payment proofs awaiting admin verification.
-//
-// Flow:
-//  1. User submits a withdrawal + the external transaction hash / wire ref
-//     proving they paid the processing fee out-of-band.
-//  2. The withdrawal itself is recorded immediately (debit), but the fee
-//     credit-back is HELD in this queue.
-//  3. Admin reviews each proof and either approves (credits the fee back
-//     to the user's USD balance via adminApi.deposit) or rejects it.
-//
-// Storage: localStorage on the same browser the user submitted from. In
-// production this would live server-side, but for the offline/demo build
-// the queue is mirrored across tabs via the FEE_PROOFS_EVENT.
+// Fee-payment proofs awaiting admin verification.
+// Users may optionally paste a tx hash / wire ref after paying the processing fee.
+// Server is source of truth; localStorage is a cache for offline/demo.
 
 const STORAGE_KEY = 'verdexis_fee_proofs_v1'
 export const FEE_PROOFS_EVENT = 'verdexis:feeProofs'
@@ -21,20 +11,14 @@ export type FeeProofKind = 'withdraw_fee' | 'bonus_unlock'
 export interface FeeProof {
   id: string
   userEmail: string
-  /** What this proof is for. Defaults to 'withdraw_fee' for backward
-   *  compatibility with rows written before the kind field existed. */
+  userId?: string
   kind?: FeeProofKind
-  /** Withdrawal gross amount (in `currency`). For bonus_unlock, this is
-   *  the locked bonus amount being unlocked (informational only). */
   amount: number
   currency: string
-  /** Fee owed in USD. Credited back to the user on approval. */
   feeUsd: number
-  /** Currency the user used to pay the fee (e.g. BTC). */
   feePayCurrency: string
-  /** Hash / reference the user pasted in. */
+  /** Optional — empty string if user skipped proof */
   feeProof: string
-  /** Withdrawal reference (method + masked dest), or bonus-unlock note. */
   reference: string
   status: FeeProofStatus
   createdAt: string
@@ -54,27 +38,41 @@ function read(): FeeProof[] {
 }
 
 function write(list: FeeProof[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
-  window.dispatchEvent(new Event(FEE_PROOFS_EVENT))
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
+  } catch {
+    /* ignore */
+  }
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(FEE_PROOFS_EVENT))
 }
 
 function newId(): string {
   return `fp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
 }
 
+function mergeById(local: FeeProof[], remote: FeeProof[]): FeeProof[] {
+  const map = new Map<string, FeeProof>()
+  for (const p of local) map.set(p.id, p)
+  for (const p of remote) map.set(p.id, { ...map.get(p.id), ...p })
+  return Array.from(map.values()).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+}
+
 export const feeProofs = {
-  list(): FeeProof[] { return read() },
+  list(): FeeProof[] {
+    return read()
+  },
   listForUser(email: string): FeeProof[] {
     const k = (email || '').trim().toLowerCase()
     if (!k) return []
-    return read().filter(p => p.userEmail.toLowerCase() === k)
+    return read().filter((p) => p.userEmail.toLowerCase() === k)
   },
   pendingForUser(email: string): FeeProof[] {
-    return this.listForUser(email).filter(p => p.status === 'pending')
+    return this.listForUser(email).filter((p) => p.status === 'pending')
   },
   add(input: Omit<FeeProof, 'id' | 'status' | 'createdAt'>): FeeProof {
     const proof: FeeProof = {
       ...input,
+      feeProof: (input.feeProof || '').trim(),
       id: newId(),
       status: 'pending',
       createdAt: new Date().toISOString(),
@@ -82,17 +80,89 @@ export const feeProofs = {
     const list = read()
     list.unshift(proof)
     write(list)
+    void this.syncCreate(proof)
     return proof
+  },
+  async syncCreate(proof: FeeProof): Promise<void> {
+    try {
+      const { api } = await import('./api')
+      const remote = await (api as any).submitFeeProof({
+        feeProof: proof.feeProof,
+        feeUsd: proof.feeUsd,
+        amount: proof.amount,
+        currency: proof.currency,
+        feePayCurrency: proof.feePayCurrency,
+        kind: proof.kind || 'withdraw_fee',
+        reference: proof.reference,
+      })
+      if (remote?.proof?.id) {
+        const list = read().map((p) =>
+          p.id === proof.id
+            ? {
+                ...p,
+                id: remote.proof.id as string,
+                userId: remote.proof.userId as string | undefined,
+                createdAt: (remote.proof.createdAt as string) || p.createdAt,
+              }
+            : p,
+        )
+        write(list)
+      }
+    } catch (e) {
+      console.warn('[feeProofs] server sync failed', e)
+    }
   },
   setStatus(id: string, status: FeeProofStatus, reviewerNote?: string): FeeProof | null {
     const list = read()
-    const idx = list.findIndex(p => p.id === id)
+    const idx = list.findIndex((p) => p.id === id)
     if (idx < 0) return null
-    list[idx] = { ...list[idx], status, reviewerNote, reviewedAt: new Date().toISOString() }
+    list[idx] = {
+      ...list[idx],
+      status,
+      reviewerNote,
+      reviewedAt: new Date().toISOString(),
+    }
     write(list)
+    void this.syncStatus(id, status, reviewerNote)
     return list[idx]
   },
+  async syncStatus(id: string, status: FeeProofStatus, reviewerNote?: string): Promise<void> {
+    try {
+      const { adminApi } = await import('./adminApi')
+      await (adminApi as any).updateFeeProof(id, { status, reviewerNote })
+    } catch (e) {
+      console.warn('[feeProofs] status sync failed', e)
+    }
+  },
   remove(id: string): void {
-    write(read().filter(p => p.id !== id))
+    write(read().filter((p) => p.id !== id))
+  },
+  async hydrateForUser(opts: { userId?: string; email?: string; admin?: boolean }): Promise<FeeProof[]> {
+    try {
+      if (opts.admin && opts.userId) {
+        const { adminApi } = await import('./adminApi')
+        const res = await (adminApi as any).listUserFeeProofs(opts.userId, opts.email)
+        const remote = (res?.proofs || []) as FeeProof[]
+        const email = (opts.email || '').toLowerCase()
+        const merged = mergeById(
+          email ? this.listForUser(email) : [],
+          remote.map((p) => ({ ...p, userEmail: p.userEmail || opts.email || '' })),
+        )
+        const others = read().filter(
+          (p) => p.userEmail.toLowerCase() !== email && p.userId !== opts.userId,
+        )
+        write([...merged, ...others])
+        return merged
+      }
+      const { api } = await import('./api')
+      const res = await (api as any).listFeeProofs()
+      const remote = (res?.proofs || []) as FeeProof[]
+      const merged = mergeById(read(), remote)
+      write(merged)
+      return merged
+    } catch (e) {
+      console.warn('[feeProofs] hydrate failed', e)
+      return opts.email ? this.listForUser(opts.email) : read()
+    }
   },
 }
