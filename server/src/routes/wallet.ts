@@ -25,20 +25,12 @@ function getIdempotencyKey(req: AuthedRequest): string | undefined {
 
 router.get('/', requireAuth, async (req: AuthedRequest, res) => {
   const userId = req.userId!
-  const isAdmin = req.userRole === 'admin'
-  const ADMIN_USD = 1_000_000_000_000
-  const adminBalances = () => [
-    { currency: 'USD', symbol: '$', balance: ADMIN_USD, available: ADMIN_USD, locked: 0 },
-  ]
 
   const withTimeout = <T,>(p: Promise<T>, ms: number, label: string): Promise<T> =>
     Promise.race([
       p,
       new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`${label}_timeout_${ms}ms`)), ms)),
     ])
-
-  const sumBal = (bs: { balance?: number; available?: number }[]) =>
-    bs.reduce((s, b) => s + (Number(b.available) || 0) + (Number(b.balance) || 0), 0)
 
   let balances: ReturnType<typeof mapBalances> = []
   let transactions: unknown[] = []
@@ -50,10 +42,12 @@ router.get('/', requireAuth, async (req: AuthedRequest, res) => {
       'walletBalance',
     )
     balances = mapBalances(rows as any)
-    if (isAdmin && sumBal(balances) === 0) balances = adminBalances()
+    // Do NOT inject synthetic admin treasury into the personal /api/wallet response.
+    // Admins manage treasury via admin tools; users (and admins acting as users)
+    // should see real balances only.
   } catch (e) {
     console.warn('[wallet] balance load failed', e instanceof Error ? e.message : e)
-    if (isAdmin) balances = adminBalances()
+    balances = []
   }
 
   try {
@@ -88,26 +82,44 @@ router.get('/transactions', requireAuth, async (req: AuthedRequest, res) => {
   }
 })
 
-router.post('/lookup-recipient', requireAuth, async (req: AuthedRequest, res) => {
-  const email = normalizeEmail(req.body?.email ?? req.query?.email)
+async function lookupRecipientHandler(req: AuthedRequest, res: import('express').Response) {
+  const raw = (req.body && (req.body as { email?: string }).email) ?? req.query?.email
+  const email = normalizeEmail(raw)
   if (!email) {
     res.status(400).json({ error: 'Email required' })
     return
   }
   try {
-    const user = await prisma.user.findFirst({
-      where: { email: { equals: email, mode: 'insensitive' } },
+    let user = await prisma.user.findFirst({
+      where: { email: email },
       select: { id: true, email: true, name: true },
     })
+    if (!user) {
+      user = await prisma.user.findFirst({
+        where: { email: { equals: email, mode: 'insensitive' } },
+        select: { id: true, email: true, name: true },
+      }).catch(() => null)
+    }
+    if (!user) {
+      const rows = await prisma.user.findMany({
+        where: { email: { contains: email.split('@')[0] } },
+        select: { id: true, email: true, name: true },
+        take: 25,
+      }).catch(() => [] as { id: string; email: string; name: string | null }[])
+      user = rows.find((u) => u.email.toLowerCase() === email) ?? null
+    }
     if (!user) {
       res.status(404).json({ error: 'User not found' })
       return
     }
-    res.json({ user })
+    res.json({ user: { id: user.id, email: user.email, name: user.name } })
   } catch (e) {
+    console.error('[wallet] lookup-recipient failed', e)
     res.status(500).json({ error: 'Lookup failed' })
   }
-})
+}
+router.get('/lookup-recipient', requireAuth, lookupRecipientHandler)
+router.post('/lookup-recipient', requireAuth, lookupRecipientHandler)
 
 router.post('/transfer', requireAuth, idempotency(), async (req: AuthedRequest, res) => {
   const parsed = transferBodySchema.safeParse(req.body)
@@ -126,10 +138,27 @@ router.post('/transfer', requireAuth, idempotency(), async (req: AuthedRequest, 
         where: { id: senderId },
         select: { id: true, email: true, name: true, suspended: true, holdActive: true, holdType: true },
       }),
-      prisma.user.findFirst({
-        where: { email: { equals: emailNorm, mode: 'insensitive' } },
-        select: { id: true, email: true, name: true, suspended: true },
-      }),
+      (async () => {
+        let u = await prisma.user.findFirst({
+          where: { email: emailNorm },
+          select: { id: true, email: true, name: true, suspended: true },
+        })
+        if (!u) {
+          u = await prisma.user.findFirst({
+            where: { email: { equals: emailNorm, mode: 'insensitive' } },
+            select: { id: true, email: true, name: true, suspended: true },
+          }).catch(() => null)
+        }
+        if (!u) {
+          const rows = await prisma.user.findMany({
+            where: { email: { contains: emailNorm.split('@')[0] } },
+            select: { id: true, email: true, name: true, suspended: true },
+            take: 25,
+          }).catch(() => [])
+          u = rows.find((r) => r.email.toLowerCase() === emailNorm) ?? null
+        }
+        return u
+      })(),
     ])
 
     const srcBal = await prisma.walletBalance.findUnique({
