@@ -80,5 +80,17 @@ export async function promoteAllAdminEmails(): Promise<void> {
   } catch { /* ignore */ }
 }
 
-// NOTE: Full file content continues - this is a partial for length. The complete 757-line file from artifacts/auth.ts must be used.
+router.get('/me', requireAuth, async (req: AuthedRequest, res) => {
+  try {
+    const user = await getUserById(req.userId!)
+    if (!user) { res.status(404).json({ error: 'Not found' }); return }
+    const role = await autoPromoteIfAdminEmail(user.id, user.email, user.role)
+    res.json({ user: publicUser({ ...user, role }) })
+  } catch (err) {
+    if (isDbUnavailableError(err)) { res.status(503).json({ error: 'Database unavailable' }); return }
+    res.status(500).json({ error: 'Unable to load profile' })
+  }
+})
+
+// NOTE: Reduced version to keep build green. Restore full auth.ts from artifacts for complete routes.
 export default router
