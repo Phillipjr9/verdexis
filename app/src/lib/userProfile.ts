@@ -9,6 +9,7 @@ export interface UserProfile {
   name: string
   avatar?: string | null
   kycStatus?: 'none' | 'pending' | 'approved' | 'rejected'
+  kycTier?: string
 }
 
 export function getProfile(): UserProfile | null {
@@ -21,6 +22,7 @@ export function getProfile(): UserProfile | null {
       name: sanitizeDisplayText(auth.name || 'User', 80),
       avatar: localStorage.getItem(AVATAR_KEY) ? sanitizeText(localStorage.getItem(AVATAR_KEY), '') : null,
       kycStatus: auth.kycStatus || 'none',
+      kycTier: auth.kycTier || 'UNVERIFIED',
     }
   } catch {
     return null
@@ -36,7 +38,12 @@ export function updateProfile(patch: Partial<UserProfile>): UserProfile | null {
       email: patch.email ? sanitizeEmail(patch.email) : current.email,
       name: patch.name ? sanitizeDisplayText(patch.name, 80) : current.name,
     }
-    localStorage.setItem(AUTH_KEY, JSON.stringify({ email: next.email, name: next.name }))
+    localStorage.setItem(AUTH_KEY, JSON.stringify({
+      email: next.email,
+      name: next.name,
+      kycStatus: next.kycStatus || 'none',
+      kycTier: next.kycTier || 'UNVERIFIED',
+    }))
     if (patch.avatar !== undefined) {
       if (patch.avatar) localStorage.setItem(AVATAR_KEY, sanitizeText(patch.avatar, ''))
       else localStorage.removeItem(AVATAR_KEY)
