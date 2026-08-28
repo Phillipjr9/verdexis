@@ -261,6 +261,15 @@ export const api = {
 
   listAlerts: () => request('/api/alerts'),
   addAlert: (a: unknown) => request('/api/alerts', { method: 'POST', body: JSON.stringify(a) }),
+
+  // Public testimonials (Home page carousel) — GET is unauthenticated
+  listReviews: () =>
+    request<{ reviews: { id: string; rating: number; text: string; authorName: string; authorAvatar: string | null; createdAt: string }[] }>('/api/reviews'),
+  getMyReview: () =>
+    request<{ review: { id: string; rating: number; text: string; authorName: string; authorAvatar: string | null; approved: boolean; createdAt: string; updatedAt: string } | null }>('/api/reviews/me'),
+  upsertReview: (payload: { rating: number; text: string }) =>
+    request<{ review: { id: string; rating: number; text: string; authorName: string; authorAvatar: string | null; approved: boolean; createdAt: string; updatedAt: string } }>('/api/reviews', { method: 'POST', body: JSON.stringify(payload) }),
+  deleteMyReview: () => request<{ ok: boolean }>('/api/reviews/me', { method: 'DELETE' }),
 }
 
 export async function isApiOnline(): Promise<boolean> {
