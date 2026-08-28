@@ -7,6 +7,7 @@ import crypto from 'node:crypto'
 import { prisma } from '../db.js'
 import { requireAuth, type AuthedRequest } from '../auth.js'
 import { idempotency } from '../idempotency.js'
+import { alertAdminsOfDeposit } from '../services/depositAlerts.js'
 
 const router = Router()
 
@@ -157,6 +158,28 @@ router.post('/pending-deposits', requireAuth, idempotency(), async (req: AuthedR
         note: body.note ? String(body.note) : null,
       },
     })
+
+    // Notify user + admins (in-app + email with approve/reject links)
+    try {
+      await prisma.notification.create({
+        data: {
+          userId,
+          kind: 'deposit',
+          title: `Deposit pending approval: ${amount} ${asset}`,
+          body: `Your deposit of ${amount} ${asset} is queued. Funds will be credited after admin confirmation.`,
+        },
+      })
+      await alertAdminsOfDeposit(
+        userId,
+        amount,
+        asset,
+        row.id,
+        `Pending deposit ${row.id}; transaction ${row.txHash}; destination ${toAddress}.`,
+      )
+    } catch (alertErr) {
+      console.warn('[wallet] pending-deposits alert failed', alertErr)
+    }
+
     res.status(201).json({
       pendingDeposit: {
         id: row.id,
