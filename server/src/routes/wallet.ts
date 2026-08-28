@@ -24,6 +24,16 @@ function getIdempotencyKey(req: AuthedRequest): string | undefined {
   return Array.isArray(raw) ? raw[0] : String(raw)
 }
 
+function parseUserPrefs(raw: string | null | undefined): Record<string, unknown> {
+  if (!raw) return {}
+  try {
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {}
+  } catch {
+    return {}
+  }
+}
+
 router.get('/', requireAuth, async (req: AuthedRequest, res) => {
   const userId = req.userId!
 
@@ -334,8 +344,87 @@ router.post('/transfer', requireAuth, idempotency(), async (req: AuthedRequest, 
   }
 })
 
-router.get('/saved-wallet', requireAuth, async (_req, res) => {
-  res.json({ savedWallet: null })
+router.get('/saved-wallet', requireAuth, async (req: AuthedRequest, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId! },
+      select: { prefs: true },
+    })
+    const prefs = parseUserPrefs(user?.prefs)
+    const savedWallet = prefs.savedWallet as
+      | { encryptedWallet?: string; address?: string; updatedAt?: string }
+      | undefined
+    if (!savedWallet?.encryptedWallet) {
+      res.json({ wallet: null })
+      return
+    }
+    res.json({
+      wallet: {
+        hasWallet: true,
+        address: savedWallet.address ?? null,
+        encryptedWallet: savedWallet.encryptedWallet,
+        updatedAt: savedWallet.updatedAt ?? null,
+      },
+    })
+  } catch (e) {
+    console.error('[wallet] saved-wallet get', e)
+    res.status(500).json({ error: 'Failed to load saved wallet' })
+  }
+})
+
+router.post('/saved-wallet', requireAuth, async (req: AuthedRequest, res) => {
+  try {
+    const encryptedWallet = String(req.body?.encryptedWallet || '').trim()
+    const address = String(req.body?.address || '').trim()
+    if (!encryptedWallet || !address) {
+      res.status(400).json({ error: 'encryptedWallet and address are required' })
+      return
+    }
+    if (encryptedWallet.length > 20000 || address.length > 128) {
+      res.status(400).json({ error: 'Payload too large' })
+      return
+    }
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId! },
+      select: { prefs: true },
+    })
+    const prefs = parseUserPrefs(user?.prefs)
+    const updatedAt = new Date().toISOString()
+    prefs.savedWallet = { encryptedWallet, address, updatedAt }
+    await prisma.user.update({
+      where: { id: req.userId! },
+      data: { prefs: JSON.stringify(prefs) },
+    })
+    res.json({
+      wallet: {
+        hasWallet: true,
+        address,
+        updatedAt,
+      },
+    })
+  } catch (e) {
+    console.error('[wallet] saved-wallet post', e)
+    res.status(500).json({ error: 'Failed to save wallet' })
+  }
+})
+
+router.delete('/saved-wallet', requireAuth, async (req: AuthedRequest, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId! },
+      select: { prefs: true },
+    })
+    const prefs = parseUserPrefs(user?.prefs)
+    delete prefs.savedWallet
+    await prisma.user.update({
+      where: { id: req.userId! },
+      data: { prefs: JSON.stringify(prefs) },
+    })
+    res.json({ ok: true })
+  } catch (e) {
+    console.error('[wallet] saved-wallet delete', e)
+    res.status(500).json({ error: 'Failed to clear saved wallet' })
+  }
 })
 
 router.get('/links', requireAuth, async (req: AuthedRequest, res) => {
@@ -424,7 +513,7 @@ router.post('/convert', requireAuth, idempotency(), async (req: AuthedRequest, r
         if (h) {
           const nextAmt = Math.max(0, (h.amount ?? 0) - fromAmount)
           if (nextAmt <= 0) await tx.holding.delete({ where: { id: h.id } })
-          else await tx.holding.update({ where: { id: h.id }, data: { amount: nextAmt } })
+          else await tx.holding.update({ where: { id: h.id }, data: { amount: nextAmt })
         }
       }
       const { generateTransactionId } = await import('../utils/transactionIdGenerator.js')
