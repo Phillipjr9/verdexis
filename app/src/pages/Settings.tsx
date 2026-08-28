@@ -1,18 +1,20 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Navigation from '../components/Navigation'
-import { getStoredUser, getToken } from '../lib/api'
+import { getToken, clearStoredAuth } from '../lib/api'
+import { getProfile } from '../lib/userProfile'
 import { Toaster } from 'sonner'
 
 export default function Settings() {
   const navigate = useNavigate()
-  const [user, setUser] = useState(getStoredUser())
+  const [profile, setProfile] = useState(getProfile())
 
   useEffect(() => {
     if (!getToken()) {
       navigate('/')
       return
     }
+    setProfile(getProfile())
   }, [navigate])
 
   return (
@@ -24,17 +26,22 @@ export default function Settings() {
           <p className="text-muted-foreground">
             Full Settings page is being restored. Basic profile info:
           </p>
-          {user ? (
+          {profile ? (
             <div className="space-y-2">
-              <p><strong>Email:</strong> {user.email}</p>
-              <p><strong>Name:</strong> {user.name}</p>
-              <p><strong>Role:</strong> {user.role}</p>
-              <p><strong>KYC Tier:</strong> {user.kycTier || 'UNVERIFIED'}</p>
-              <p><strong>KYC Status:</strong> {user.kycStatus}</p>
+              <p><strong>Email:</strong> {profile.email}</p>
+              <p><strong>Name:</strong> {profile.name}</p>
+              <p><strong>KYC Tier:</strong> {profile.kycTier || 'UNVERIFIED'}</p>
+              <p><strong>KYC Status:</strong> {profile.kycStatus || 'none'}</p>
             </div>
           ) : (
-            <p>Loading user...</p>
+            <p>Loading profile...</p>
           )}
+          <button
+            onClick={() => { clearStoredAuth(); navigate('/') }}
+            className="mt-4 px-4 py-2 rounded bg-red-600 text-white text-sm"
+          >
+            Sign out
+          </button>
         </div>
       </main>
       <Toaster />
