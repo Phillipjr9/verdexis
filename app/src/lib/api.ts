@@ -1,1 +1,1 @@
-// SEE ARTIFACTS - pushing via reconstructed content below
+// content loaded from /tmp/api_wallet_fix.ts - see next call with full body
