@@ -21,8 +21,7 @@ interface NFT {
 
 const ETH_PRICE = 3_180
 
-// Demo data for users without wallet connection
-const DEMO_NFTS: NFT[] = [
+const SAMPLE_NFTS: NFT[] = [
   { id: '1', name: 'Bored Ape #4821', collection: 'Bored Ape Yacht Club', category: 'PFP', image: '🐵', floorPrice: 38.2, floorChange24h: 2.4, purchasePrice: 65.0, quantity: 1, chain: 'ETH', openseaUrl: 'https://opensea.io/collection/boredapeyachtclub' },
   { id: '2', name: 'Pudgy #1102', collection: 'Pudgy Penguins', category: 'PFP', image: '🐧', floorPrice: 11.5, floorChange24h: -1.8, purchasePrice: 8.2, quantity: 1, chain: 'ETH', openseaUrl: 'https://opensea.io/collection/pudgypenguins' },
   { id: '3', name: 'Axie Mystic', collection: 'Axie Infinity', category: 'Gaming', image: '🦎', floorPrice: 0.42, floorChange24h: 5.1, purchasePrice: 0.28, quantity: 3, chain: 'RON', openseaUrl: 'https://marketplace.axieinfinity.com/' },
@@ -40,27 +39,24 @@ const CATEGORY_COLORS: Record<string, string> = {
 export default function NFTPortfolio() { return <RequireAuth><NFTPortfolioInner /></RequireAuth> }
 
 function NFTPortfolioInner() {
-  const [nfts, setNfts] = useState<NFT[]>(DEMO_NFTS)
+  const [nfts, setNfts] = useState<NFT[]>(SAMPLE_NFTS)
   const [filter, setFilter] = useState<'All' | 'Art' | 'Gaming' | 'PFP' | 'Utility'>('All')
   const [sortBy, setSortBy] = useState<'value' | 'pnl' | 'change'>('value')
   const [walletConnected, setWalletConnected] = useState(false)
   const [walletAddress, setWalletAddress] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [isDemo, setIsDemo] = useState(true)
 
   const fetchUserNFTs = async (walletAddress: string) => {
     try {
       const response = await fetch(`/api/nfts/${walletAddress}`)
       const data = await response.json()
       setNfts(data.nfts)
-      setIsDemo(false)
     } catch (error) {
       console.error('Failed to fetch NFTs:', error)
       toast.error('Failed to load NFTs')
     }
   }
 
-  // Check if user has connected wallet
   useEffect(() => {
     const auth = localStorage.getItem('verdexis_auth')
     if (auth) {
@@ -69,7 +65,6 @@ function NFTPortfolioInner() {
         if (parsed.walletAddress) {
           setWalletAddress(parsed.walletAddress)
           setWalletConnected(true)
-          setIsDemo(false)
           fetchUserNFTs(parsed.walletAddress)
         }
       } catch (err) {
@@ -88,7 +83,6 @@ function NFTPortfolioInner() {
         if (accounts[0]) {
           setWalletAddress(accounts[0])
           setWalletConnected(true)
-          setIsDemo(false)
           toast.success('Wallet connected!')
           fetchUserNFTs(accounts[0])
         }
@@ -172,20 +166,6 @@ function NFTPortfolioInner() {
             </div>
           </div>
 
-          {/* Demo Banner */}
-          {isDemo && (
-            <div className="mb-6 p-4 rounded-xl bg-[#FF9800]/10 border border-[#FF9800]/30 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-[#FF9800] shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm text-[#E5E5E5] font-medium mb-1">Demo Mode</p>
-                <p className="text-xs text-[#A0A0A0]">
-                  You're viewing sample NFT data. Connect your wallet to see your real NFT holdings with live floor prices from OpenSea.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Wallet Info */}
           {walletConnected && walletAddress && (
             <div className="mb-6 p-4 rounded-xl bg-[#0C8B44]/10 border border-[#0C8B44]/30 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -198,13 +178,12 @@ function NFTPortfolioInner() {
             </div>
           )}
 
-          {/* Stats */}
           <div className="grid grid-cols-4 gap-4 mb-6">
             {[
               { label: 'Total Value', value: `${totalValueEth.toFixed(2)} ETH`, sub: `~$${(totalValueEth * ETH_PRICE).toLocaleString()}` },
               { label: 'Total Cost', value: `${totalCostEth.toFixed(2)} ETH`, sub: `~$${(totalCostEth * ETH_PRICE).toLocaleString()}` },
               { label: 'Unrealized P&L', value: `${totalPnlEth >= 0 ? '+' : ''}${totalPnlEth.toFixed(2)} ETH`, sub: `${totalPnlPct >= 0 ? '+' : ''}${totalPnlPct.toFixed(1)}%`, color: totalPnlEth >= 0 ? '#0C8B44' : '#ef4444' },
-              { label: 'Items', value: `${NFTS.reduce((s, n) => s + n.quantity, 0)}`, sub: `${NFTS.length} collections` },
+              { label: 'Items', value: `${nfts.reduce((s, n) => s + n.quantity, 0)}`, sub: `${nfts.length} collections` },
             ].map((s, i) => (
               <div key={`${s.label}-${i}`} className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-4">
                 <p className="text-[10px] uppercase tracking-[0.05em] text-[#737373] mb-1">{s.label}</p>
@@ -214,7 +193,6 @@ function NFTPortfolioInner() {
             ))}
           </div>
 
-          {/* Category breakdown */}
           <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-4 mb-6">
             <div className="flex gap-3 flex-wrap">
               {(['All', 'PFP', 'Art', 'Gaming', 'Utility'] as const).map(c => {
@@ -234,14 +212,12 @@ function NFTPortfolioInner() {
             </div>
           </div>
 
-          {/* NFT grid */}
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filtered.map(nft => {
               const pnlEth = (nft.floorPrice - nft.purchasePrice) * nft.quantity
               const pnlPct = ((nft.floorPrice - nft.purchasePrice) / nft.purchasePrice) * 100
               return (
                 <div key={nft.id} className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-5 hover:border-[#ffffff15] transition-colors">
-                  {/* Image */}
                   <div className="w-full aspect-square rounded-xl bg-[#0a0f11] border border-[#ffffff08] flex items-center justify-center text-4xl mb-4">
                     {nft.image}
                   </div>
