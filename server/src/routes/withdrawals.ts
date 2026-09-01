@@ -141,7 +141,7 @@ router.post('/', requireAuth, moneyLimiter, idempotency(), async (req: AuthedReq
     const totalBalance = (user.walletBalances ?? []).reduce((sum, wb) => sum + wb.balance, 0)
     const level = user.kycTier === 'UNVERIFIED' ? 0 : parseInt(user.kycTier.split('_')[1] ?? '1', 10)
     const tier = calculateUserTier(totalBalance, level)
-    
+
     let userPrefs: Record<string, unknown> = {}
     try { if (user.prefs) userPrefs = JSON.parse(user.prefs) } catch { userPrefs = {} }
     const customFeeRate = (userPrefs as { withdrawalFeeOverride?: number }).withdrawalFeeOverride
@@ -208,10 +208,6 @@ router.post('/', requireAuth, moneyLimiter, idempotency(), async (req: AuthedReq
       let holding = await tx.holding.findUnique({ where: { userId_symbol: { userId: req.userId!, symbol: normalizedAssetInner } } })
       let usedWalletBalanceFallback = false
       if (!holding || holding.amount < totalDebit) {
-        // Holding only tracks trading positions. Admin credits/deposits/transfers
-        // and USD proceeds live in WalletBalance instead — that's what the
-        // dashboard actually reads, so withdrawals must honor it too, not just
-        // a single hardcoded demo account.
         const wb = await tx.walletBalance.findUnique({ where: { userId_currency: { userId: req.userId!, currency: normalizedAssetInner } } })
         if (wb && wb.available >= totalDebit) {
           await recordLedgerTransaction({ tx, userId: req.userId!, asset: normalizedAssetInner, amount: totalDebit, entryType: 'credit', kind: 'withdrawal', eventType: 'withdrawal_request', sourceType: 'withdrawal_request', sourceId: `withdrawal_request:${req.userId!}:${normalizedAssetInner}:${targetAddress}:${totalDebit}`, externalRef: `withdrawal_request:${req.userId!}:${normalizedAssetInner}:${targetAddress}:${totalDebit}`, idempotencyKey: getIdempotencyKey(req), description: `Withdrawal request ${normalizedAssetInner}`, reference: `Withdrawal request ${normalizedAssetInner}`, pending: true, })
@@ -240,13 +236,10 @@ router.post('/', requireAuth, moneyLimiter, idempotency(), async (req: AuthedReq
       const withdrawal = await tx.withdrawalRequest.findUnique({ where: { id: prepared.withdrawal.id } })
       if (!withdrawal) { throw Object.assign(new Error('Withdrawal not found'), { status: 404 }) }
 
-      if (transfer.status === 'completed') {
+      if (transfer.status === 'completed' || transfer.status === 'pending_broadcast') {
         const updated = await tx.withdrawalRequest.update({ where: { id: prepared.withdrawal.id }, data: { status: 'approved', txHash: (transfer as any).txHash?.toLowerCase() ?? null, approvedBy: req.userId!, approvedAt: new Date(), completedAt: new Date(), } })
-
         await tx.transaction.create({ data: { transactionId: generateTransactionId(), userId: req.userId!, kind: 'withdrawal', currency: prepared.normalizedAsset, amount, status: 'completed', reference: (transfer as any).txHash ?? null, } as any })
-
         await tx.notification.create({ data: { userId: req.userId!, kind: 'withdrawal', title: `Withdrawal completed: ${amount} ${prepared.normalizedAsset}`, body: transfer.message, } })
-
         return updated
       }
 
@@ -259,10 +252,11 @@ router.post('/', requireAuth, moneyLimiter, idempotency(), async (req: AuthedReq
     })
 
     process.nextTick(() => {
-      prisma.user.findUnique({ where: { id: req.userId! }, select: { id: true, email: true, name: true } }).then((u) => {
+      prisma.user.findUnique({ where: { id: req.userId! }, select: { id: true, email: true, name: true } }).then(async (u) => {
         if (!u) return
+        const success = transfer.status === 'completed' || transfer.status === 'pending_broadcast'
         notifyWithdrawalEvent(u, {
-          status: transfer.status === 'completed' ? 'completed' : 'pending',
+          status: success ? 'completed' : 'pending',
           amount,
           asset: prepared.normalizedAsset,
           destination: prepared.targetAddress,
@@ -270,6 +264,17 @@ router.post('/', requireAuth, moneyLimiter, idempotency(), async (req: AuthedReq
           fee: processingFee,
           id: finalized.id,
         }).catch(() => {})
+        try {
+          const { sendAdminEmailNotification } = await import('../notificationService.js')
+          await sendAdminEmailNotification(
+            `Withdrawal successful: ${amount} ${prepared.normalizedAsset}`,
+            `${u.name || 'A user'} (${u.email}) completed a withdrawal of ${amount} ${prepared.normalizedAsset} to ${prepared.targetAddress}. Fee: ${processingFee}. Status: ${transfer.status}. ${transfer.message}`,
+            undefined,
+            { important: true },
+          )
+        } catch (err) {
+          console.warn('[withdrawals] admin email failed', err)
+        }
       }).catch(() => {})
     })
 
@@ -314,32 +319,18 @@ router.put('/admin/:id/approve', requireAuth, requireAdmin, async (req: AuthedRe
       if (withdrawal.status !== 'pending') { throw Object.assign(new Error('Withdrawal already processed'), { status: 400 }) }
 
       const updated = await tx.withdrawalRequest.update({ where: { id: withdrawalId }, data: { status: 'approved', txHash: txHash.toLowerCase(), fee: fee ?? 0, approvedBy: req.userId!, approvedAt: new Date(), } })
-
       await tx.transaction.create({ data: { transactionId: generateTransactionId(), userId: withdrawal.userId, kind: 'withdrawal', currency: withdrawal.asset, amount: withdrawal.amount, status: 'completed', reference: txHash, } as any })
-
       if (withdrawal.fee && withdrawal.fee > 0) {
         await recordLedgerTransaction({ tx, userId: withdrawal.userId, asset: withdrawal.asset, amount: withdrawal.fee, entryType: 'credit', kind: 'deposit', eventType: 'withdrawal_fee_refund', sourceType: 'withdrawal_fee_refund', sourceId: `withdrawal_fee_refund:${withdrawal.id}`, externalRef: `withdrawal_fee_refund:${withdrawal.id}`, description: `Withdrawal fee refund for ${withdrawal.asset}`, reference: `Withdrawal fee refund for ${withdrawal.asset}`, subType: 'fee_refund', recordTransaction: true, })
       }
-
       await tx.notification.create({ data: { userId: withdrawal.userId, kind: 'withdrawal', title: `Withdrawal approved: ${withdrawal.amount} ${withdrawal.asset}`, body: `Your withdrawal has been approved and sent. Tx: ${txHash.slice(0, 14)}…${withdrawal.fee ? ` Processing fee of $${withdrawal.fee.toFixed(2)} has been credited.` : ''}`, } })
-
       return updated
-    }, {
-      timeout: 20_000,
-      maxWait: 10_000,
-    })
+    }, { timeout: 20_000, maxWait: 10_000 })
 
     process.nextTick(() => {
       prisma.user.findUnique({ where: { id: result.userId }, select: { id: true, email: true, name: true } }).then((u) => {
         if (!u) return
-        notifyWithdrawalEvent(u, {
-          status: 'approved',
-          amount: result.amount,
-          asset: result.asset,
-          txHash: result.txHash,
-          fee: result.fee ?? 0,
-          id: result.id,
-        }).catch(() => {})
+        notifyWithdrawalEvent(u, { status: 'approved', amount: result.amount, asset: result.asset, txHash: result.txHash, fee: result.fee ?? 0, id: result.id }).catch(() => {})
       }).catch(() => {})
     })
 
@@ -354,7 +345,6 @@ router.put('/admin/:id/approve', requireAuth, requireAdmin, async (req: AuthedRe
 
 router.put('/admin/:id/reject', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
   const { reason } = z.object({ reason: z.string().min(1).max(500) }).parse(req.body)
-
   const withdrawalId = req.params['id']
   if (!withdrawalId) { res.status(400).json({ error: 'Withdrawal id is required' }); return }
 
@@ -363,30 +353,16 @@ router.put('/admin/:id/reject', requireAuth, requireAdmin, async (req: AuthedReq
       const withdrawal = await tx.withdrawalRequest.findUnique({ where: { id: withdrawalId }, include: { user: true } })
       if (!withdrawal) { throw Object.assign(new Error('Withdrawal not found'), { status: 404 }) }
       if (withdrawal.status !== 'pending') { throw Object.assign(new Error('Withdrawal already processed'), { status: 400 }) }
-
       const updated = await tx.withdrawalRequest.update({ where: { id: withdrawalId }, data: { status: 'rejected', rejectedReason: reason } })
-
       await recordLedgerTransaction({ tx, userId: withdrawal.userId, asset: withdrawal.asset, amount: withdrawal.amount + (withdrawal.fee ?? 0), entryType: 'credit', kind: 'deposit', eventType: 'withdrawal_reject', sourceType: 'withdrawal_reject', sourceId: `withdrawal_reject:${withdrawal.id}`, externalRef: `withdrawal_reject:${withdrawal.id}`, description: `Withdrawal rejected refund for ${withdrawal.asset}`, reference: `Withdrawal rejected refund for ${withdrawal.asset}`, subType: 'withdrawal_reject', recordTransaction: true, })
-
       await tx.notification.create({ data: { userId: withdrawal.userId, kind: 'withdrawal', title: `Withdrawal rejected: ${withdrawal.amount} ${withdrawal.asset}`, body: `Reason: ${reason}. Amount${withdrawal.fee ? ` and processing fee of $${withdrawal.fee.toFixed(2)}` : ''} refunded to your account.`, } })
-
       return updated
-    }, {
-      timeout: 20_000,
-      maxWait: 10_000,
-    })
+    }, { timeout: 20_000, maxWait: 10_000 })
 
     process.nextTick(() => {
       prisma.user.findUnique({ where: { id: result.userId }, select: { id: true, email: true, name: true } }).then((u) => {
         if (!u) return
-        notifyWithdrawalEvent(u, {
-          status: 'rejected',
-          amount: result.amount,
-          asset: result.asset,
-          reason: reason,
-          fee: result.fee ?? 0,
-          id: result.id,
-        }).catch(() => {})
+        notifyWithdrawalEvent(u, { status: 'rejected', amount: result.amount, asset: result.asset, reason, fee: result.fee ?? 0, id: result.id }).catch(() => {})
       }).catch(() => {})
     })
 
