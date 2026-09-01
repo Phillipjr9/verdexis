@@ -12,6 +12,11 @@ export interface FeeProof {
   id: string
   userEmail: string
   userId?: string
+  userName?: string
+  userUsername?: string
+  userInvestmentId?: string
+  userCountry?: string
+  userCity?: string
   kind?: FeeProofKind
   amount: number
   currency: string
