@@ -3,7 +3,6 @@ import { ArrowLeft } from 'lucide-react'
 import { CryptoDepositAddresses } from '../components/CryptoDepositAddresses'
 import { PendingDepositsCard } from '../components/PendingDepositsCard'
 import { TransferStatusCard } from '../components/TransferStatusCard'
-import { WithdrawalStatusCard } from '../components/WithdrawalStatusCard'
 import DocumentTitle from '../components/DocumentTitle'
 import Navigation from '../components/Navigation'
 
@@ -22,7 +21,6 @@ export default function CreateWallet() {
             <CryptoDepositAddresses />
             <PendingDepositsCard />
             <TransferStatusCard />
-            <WithdrawalStatusCard />
           </div>
         </div>
       </div>

@@ -4,14 +4,11 @@ import OTPModal from './OTPModal'
 import { toast } from 'sonner'
 import { showWithdrawalPending, showWithdrawalResult } from '../lib/txNotifier'
 import { api, getToken } from '../lib/api'
-import { WithdrawalStatusCard } from './WithdrawalStatusCard'
 
 export default function WithdrawalFlow({ defaultAddress }: { defaultAddress?: string }) {
   const [promptOpen, setPromptOpen] = useState(false)
   const [otpOpen, setOtpOpen] = useState(false)
   const [pendingPayload, setPendingPayload] = useState<{ amount: string; address: string; network?: string; note?: string } | null>(null)
-  const [refreshKey, setRefreshKey] = useState(0)
-
   const handleRequest = async (payload: { amount: string; address: string; network?: string; note?: string }) => {
     setPendingPayload(payload)
     try {
@@ -60,7 +57,6 @@ export default function WithdrawalFlow({ defaultAddress }: { defaultAddress?: st
         showWithdrawalResult(id, true, json?.txHash || json?.withdrawalId || undefined)
       }
       toast.success('Withdrawal submitted')
-      setRefreshKey((k) => k + 1)
     } catch (err) {
       toast.error(err instanceof Error ? (err as { error?: string }).error || err.message : 'Withdrawal failed')
     } finally {
@@ -72,7 +68,6 @@ export default function WithdrawalFlow({ defaultAddress }: { defaultAddress?: st
   return (
     <>
       <button onClick={() => setPromptOpen(true)} className="px-4 py-2 bg-[#0C8B44] text-white rounded">Withdraw</button>
-      <WithdrawalStatusCard refreshKey={refreshKey} />
       <WithdrawalPrompt open={promptOpen} onClose={() => setPromptOpen(false)} onConfirm={handleRequest} defaultAddress={defaultAddress} />
       <OTPModal open={otpOpen} onClose={() => setOtpOpen(false)} onVerify={onVerified} purpose="transaction" />
     </>
