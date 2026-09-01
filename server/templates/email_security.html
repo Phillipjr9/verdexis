@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="x-apple-disable-message-reformatting" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-  <title>Security Alert</title>
+  <title>Security notice</title>
   <!--[if mso]>
   <noscript>
     <xml>
@@ -19,97 +19,92 @@
     body, table, td, p, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
     table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
     img { -ms-interpolation-mode: bicubic; border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; }
-    body { margin: 0 !important; padding: 0 !important; background-color: #f4f6f8; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; -webkit-font-smoothing: antialiased; }
+    body { margin: 0 !important; padding: 0 !important; background-color: #f1f3f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
     .preheader { display: none !important; visibility: hidden; mso-hide: all; font-size: 1px; line-height: 1px; max-height: 0; max-width: 0; opacity: 0; overflow: hidden; }
-    .wrapper { width: 100%; max-width: 600px; margin: 0 auto; }
-    .card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; }
-    .header { background: linear-gradient(135deg, #b91c1c 0%, #991b1b 100%); padding: 28px 24px; text-align: center; }
-    .content { padding: 28px 24px; color: #0f172a; }
-    .btn-danger a { background: #dc2626; color: #ffffff !important; padding: 14px 22px; border-radius: 10px; text-decoration: none; display: inline-block; font-weight: 700; font-size: 14px; }
-    .btn-secondary a { background: #f8fafc; color: #0C8B44 !important; padding: 12px 20px; border-radius: 10px; text-decoration: none; display: inline-block; font-weight: 600; font-size: 14px; border: 1px solid #bbf7d0; }
-    .footer { background: #f8fafc; padding: 20px 24px 24px; text-align: center; font-size: 12px; color: #64748b; line-height: 1.6; }
-    .footer a { color: #0C8B44; text-decoration: none; font-weight: 600; }
+    .wrapper { width: 100%; max-width: 560px; margin: 0 auto; }
+    .card { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+    .brandbar { border-top: 3px solid #0C8B44; }
+    .btn a { background: #0C8B44; color: #ffffff !important; padding: 12px 22px; border-radius: 6px; text-decoration: none; display: inline-block; font-weight: 600; font-size: 14px; }
+    .footer a { color: #6b7280; text-decoration: underline; }
     @media only screen and (max-width: 600px) {
-      .content { padding: 20px 16px !important; }
-      .btn-danger a, .btn-secondary a { display: block !important; text-align: center; margin: 6px 0 !important; }
+      .content { padding: 24px 20px !important; }
     }
   </style>
 </head>
 <body>
-  <span class="preheader">Security alert: {{ALERT_TITLE}}. Review this activity on your {{COMPANY_NAME}} account.</span>
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f4f6f8">
+  <span class="preheader">{{ALERT_TITLE}} &mdash; review this activity on your {{COMPANY_NAME}} account.</span>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f1f3f5">
     <tr>
-      <td align="center" style="padding: 24px 12px">
+      <td align="center" style="padding: 32px 12px">
         <table role="presentation" class="wrapper" cellspacing="0" cellpadding="0" border="0">
+
+          <!-- Wordmark, outside the card, like a real letterhead -->
           <tr>
-            <td class="card">
-              <div class="header">
-                <img src="{{LOGO_URL}}" alt="{{COMPANY_NAME}}" width="48" height="48" style="display:block;margin:0 auto 12px;border:0;border-radius:10px" onerror="this.style.display='none'" />
-                <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:700">Security Alert</h1>
-                <p style="margin:6px 0 0;color:rgba(255,255,255,0.92);font-size:13px">{{ALERT_TITLE}}</p>
-              </div>
+            <td style="padding:0 4px 16px">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td style="vertical-align:middle;padding-right:8px">
+                    <img src="{{LOGO_URL}}" width="22" height="22" alt="" style="display:block;border-radius:5px" />
+                  </td>
+                  <td style="vertical-align:middle;font-size:14px;font-weight:700;color:#111827;letter-spacing:-0.01em">{{COMPANY_NAME}}</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
 
-              <div class="content">
-                <p style="margin:0 0 8px;font-size:16px;font-weight:600;color:#0f172a">Hi {{USER_NAME}},</p>
-                <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#475569">{{ALERT_MESSAGE}}</p>
+          <tr>
+            <td class="card brandbar">
+              <div class="content" style="padding:32px 32px 28px">
+                <p style="margin:0 0 4px;font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#0C8B44">Account security</p>
+                <h1 style="margin:0 0 16px;font-size:19px;font-weight:700;color:#111827;line-height:1.35">{{ALERT_TITLE}}</h1>
 
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 16px;background:#fef2f2;border:1px solid #fecaca;border-radius:12px">
+                <p style="margin:0 0 8px;font-size:14px;color:#374151">Hi {{USER_NAME}},</p>
+                <p style="margin:0 0 20px;font-size:14px;line-height:1.65;color:#374151">{{ALERT_MESSAGE}}</p>
+
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 20px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px">
                   <tr>
-                    <td style="padding:14px 16px;font-size:14px;line-height:1.5;color:#991b1b">
-                      <strong>If this wasn’t you</strong>, secure your account right away — change your password and review recent activity.
-                    </td>
+                    <td style="padding:11px 14px;color:#6b7280;font-size:12px;width:38%">Date &amp; time</td>
+                    <td style="padding:11px 14px;color:#111827;font-weight:600;font-size:12px;text-align:right">{{EVENT_TIME}}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:11px 14px;color:#6b7280;font-size:12px;border-top:1px solid #e5e7eb">Location</td>
+                    <td style="padding:11px 14px;color:#111827;font-weight:600;font-size:12px;text-align:right;border-top:1px solid #e5e7eb">{{LOCATION}}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:11px 14px;color:#6b7280;font-size:12px;border-top:1px solid #e5e7eb">IP address</td>
+                    <td style="padding:11px 14px;color:#111827;font-weight:600;font-size:12px;text-align:right;border-top:1px solid #e5e7eb;font-family:ui-monospace,Menlo,monospace">{{IP_ADDRESS}}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:11px 14px;color:#6b7280;font-size:12px;border-top:1px solid #e5e7eb">Device</td>
+                    <td style="padding:11px 14px;color:#111827;font-weight:600;font-size:12px;text-align:right;border-top:1px solid #e5e7eb">{{DEVICE}}</td>
                   </tr>
                 </table>
 
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 24px">
                   <tr>
-                    <td style="padding:12px 16px;color:#64748b;font-size:13px;width:40%">Time</td>
-                    <td style="padding:12px 16px;color:#0f172a;font-weight:600;font-size:13px;text-align:right">{{EVENT_TIME}}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:12px 16px;color:#64748b;font-size:13px;border-top:1px solid #e2e8f0">Location</td>
-                    <td style="padding:12px 16px;color:#0f172a;font-weight:600;font-size:13px;text-align:right;border-top:1px solid #e2e8f0">{{LOCATION}}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:12px 16px;color:#64748b;font-size:13px;border-top:1px solid #e2e8f0">IP address</td>
-                    <td style="padding:12px 16px;color:#0f172a;font-weight:600;font-size:13px;text-align:right;border-top:1px solid #e2e8f0;font-family:monospace">{{IP_ADDRESS}}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:12px 16px;color:#64748b;font-size:13px;border-top:1px solid #e2e8f0">Device</td>
-                    <td style="padding:12px 16px;color:#0f172a;font-weight:600;font-size:13px;text-align:right;border-top:1px solid #e2e8f0">{{DEVICE}}</td>
+                    <td class="btn"><a href="{{SECURITY_URL}}" target="_blank" rel="noopener">Review account security</a></td>
                   </tr>
                 </table>
 
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin:20px 0 8px">
-                  <tr>
-                    <td align="center" class="btn-danger" style="padding:4px">
-                      <a href="{{SECURITY_URL}}" target="_blank" rel="noopener">Review security activity</a>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td align="center" class="btn-secondary" style="padding:4px">
-                      <a href="{{CHANGE_PASSWORD_URL}}" target="_blank" rel="noopener">Change password</a>
-                    </td>
-                  </tr>
-                </table>
-
-                <p style="margin:16px 0 0;font-size:13px;line-height:1.6;color:#64748b">
+                <p style="margin:0;font-size:12.5px;line-height:1.6;color:#9ca3af;border-top:1px solid #f1f3f5;padding-top:16px">
+                  If you didn't expect this, <a href="{{CHANGE_PASSWORD_URL}}" style="color:#0C8B44;font-weight:600;text-decoration:none">change your password</a> and contact
+                  <a href="{{SUPPORT_URL}}" style="color:#0C8B44;font-weight:600;text-decoration:none">support</a> right away.
                   {{COMPANY_NAME}} will never ask for your password by email or chat.
-                  Need help? <a href="{{SUPPORT_URL}}" style="color:#0C8B44;font-weight:600;text-decoration:none">Contact support</a>.
                 </p>
               </div>
+            </td>
+          </tr>
 
-              <div class="footer">
-                <div style="margin-bottom:8px"><strong style="color:#0f172a">{{COMPANY_NAME}}</strong></div>
-                <div>{{COMPANY_ADDRESS}}</div>
-                <div style="margin-top:10px">
-                  <a href="{{SUPPORT_LINK}}">Support</a> ·
-                  <a href="{{PRIVACY_LINK}}">Privacy</a> ·
-                  <a href="{{TERMS_LINK}}">Terms</a> ·
-                  <a href="{{SECURITY_LINK}}">Security</a>
-                </div>
-                <div style="margin-top:10px;color:#94a3b8">© {{YEAR}} {{COMPANY_NAME}}. All rights reserved.</div>
-              </div>
+          <tr>
+            <td style="padding:20px 8px 0" class="footer">
+              <p style="margin:0 0 6px;font-size:11.5px;color:#9ca3af">{{COMPANY_ADDRESS}}</p>
+              <p style="margin:0;font-size:11.5px;color:#9ca3af">
+                <a href="{{SUPPORT_LINK}}">Support</a> &nbsp;&middot;&nbsp;
+                <a href="{{PRIVACY_LINK}}">Privacy</a> &nbsp;&middot;&nbsp;
+                <a href="{{TERMS_LINK}}">Terms</a> &nbsp;&middot;&nbsp;
+                <a href="{{SECURITY_LINK}}">Security</a>
+              </p>
+              <p style="margin:10px 0 0;font-size:11px;color:#c1c7cd">&copy; {{YEAR}} {{COMPANY_NAME}}. All rights reserved.</p>
             </td>
           </tr>
         </table>

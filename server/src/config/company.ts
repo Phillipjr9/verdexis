@@ -65,10 +65,10 @@ export const companyInfo = {
   branding: {
     // Use the public site wordmark to ensure email clients fetch the correct
     // official logo instead of older or redirecting domains.
-    logo: 'https://www.verdexisgroup.com/assets/logo-icon-transparent.png',
-    logoLight: 'https://www.verdexisgroup.com/assets/logo-icon-transparent.png',
-    logoDark: 'https://www.verdexisgroup.com/assets/logo-icon-transparent.png',
-    favicon: 'https://www.verdexisgroup.com/favicon.ico',
+    logo: 'https://www.verdexisgroup.online/assets/logo-icon-transparent.png',
+    logoLight: 'https://www.verdexisgroup.online/assets/logo-icon-transparent.png',
+    logoDark: 'https://www.verdexisgroup.online/assets/logo-icon-transparent.png',
+    favicon: 'https://www.verdexisgroup.online/favicon.ico',
     primaryColor: '#0077d9',
     secondaryColor: '#0f4c81',
   },
