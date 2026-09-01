@@ -64,6 +64,8 @@ import advancedTaxRoutes from './routes/advanced-tax.js'
 import advancedComplianceRoutes from './routes/advanced-compliance.js'
 import advancedNotificationsRoutes from './routes/advanced-notifications.js'
 import adminWithdrawalConfigRoutes from './routes/admin-withdrawal-config.js'
+import feeProofsRoutes from './routes/feeProofs.js'
+import walletTransactionsRoutes from './routes/walletTransactions.js'
 
 const app = express()
 app.set('etag', false)
@@ -401,6 +403,7 @@ app.use('/api/auth', authRoutes)
 app.use('/api/profile', profileRoutes)
 app.use('/api/holdings', holdingsRoutes)
 app.use('/api/wallet', walletRoutes)
+app.use('/api/wallet', walletTransactionsRoutes)
 app.use('/api/trades', tradesRoutes)
 app.use('/api/watchlist', watchlistRoutes)
 app.use('/api/alerts', alertsRoutes)
@@ -423,6 +426,7 @@ app.use('/api/passkeys', passkeysRoutes)
 app.use('/api/kyc', kycRoutes)
 app.use('/api', adminWithdrawalConfigRoutes)
 app.use('/api/withdrawals', withdrawalsRoutes)
+app.use('/api/fee-proofs', feeProofsRoutes)
 app.use('/api/otp', otpRoutes)
 app.use('/api/staking', stakingRoutes)
 app.use('/api/analytics', advancedAnalyticsRoutes)
