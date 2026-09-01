@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { X, Mail, Lock, User, Eye, EyeOff, ArrowRight, Shield, Fingerprint, KeyRound, ArrowLeft, Phone } from 'lucide-react'
@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { api, getFriendlyApiErrorMessage, setTokenWithTimestamp, setStoredUser, type ApiError } from '../lib/api'
 import { sanitizeDisplayText, sanitizeEmail, sanitizeText, sanitizeLiveInput } from '../lib/sanitize'
 import { isSupabaseConfigured, signInWithEmail, signUpWithEmail } from '../lib/supabase'
+import { loadGoogleMapsPlaces } from '../lib/googleMaps'
 
 interface AuthModalProps {
   isOpen: boolean
@@ -28,6 +29,35 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
   const [otpCode, setOtpCode] = useState('')
   const [otpMessage, setOtpMessage] = useState('')
   const [resendLoading, setResendLoading] = useState(false)
+  const addressInputRef = useRef<HTMLInputElement>(null)
+
+  // Wire Google Places Autocomplete onto the signup address field once the
+  // input is mounted. Silently no-ops if VITE_GOOGLE_MAPS_API_KEY is unset.
+  useEffect(() => {
+    if (mode !== 'signup' || !addressInputRef.current) return
+    let autocomplete: any
+    let cancelled = false
+    loadGoogleMapsPlaces()
+      .then(() => {
+        if (cancelled || !addressInputRef.current) return
+        const google = (window as any).google
+        autocomplete = new google.maps.places.Autocomplete(addressInputRef.current, {
+          types: ['address'],
+          fields: ['formatted_address'],
+        })
+        autocomplete.addListener('place_changed', () => {
+          const place = autocomplete.getPlace()
+          if (place?.formatted_address) {
+            setForm((f) => ({ ...f, address: sanitizeDisplayText(place.formatted_address, 200) }))
+          }
+        })
+      })
+      .catch(() => { /* Maps not configured — plain text input still works */ })
+    return () => {
+      cancelled = true
+      if (autocomplete) (window as any).google?.maps?.event?.clearInstanceListeners(autocomplete)
+    }
+  }, [mode])
 
   // Lock body scroll while the modal is open so the fixed overlay always
   // sits centered in the current viewport (prevents the user from having
@@ -509,6 +539,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
                 <label className="text-xs text-[#737373] mb-1.5 block">Street address</label>
                 <div className="relative">
                   <input
+                    ref={addressInputRef}
                     type="text"
                     value={form.address}
                     onChange={(e) => setForm({ ...form, address: sanitizeLiveInput(e.target.value, 200) })}
