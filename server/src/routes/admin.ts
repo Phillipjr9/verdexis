@@ -2404,13 +2404,12 @@ router.post('/users/:id/kyc', async (req: AuthedRequest, res) => {
     }).catch(() => {})
     if (u.email && (parsed.data.status === 'approved' || parsed.data.status === 'rejected')) {
       const approved = parsed.data.status === 'approved'
-      void sendEmailNotification(
-        u.email,
-        approved ? 'Identity verification approved' : 'Identity verification rejected',
-        approved
+      void emailService.sendSecurityAlert(u.email, u.name || u.email, {
+        title: approved ? 'Identity verification approved' : 'Identity verification rejected',
+        message: approved
           ? 'Your identity verification (KYC) has been approved. You now have full access to Verdexis features.'
-          : `Your identity verification (KYC) was rejected.${parsed.data.notes ? ` Reason: ${parsed.data.notes}` : ''} Please resubmit your documents or contact support.`
-      ).catch((e) => console.warn('[admin] kyc email failed', e))
+          : `Your identity verification (KYC) was rejected.${parsed.data.notes ? ` Reason: ${parsed.data.notes}` : ''} Please resubmit your documents or contact support.`,
+      }, u.id).catch((e) => console.warn('[admin] kyc email failed', e))
     }
   }
   await audit(req.userId!, 'user.kyc.update', userId, parsed.data)
