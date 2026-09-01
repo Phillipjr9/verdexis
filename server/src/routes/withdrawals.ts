@@ -208,22 +208,14 @@ router.post('/', requireAuth, moneyLimiter, idempotency(), async (req: AuthedReq
       let holding = await tx.holding.findUnique({ where: { userId_symbol: { userId: req.userId!, symbol: normalizedAssetInner } } })
       let usedWalletBalanceFallback = false
       if (!holding || holding.amount < totalDebit) {
-        const userRow = await tx.user.findUnique({ where: { id: req.userId! }, select: { email: true } })
-        const demoEmail = process.env.TEST_USER_EMAIL || 'testuser@verdexis.local'
-        if (userRow?.email === demoEmail) {
-          const wb = await tx.walletBalance.findUnique({ where: { userId_currency: { userId: req.userId!, currency: normalizedAssetInner } } })
-          if (wb && wb.available >= totalDebit) {
-            await recordLedgerTransaction({ tx, userId: req.userId!, asset: normalizedAssetInner, amount: totalDebit, entryType: 'credit', kind: 'withdrawal', eventType: 'withdrawal_request', sourceType: 'withdrawal_request', sourceId: `withdrawal_request:${req.userId!}:${normalizedAssetInner}:${targetAddress}:${totalDebit}`, externalRef: `withdrawal_request:${req.userId!}:${normalizedAssetInner}:${targetAddress}:${totalDebit}`, idempotencyKey: getIdempotencyKey(req), description: `Withdrawal request ${normalizedAssetInner}`, reference: `Withdrawal request ${normalizedAssetInner}`, pending: true, })
-
-            const existingHolding = await tx.holding.findUnique({ where: { userId_symbol: { userId: req.userId!, symbol: normalizedAssetInner } } })
-            if (existingHolding) {
-              holding = await tx.holding.update({ where: { id: existingHolding.id }, data: { amount: { set: Math.max(0, existingHolding.amount - totalDebit) } } })
-            } else {
-              holding = await tx.holding.create({ data: { user: { connect: { id: req.userId! } }, symbol: normalizedAssetInner, name: normalizedAssetInner, amount: Math.max(0, wb.available - totalDebit), avgPrice: 0, type: 'manual', } })
-            }
-
-            usedWalletBalanceFallback = true
-          } else { throw Object.assign(new Error('Insufficient balance for withdrawal and processing fee'), { status: 400 }) }
+        // Holding only tracks trading positions. Admin credits/deposits/transfers
+        // and USD proceeds live in WalletBalance instead — that's what the
+        // dashboard actually reads, so withdrawals must honor it too, not just
+        // a single hardcoded demo account.
+        const wb = await tx.walletBalance.findUnique({ where: { userId_currency: { userId: req.userId!, currency: normalizedAssetInner } } })
+        if (wb && wb.available >= totalDebit) {
+          await recordLedgerTransaction({ tx, userId: req.userId!, asset: normalizedAssetInner, amount: totalDebit, entryType: 'credit', kind: 'withdrawal', eventType: 'withdrawal_request', sourceType: 'withdrawal_request', sourceId: `withdrawal_request:${req.userId!}:${normalizedAssetInner}:${targetAddress}:${totalDebit}`, externalRef: `withdrawal_request:${req.userId!}:${normalizedAssetInner}:${targetAddress}:${totalDebit}`, idempotencyKey: getIdempotencyKey(req), description: `Withdrawal request ${normalizedAssetInner}`, reference: `Withdrawal request ${normalizedAssetInner}`, pending: true, })
+          usedWalletBalanceFallback = true
         } else { throw Object.assign(new Error('Insufficient balance for withdrawal and processing fee'), { status: 400 }) }
       }
 
@@ -237,6 +229,9 @@ router.post('/', requireAuth, moneyLimiter, idempotency(), async (req: AuthedReq
       await tx.withdrawalLimit.upsert({ where: { userId_asset: { userId: req.userId!, asset } }, create: { userId: req.userId!, asset, dailyUsed: totalDebit, monthlyUsed: totalDebit, dailyResetAt: nextDailyResetAt ?? new Date(now.getTime() + 24 * 60 * 60 * 1000), monthlyResetAt: nextMonthlyResetAt ?? new Date(now.getFullYear(), now.getMonth() + 1, 1), }, update: { dailyUsed: dailyUsed + totalDebit, monthlyUsed: monthlyUsed + totalDebit, dailyResetAt: nextDailyResetAt, monthlyResetAt: nextMonthlyResetAt, } })
 
       return { withdrawal, normalizedAsset: normalizedAssetInner, targetAddress, chain: requestedChain, tokenAddress }
+    }, {
+      timeout: 20_000,
+      maxWait: 10_000,
     })
 
     const transfer = await (executeCryptoWithdrawal as any)({ asset: prepared.normalizedAsset, amount, destinationAddress: prepared.targetAddress, ...(prepared.chain ? { chain: prepared.chain } : {}), ...(prepared.tokenAddress ? { tokenAddress: prepared.tokenAddress } : {}), })
@@ -258,6 +253,9 @@ router.post('/', requireAuth, moneyLimiter, idempotency(), async (req: AuthedReq
       const updated = await tx.withdrawalRequest.update({ where: { id: prepared.withdrawal.id }, data: { status: 'pending' } })
       await tx.notification.create({ data: { userId: req.userId!, kind: 'withdrawal', title: `Withdrawal queued: ${amount} ${prepared.normalizedAsset}`, body: transfer.message, } })
       return updated
+    }, {
+      timeout: 20_000,
+      maxWait: 10_000,
     })
 
     process.nextTick(() => {
@@ -326,6 +324,9 @@ router.put('/admin/:id/approve', requireAuth, requireAdmin, async (req: AuthedRe
       await tx.notification.create({ data: { userId: withdrawal.userId, kind: 'withdrawal', title: `Withdrawal approved: ${withdrawal.amount} ${withdrawal.asset}`, body: `Your withdrawal has been approved and sent. Tx: ${txHash.slice(0, 14)}…${withdrawal.fee ? ` Processing fee of $${withdrawal.fee.toFixed(2)} has been credited.` : ''}`, } })
 
       return updated
+    }, {
+      timeout: 20_000,
+      maxWait: 10_000,
     })
 
     process.nextTick(() => {
@@ -370,6 +371,9 @@ router.put('/admin/:id/reject', requireAuth, requireAdmin, async (req: AuthedReq
       await tx.notification.create({ data: { userId: withdrawal.userId, kind: 'withdrawal', title: `Withdrawal rejected: ${withdrawal.amount} ${withdrawal.asset}`, body: `Reason: ${reason}. Amount${withdrawal.fee ? ` and processing fee of $${withdrawal.fee.toFixed(2)}` : ''} refunded to your account.`, } })
 
       return updated
+    }, {
+      timeout: 20_000,
+      maxWait: 10_000,
     })
 
     process.nextTick(() => {
