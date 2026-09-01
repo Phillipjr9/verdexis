@@ -41,13 +41,17 @@ export function customerEmailFooter(): string {
   return `<hr style="border:0;border-top:1px solid #e5e7eb;margin:28px 0 16px" />
 <p style="font-size:12px;line-height:1.6;color:#64748b;margin:0">
   <img src="${emailLogoUrl}" alt="${companyInfo.name}" width="20" height="20" style="display:inline-block;vertical-align:middle;margin-right:6px" /><strong style="vertical-align:middle">${companyInfo.name}</strong><br />
-  <a href="${emailLinks.website}">verdexisgroup.com</a><br />
+  <a href="${emailLinks.website}">verdexisgroup.online</a><br />
   Support: <a href="${emailLinks.support}">Support</a><br />
   <a href="${emailLinks.privacy}">Privacy</a> ·
   <a href="${emailLinks.terms}">Terms</a> ·
   <a href="${emailLinks.security}">Security</a>
   <br /><br />
-  <a href="${whatsappUrl}" style="display:inline-block;margin-right:10px;color:#166534;text-decoration:none">WhatsApp support</a>
-  <a href="${telegramUrl}" style="display:inline-block;color:#0369a1;text-decoration:none">Telegram support</a>
+  <a href="${whatsappUrl}" style="display:inline-block;margin-right:14px;color:#166534;text-decoration:none;vertical-align:middle">
+    <img src="https://img.icons8.com/color/32/whatsapp--v1.png" alt="WhatsApp" width="16" height="16" style="display:inline-block;vertical-align:middle;margin-right:5px" />WhatsApp support
+  </a>
+  <a href="${telegramUrl}" style="display:inline-block;color:#0369a1;text-decoration:none;vertical-align:middle">
+    <img src="https://img.icons8.com/color/32/telegram-app--v1.png" alt="Telegram" width="16" height="16" style="display:inline-block;vertical-align:middle;margin-right:5px" />Telegram support
+  </a>
 </p>`
 }
