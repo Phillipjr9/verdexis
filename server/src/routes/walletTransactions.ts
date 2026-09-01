@@ -50,7 +50,7 @@ router.post('/transactions', requireAuth, idempotency(), async (req: AuthedReque
         kind: mappedKind,
         currency,
         amount,
-        status: mappedKind === 'withdraw' || mappedKind === 'fee' ? 'pending' : 'completed',
+        status: mappedKind === 'fee' ? 'pending' : 'completed',
         reference: reference || null,
       },
     })
@@ -60,10 +60,10 @@ router.post('/transactions', requireAuth, idempotency(), async (req: AuthedReque
       const isFee = mappedKind === 'fee'
       const subject = isFee
         ? `Processing fee paid: ${amount} ${currency}`
-        : `Withdrawal submitted: ${amount} ${currency}`
+        : `Withdrawal successful: ${amount} ${currency}`
       const text = isFee
         ? `${user.name || 'A user'} (${user.email}) marked a processing fee of ${amount} ${currency} as paid.\n\n${reference}\n\nReview in the admin dashboard.`
-        : `${user.name || 'A user'} (${user.email}) submitted a ${amount} ${currency} withdrawal.\n\n${reference}\n\nReview in the admin dashboard.`
+        : `${user.name || 'A user'} (${user.email}) completed a ${amount} ${currency} withdrawal.\n\n${reference}\n\nReview in the admin dashboard.`
       await sendAdminEmailNotification(subject, text, undefined, { important: true }).catch((err) => {
         console.warn('[wallet] admin email failed', err)
       })
