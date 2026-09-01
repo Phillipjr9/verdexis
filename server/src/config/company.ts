@@ -35,14 +35,14 @@ export const companyInfo = {
 
   // Important Links
   links: {
-    website: 'https://www.verdexisgroup.com',
+    website: 'https://www.verdexisgroup.online',
     dashboard: 'https://app.verdexis.com',
     helpCenter: 'https://help.verdexis.com',
     blog: 'https://blog.verdexis.com',
-    terms: 'https://www.verdexisgroup.com/terms',
-    privacy: 'https://www.verdexisgroup.com/privacy',
-    security: 'https://www.verdexisgroup.com/security',
-    contact: 'https://www.verdexisgroup.com/support',
+    terms: 'https://www.verdexisgroup.online/terms',
+    privacy: 'https://www.verdexisgroup.online/privacy',
+    security: 'https://www.verdexisgroup.online/security',
+    contact: 'https://www.verdexisgroup.online/support',
   },
 
   // Legal Information

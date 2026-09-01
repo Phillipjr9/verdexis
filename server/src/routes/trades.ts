@@ -7,6 +7,7 @@ import { brokerEnabled, submitPaperOrder } from '../broker.js'
 import { idempotency } from '../idempotency.js'
 import { VALIDATION_LIMITS, isValidSymbol, isValidAmount } from '../errorHandler.js'
 import { recordLedgerTransaction } from '../services/ledger.js'
+import { notifyTransaction } from '../services/emailHooks.js'
 
 const router = Router()
 
@@ -145,12 +146,42 @@ router.post('/', requireAuth, tradeLimiter, idempotency(), async (req: AuthedReq
       data: { userId, symbol, side, amount, price, total },
     })
     return { trade }
-  }).catch((err: Error & { status?: number }) => ({ error: err.message, status: err.status || 500 }))
+  }, {
+    // The ledger + holding + trade writes are several sequential round-trips.
+    // Under real-world DB latency (remote Postgres, RLS context, connection
+    // pool contention from polling) the default 5s Prisma interactive-
+    // transaction timeout can be exceeded, which aborts the transaction with
+    // a "Transaction not found / may have timed out" error even though
+    // nothing is actually wrong with the trade itself. Give it more room.
+    timeout: 20_000,
+    maxWait: 10_000,
+  }).catch((err: Error & { status?: number }) => {
+    if (!err.status) {
+      // Unexpected (non-business-rule) failure — log it so it's visible in
+      // server logs instead of only surfacing as a generic 500 to the client.
+      console.error('[trades] POST / transaction failed:', err)
+    }
+    return { error: err.message, status: err.status || 500 }
+  })
 
   if ('error' in result) {
     res.status(result.status || 500).json({ error: result.error })
     return
   }
+
+  const trader = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, name: true } })
+  if (trader) {
+    void notifyTransaction(trader, {
+      id: result.trade.id,
+      type: side === 'buy' ? 'Trade — buy' : 'Trade — sell',
+      amount: `${amount} ${symbol}`,
+      currency: 'USD',
+      from: side === 'buy' ? 'USD balance' : `${symbol} holdings`,
+      to: side === 'buy' ? `${symbol} holdings` : 'USD balance',
+      fee: '0',
+    })
+  }
+
   res.status(201).json({ ...result, broker: brokerOrderId ? { id: brokerOrderId, venue: 'alpaca-paper' } : null })
 })
 

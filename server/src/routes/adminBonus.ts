@@ -8,6 +8,7 @@ import { requireAuth, requireAdmin, type AuthedRequest } from '../auth.js'
 import { idempotency } from '../idempotency.js'
 import { recordLedgerTransaction } from '../services/ledger.js'
 import { notifyAdminFundedUser } from '../services/transferNotifications.js'
+import { sendEmailNotification } from '../notificationService.js'
 
 const router = Router()
 
@@ -188,7 +189,7 @@ router.get('/users/:id/bonus-lock', async (req: AuthedRequest, res) => {
 router.post('/users/:id/bonus/unlock', async (req: AuthedRequest, res) => {
   const userId = req.params.id
   const { note } = req.body as { note?: string }
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, prefs: true } })
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, prefs: true } })
   if (!user) {
     res.status(404).json({ error: 'User not found' })
     return
@@ -214,6 +215,13 @@ router.post('/users/:id/bonus/unlock', async (req: AuthedRequest, res) => {
       body: note || 'Your bonus has been unlocked. You can now withdraw funds.',
     },
   }).catch(() => {})
+  if (user.email) {
+    void sendEmailNotification(
+      user.email,
+      'Bonus withdrawal unlocked',
+      note || 'Your bonus has been unlocked. You can now withdraw funds.'
+    ).catch((e) => console.warn('[adminBonus] unlock email notify failed', e))
+  }
   await audit(req.userId!, 'user.bonus.unlock', userId, { note })
   res.json({ ok: true, message: 'Bonus unlocked successfully' })
 })

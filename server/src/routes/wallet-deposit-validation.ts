@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../db.js'
 import { requireAuth, requireAdmin, type AuthedRequest } from '../auth.js'
+import { notifyDepositEvent } from '../services/emailHooks.js'
 
 const router = Router()
 
@@ -124,6 +125,17 @@ router.post('/admin/pending-deposits/:id/reject', requireAuth, requireAdmin, asy
       body: reasonMessages[parsed.data.reason] || 'Your deposit was rejected. Please contact support.'
     }
   }).catch(() => {})
+
+  const depositUser = await prisma.user.findUnique({ where: { id: pending.userId }, select: { id: true, email: true, name: true } })
+  if (depositUser) {
+    void notifyDepositEvent(depositUser, {
+      status: 'rejected',
+      amount: pending.amount,
+      asset: pending.asset,
+      reference: reasonMessages[parsed.data.reason] || parsed.data.reason,
+      id: pending.id,
+    })
+  }
 
   res.json({ pendingDeposit: updated })
 })

@@ -30,7 +30,7 @@ const DEFAULT_SETTINGS = {
   ],
   general: [
     { key: 'platform_name', value: 'Verdexis', type: 'string', category: 'general' },
-    { key: 'support_email', value: 'https://www.verdexisgroup.com/support', type: 'string', category: 'general' },
+    { key: 'support_email', value: 'https://www.verdexisgroup.online/support', type: 'string', category: 'general' },
     { key: 'maintenance_mode', value: 'false', type: 'boolean', category: 'general' },
     { key: 'signup_bonus_enabled', value: 'false', type: 'boolean', category: 'general' },
     { key: 'signup_bonus_amount', value: '0', type: 'number', category: 'general' },

@@ -10,7 +10,7 @@ export const adminEmailRecipients = Array.from(new Set(
     .filter(Boolean),
 ))
 export const emailReplyTo = (env.EMAIL_REPLY_TO || '').trim() || undefined
-export const appUrl = (env.APP_URL || 'https://www.verdexisgroup.com').replace(/\/$/, '')
+export const appUrl = (env.APP_URL || 'https://www.verdexisgroup.online').replace(/\/$/, '')
 
 export const emailLinks = {
   website: appUrl,
@@ -27,7 +27,7 @@ export const emailLinks = {
 // point at the public site logo on the verdexisgroup domain.
 export const emailLogoUrl = (companyInfo?.branding?.logo && companyInfo.branding.logo.length)
   ? companyInfo.branding.logo
-  : `https://www.verdexisgroup.com/assets/logo-icon-transparent.png`
+  : `https://www.verdexisgroup.online/assets/logo-icon-transparent.png`
 const whatsappUrl = `https://wa.me/${companyInfo.contact.whatsapp.replace(/\D/g, '')}`
 const telegramUrl = companyInfo.contact.telegram.startsWith('http')
   ? companyInfo.contact.telegram

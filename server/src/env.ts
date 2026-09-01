@@ -31,7 +31,7 @@ const schema = z.object({
   JWT_EXPIRES_IN: z.string().default('7d'),
   CORS_ORIGIN: z.string().default('http://localhost:5173,http://localhost:3000'),
   APP_BASE_URL: z.string().default('http://localhost:5173'),
-  APP_URL: z.string().default('https://www.verdexisgroup.com'),
+  APP_URL: z.string().default('https://www.verdexisgroup.online'),
   PRODUCTION_ORIGIN: z.string().optional(),
   PASSKEY_RP_ID: z.string().optional(),
   PASSKEY_ORIGIN: z.string().optional(),

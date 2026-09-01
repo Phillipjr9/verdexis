@@ -2,6 +2,7 @@ import https from 'node:https'
 import crypto from 'node:crypto'
 import { env } from '../env.js'
 import { prisma } from '../db.js'
+import { notifyDepositEvent } from '../services/emailHooks.js'
 
 interface BTCPayInvoice {
   id: string
@@ -214,6 +215,22 @@ export async function handleBTCPayWebhook(event: BTCPayWebhookEvent): Promise<vo
           updatedAt: new Date(),
         },
       })
+    }
+
+    await prisma.notification.create({
+      data: {
+        userId,
+        kind: 'deposit',
+        title: `${amount.toLocaleString()} ${currency} credited`,
+        body: `Deposit confirmed via BTCPay (invoice ${invoiceId})`,
+      },
+    }).catch((e) => {
+      console.error('[btcpay] failed to create notification:', e instanceof Error ? e.message : e)
+    })
+
+    const depositUser = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, name: true } })
+    if (depositUser) {
+      void notifyDepositEvent(depositUser, { status: 'credited', amount, asset: currency, reference: invoiceId, id: invoiceId })
     }
 
     console.log('[btcpay] deposit confirmed:', invoiceId, amount, currency)

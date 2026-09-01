@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import https from 'node:https'
 import { env } from '../env.js'
 import { prisma } from '../db.js'
+import { notifyDepositEvent } from '../services/emailHooks.js'
 
 interface CoinbaseCharge {
   id: string
@@ -214,6 +215,22 @@ export async function handleCoinbaseWebhook(event: CoinbaseWebhookEvent): Promis
           updatedAt: new Date(),
         },
       })
+    }
+
+    await prisma.notification.create({
+      data: {
+        userId,
+        kind: 'deposit',
+        title: `${amount.toLocaleString()} ${currency} credited`,
+        body: `Deposit confirmed via Coinbase Commerce (charge ${charge.id})`,
+      },
+    }).catch((e) => {
+      console.error('[coinbase-commerce] failed to create notification:', e instanceof Error ? e.message : e)
+    })
+
+    const depositUser = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, name: true } })
+    if (depositUser) {
+      void notifyDepositEvent(depositUser, { status: 'credited', amount, asset: currency, reference: charge.id, id: charge.id })
     }
 
     console.log('[coinbase-commerce] deposit confirmed:', charge.id, amount, currency)

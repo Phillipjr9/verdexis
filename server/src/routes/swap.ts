@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { prisma } from '../db.js'
 import { requireAuth, type AuthedRequest } from '../auth.js'
 import { idempotency } from '../idempotency.js'
+import { notifyTransaction } from '../services/emailHooks.js'
 
 const router = Router()
 
@@ -126,6 +127,9 @@ router.post('/', requireAuth, swapLimiter, idempotency(), async (req: AuthedRequ
     })
 
     return { sellTrade, buyTrade, toAmount, feeUsd }
+  }, {
+    timeout: 20_000,
+    maxWait: 10_000,
   }).catch((err: Error & { status?: number }) => ({ 
     error: err.message, 
     status: err.status || 500 
@@ -134,6 +138,19 @@ router.post('/', requireAuth, swapLimiter, idempotency(), async (req: AuthedRequ
   if ('error' in result) {
     res.status(result.status || 500).json({ error: result.error })
     return
+  }
+
+  const swapper = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, name: true } })
+  if (swapper) {
+    void notifyTransaction(swapper, {
+      id: result.buyTrade.id,
+      type: 'Swap',
+      amount: `${fromAmount} ${fromSymbol} → ${result.toAmount.toFixed(8)} ${toSymbol}`,
+      currency: 'USD',
+      from: fromSymbol,
+      to: toSymbol,
+      fee: String(result.feeUsd),
+    })
   }
 
   res.status(201).json({

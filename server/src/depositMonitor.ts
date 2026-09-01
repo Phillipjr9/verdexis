@@ -1,6 +1,7 @@
 import https from 'node:https'
 import { prisma } from './db.js'
 import { recordLedgerTransaction } from './services/ledger.js'
+import { notifyDepositEvent } from './services/emailHooks.js'
 
 interface BlockchainNode {
   network: string
@@ -322,6 +323,11 @@ class DepositMonitor {
         },
       })
     })
+
+    const depositUser = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, name: true } })
+    if (depositUser) {
+      void notifyDepositEvent(depositUser, { status: 'credited', amount, asset: currency, reference: address })
+    }
 
     console.log(`[deposit-monitor] ✓ deposited ${amount} ${currency} to user ${userId}`)
   }

@@ -14,6 +14,7 @@ import { isDbUnavailableError } from '../dbError.js'
 import { generateInvestmentId } from '../investmentId.js'
 import { notifyAdminNewUser } from '../notificationService.js'
 import { grantSignupBonusIfEligible } from '../services/signupBonus.js'
+import { notifyPasswordChanged } from '../services/emailHooks.js'
 
 const router = Router()
 const failedLoginAttempts = new Map<string, { count: number; lockedUntil: number }>()
@@ -697,7 +698,7 @@ router.post('/forgot', passwordResetLimiter, async (req, res) => {
         expiresAt: new Date(Date.now() + 60 * 60 * 1000),
       },
     })
-    const base = (env.APP_BASE_URL || process.env.APP_BASE_URL || 'https://www.verdexisgroup.com').replace(/\/$/, '')
+    const base = (env.APP_BASE_URL || process.env.APP_BASE_URL || 'https://www.verdexisgroup.online').replace(/\/$/, '')
     const resetUrl = `${base}/reset?token=${rawToken}`
     try {
       const sent = await emailService.sendPasswordReset(user.email, user.name, resetUrl, user.id)
@@ -729,6 +730,7 @@ router.post('/reset', authLimiter, async (req, res) => {
   })
   try { failedLoginAttempts.delete(String(updated.email || '').toLowerCase()) } catch { /* ignore */ }
   await prisma.passwordReset.update({ where: { id: record.id }, data: { used: true } })
+  void notifyPasswordChanged(updated, { ip: req.ip })
   const secureCookie = process.env.NODE_ENV === 'production'
   res.clearCookie('verdexis_token', { httpOnly: true, sameSite: 'lax', secure: secureCookie })
   res.clearCookie('vdx_token', { httpOnly: true, sameSite: 'lax', secure: secureCookie, path: '/' })

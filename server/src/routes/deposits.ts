@@ -5,6 +5,7 @@ import { requireAuth, type AuthedRequest } from '../auth.js'
 import { depositMonitor } from '../depositMonitor.js'
 import { recordLedgerTransaction } from '../services/ledger.js'
 import { alertAdminsOfDeposit } from '../services/depositAlerts.js'
+import { notifyDepositEvent } from '../services/emailHooks.js'
 
 const router = Router()
 
@@ -197,7 +198,24 @@ router.post('/:depositId/confirm', requireAuth, async (req: AuthedRequest, res) 
           creditedTxId: ledgerResult.transaction?.id,
         },
       })
+
+      await tx.notification.create({
+        data: {
+          userId: deposit.userId,
+          kind: 'deposit',
+          title: `${deposit.amount.toLocaleString()} ${deposit.asset} credited`,
+          body: `Manual deposit confirmation ${deposit.id}`,
+        },
+      }).catch(() => {})
+    }, {
+      timeout: 20_000,
+      maxWait: 10_000,
     })
+
+    const depositUser = await prisma.user.findUnique({ where: { id: deposit.userId }, select: { id: true, email: true, name: true } })
+    if (depositUser) {
+      void notifyDepositEvent(depositUser, { status: 'credited', amount: deposit.amount, asset: deposit.asset, reference: deposit.id, id: deposit.id })
+    }
 
     res.json({
       id: depositId,

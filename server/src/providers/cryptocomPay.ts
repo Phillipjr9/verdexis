@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import https from 'node:https'
 import { env } from '../env.js'
 import { prisma } from '../db.js'
+import { notifyDepositEvent } from '../services/emailHooks.js'
 
 interface CryptocomPayment {
   id: string
@@ -195,6 +196,22 @@ export async function handleCryptocomWebhook(event: CryptocomWebhookEvent): Prom
         updatedAt: new Date(),
       },
     })
+
+    await prisma.notification.create({
+      data: {
+        userId: pendingDeposit.userId,
+        kind: 'deposit',
+        title: `${event.amount.toLocaleString()} ${event.currency} credited`,
+        body: `Deposit confirmed via Crypto.com Pay (payment ${event.id})`,
+      },
+    }).catch((e) => {
+      console.error('[cryptocom] failed to create notification:', e instanceof Error ? e.message : e)
+    })
+
+    const depositUser = await prisma.user.findUnique({ where: { id: pendingDeposit.userId }, select: { id: true, email: true, name: true } })
+    if (depositUser) {
+      void notifyDepositEvent(depositUser, { status: 'credited', amount: event.amount, asset: event.currency, reference: event.id, id: event.id })
+    }
 
     console.log('[cryptocom] deposit confirmed:', event.id, event.amount, event.currency)
   } else if (event.status === 'FAILED') {
