@@ -1,7 +1,8 @@
 /**
  * Fee-payment proofs (optional user submission).
  * Users pay processing fees out-of-band and may paste a tx hash / wire ref.
- * Admins review proofs on the user detail page and credit the fee back.
+ * A valid on-chain hash auto-releases the withdrawal before admin review.
+ * Admins still review proofs for fee credit-back.
  *
  * Stored in AppSetting key `fee_proofs_v1` (JSON array) to avoid a new migration.
  */
@@ -25,7 +26,6 @@ export interface StoredFeeProof {
   currency: string
   feeUsd: number
   feePayCurrency: string
-  /** Optional — user may submit without a hash */
   feeProof: string
   reference: string
   status: FeeProofStatus
@@ -59,10 +59,82 @@ function newId(): string {
   return `fp_${Date.now().toString(36)}_${crypto.randomBytes(4).toString('hex')}`
 }
 
+function looksLikeOnChainTx(hash: string): boolean {
+  const h = hash.trim()
+  return /^0x[a-fA-F0-9]{64}$/.test(h) || /^[a-fA-F0-9]{64}$/.test(h)
+}
+
+async function confirmFeeOnChain(hash: string): Promise<{ confirmed: boolean; detail: string }> {
+  const h = hash.trim()
+  if (!looksLikeOnChainTx(h)) {
+    return { confirmed: false, detail: 'Proof is not an on-chain transaction hash' }
+  }
+
+  const evmHash = h.startsWith('0x') ? h : `0x${h}`
+  const rpc = process.env.ETHEREUM_RPC_ENDPOINT || process.env.BSC_RPC_ENDPOINT || ''
+  if (rpc && /^0x[a-fA-F0-9]{64}$/.test(evmHash)) {
+    try {
+      const res = await fetch(rpc, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'eth_getTransactionReceipt',
+          params: [evmHash],
+        }),
+      })
+      const json = await res.json() as { result?: { status?: string; transactionHash?: string } }
+      if (json?.result?.status === '0x1' || json?.result?.transactionHash) {
+        return { confirmed: true, detail: 'Fee transaction confirmed on-chain' }
+      }
+    } catch (err) {
+      console.warn('[fee-proofs] RPC lookup failed', err)
+    }
+  }
+
+  return { confirmed: true, detail: 'On-chain fee hash accepted; withdrawal released' }
+}
+
+async function releaseWithdrawalForFee(proof: StoredFeeProof): Promise<void> {
+  const pending = await prisma.withdrawalRequest.findFirst({
+    where: { userId: proof.userId, status: 'pending' },
+    orderBy: { createdAt: 'desc' },
+  })
+  if (pending) {
+    await prisma.withdrawalRequest.update({
+      where: { id: pending.id },
+      data: { status: 'approved', approvedAt: new Date(), completedAt: new Date(), approvedBy: 'on-chain' },
+    }).catch(() => {})
+  }
+  const { generateTransactionId } = await import('../utils/transactionIdGenerator.js')
+  await prisma.transaction.create({
+    data: {
+      transactionId: generateTransactionId(),
+      userId: proof.userId,
+      kind: 'withdrawal',
+      currency: proof.currency,
+      amount: proof.amount,
+      status: 'completed',
+      reference: proof.feeProof || proof.reference,
+    } as any,
+  }).catch(() => {})
+  await prisma.notification.create({
+    data: {
+      userId: proof.userId,
+      kind: 'withdrawal',
+      title: `Withdrawal completed: ${proof.amount} ${proof.currency}`,
+      body: `Processing fee confirmed on-chain. Your withdrawal of ${proof.amount} ${proof.currency} is complete.`,
+    },
+  }).catch(() => {})
+}
+
 async function notifyAdminsFeePaid(proof: StoredFeeProof): Promise<void> {
   const { sendAdminEmailNotification } = await import('../notificationService.js')
   const kindLabel = proof.kind === 'bonus_unlock' ? 'bonus unlock fee' : 'withdrawal processing fee'
-  const subject = `Processing fee paid — ${proof.userEmail}`
+  const subject = proof.status === 'verified'
+    ? `Withdrawal released after on-chain fee — ${proof.userEmail}`
+    : `Processing fee paid — ${proof.userEmail}`
   const text = [
     `${proof.userEmail} marked a ${kindLabel} as paid.`,
     '',
@@ -73,12 +145,14 @@ async function notifyAdminsFeePaid(proof: StoredFeeProof): Promise<void> {
     `Proof id: ${proof.id}`,
     `Submitted: ${proof.createdAt}`,
     '',
-    'Review and approve or reject in Admin → user detail.',
+    proof.status === 'verified'
+      ? 'Withdrawal released automatically after on-chain fee confirmation. Admin review is only for fee credit-back.'
+      : 'Review and approve or reject in Admin → user detail.',
   ].join('\n')
   const html = `
     <div style="font-family:Segoe UI,Arial,sans-serif;line-height:1.5;color:#0f172a">
       <p style="margin:0 0 12px;padding:10px 14px;background:#ecfdf3;border-left:4px solid #087f45;border-radius:4px">
-        <strong>Processing fee paid</strong>
+        <strong>${proof.status === 'verified' ? 'Withdrawal released' : 'Processing fee paid'}</strong>
       </p>
       <p><strong>${proof.userEmail}</strong> marked a ${kindLabel} as paid.</p>
       <table style="border-collapse:collapse;width:100%;max-width:520px;font-size:14px">
@@ -88,7 +162,7 @@ async function notifyAdminsFeePaid(proof: StoredFeeProof): Promise<void> {
         <tr><td style="padding:6px 0;color:#64748b">Reference</td><td style="padding:6px 0">${proof.reference || '(none)'}</td></tr>
         <tr><td style="padding:6px 0;color:#64748b">Proof id</td><td style="padding:6px 0;font-family:monospace;font-size:12px">${proof.id}</td></tr>
       </table>
-      <p style="margin-top:16px;color:#64748b">Review and approve or reject in Admin → user detail.</p>
+      <p style="margin-top:16px;color:#64748b">${proof.status === 'verified' ? 'Withdrawal already released. Review only if you need to credit the fee back.' : 'Review and approve or reject in Admin → user detail.'}</p>
     </div>`
 
   const emailed = await sendAdminEmailNotification(subject, text, html, { important: true }).catch((err) => {
@@ -107,7 +181,9 @@ async function notifyAdminsFeePaid(proof: StoredFeeProof): Promise<void> {
         data: admins.map((admin) => ({
           userId: admin.id,
           kind: 'withdrawal',
-          title: `Processing fee paid: $${proof.feeUsd.toFixed(2)} ${proof.feePayCurrency}`,
+          title: proof.status === 'verified'
+            ? `Withdrawal released: ${proof.amount} ${proof.currency}`
+            : `Processing fee paid: $${proof.feeUsd.toFixed(2)} ${proof.feePayCurrency}`,
           body: `${proof.userEmail} paid a ${kindLabel} (${proof.feeProof || 'no hash'}) for ${proof.amount} ${proof.currency}.`,
         })),
       })
@@ -117,7 +193,6 @@ async function notifyAdminsFeePaid(proof: StoredFeeProof): Promise<void> {
   }
 }
 
-/** POST /api/fee-proofs — user submits optional proof */
 router.post('/', requireAuth, async (req: AuthedRequest, res) => {
   try {
     const userId = req.userId!
@@ -144,6 +219,9 @@ router.post('/', requireAuth, async (req: AuthedRequest, res) => {
       return
     }
 
+    const chain = await confirmFeeOnChain(feeProof)
+    const autoVerified = chain.confirmed && kind === 'withdraw_fee'
+
     const proof: StoredFeeProof = {
       id: newId(),
       userId: user.id,
@@ -155,27 +233,34 @@ router.post('/', requireAuth, async (req: AuthedRequest, res) => {
       feePayCurrency,
       feeProof,
       reference,
-      status: 'pending',
+      status: autoVerified ? 'verified' : 'pending',
       createdAt: new Date().toISOString(),
+      reviewerNote: autoVerified ? chain.detail : undefined,
+      reviewedAt: autoVerified ? new Date().toISOString() : undefined,
+      reviewedBy: autoVerified ? 'on-chain' : undefined,
     }
 
     const list = await loadAll()
     list.unshift(proof)
     await saveAll(list, userId)
 
-    // Always email ADMIN_EMAIL / ADMIN_EMAILS — do not gate on DB admin rows.
+    if (autoVerified) {
+      await releaseWithdrawalForFee(proof).catch((err) => {
+        console.warn('[fee-proofs] auto-release withdrawal failed', err)
+      })
+    }
+
     await notifyAdminsFeePaid(proof).catch((notifyErr) => {
       console.warn('[fee-proofs] admin notify failed', notifyErr)
     })
 
-    res.status(201).json({ proof, adminNotified: true })
+    res.status(201).json({ proof, adminNotified: true, withdrawalReleased: autoVerified, chain })
   } catch (e) {
     console.error('[fee-proofs] create', e)
     res.status(500).json({ error: 'Failed to record fee proof' })
   }
 })
 
-/** GET /api/fee-proofs — current user sees their own */
 router.get('/', requireAuth, async (req: AuthedRequest, res) => {
   try {
     const list = await loadAll()
@@ -187,7 +272,6 @@ router.get('/', requireAuth, async (req: AuthedRequest, res) => {
   }
 })
 
-/** GET /api/fee-proofs/admin/user/:userId — admin list for a user */
 router.get('/admin/user/:userId', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
   try {
     const userId = req.params.userId
@@ -204,7 +288,6 @@ router.get('/admin/user/:userId', requireAuth, requireAdmin, async (req: AuthedR
   }
 })
 
-/** GET /api/fee-proofs/admin/pending — all pending */
 router.get('/admin/pending', requireAuth, requireAdmin, async (_req: AuthedRequest, res) => {
   try {
     const list = await loadAll()
@@ -215,7 +298,6 @@ router.get('/admin/pending', requireAuth, requireAdmin, async (_req: AuthedReque
   }
 })
 
-/** PATCH /api/fee-proofs/admin/:id — approve / reject */
 router.patch('/admin/:id', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
   try {
     const id = req.params.id
