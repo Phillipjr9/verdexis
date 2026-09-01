@@ -49,6 +49,7 @@ export default function AssetDetail() {
   const [watch, setWatch] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
+  // Sync URL ?action=buy|sell|swap with tab
   useEffect(() => {
     const next = new URLSearchParams(search)
     next.set('action', tab)
@@ -56,6 +57,7 @@ export default function AssetDetail() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab])
 
+  // Load coin data
   useEffect(() => {
     let alive = true
     ;(async () => {
@@ -64,6 +66,7 @@ export default function AssetDetail() {
       if (list.length > 0) {
         setCoin(list[0])
       } else {
+        // Fallback: try to get from the full list cache
         const fullList = await marketData.getCryptoList()
         const fallback = fullList.find(c => c.id === id || c.symbol?.toLowerCase() === id.toLowerCase())
         setCoin(fallback ?? null)
@@ -72,11 +75,13 @@ export default function AssetDetail() {
     return () => { alive = false }
   }, [id])
 
+  // Live price
   useEffect(() => {
     setLivePrice(liveTicker.getPrice(id))
     return liveTicker.subscribe(id, (p) => setLivePrice(p))
   }, [id])
 
+  // Holding + recent trades for this asset
   useEffect(() => {
     const refresh = () => {
       const h = portfolioStore.getHoldings().find((x) => x.id === id) ?? null
@@ -89,6 +94,8 @@ export default function AssetDetail() {
     return () => clearInterval(i)
   }, [id, coin?.symbol])
 
+  // Watchlist toggle (server-backed). Uses the same /api/watchlist store as
+  // the dashboard WatchlistPanel so add/remove here syncs everywhere.
   useEffect(() => {
     if (!getToken()) { setWatch(false); return }
     let alive = true
@@ -144,6 +151,8 @@ export default function AssetDetail() {
       toast.error('Sign in to place real orders')
       return
     }
+    // Swap = sell the current asset; the destination credit is handled
+    // separately by the user (out of scope for the Trade endpoint).
     const side: 'buy' | 'sell' = tab === 'swap' ? 'sell' : tab
     setSubmitting(true)
     const tradeKey = newIdempotencyKey()
@@ -177,6 +186,8 @@ export default function AssetDetail() {
       if (!holding) return
       setAmount(((holding.quantity * pct) / 100).toFixed(6))
     } else {
+      // For buy, % of the user's actual USD wallet (available cash). Falls
+      // back to 0 when offline or unfunded so we never quote a fake amount.
       const usdWallet = portfolioStore.getWallet().find((w) => w.currency === 'USD')
       const buyingPower = usdWallet?.available ?? usdWallet?.balance ?? 0
       if (buyingPower <= 0 || !price) { setAmount(''); return }
@@ -197,6 +208,7 @@ export default function AssetDetail() {
 
       <div className="pt-20 pb-10 px-3 sm:px-6">
         <div className="max-w-[1280px] mx-auto">
+          {/* Header */}
           <div className="flex items-center gap-3 mb-4 flex-wrap">
             <button
               onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/trading'))}
@@ -242,13 +254,14 @@ export default function AssetDetail() {
             </div>
           </div>
 
+          {/* Price strip */}
           <div className="flex items-baseline gap-3 mb-6 flex-wrap">
             {price > 0 ? (
               <>
                 <p className="text-3xl sm:text-4xl font-light text-[#E5E5E5] tabular-nums">
                   ${fmtPrice(price)}
                 </p>
-                <p className={`text-sm font-medium flex items-center gap-1 ${changePos ? 'text-[#4CAF50]' : 'text-[#f44336]'`}>
+                <p className={`text-sm font-medium flex items-center gap-1 ${changePos ? 'text-[#4CAF50]' : 'text-[#f44336]'}`}>
                   {changePos ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
                   {changePos ? '+' : ''}{change.toFixed(2)}%
                 </p>
@@ -265,8 +278,10 @@ export default function AssetDetail() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Chart + stats column */}
             <div className="lg:col-span-2 space-y-4">
               <div className="glass-card p-4">
+                {/* Range tabs */}
                 <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                   <div className="flex items-center gap-1 p-1 bg-[#1a1a1a] rounded-lg">
                     {RANGES.map((r) => (
@@ -291,6 +306,7 @@ export default function AssetDetail() {
                 </div>
               </div>
 
+              {/* Stats grid */}
               <div className="glass-card p-4">
                 <h3 className="text-xs uppercase tracking-wider text-[#737373] mb-3">Market Statistics</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -301,6 +317,7 @@ export default function AssetDetail() {
                 </div>
               </div>
 
+              {/* Your position */}
               {holding && (
                 <div className="glass-card p-4">
                   <div className="flex items-center justify-between mb-3">
@@ -322,6 +339,7 @@ export default function AssetDetail() {
                 </div>
               )}
 
+              {/* Recent trades for this asset */}
               <div className="glass-card p-4">
                 <h3 className="text-xs uppercase tracking-wider text-[#737373] mb-3 flex items-center gap-2">
                   <Activity className="w-3 h-3" /> Your Recent {symbol} Trades
@@ -349,6 +367,7 @@ export default function AssetDetail() {
               </div>
             </div>
 
+            {/* Buy / Sell / Swap panel */}
             <div className="lg:col-span-1">
               <div className="glass-card p-4 lg:sticky lg:top-24">
                 <div className="grid grid-cols-3 gap-1 p-1 bg-[#1a1a1a] rounded-lg mb-4">
@@ -384,6 +403,7 @@ export default function AssetDetail() {
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-[#737373] uppercase">{symbol}</span>
                 </div>
 
+                {/* Percent shortcuts */}
                 <div className="grid grid-cols-4 gap-1.5 mb-3">
                   {[25, 50, 75, 100].map((p) => (
                     <button
@@ -396,6 +416,7 @@ export default function AssetDetail() {
                   ))}
                 </div>
 
+                {/* Swap target picker */}
                 {tab === 'swap' && (
                   <div className="mb-3">
                     <label className="block text-xs text-[#737373] mb-1.5 flex items-center gap-1.5">
@@ -415,6 +436,7 @@ export default function AssetDetail() {
                   </div>
                 )}
 
+                {/* Total */}
                 <div className="p-3 rounded-lg bg-[#1a1a1a]/50 mb-3 space-y-1.5 text-xs">
                   <div className="flex justify-between">
                     <span className="text-[#737373]">Price</span>
