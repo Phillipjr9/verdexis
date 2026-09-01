@@ -63,8 +63,6 @@ export const companyInfo = {
 
   // Branding
   branding: {
-    // Use the public site wordmark to ensure email clients fetch the correct
-    // official logo instead of older or redirecting domains.
     logo: 'https://www.verdexisgroup.online/assets/logo-icon-transparent.png',
     logoLight: 'https://www.verdexisgroup.online/assets/logo-icon-transparent.png',
     logoDark: 'https://www.verdexisgroup.online/assets/logo-icon-transparent.png',
@@ -73,7 +71,6 @@ export const companyInfo = {
     secondaryColor: '#0f4c81',
   },
 
-  // Email Footer Template
   getEmailFooter(): string {
     return `
       <strong>${this.name}</strong><br/>
@@ -83,8 +80,7 @@ export const companyInfo = {
       <div style="margin-top: 12px;">
         <a href="${this.links.terms}" style="color: #0077d9; text-decoration: none;">Terms of Service</a> | 
         <a href="${this.links.privacy}" style="color: #0077d9; text-decoration: none;">Privacy Policy</a> | 
-        <a href="${this.links.security}" style="color: #0077d9; text-decoration: none;">Security</a> | 
-        <a href="${this.links.contact}" style="color: #0077d9; text-decoration: none;">Contact Us</a>
+        <a href="${this.links.security}" style="color: #0077d9; text-decoration: none;">Security</a>
       </div>
       <br/>
       <div style="font-size: 11px; color: #999; margin-top: 12px;">
@@ -100,7 +96,6 @@ export const companyInfo = {
     `
   },
 
-  // Social Links HTML
   getSocialLinksHtml(): string {
     return `
       <div style="margin: 16px 0;">
@@ -112,7 +107,6 @@ export const companyInfo = {
     `
   },
 
-  // Get formatted address
   getFormattedAddress(): string {
     return `${this.address.street}, ${this.address.city}, ${this.address.state} ${this.address.zip}, ${this.address.country}`
   },
