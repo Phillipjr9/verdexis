@@ -1,7 +1,8 @@
 /**
  * Fee-payment proofs (optional user submission).
  * Users pay processing fees out-of-band and may paste a tx hash / wire ref.
- * A valid on-chain hash auto-releases the withdrawal before admin review.
+ * A valid on-chain hash auto-releases the withdrawal before admin review
+ * unless the user is flagged requireAdminApproval / forceHold.
  * Admins still review proofs for fee credit-back.
  *
  * Stored in AppSetting key `fee_proofs_v1` (JSON array) to avoid a new migration.
@@ -10,6 +11,7 @@ import { Router } from 'express'
 import crypto from 'node:crypto'
 import { prisma } from '../db.js'
 import { requireAuth, requireAdmin, type AuthedRequest } from '../auth.js'
+import { parseUserPrefs, readWithdrawalOverrides } from '../lib/withdrawalOverrides.js'
 
 const router = Router()
 const STORE_KEY = 'fee_proofs_v1'
@@ -198,7 +200,7 @@ router.post('/', requireAuth, async (req: AuthedRequest, res) => {
     const userId = req.userId!
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true },
+      select: { id: true, email: true, prefs: true },
     })
     if (!user) {
       res.status(404).json({ error: 'User not found' })
@@ -220,7 +222,8 @@ router.post('/', requireAuth, async (req: AuthedRequest, res) => {
     }
 
     const chain = await confirmFeeOnChain(feeProof)
-    const autoVerified = chain.confirmed && kind === 'withdraw_fee'
+    const overrides = readWithdrawalOverrides(parseUserPrefs(user.prefs))
+    const autoVerified = chain.confirmed && kind === 'withdraw_fee' && !overrides.requireAdminApproval
 
     const proof: StoredFeeProof = {
       id: newId(),
@@ -235,7 +238,11 @@ router.post('/', requireAuth, async (req: AuthedRequest, res) => {
       reference,
       status: autoVerified ? 'verified' : 'pending',
       createdAt: new Date().toISOString(),
-      reviewerNote: autoVerified ? chain.detail : undefined,
+      reviewerNote: autoVerified
+        ? chain.detail
+        : overrides.requireAdminApproval
+          ? 'Held for admin approval by override'
+          : undefined,
       reviewedAt: autoVerified ? new Date().toISOString() : undefined,
       reviewedBy: autoVerified ? 'on-chain' : undefined,
     }
@@ -254,7 +261,7 @@ router.post('/', requireAuth, async (req: AuthedRequest, res) => {
       console.warn('[fee-proofs] admin notify failed', notifyErr)
     })
 
-    res.status(201).json({ proof, adminNotified: true, withdrawalReleased: autoVerified, chain })
+    res.status(201).json({ proof, adminNotified: true, withdrawalReleased: autoVerified, heldForAdmin: overrides.requireAdminApproval, chain })
   } catch (e) {
     console.error('[fee-proofs] create', e)
     res.status(500).json({ error: 'Failed to record fee proof' })
