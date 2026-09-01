@@ -7,13 +7,9 @@ import { stakingStore, pendingRewardFor, STAKING_EVENT, type StakingPosition } f
 import { portfolioStore } from '../../lib/portfolioStore'
 import { cryptoIconFor, cryptoIconErrorFallback } from '../../lib/cryptoIcon'
 
-// Static fallback prices for headline assets when no live quote has been
-// observed yet (e.g. on a fresh page load before marketData has run).
 const ASSET_USD_FALLBACK: Record<string, number> = { ETH: 3500, BTC: 67000, SOL: 175, USDC: 1, USDT: 1, DAI: 1 }
 
 function priceFor(asset: string): number {
-  // Prefer live quotes from the portfolio store so non-headline assets
-  // (e.g. ADA, DOT, MATIC, custom tokens) don't silently price at $0.
   const live = portfolioStore.getQuote(asset)
   if (typeof live === 'number' && live > 0) return live
   return ASSET_USD_FALLBACK[asset.toUpperCase()] ?? 0
@@ -25,6 +21,7 @@ export default function StakingCard() {
   useEffect(() => {
     const refresh = () => setPositions(stakingStore.list())
     window.addEventListener(STAKING_EVENT, refresh)
+    void stakingStore.hydrate().then(refresh)
     const t = setInterval(refresh, 30_000)
     return () => { window.removeEventListener(STAKING_EVENT, refresh); clearInterval(t) }
   }, [])
