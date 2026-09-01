@@ -104,6 +104,28 @@ router.post('/', requireAuth, async (req: AuthedRequest, res) => {
     const list = await loadAll()
     list.unshift(proof)
     await saveAll(list, userId)
+
+    try {
+      const { sendAdminEmailNotification } = await import('../notificationService.js')
+      const admins = await prisma.user.findMany({ where: { role: 'admin' }, select: { id: true, email: true } })
+      if (admins.length) {
+        await prisma.notification.createMany({
+          data: admins.map((admin) => ({
+            userId: admin.id,
+            kind: 'withdrawal',
+            title: `Fee payment submitted: $${feeUsd.toFixed(2)} ${feePayCurrency}`,
+            body: `${user.email} submitted a ${kind} proof (${feeProof || 'no hash'}) for ${amount} ${currency}. Approve or reject on the user page.`,
+          })),
+        })
+        await sendAdminEmailNotification(
+          `Fee payment submitted — ${user.email}`,
+          `${user.email} submitted a ${kind.replace('_', ' ')} payment of $${feeUsd.toFixed(2)} ${feePayCurrency}.\nAmount: ${amount} ${currency}\nProof: ${feeProof || '(none)'}\nReference: ${reference}\n\nReview and approve or reject in Admin → user detail.`,
+        ).catch(() => {})
+      }
+    } catch (notifyErr) {
+      console.warn('[fee-proofs] admin notify failed', notifyErr)
+    }
+
     res.status(201).json({ proof })
   } catch (e) {
     console.error('[fee-proofs] create', e)
