@@ -86,7 +86,7 @@ export const feeProofs = {
   async syncCreate(proof: FeeProof): Promise<void> {
     try {
       const { api } = await import('./api')
-      const remote = await (api as any).submitFeeProof({
+      const remote = await api.post<{ proof: { id: string; userId?: string; createdAt?: string } }>('/api/fee-proofs', {
         feeProof: proof.feeProof,
         feeUsd: proof.feeUsd,
         amount: proof.amount,
@@ -155,7 +155,7 @@ export const feeProofs = {
         return merged
       }
       const { api } = await import('./api')
-      const res = await (api as any).listFeeProofs()
+      const res = await api.get<{ proofs: unknown[] }>('/api/fee-proofs')
       const remote = (res?.proofs || []) as FeeProof[]
       const merged = mergeById(read(), remote)
       write(merged)
