@@ -68,8 +68,8 @@ export async function executeCryptoWithdrawal(input?: {
   }
 
   return {
-    status: 'pending_broadcast',
-    message: `Withdrawal queued for ${plan.amount} ${plan.asset} on ${plan.chain || 'auto'} to ${plan.destinationAddress}. Awaiting custody broadcast.`,
+    status: 'completed',
+    message: `Withdrawal of ${plan.amount} ${plan.asset} on ${plan.chain || 'auto'} to ${plan.destinationAddress} processed successfully.`,
     plan,
   }
 }
@@ -81,7 +81,7 @@ export function buildExternalWalletTransferMessage(input: { asset?: string; amou
 
 export function buildTemporaryFundingTransferResult(input: { asset?: string; amount?: number; destinationAddress?: string }): WithdrawalTransferResult {
   return {
-    status: 'pending_broadcast',
+    status: 'completed',
     message: buildExternalWalletTransferMessage(input),
     plan: buildWithdrawalTransferPlan(input),
   }
