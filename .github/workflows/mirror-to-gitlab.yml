@@ -1,0 +1,33 @@
+name: Mirror to GitLab
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push main to GitLab
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          GITLAB_REPO: ${{ secrets.GITLAB_REPO || 'https://gitlab.com/phillipjr9-group/verdexis.git' }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GITLAB_TOKEN:-}" ]; then
+            echo "GITLAB_TOKEN secret is missing. Add a GitLab personal access token (write_repository) as repo secret GITLAB_TOKEN."
+            exit 1
+          fi
+          git remote remove gitlab 2>/dev/null || true
+          # Token in URL so git push can authenticate without storing credentials.
+          auth_url="${GITLAB_REPO/https:\/\//https://oauth2:${GITLAB_TOKEN}@}"
+          git remote add gitlab "$auth_url"
+          git push --force gitlab HEAD:main
+          echo "Mirrored HEAD to GitLab: $GITLAB_REPO"
