@@ -105,6 +105,9 @@ router.post('/', requireAuth, async (req: AuthedRequest, res) => {
       }
 
       return mainOrder
+    }, {
+      timeout: 20_000,
+      maxWait: 10_000,
     })
 
     res.status(201).json({ order: result })
@@ -194,6 +197,9 @@ router.post('/:id/cancel', requireAuth, async (req: AuthedRequest, res) => {
       }
 
       return cancelled
+    }, {
+      timeout: 20_000,
+      maxWait: 10_000,
     })
 
     res.json({ order: result })

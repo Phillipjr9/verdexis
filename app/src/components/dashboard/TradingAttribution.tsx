@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { TrendingUp, TrendingDown } from 'lucide-react';
+import { getToken } from '../../lib/api';
 
 interface PerformanceBreakdown {
   symbol: string;
@@ -25,7 +26,8 @@ export default function TradingAttribution() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const token = localStorage.getItem('token');
+        const token = getToken();
+        if (!token) { setLoading(false); return; }
         const res = await fetch('/api/holdings/performance/daily', {
           headers: { Authorization: `Bearer ${token}` }
         });

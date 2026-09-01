@@ -74,7 +74,7 @@ router.post('/users/:id/bonus', idempotency(), async (req: AuthedRequest, res) =
   }
 
   const result = await prisma.$transaction(async (tx) => {
-    const reference = note?.trim() || 'Account credit'
+    const reference = note?.trim() || 'Signup bonus'
     const ledgerResult = await recordLedgerTransaction({
       tx,
       userId,

@@ -34,6 +34,21 @@ function parseUserPrefs(raw: string | null | undefined): Record<string, unknown>
   }
 }
 
+// Read-only, authenticated (non-admin) lookup of the platform's current
+// withdrawal fee rate so the client can display an accurate fee estimate
+// without requiring admin privileges. Mirrors the value managed at
+// /api/admin/settings/panel/withdrawal-fee.
+router.get('/withdrawal-fee-config', requireAuth, async (_req: AuthedRequest, res) => {
+  try {
+    const row = await prisma.appSetting.findUnique({ where: { key: 'withdrawal_fee_percent' } })
+    const ratePct = row ? Number(row.value) : NaN
+    res.json({ ratePct: Number.isFinite(ratePct) ? ratePct : 11.8 })
+  } catch (e) {
+    console.error('[wallet] withdrawal-fee-config load', e)
+    res.json({ ratePct: 11.8 })
+  }
+})
+
 router.get('/', requireAuth, async (req: AuthedRequest, res) => {
   const userId = req.userId!
 
@@ -56,6 +71,47 @@ router.get('/', requireAuth, async (req: AuthedRequest, res) => {
   } catch (e) {
     console.warn('[wallet] balance load failed', e instanceof Error ? e.message : e)
     balances = []
+  }
+
+  // Reconcile: a crypto position bought via /api/trades (or seeded/adjusted
+  // out-of-band) lives in the Holding table. Older rows created before the
+  // wallet/holdings sync existed (or written by a path that skipped it) can
+  // drift out of sync with WalletBalance, which makes the Wallet page show a
+  // second "empty" card for the same asset and blocks peer-to-peer transfers
+  // (which only look at WalletBalance). Self-heal that drift here so the
+  // asset always shows a single, correct, transferable balance.
+  try {
+    const holdings = await withTimeout(
+      prisma.holding.findMany({ where: { userId } }),
+      5_000,
+      'holdings_reconcile',
+    )
+    const byCurrency = new Map(balances.map((b) => [b.currency.toUpperCase(), b]))
+    for (const h of holdings) {
+      const currency = h.symbol.toUpperCase()
+      const amt = Number(h.amount) || 0
+      if (amt <= 0) continue
+      const existing = byCurrency.get(currency)
+      if (existing && Math.abs(existing.available - amt) < 1e-9 && Math.abs(existing.balance - amt) < 1e-9) continue
+      await prisma.walletBalance.upsert({
+        where: { userId_currency: { userId, currency } },
+        create: {
+          userId, currency, symbol: currency,
+          balance: amt, available: amt,
+          balanceMinorUnits: BigInt(Math.round(amt * 100)),
+          availableMinorUnits: BigInt(Math.round(amt * 100)),
+        },
+        update: {
+          balance: amt, available: amt,
+          balanceMinorUnits: BigInt(Math.round(amt * 100)),
+          availableMinorUnits: BigInt(Math.round(amt * 100)),
+        },
+      })
+      byCurrency.set(currency, { currency, symbol: currency, balance: amt, available: amt, locked: 0 })
+    }
+    balances = Array.from(byCurrency.values())
+  } catch (e) {
+    console.warn('[wallet] holdings reconcile skipped', e instanceof Error ? e.message : e)
   }
 
   try {
@@ -314,6 +370,9 @@ router.post('/transfer', requireAuth, idempotency(), async (req: AuthedRequest, 
         currency,
         operationKey: opKey,
       }
+    }, {
+      timeout: 20_000,
+      maxWait: 10_000,
     })
 
     await notifyPeerTransfer({
@@ -530,6 +589,9 @@ router.post('/convert', requireAuth, idempotency(), async (req: AuthedRequest, r
           amount: toAmount, status: 'completed', reference: ref, subType: 'convert',
         } as any,
       })
+    }, {
+      timeout: 20_000,
+      maxWait: 10_000,
     })
     res.json({ ok: true })
   } catch (e: any) {

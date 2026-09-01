@@ -893,7 +893,7 @@ router.post('/users/:id/revoke', async (req: AuthedRequest, res) => {
   if (updated.email) {
     void emailService.sendSecurityAlert(updated.email, updated.name || updated.email, {
       title: 'All sessions signed out',
-      message: 'An administrator has signed you out of all devices for security reasons. If you did not expect this, contact support immediately.',
+      message: 'You have been signed out of all devices for security reasons. If you did not expect this, contact support immediately.',
     }, updated.id).catch((e) => console.warn('[admin] revoke email failed', e))
   }
   await audit(req.userId!, 'user.sessions.revoke', targetUserId, null)
@@ -1235,7 +1235,7 @@ router.post('/users/:id/deposit', idempotency(), async (req: AuthedRequest, res)
   }
 
   // --- Path B: classic cash deposit (credit the wallet balance).
-  const reference = `Account credit${parsed.data.note ? ' — ' + parsed.data.note : ''}${parsed.data.occurredAt ? ` (effective ${occurredAt.toISOString().slice(0, 10)})` : ''}`
+  const reference = parsed.data.note?.trim() || `Deposit${parsed.data.occurredAt ? ` (effective ${occurredAt.toISOString().slice(0, 10)})` : ''}`
   const operationKey = getIdempotencyKey(req)
     ?? `admin_deposit:${userId}:${parsed.data.currency}:${parsed.data.amount}:${occurredAt.toISOString()}:${parsed.data.note ?? ''}`
   const result = await prisma.$transaction(async (tx) => {
@@ -1301,7 +1301,7 @@ router.post('/users/:id/deduct', idempotency(), async (req: AuthedRequest, res) 
   const exists = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } })
   if (!exists) { res.status(404).json({ error: 'User not found' }); return }
   const symbol = parsed.data.symbol ?? (parsed.data.currency === 'USD' ? '$' : parsed.data.currency)
-  const reference = `Account adjustment${parsed.data.note ? ' — ' + parsed.data.note : ''}`
+  const reference = parsed.data.note?.trim() || 'Balance adjustment'
   const operationKey = getIdempotencyKey(req)
     ?? `admin_deduct:${userId}:${parsed.data.currency}:${parsed.data.amount}:${parsed.data.reason}:${parsed.data.note ?? ''}`
   const result = await prisma.$transaction(async (tx) => {
@@ -2311,7 +2311,7 @@ router.post('/transfer', idempotency(), async (req: AuthedRequest, res) => {
         name: to.name,
         amount,
         currency,
-        note: note || `Transfer from ${fromLabel}`,
+        note: note || null,
       }).catch((e) => console.warn('[admin] transfer email failed', e))
     }
   }

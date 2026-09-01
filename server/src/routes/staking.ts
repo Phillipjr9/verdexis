@@ -86,6 +86,9 @@ router.post('/positions', requireAuth, async (req: AuthedRequest, res) => {
       })
 
       return position
+    }, {
+      timeout: 20_000,
+      maxWait: 10_000,
     })
 
     res.status(201).json({ position: result })
@@ -198,6 +201,9 @@ router.post('/positions/:id/unstake', requireAuth, async (req: AuthedRequest, re
       })
 
       return updated
+    }, {
+      timeout: 20_000,
+      maxWait: 10_000,
     })
 
     res.json({ position: result })
@@ -294,6 +300,9 @@ router.post('/rewards/:id/claim', requireAuth, async (req: AuthedRequest, res) =
       })
 
       return updated
+    }, {
+      timeout: 20_000,
+      maxWait: 10_000,
     })
 
     res.json({ reward: result })

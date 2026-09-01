@@ -314,6 +314,40 @@ export const api = {
     getCookiePreferences: () => request<Record<string, unknown>>('/api/user-settings/cookie-preferences'),
     patchCookiePreferences: (data: Record<string, unknown>) => request<Record<string, unknown>>('/api/user-settings/cookie-preferences', { method: 'PATCH', body: JSON.stringify(data) }),
   },
+
+  staking: {
+    listPositions: () => request<{ positions: ApiStakingPosition[] }>('/api/staking/positions'),
+    openPosition: (payload: { asset: string; amount: number; apy: number; yieldFrequency?: 'daily' | 'weekly' | 'monthly' }) =>
+      request<{ position: ApiStakingPosition }>('/api/staking/positions', { method: 'POST', body: JSON.stringify(payload) }),
+    unstake: (id: string) =>
+      request<{ position: ApiStakingPosition }>(`/api/staking/positions/${encodeURIComponent(id)}/unstake`, { method: 'POST' }),
+    listRewards: () =>
+      request<{ rewards: unknown[]; summary: { totalEarned: number; totalClaimed: number; byCurrency: Record<string, { earned: number; claimed: number }> } }>('/api/staking/rewards'),
+  },
+}
+
+export interface ApiYieldReward {
+  id: string
+  amount: number
+  asset: string
+  earnedAt: string
+  claimedAt: string | null
+}
+
+export interface ApiStakingPosition {
+  id: string
+  userId: string
+  asset: string
+  amount: number
+  apy: number // percentage points, e.g. 3.8 for 3.8%
+  startedAt: string
+  unstakedAt: string | null
+  totalYieldEarned: number
+  yieldFrequency: 'daily' | 'weekly' | 'monthly'
+  createdAt: string
+  updatedAt: string
+  status: 'active' | 'unstaked'
+  yieldRewards: ApiYieldReward[]
 }
 
 export async function isApiOnline(): Promise<boolean> {

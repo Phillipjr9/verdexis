@@ -68,7 +68,7 @@ function buildWalletMovementHtml(opts: {
         </tr>
         <tr>
           <td style="padding:12px 16px;color:#64748b;font-size:14px;border-top:1px solid #e2e8f0">Type</td>
-          <td style="padding:12px 16px;text-align:right;border-top:1px solid #e2e8f0">${isCredit ? 'Account credit' : 'Account debit'}</td>
+          <td style="padding:12px 16px;text-align:right;border-top:1px solid #e2e8f0">${isCredit ? 'Deposit' : 'Debit'}</td>
         </tr>
         ${opts.note ? `<tr>
           <td style="padding:12px 16px;color:#64748b;font-size:14px;border-top:1px solid #e2e8f0">Note</td>
@@ -173,7 +173,7 @@ export async function notifyAdminFundedUser(opts: {
     amount: opts.amount,
     currency: opts.currency,
     title: `Funds received: ${amt}`,
-    body: `An administrator credited ${amt} to your Verdexis wallet.${opts.note ? ` Note: ${opts.note}` : ''}`,
+    body: opts.note || `${amt} has been added to your account.`,
     kind: 'deposit',
     note: opts.note,
   })
@@ -196,7 +196,7 @@ export async function notifyAdminDeductedUser(opts: {
     amount: opts.amount,
     currency: opts.currency,
     title: `Account debit: ${amt}`,
-    body: `An administrator debited ${amt} from your Verdexis wallet.${opts.note ? ` Note: ${opts.note}` : ''}`,
+    body: opts.note || `${amt} has been deducted from your account.`,
     kind: 'transfer',
     note: opts.note,
   })

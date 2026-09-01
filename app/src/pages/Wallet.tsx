@@ -1912,7 +1912,7 @@ export default function WalletPage() {
                 <p className="text-xs text-[#737373] mt-1 truncate">Available: {w.symbol}{w.available.toLocaleString(undefined, { minimumFractionDigits: w.currency === 'USD' ? 2 : 0, maximumFractionDigits: w.currency === 'USD' ? 2 : 8 })}</p>
               </div>
             ))}
-            {holdings.map((h) => (
+            {holdings.filter((h) => !wallet.some((w) => w.currency.toUpperCase() === h.symbol.toUpperCase())).map((h) => (
               <div key={`holding-${h.id}`} className="glass-card p-4 hover:border-[#0C8B44]/30 transition-all cursor-pointer">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2 min-w-0">

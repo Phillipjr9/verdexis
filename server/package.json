@@ -7,7 +7,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "node scripts/generate-prisma-client.mjs && tsx watch src/index.ts",
+    "dev": "node scripts/restore-admin-ts.mjs && node scripts/generate-prisma-client.mjs && tsx watch src/index.ts",
     "build": "node scripts/restore-admin-ts.mjs && node scripts/generate-prisma-client.mjs && npx tsc -p tsconfig.json --skipLibCheck",
     "start": "bash scripts/prestart.sh && node dist/index.js",
     "token-registry-agent": "tsx src/scripts/tokenRegistryAgent.ts",

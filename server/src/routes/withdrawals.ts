@@ -54,7 +54,7 @@ router.get('/config', requireAuth, async (_req, res) => {
     ],
     message: enabled
       ? 'On-chain withdrawals are active for the configured networks. Funds will be sent directly to your wallet address.'
-      : 'Withdrawals are processed manually by an administrator. Submit your request and you will be notified once it is approved and sent.',
+      : 'Withdrawals are processed manually. Submit your request and you will be notified once it is approved and sent.',
   })
 })
 

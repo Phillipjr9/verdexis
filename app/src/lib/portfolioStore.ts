@@ -86,91 +86,127 @@ const DEFAULT_TRADES: Trade[] = []
 
 const DEFAULT_WALLET: WalletBalance[] = [
   { currency: 'USD', symbol: '$', balance: 0, available: 0 },
-  { currency: 'BTC', symbol: 'B', balance: 0, available: 0 },
 ]
 
 const DEFAULT_TRANSACTIONS: WalletTransaction[] = []
 
-function symbolFor(currency: string): string {
-  const c = (currency || '').toUpperCase()
-  if (c === 'USD' || c === 'USDT' || c === 'USDC') return '$'
-  if (c === 'BTC') return '₿'
-  if (c === 'ETH') return 'Ξ'
-  return c.slice(0, 1) || '?'
+interface ApiHolding { id: string; symbol: string; name: string; amount: number; avgPrice: number; type: string }
+interface ApiBalance { currency: string; symbol: string; balance: number; available: number }
+interface ApiTransaction { id: string; kind: 'deposit' | 'withdraw' | 'transfer' | 'dividend' | 'interest' | 'fee'; currency: string; amount: number; reference?: string | null; status: string; createdAt: string }
+interface ApiTrade { id: string; symbol: string; side: 'buy' | 'sell'; amount: number; price: number; total: number; createdAt: string }
+
+function sanitizeActivityDescription(reference: string): string {
+  return reference
+    .replace(/\bfrom\s+admin\b/gi, 'from system')
+    .replace(/\badmin\b/gi, 'system')
+    .replace(/\badministrative\b/gi, 'service')
 }
 
-function sanitizeActivityDescription(ref: string): string {
-  if (!ref || typeof ref !== 'string') return 'Activity'
-  return ref.replace(/[<>]/g, '').slice(0, 120)
-}
+const PORTFOLIO_EVENT = 'verdexis:portfolio'
 
-type ApiHolding = { id?: string; symbol?: string; name?: string; amount?: number; avgPrice?: number }
-type ApiBalance = { currency?: string; symbol?: string; balance?: number; available?: number }
-type ApiTransaction = {
-  id: string
-  kind: string
-  amount?: number
-  currency?: string
-  reference?: string
-  createdAt: string
-  status?: string
-}
-type ApiTrade = {
-  id: string
-  symbol?: string
-  side: 'buy' | 'sell'
-  price?: number
-  amount?: number
-  total?: number
-  createdAt: string
-}
-
-const listeners = new Set<() => void>()
 function emit() {
-  listeners.forEach((fn) => {
-    try { fn() } catch { /* ignore */ }
-  })
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(PORTFOLIO_EVENT))
+  }
 }
 
-class PortfolioStore {
-  private holdings: PortfolioHolding[] = []
-  private trades: Trade[] = []
-  private wallet: WalletBalance[] = []
-  private transactions: WalletTransaction[] = []
+function symbolFor(currency: string): string {
+  const map: Record<string, string> = { USD: '$', BTC: 'B', ETH: 'E', SOL: 'S', USDC: '$', USDT: '$' }
+  return map[currency] || currency
+}
+
+class PortfolioStoreImpl {
+  private holdings: PortfolioHolding[]
+  private trades: Trade[]
+  private wallet: WalletBalance[]
+  private transactions: WalletTransaction[]
   private hydrated = false
+  // Most recent live quote map keyed by both coin id (e.g. 'bitcoin') and
+  // upper-case symbol (e.g. 'BTC'). Updated by markToMarket so wallet-value
+  // helpers can convert non-USD balances to USD using the same prices the
+  // dashboard already uses for holdings. Falls back to baseline rates below.
+  private lastQuotes: Record<string, number> = {}
 
   constructor() {
     this.holdings = this.load(STORAGE_KEYS.holdings, DEFAULT_HOLDINGS)
     this.trades = this.load(STORAGE_KEYS.trades, DEFAULT_TRADES)
-    this.wallet = this.load(STORAGE_KEYS.wallet, DEFAULT_WALLET)
+    this.wallet = this.dedupeWallet(this.load(STORAGE_KEYS.wallet, DEFAULT_WALLET))
     this.transactions = this.load(STORAGE_KEYS.transactions, DEFAULT_TRANSACTIONS)
+    // Normalize any timestamp strings that may have been persisted by
+    // earlier runs so consumers can safely call `timestamp.getTime()`.
+    this.ensureTimestamps()
+  }
+
+  private ensureTimestamps() {
     try {
       this.trades = (this.trades || []).map((t: any) => ({ ...t, timestamp: typeof t?.timestamp === 'string' ? new Date(t.timestamp) : t?.timestamp }))
       this.transactions = (this.transactions || []).map((tx: any) => ({ ...tx, timestamp: typeof tx?.timestamp === 'string' ? new Date(tx.timestamp) : tx?.timestamp }))
-    } catch { /* ignore */ }
-  }
-
-  private load<T>(key: string, fallback: T): T {
-    if (typeof window === 'undefined') return fallback
-    try {
-      const raw = localStorage.getItem(key)
-      if (!raw) return fallback
-      return JSON.parse(raw) as T
     } catch {
-      return fallback
+      /* ignore */
     }
   }
 
-  private save(key: string, value: unknown) {
-    if (typeof window === 'undefined') return
+  private load<T>(key: string, fallback: T): T {
     try {
-      localStorage.setItem(key, JSON.stringify(value))
+      const stored = localStorage.getItem(key)
+      if (stored) return JSON.parse(stored)
+    } catch { /* ignore */ }
+    return fallback
+  }
+
+  private save(key: string, data: unknown) {
+    try {
+      localStorage.setItem(key, JSON.stringify(data))
     } catch { /* ignore */ }
   }
 
-  subscribe(fn: () => void): () => void {
-    listeners.add(fn)
-    return () => { listeners.delete(fn) }
+
+  /** Keep one row per currency (uppercase). Prevents duplicate BTC cards. */
+  private dedupeWallet(list: WalletBalance[]): WalletBalance[] {
+    const map = new Map<string, WalletBalance>()
+    for (const b of list || []) {
+      if (!b || typeof b.currency !== 'string' || !b.currency) continue
+      const currency = b.currency.toUpperCase()
+      const prev = map.get(currency)
+      const nextBal = typeof b.balance === 'number' && isFinite(b.balance) ? b.balance : 0
+      const nextAvail = typeof b.available === 'number' && isFinite(b.available) ? b.available : 0
+      if (!prev || Math.abs(nextBal) >= Math.abs(prev.balance)) {
+        map.set(currency, {
+          currency,
+          symbol: b.symbol || (prev && prev.symbol) || symbolFor(currency),
+          balance: nextBal,
+          available: nextAvail,
+        })
+      }
+    }
+    if (!map.has('USD')) {
+      map.set('USD', { currency: 'USD', symbol: '$', balance: 0, available: 0 })
+    }
+    return Array.from(map.values())
+  }
+
+  private mergeWalletBalances(apiBalances: WalletBalance[]): WalletBalance[] {
+    const merged = new Map<string, WalletBalance>()
+    for (const defaultBalance of DEFAULT_WALLET) {
+      merged.set(defaultBalance.currency.toUpperCase(), {
+        currency: defaultBalance.currency.toUpperCase(),
+        symbol: defaultBalance.symbol,
+        balance: defaultBalance.balance,
+        available: defaultBalance.available,
+      })
+    }
+
+    for (const balance of apiBalances) {
+      const currency = balance.currency.toUpperCase()
+      merged.set(currency, {
+        currency,
+        symbol: balance.symbol || symbolFor(currency),
+        balance: typeof balance.balance === 'number' && isFinite(balance.balance) ? balance.balance : 0,
+        available: typeof balance.available === 'number' && isFinite(balance.available) ? balance.available : 0,
+      })
+    }
+
+    return Array.from(merged.values())
   }
 
   async hydrate(force = false): Promise<void> {
@@ -255,7 +291,7 @@ class PortfolioStore {
               : `${(kind[0] || '?').toUpperCase()}${kind.slice(1)} ${currency}`
             return {
               id: tx.id,
-              type: kind as WalletTransaction['type'],
+              type: kind,
               amount: signedAmount,
               currency,
               description,
@@ -264,7 +300,7 @@ class PortfolioStore {
             }
           })
 
-        this.wallet = this.mergeWalletBalances(apiBalances)
+        this.wallet = this.dedupeWallet(this.mergeWalletBalances(apiBalances))
         // Merge: keep any local-only pending transactions (e.g. deposits
         // awaiting admin approval) that the server doesn't know about yet.
         // Without this, every 30s hydrate cycle silently drops them.
@@ -335,61 +371,104 @@ class PortfolioStore {
 
   getHoldings(): PortfolioHolding[] { return this.holdings }
 
-  getWallet(): WalletBalance[] { return this.wallet }
+  /**
+   * Update currentPrice / value / pnl / allocation from a live quote map keyed by
+   * coin id (e.g. 'bitcoin') OR lower-case symbol (e.g. 'btc'). Called whenever
+   * the crypto market list refreshes so the portfolio actually moves with the market.
+   * Persists to localStorage and emits a single change event.
+   */
+  markToMarket(quotes: Record<string, number>): void {
+    // Always cache quotes (even when no holdings) so wallet conversions can
+    // use them. Keys come in as coin id ('bitcoin') and/or symbol ('btc').
+    let quoteChanged = false
+    for (const [k, v] of Object.entries(quotes)) {
+      if (typeof v === 'number' && isFinite(v) && v > 0) {
+        const lk = k.toLowerCase()
+        const uk = k.toUpperCase()
+        if (this.lastQuotes[lk] !== v || this.lastQuotes[uk] !== v) quoteChanged = true
+        this.lastQuotes[lk] = v
+        this.lastQuotes[uk] = v
+      }
+    }
+    if (!this.holdings.length) {
+      // No holdings, but a wallet conversion rate just changed — let
+      // subscribers (Dashboard total net worth, charts) re-render.
+      if (quoteChanged) emit()
+      return
+    }
+    let changed = false
+    for (const h of this.holdings) {
+      const live = quotes[h.id] ?? quotes[h.symbol?.toLowerCase()] ?? quotes[h.symbol]
+      if (typeof live !== 'number' || !isFinite(live) || live <= 0) continue
+      if (live === h.currentPrice) continue
+      h.currentPrice = live
+      h.value = h.quantity * live
+      const cost = h.avgBuyPrice * h.quantity
+      h.pnl = h.value - cost
+      h.pnlPercent = cost > 0 ? (h.pnl / cost) * 100 : 0
+      changed = true
+    }
+    if (!changed) return
+    const totalValue = this.holdings.reduce((s, x) => s + x.value, 0)
+    this.holdings.forEach((h) => { h.allocation = totalValue > 0 ? Math.round((h.value / totalValue) * 100) : 0 })
+    this.save(STORAGE_KEYS.holdings, this.holdings)
+    emit()
+  }
 
   getTrades(): Trade[] {
     return [...this.trades].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+  }
+
+  getWallet(): WalletBalance[] { return this.dedupeWallet(this.wallet) }
+
+  /** Latest live quote (USD per unit) for a currency / coin id. Returns
+   *  null when no live quote has been seen yet so callers can fall back
+   *  to a sensible default rather than silently using 0. */
+  getQuote(currencyOrId: string): number | null {
+    if (!currencyOrId) return null
+    const cur = currencyOrId.toUpperCase()
+    if (cur === 'USD' || cur === 'USDC' || cur === 'USDT') return 1
+    const live = this.lastQuotes[cur] ?? this.lastQuotes[currencyOrId.toLowerCase()]
+    return typeof live === 'number' && live > 0 ? live : null
+  }
+
+  /** Single source of truth for the user's cash side. Sums every wallet
+   *  entry converted to USD: USD/USDC/USDT count as 1:1, other currencies
+   *  use the latest live quote (cached from markToMarket) and fall back to
+   *  a static baseline only if no live price has ever been seen.  */
+  getWalletValueUsd(): number {
+    const baseline: Record<string, number> = { USD: 1, USDC: 1, USDT: 1, BTC: 67432, ETH: 3521, SOL: 178.45, ADA: 0.52 }
+    let total = 0
+    for (const w of this.wallet) {
+      const cur = w.currency.toUpperCase()
+      if (cur === 'USD' || cur === 'USDC' || cur === 'USDT') { total += w.balance; continue }
+      const live = this.lastQuotes[cur] ?? this.lastQuotes[cur.toLowerCase()]
+      const rate = (typeof live === 'number' && live > 0) ? live : (baseline[cur] ?? 0)
+      total += w.balance * rate
+    }
+    return total
+  }
+
+  /** Net worth = holdings (positions) value at market + wallet cash + crypto
+   *  wallet balances valued at market. This is the figure surfaced as the
+   *  big "Total Net Worth" on the dashboard and matches the Wallet page. */
+  getNetWorth(): number {
+    const positions = this.holdings.reduce((s, h) => s + h.value, 0)
+    return positions + this.getWalletValueUsd()
   }
 
   getTransactions(): WalletTransaction[] {
     return [...this.transactions].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
   }
 
-  getTotalValue(): number {
-    if (!this.holdings.length) {
-      return this.wallet.reduce((s, b) => s + (b.balance || 0), 0)
-    }
-    let total = 0
-    for (const h of this.holdings) {
-      total += h.value || 0
-    }
-    for (const b of this.wallet) {
-      if ((b.currency || '').toUpperCase() === 'USD') total += b.balance || 0
-    }
-    return total
-  }
-
-  recalculateAllocations() {
-    const totalValue = this.holdings.reduce((s, x) => s + x.value, 0)
-    this.holdings.forEach((h) => { h.allocation = totalValue > 0 ? Math.round((h.value / totalValue) * 100) : 0 })
-    this.save(STORAGE_KEYS.holdings, this.holdings)
-  }
-
-  private mergeWalletBalances(apiBalances: WalletBalance[]): WalletBalance[] {
-    const map = new Map<string, WalletBalance>()
-    for (const b of DEFAULT_WALLET) {
-      map.set(b.currency.toUpperCase(), { ...b })
-    }
-    for (const b of apiBalances) {
-      map.set(b.currency.toUpperCase(), b)
-    }
-    return Array.from(map.values())
-  }
-
-  // Remaining methods preserved from prior good version for trade/deposit flows
-  addTrade(symbol: string, name: string, side: 'buy' | 'sell', price: number, quantity: number) {
+  executeTrade(symbol: string, name: string, side: 'buy' | 'sell', price: number, quantity: number, type: string, idempotencyKey?: string): Trade {
     const total = price * quantity
     const trade: Trade = {
-      id: `local-${Date.now()}`,
-      symbol,
-      name,
-      side,
-      type: 'market',
-      price,
-      quantity,
-      total,
+      id: Date.now().toString(),
+      symbol, name, side, type, price, quantity, total,
       timestamp: new Date(),
     }
+
     this.trades.push(trade)
     this.save(STORAGE_KEYS.trades, this.trades)
 
@@ -398,98 +477,214 @@ class PortfolioStore {
       if (existingIdx >= 0) {
         const h = this.holdings[existingIdx]
         const newQty = h.quantity + quantity
-        const newAvg = newQty > 0 ? ((h.avgBuyPrice * h.quantity) + (price * quantity)) / newQty : price
+        h.avgBuyPrice = newQty > 0 ? (h.avgBuyPrice * h.quantity + price * quantity) / newQty : 0
         h.quantity = newQty
-        h.avgBuyPrice = newAvg
         h.currentPrice = price
         h.value = newQty * price
+        const cost = h.avgBuyPrice * newQty
+        h.pnl = h.value - cost
+        h.pnlPercent = cost > 0 ? (h.pnl / cost) * 100 : 0
       } else {
         this.holdings.push({
-          id: symbol.toLowerCase(),
-          symbol,
-          name,
-          quantity,
-          avgBuyPrice: price,
-          currentPrice: price,
-          value: quantity * price,
-          pnl: 0,
-          pnlPercent: 0,
-          allocation: 0,
+          id: symbol.toLowerCase(), symbol, name, quantity,
+          avgBuyPrice: price, currentPrice: price, value: total,
+          pnl: 0, pnlPercent: 0, allocation: 0,
         })
+      }
+      // Debit the USD wallet so cash + holdings don't both count the same funds.
+      const usdWallet = this.wallet.find((w) => w.currency === 'USD')
+      if (usdWallet) {
+        usdWallet.balance = Math.max(0, usdWallet.balance - total)
+        usdWallet.available = Math.max(0, usdWallet.available - total)
+        this.save(STORAGE_KEYS.wallet, this.wallet)
       }
     } else if (existingIdx >= 0) {
       const h = this.holdings[existingIdx]
       h.quantity = Math.max(0, h.quantity - quantity)
       h.currentPrice = price
       h.value = h.quantity * price
+      // Recompute P&L against the (unchanged) average cost basis so the
+      // dashboard doesn't keep showing stale pre-sell P&L numbers.
+      const cost = h.avgBuyPrice * h.quantity
+      h.pnl = h.value - cost
+      h.pnlPercent = cost > 0 ? (h.pnl / cost) * 100 : 0
       if (h.quantity === 0) this.holdings.splice(existingIdx, 1)
+      // Credit the USD wallet with the sale proceeds.
+      const usdWallet = this.wallet.find((w) => w.currency === 'USD')
+      if (usdWallet) {
+        usdWallet.balance += total
+        usdWallet.available += total
+        this.save(STORAGE_KEYS.wallet, this.wallet)
+      }
     }
+
     const totalValue = this.holdings.reduce((s, h) => s + h.value, 0)
     this.holdings.forEach((h) => { h.allocation = totalValue > 0 ? Math.round((h.value / totalValue) * 100) : 0 })
     this.save(STORAGE_KEYS.holdings, this.holdings)
+
+    if (getToken()) {
+      api.postTrade({ symbol, name, side, amount: quantity, price, type: 'crypto' }, idempotencyKey)
+        .then(() => this.hydrate(true))
+        .catch(() => { /* offline; local cache wins */ })
+    }
     emit()
+    return trade
   }
 
-  addTransaction(type: WalletTransaction['type'], amount: number, currency: string, description: string, status: 'completed' | 'pending' = 'completed') {
+  addTransaction(type: 'deposit' | 'withdraw' | 'transfer' | 'dividend' | 'interest' | 'fee', amount: number, currency: string, description: string, idempotencyKey?: string, opts?: { skipApi?: boolean }): WalletTransaction {
+    // User deposits require admin approval on the server (status='pending',
+    // no balance credit) unless the actor is an admin. Mirror that locally
+    // so the UI doesn't show inflated balances or "completed" badges for
+    // requests that haven't actually settled. See server/src/routes/wallet.ts.
+    let role: 'user' | 'admin' = 'user'
+    try {
+      const raw = localStorage.getItem('verdexis_auth')
+      if (raw) {
+        const u = JSON.parse(raw) as { role?: string }
+        if (u?.role === 'admin') role = 'admin'
+      }
+    } catch { /* ignore */ }
+    const requiresApproval = type === 'deposit' && role !== 'admin'
+
     const tx: WalletTransaction = {
-      id: `local-tx-${Date.now()}`,
-      type,
-      amount,
-      currency: currency.toUpperCase(),
-      description,
+      id: Date.now().toString(),
+      type, amount, currency, description,
       timestamp: new Date(),
-      status,
+      status: requiresApproval ? 'pending' : 'completed',
     }
+
     this.transactions.push(tx)
     this.save(STORAGE_KEYS.transactions, this.transactions)
+
+    // Pending deposits do NOT credit the local wallet — server won't either,
+    // and the funds only land after an admin approves.
+    if (!requiresApproval) {
+      const walletEntry = this.wallet.find((w) => w.currency === currency)
+      if (walletEntry) {
+        walletEntry.balance += amount
+        walletEntry.available += amount
+        this.save(STORAGE_KEYS.wallet, this.wallet)
+      }
+    }
+
+    if (getToken() && !opts?.skipApi) {
+      api.postTransaction({ kind: type, currency, symbol: symbolFor(currency), amount: Math.abs(amount), reference: description }, idempotencyKey)
+        .then(() => this.hydrate(true))
+        .catch(() => { /* offline; local cache wins */ })
+    }
     emit()
+    return tx
   }
 
-  recordTransfer(fromCurrency: string, toCurrency: string, amount: number, description: string) {
+  /**
+   * Internal currency conversion (USD ↔ crypto inside the user's own
+   * wallet). Records both legs locally as COMPLETED transfers — they
+   * never sit in the deposit-approval queue because funds aren't entering
+   * the platform. Also debits/credits the appropriate balances and fires
+   * a single `/api/wallet/convert` call so the server stays in sync.
+   */
+  convert(fromCurrency: string, fromAmount: number, toCurrency: string, toAmount: number, description?: string, idempotencyKey?: string): { debit: WalletTransaction; credit: WalletTransaction } {
+    const ref = description || `Convert ${fromCurrency} → ${toCurrency}`
+    const now = new Date()
     const debit: WalletTransaction = {
-      id: `xfer-debit-${Date.now()}`,
-      type: 'transfer',
-      amount: -Math.abs(amount),
-      currency: fromCurrency.toUpperCase(),
-      description,
-      timestamp: new Date(),
-      status: 'completed',
+      id: `${Date.now()}-d`,
+      type: 'transfer', amount: -fromAmount, currency: fromCurrency, description: ref,
+      timestamp: now, status: 'completed',
     }
     const credit: WalletTransaction = {
-      id: `xfer-credit-${Date.now() + 1}`,
-      type: 'transfer',
-      amount: Math.abs(amount),
-      currency: toCurrency.toUpperCase(),
-      description,
-      timestamp: new Date(),
-      status: 'completed',
+      id: `${Date.now()}-c`,
+      type: 'transfer', amount: toAmount, currency: toCurrency, description: ref,
+      timestamp: now, status: 'completed',
     }
     this.transactions.push(debit, credit)
+
+    const src = this.wallet.find(w => w.currency === fromCurrency)
+    if (src) {
+      src.balance -= fromAmount
+      src.available -= fromAmount
+    }
+    let dst = this.wallet.find(w => w.currency === toCurrency)
+    if (!dst) {
+      dst = { currency: toCurrency, symbol: symbolFor(toCurrency), balance: 0, available: 0 }
+      this.wallet.push(dst)
+    }
+    dst.balance += toAmount
+    dst.available += toAmount
+
+    this.save(STORAGE_KEYS.wallet, this.wallet)
+    this.save(STORAGE_KEYS.transactions, this.transactions)
+
+    if (getToken()) {
+      api.convertCurrency({
+        fromCurrency, fromAmount, fromSymbol: symbolFor(fromCurrency),
+        toCurrency, toAmount, toSymbol: symbolFor(toCurrency),
+      }, idempotencyKey)
+        .then(() => this.hydrate(true))
+        .catch(() => { /* offline; local cache wins */ })
+    }
+    emit()
+    return { debit, credit }
+  }
+
+  /**
+   * Promote a pending deposit to completed and credit the wallet. Called by
+   * the on-chain verifier once a crypto deposit's transaction hash has been
+   * confirmed on the relevant network. Idempotent — re-confirming a tx that
+   * is already completed is a no-op.
+   */
+  confirmDeposit(txId: string): WalletTransaction | null {
+    const tx = this.transactions.find(t => t.id === txId)
+    if (!tx) return null
+    if (tx.type !== 'deposit') return tx
+    if (tx.status === 'completed') return tx
+
+    tx.status = 'completed'
+    const walletEntry = this.wallet.find(w => w.currency === tx.currency)
+    if (walletEntry) {
+      walletEntry.balance += tx.amount
+      walletEntry.available += tx.amount
+      this.save(STORAGE_KEYS.wallet, this.wallet)
+    }
     this.save(STORAGE_KEYS.transactions, this.transactions)
     emit()
+    return tx
   }
 
-  updateTransactionStatus(txId: string, status: 'completed' | 'pending') {
-    const tx = this.transactions.find(t => t.id === txId)
-    if (tx) {
-      tx.status = status
-      this.save(STORAGE_KEYS.transactions, this.transactions)
-      emit()
-    }
-  }
-
-  clear() {
-    this.holdings = []
-    this.trades = []
-    this.wallet = [...DEFAULT_WALLET]
-    this.transactions = []
-    this.hydrated = false
+  reset() {
     localStorage.removeItem(STORAGE_KEYS.holdings)
     localStorage.removeItem(STORAGE_KEYS.trades)
     localStorage.removeItem(STORAGE_KEYS.wallet)
     localStorage.removeItem(STORAGE_KEYS.transactions)
+    this.holdings = [...DEFAULT_HOLDINGS]
+    this.trades = [...DEFAULT_TRADES]
+    this.wallet = [...DEFAULT_WALLET]
+    this.transactions = [...DEFAULT_TRANSACTIONS]
+    this.hydrated = false
     emit()
   }
 }
 
-export const portfolioStore = new PortfolioStore()
+export const portfolioStore = new PortfolioStoreImpl()
+export const PORTFOLIO_EVENT_NAME = PORTFOLIO_EVENT
+
+if (typeof window !== 'undefined') {
+  setTimeout(() => { void portfolioStore.hydrate() }, 0)
+  window.addEventListener('verdexis:profile', () => { void portfolioStore.hydrate(true) })
+  // Pull fresh server state when the user returns to the tab so admin-approved
+  // deposits, transfers, etc. show up without a manual reload.
+  window.addEventListener('focus', () => { if (getToken()) void portfolioStore.hydrate(true) })
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && getToken()) void portfolioStore.hydrate(true)
+  })
+  // NotificationBell fires this when a deposit is approved/rejected, a
+  // transfer is received, or a trade fills server-side. Refresh balances
+  // immediately so the user doesn't see stale numbers next to a "Deposit
+  // approved" toast.
+  window.addEventListener('verdexis:portfolio-refresh', () => {
+    if (getToken()) void portfolioStore.hydrate(true)
+  })
+  // Poll the server every 30s while a token is present so admin-side
+  // mutations (deposits, transfers, balance edits) reflect without a
+  // manual reload. 5s was too aggressive for a shared backend.
+  setInterval(() => { if (getToken()) void portfolioStore.hydrate(true) }, 30_000)
+}

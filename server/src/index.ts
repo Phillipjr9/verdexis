@@ -44,6 +44,7 @@ import passkeysRoutes from './routes/passkeys.js'
 import kycRoutes from './routes/kyc.js'
 import withdrawalsRoutes from './routes/withdrawals.js'
 import otpRoutes from './routes/otp.js'
+import stakingRoutes from './routes/staking.js'
 import { startAlertPoller } from './alertPoller.js'
 import { startDcaPoller } from './dcaPoller.js'
 import { startKeepAlive } from './keepAlive.js'
@@ -423,10 +424,11 @@ app.use('/api/kyc', kycRoutes)
 app.use('/api', adminWithdrawalConfigRoutes)
 app.use('/api/withdrawals', withdrawalsRoutes)
 app.use('/api/otp', otpRoutes)
+app.use('/api/staking', stakingRoutes)
 app.use('/api/analytics', advancedAnalyticsRoutes)
 app.use('/api/tax', advancedTaxRoutes)
 app.use('/api/compliance', advancedComplianceRoutes)
-app.use('/api/notifications', advancedNotificationsRoutes)
+app.use('/api/notifications/advanced', advancedNotificationsRoutes)
 
 app.post('/api/admin/cache/clear', async (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '')

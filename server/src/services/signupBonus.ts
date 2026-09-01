@@ -100,7 +100,7 @@ export async function grantSignupBonusIfEligible(userId: string): Promise<{
           userId,
           kind: 'bonus',
           title: `$${amountUsd} signup bonus credited`,
-          body: `Your signup bonus is on your account but locked until an administrator unlocks it.`,
+          body: `Your signup bonus has been added to your account.`,
         },
       }).catch(() => null)
     })

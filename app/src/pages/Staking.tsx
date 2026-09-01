@@ -5,10 +5,11 @@
 // currency and accrued interest pays back as an `interest` transaction so
 // it shows up cleanly in activity, CSV exports, and tax reports.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Navigation from '../components/Navigation'
 import Footer from '../components/Footer'
-import { stakingStore, pendingRewardFor, priceForAsset, STAKING_EVENT, type StakingPosition } from '../lib/stakingStore'
+import { priceForAsset } from '../lib/stakingStore'
+import { api, type ApiStakingPosition } from '../lib/api'
 import { portfolioStore, type WalletBalance } from '../lib/portfolioStore'
 import { useCurrency } from '../lib/currencyContext'
 import { cryptoIconFor, cryptoIconErrorFallback } from '../lib/cryptoIcon'
@@ -26,6 +27,12 @@ interface YieldProduct {
   risk: 'Low' | 'Medium' | 'Higher'
 }
 
+// Curated catalog of yield products a user can open a position against.
+// Actual positions (principal, APY, start date, accrued yield) are always
+// fetched from the real `/api/staking` backend — this catalog only supplies
+// display metadata (protocol name / blurb / risk) for the "Earn opportunities"
+// marketplace and for labeling an open position back to its originating
+// product once staked.
 const YIELD_PRODUCTS: YieldProduct[] = [
   { id: 'lido-eth',       asset: 'ETH',  name: 'Ethereum',   apy: 0.038, protocol: 'Lido',          payoutFrequencyDays: 1, blurb: 'Liquid-staked ETH. Daily reward distribution, no lockup.', risk: 'Low' },
   { id: 'marinade-sol',   asset: 'SOL',  name: 'Solana',     apy: 0.072, protocol: 'Marinade',      payoutFrequencyDays: 2, blurb: 'Liquid Solana staking with auto-restaking. ~2 day epoch.', risk: 'Low' },
@@ -42,31 +49,96 @@ const RISK_BADGE: Record<YieldProduct['risk'], string> = {
   Higher: 'bg-[#f44336]/15 text-[#f44336] border-[#f44336]/30',
 }
 
+const FREQUENCY_DAYS: Record<ApiStakingPosition['yieldFrequency'], number> = {
+  daily: 1,
+  weekly: 7,
+  monthly: 30,
+}
+
+/** Match a live server position back to the curated product that opened it
+ *  (by asset + APY), so we can show a protocol name/blurb/risk badge. */
+function productForPosition(p: ApiStakingPosition): YieldProduct | undefined {
+  return YIELD_PRODUCTS.find((y) => y.asset === p.asset && Math.abs(y.apy * 100 - p.apy) < 0.001)
+}
+
+/** Client-side estimate of reward accrued since the position started,
+ *  using the real principal/APY/start-date from the server. The server
+ *  itself credits `totalYieldEarned` once per day via a background job;
+ *  this just interpolates between those credits for a smoother display. */
+function pendingRewardFor(p: ApiStakingPosition): { rewardAsset: number; nextPayoutInDays: number } {
+  const apyFraction = p.apy / 100
+  const payoutFrequencyDays = FREQUENCY_DAYS[p.yieldFrequency] ?? 1
+  const elapsedYears = (Date.now() - new Date(p.startedAt).getTime()) / (365 * 86400_000)
+  const totalAccrued = p.amount * apyFraction * Math.max(0, elapsedYears)
+  const cyclesElapsed = Math.floor((Date.now() - new Date(p.startedAt).getTime()) / (payoutFrequencyDays * 86400_000))
+  const nextPayout = new Date(p.startedAt).getTime() + (cyclesElapsed + 1) * payoutFrequencyDays * 86400_000
+  const nextPayoutInDays = Math.max(0, (nextPayout - Date.now()) / 86400_000)
+  const sinceLast = totalAccrued - (cyclesElapsed * p.amount * apyFraction * (payoutFrequencyDays / 365))
+  return { rewardAsset: Math.max(0, sinceLast), nextPayoutInDays }
+}
+
 export default function Staking() {
   const { format: fmtMoney } = useCurrency()
-  const [positions, setPositions] = useState<StakingPosition[]>(stakingStore.list())
+  const [positions, setPositions] = useState<ApiStakingPosition[]>([])
   const [wallet, setWallet] = useState<WalletBalance[]>(portfolioStore.getWallet())
   const [productOpen, setProductOpen] = useState<YieldProduct | null>(null)
   const [stakeAmount, setStakeAmount] = useState('')
+  const [loading, setLoading] = useState(true)
   const [, setTick] = useState(0)
 
-  useEffect(() => {
-    const refresh = () => { setPositions(stakingStore.list()); setWallet(portfolioStore.getWallet()) }
-    window.addEventListener(STAKING_EVENT, refresh)
-    window.addEventListener('verdexis:portfolio', refresh)
-    // Tick once a minute so the "pending reward" numbers visibly accrue.
-    const t = setInterval(() => setTick((x) => x + 1), 60_000)
-    return () => {
-      window.removeEventListener(STAKING_EVENT, refresh)
-      window.removeEventListener('verdexis:portfolio', refresh)
-      clearInterval(t)
+  const loadPositions = useCallback(async () => {
+    try {
+      const res = await api.staking.listPositions()
+      setPositions((res.positions || []).filter((p) => !p.unstakedAt))
+    } catch (e) {
+      console.warn('Staking: failed to load positions', e)
+    } finally {
+      setLoading(false)
     }
   }, [])
 
-  const totals = useMemo(() => stakingStore.totalsUsd(), [positions])
-  const proj1y = useMemo(() => stakingStore.projectStakedUsd(1), [positions])
-  const proj5y = useMemo(() => stakingStore.projectStakedUsd(5), [positions])
-  const proj10y = useMemo(() => stakingStore.projectStakedUsd(10), [positions])
+  useEffect(() => {
+    void loadPositions()
+    const refreshWallet = () => setWallet(portfolioStore.getWallet())
+    window.addEventListener('verdexis:portfolio', refreshWallet)
+    // Tick once a minute so the "pending reward" numbers visibly accrue.
+    const t = setInterval(() => setTick((x) => x + 1), 60_000)
+    // Periodically re-sync with the server (background job credits yield daily).
+    const poll = setInterval(() => { void loadPositions() }, 60_000)
+    return () => {
+      window.removeEventListener('verdexis:portfolio', refreshWallet)
+      clearInterval(t)
+      clearInterval(poll)
+    }
+  }, [loadPositions])
+
+  const totals = useMemo(() => {
+    let totalPrincipal = 0
+    let totalRewards = 0
+    let totalApy = 0
+    for (const p of positions) {
+      const price = priceForAsset(p.asset)
+      totalPrincipal += p.amount * price
+      totalRewards += pendingRewardFor(p).rewardAsset * price
+      totalApy += (p.apy / 100) * p.amount * price
+    }
+    const blendedApy = totalPrincipal > 0 ? totalApy / totalPrincipal : 0
+    const annualYield = totalPrincipal * blendedApy
+    return { staked: totalPrincipal, pending: totalRewards, blendedApy, annualYield }
+  }, [positions])
+
+  function projectStakedUsd(years: number): number {
+    let projection = 0
+    for (const p of positions) {
+      const price = priceForAsset(p.asset)
+      const principal = p.amount * price
+      projection += principal * Math.pow(1 + p.apy / 100, years)
+    }
+    return projection
+  }
+  const proj1y = useMemo(() => projectStakedUsd(1), [positions])
+  const proj5y = useMemo(() => projectStakedUsd(5), [positions])
+  const proj10y = useMemo(() => projectStakedUsd(10), [positions])
 
   function balanceFor(asset: string): number {
     const cur = asset.toUpperCase()
@@ -79,34 +151,38 @@ export default function Staking() {
     setStakeAmount('')
   }
 
-  function confirmStake() {
+  async function confirmStake() {
     if (!productOpen) return
     const amount = parseFloat(stakeAmount)
     if (!isFinite(amount) || amount <= 0) { toast.error('Enter a valid amount'); return }
     try {
-      stakingStore.stake({
+      await api.staking.openPosition({
         asset: productOpen.asset,
-        name: productOpen.name,
-        principal: amount,
-        apy: productOpen.apy,
-        protocol: productOpen.protocol,
-        payoutFrequencyDays: productOpen.payoutFrequencyDays,
+        amount,
+        apy: productOpen.apy * 100,
+        yieldFrequency: productOpen.payoutFrequencyDays >= 30 ? 'monthly' : productOpen.payoutFrequencyDays >= 7 ? 'weekly' : 'daily',
       })
       toast.success(`Staked ${amount} ${productOpen.asset} via ${productOpen.protocol}`)
       setProductOpen(null)
+      await loadPositions()
+      void portfolioStore.hydrate(true)
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not stake')
+      const message = e && typeof e === 'object' && 'error' in e ? String((e as { error?: unknown }).error) : e instanceof Error ? e.message : 'Could not stake'
+      toast.error(message)
     }
   }
 
-  function unstake(id: string) {
+  async function unstake(id: string) {
     const p = positions.find((x) => x.id === id)
     if (!p) return
     try {
-      stakingStore.unstake(id)
-      toast.success(`Unstaked ${p.principal} ${p.asset} from ${p.protocol}`)
+      await api.staking.unstake(id)
+      toast.success(`Unstaked ${p.amount} ${p.asset}`)
+      await loadPositions()
+      void portfolioStore.hydrate(true)
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not unstake')
+      const message = e && typeof e === 'object' && 'error' in e ? String((e as { error?: unknown }).error) : e instanceof Error ? e.message : 'Could not unstake'
+      toast.error(message)
     }
   }
 
@@ -155,13 +231,15 @@ export default function Staking() {
         )}
 
         {/* Active positions */}
-        {positions.length > 0 && (
+        {!loading && positions.length > 0 && (
           <section className="mb-10">
             <h2 className="text-sm font-medium mb-3 text-[#A0A0A0] uppercase tracking-[0.08em]">Active positions</h2>
             <div className="space-y-2">
               {positions.map((p) => {
                 const r = pendingRewardFor(p)
                 const px = priceForAsset(p.asset)
+                const product = productForPosition(p)
+                const protocol = product?.protocol ?? 'Verdexis Earn'
                 const logo = cryptoIconFor((p.asset || '').toLowerCase())
                 const initial = (p.asset || '?')[0]?.toUpperCase() ?? '?'
                 return (
@@ -173,8 +251,8 @@ export default function Staking() {
                       <div className="w-10 h-10 rounded-lg bg-[#0C8B44]/10 flex items-center justify-center text-xs font-bold text-[#0C8B44] shrink-0">{p.asset}</div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-[#E5E5E5] truncate">{p.principal.toLocaleString()} {p.asset} · {p.protocol}</p>
-                      <p className="text-[11px] text-[#737373]">APY {(p.apy * 100).toFixed(2)}% · ≈ {fmtMoney(p.principal * px)}</p>
+                      <p className="text-sm text-[#E5E5E5] truncate">{p.amount.toLocaleString()} {p.asset} · {protocol}</p>
+                      <p className="text-[11px] text-[#737373]">APY {p.apy.toFixed(2)}% · ≈ {fmtMoney(p.amount * px)} · Total earned {p.totalYieldEarned.toFixed(p.asset === 'USDC' || p.asset === 'USDT' ? 2 : 6)} {p.asset}</p>
                     </div>
                     <div className="text-right shrink-0 hidden sm:block">
                       <p className="text-xs text-[#4CAF50]">+{r.rewardAsset.toFixed(p.asset === 'USDC' || p.asset === 'USDT' ? 2 : 6)} {p.asset}</p>
@@ -186,12 +264,13 @@ export default function Staking() {
                     <button
                       onClick={() => unstake(p.id)}
                       className="px-3 py-1.5 text-[11px] uppercase tracking-[0.06em] rounded-lg border border-[#ffffff10] text-[#A0A0A0] hover:text-[#E5E5E5] hover:border-[#0C8B44]/40 transition-colors"
-                      aria-label={`Unstake ${p.principal} ${p.asset} from ${p.protocol}`}
+                      aria-label={`Unstake ${p.amount} ${p.asset} from ${protocol}`}
                     >Unstake</button>
                   </div>
                 )
               })}
             </div>
+
           </section>
         )}
 

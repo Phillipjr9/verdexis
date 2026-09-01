@@ -187,6 +187,9 @@ export class DCAService {
             lastRunAt: new Date(),
           },
         })
+      }, {
+        timeout: 20_000,
+        maxWait: 10_000,
       })
 
       return {
