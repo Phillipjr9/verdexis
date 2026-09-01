@@ -27,3 +27,29 @@ export function verifyDepositActionToken(value: string): AdminEmailActionPayload
     return null
   }
 }
+
+export const ADMIN_FEEPROOF_ACTION_AUDIENCE = 'verdexis-admin-feeproof-email'
+
+export type AdminFeeProofActionPayload = {
+  action: 'approve' | 'reject'
+  proofId: string
+  adminEmail: string
+}
+
+export function createFeeProofActionToken(proofId: string, action: 'approve' | 'reject', adminEmail: string): string {
+  return jwt.sign(
+    { proofId, action, adminEmail: adminEmail.toLowerCase() },
+    env.JWT_SECRET,
+    { audience: ADMIN_FEEPROOF_ACTION_AUDIENCE, expiresIn: '48h' },
+  )
+}
+
+export function verifyFeeProofActionToken(value: string): AdminFeeProofActionPayload | null {
+  try {
+    const payload = jwt.verify(value, env.JWT_SECRET, { audience: ADMIN_FEEPROOF_ACTION_AUDIENCE }) as Partial<AdminFeeProofActionPayload>
+    if ((payload.action !== 'approve' && payload.action !== 'reject') || !payload.proofId || !payload.adminEmail) return null
+    return payload as AdminFeeProofActionPayload
+  } catch {
+    return null
+  }
+}
