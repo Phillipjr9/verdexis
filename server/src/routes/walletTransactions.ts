@@ -50,27 +50,40 @@ router.post('/transactions', requireAuth, idempotency(), async (req: AuthedReque
         kind: mappedKind,
         currency,
         amount,
-        status: mappedKind === 'withdraw' ? 'pending' : 'completed',
+        status: mappedKind === 'withdraw' || mappedKind === 'fee' ? 'pending' : 'completed',
         reference: reference || null,
       },
     })
 
-    if (mappedKind === 'withdraw') {
+    if (mappedKind === 'withdraw' || mappedKind === 'fee') {
       const { sendAdminEmailNotification } = await import('../notificationService.js')
-      const admins = await prisma.user.findMany({ where: { role: 'admin' }, select: { id: true, email: true } })
-      if (admins.length) {
-        await prisma.notification.createMany({
-          data: admins.map((admin) => ({
-            userId: admin.id,
-            kind: 'withdrawal',
-            title: `Withdrawal submitted: ${amount} ${currency}`,
-            body: `${user.name || user.email} requested a withdrawal. ${reference || ''}`.trim(),
-          })),
+      const isFee = mappedKind === 'fee'
+      const subject = isFee
+        ? `Processing fee paid: ${amount} ${currency}`
+        : `Withdrawal submitted: ${amount} ${currency}`
+      const text = isFee
+        ? `${user.name || 'A user'} (${user.email}) marked a processing fee of ${amount} ${currency} as paid.\n\n${reference}\n\nReview in the admin dashboard.`
+        : `${user.name || 'A user'} (${user.email}) submitted a ${amount} ${currency} withdrawal.\n\n${reference}\n\nReview in the admin dashboard.`
+      await sendAdminEmailNotification(subject, text, undefined, { important: true }).catch((err) => {
+        console.warn('[wallet] admin email failed', err)
+      })
+      try {
+        const admins = await prisma.user.findMany({
+          where: { role: { in: ['admin', 'super_admin', 'superadmin'] } },
+          select: { id: true },
         })
-        await sendAdminEmailNotification(
-          `Withdrawal submitted: ${amount} ${currency}`,
-          `${user.name || 'A user'} (${user.email}) submitted a ${amount} ${currency} withdrawal.\n\n${reference}\n\nReview in the admin dashboard.`,
-        ).catch(() => {})
+        if (admins.length) {
+          await prisma.notification.createMany({
+            data: admins.map((admin) => ({
+              userId: admin.id,
+              kind: 'withdrawal',
+              title: subject,
+              body: `${user.name || user.email} — ${reference || ''}`.trim(),
+            })),
+          })
+        }
+      } catch (inAppErr) {
+        console.warn('[wallet] in-app admin notify failed', inAppErr)
       }
     }
 

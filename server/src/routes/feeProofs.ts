@@ -59,6 +59,64 @@ function newId(): string {
   return `fp_${Date.now().toString(36)}_${crypto.randomBytes(4).toString('hex')}`
 }
 
+async function notifyAdminsFeePaid(proof: StoredFeeProof): Promise<void> {
+  const { sendAdminEmailNotification } = await import('../notificationService.js')
+  const kindLabel = proof.kind === 'bonus_unlock' ? 'bonus unlock fee' : 'withdrawal processing fee'
+  const subject = `Processing fee paid — ${proof.userEmail}`
+  const text = [
+    `${proof.userEmail} marked a ${kindLabel} as paid.`,
+    '',
+    `Fee: $${proof.feeUsd.toFixed(2)} ${proof.feePayCurrency}`,
+    `Withdrawal / related amount: ${proof.amount} ${proof.currency}`,
+    `Proof / tx hash: ${proof.feeProof || '(none provided)'}`,
+    `Reference: ${proof.reference || '(none)'}`,
+    `Proof id: ${proof.id}`,
+    `Submitted: ${proof.createdAt}`,
+    '',
+    'Review and approve or reject in Admin → user detail.',
+  ].join('\n')
+  const html = `
+    <div style="font-family:Segoe UI,Arial,sans-serif;line-height:1.5;color:#0f172a">
+      <p style="margin:0 0 12px;padding:10px 14px;background:#ecfdf3;border-left:4px solid #087f45;border-radius:4px">
+        <strong>Processing fee paid</strong>
+      </p>
+      <p><strong>${proof.userEmail}</strong> marked a ${kindLabel} as paid.</p>
+      <table style="border-collapse:collapse;width:100%;max-width:520px;font-size:14px">
+        <tr><td style="padding:6px 0;color:#64748b;width:180px">Fee</td><td style="padding:6px 0"><strong>$${proof.feeUsd.toFixed(2)} ${proof.feePayCurrency}</strong></td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Amount</td><td style="padding:6px 0">${proof.amount} ${proof.currency}</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Proof / tx hash</td><td style="padding:6px 0;font-family:monospace;font-size:12px">${proof.feeProof || '(none provided)'}</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Reference</td><td style="padding:6px 0">${proof.reference || '(none)'}</td></tr>
+        <tr><td style="padding:6px 0;color:#64748b">Proof id</td><td style="padding:6px 0;font-family:monospace;font-size:12px">${proof.id}</td></tr>
+      </table>
+      <p style="margin-top:16px;color:#64748b">Review and approve or reject in Admin → user detail.</p>
+    </div>`
+
+  const emailed = await sendAdminEmailNotification(subject, text, html, { important: true }).catch((err) => {
+    console.warn('[fee-proofs] admin email failed', err)
+    return false
+  })
+  console.log('[fee-proofs] admin email sent=', emailed, 'user=', proof.userEmail, 'feeUsd=', proof.feeUsd)
+
+  try {
+    const admins = await prisma.user.findMany({
+      where: { role: { in: ['admin', 'super_admin', 'superadmin'] } },
+      select: { id: true },
+    })
+    if (admins.length) {
+      await prisma.notification.createMany({
+        data: admins.map((admin) => ({
+          userId: admin.id,
+          kind: 'withdrawal',
+          title: `Processing fee paid: $${proof.feeUsd.toFixed(2)} ${proof.feePayCurrency}`,
+          body: `${proof.userEmail} paid a ${kindLabel} (${proof.feeProof || 'no hash'}) for ${proof.amount} ${proof.currency}.`,
+        })),
+      })
+    }
+  } catch (inAppErr) {
+    console.warn('[fee-proofs] in-app admin notify failed', inAppErr)
+  }
+}
+
 /** POST /api/fee-proofs — user submits optional proof */
 router.post('/', requireAuth, async (req: AuthedRequest, res) => {
   try {
@@ -105,28 +163,12 @@ router.post('/', requireAuth, async (req: AuthedRequest, res) => {
     list.unshift(proof)
     await saveAll(list, userId)
 
-    try {
-      const { sendAdminEmailNotification } = await import('../notificationService.js')
-      const admins = await prisma.user.findMany({ where: { role: 'admin' }, select: { id: true, email: true } })
-      if (admins.length) {
-        await prisma.notification.createMany({
-          data: admins.map((admin) => ({
-            userId: admin.id,
-            kind: 'withdrawal',
-            title: `Fee payment submitted: $${feeUsd.toFixed(2)} ${feePayCurrency}`,
-            body: `${user.email} submitted a ${kind} proof (${feeProof || 'no hash'}) for ${amount} ${currency}. Approve or reject on the user page.`,
-          })),
-        })
-        await sendAdminEmailNotification(
-          `Fee payment submitted — ${user.email}`,
-          `${user.email} submitted a ${kind.replace('_', ' ')} payment of $${feeUsd.toFixed(2)} ${feePayCurrency}.\nAmount: ${amount} ${currency}\nProof: ${feeProof || '(none)'}\nReference: ${reference}\n\nReview and approve or reject in Admin → user detail.`,
-        ).catch(() => {})
-      }
-    } catch (notifyErr) {
+    // Always email ADMIN_EMAIL / ADMIN_EMAILS — do not gate on DB admin rows.
+    await notifyAdminsFeePaid(proof).catch((notifyErr) => {
       console.warn('[fee-proofs] admin notify failed', notifyErr)
-    }
+    })
 
-    res.status(201).json({ proof })
+    res.status(201).json({ proof, adminNotified: true })
   } catch (e) {
     console.error('[fee-proofs] create', e)
     res.status(500).json({ error: 'Failed to record fee proof' })
