@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { X, Mail, Lock, User, Eye, EyeOff, ArrowRight, Shield, Fingerprint, KeyRound, ArrowLeft, Phone } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, getFriendlyApiErrorMessage, setTokenWithTimestamp, setStoredUser, type ApiError } from '../lib/api'
-import { sanitizeDisplayText, sanitizeEmail, sanitizeText } from '../lib/sanitize'
+import { sanitizeDisplayText, sanitizeEmail, sanitizeText, sanitizeLiveInput } from '../lib/sanitize'
 import { isSupabaseConfigured, signInWithEmail, signUpWithEmail } from '../lib/supabase'
 
 interface AuthModalProps {
@@ -436,7 +436,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
                     <input
                       type="text"
                       value={form.firstName}
-                      onChange={(e) => setForm({ ...form, firstName: sanitizeDisplayText(e.target.value, 40) })}
+                      onChange={(e) => setForm({ ...form, firstName: sanitizeLiveInput(e.target.value, 40) })}
                       className="w-full pl-10 pr-4 py-3 bg-[#1a1a1a] border border-[#ffffff08] rounded-xl text-sm text-[#E5E5E5] placeholder-[#737373] focus:outline-none focus:border-[#0C8B44] transition-colors"
                       placeholder="John"
                       required
@@ -450,7 +450,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
                     <input
                       type="text"
                       value={form.lastName}
-                      onChange={(e) => setForm({ ...form, lastName: sanitizeDisplayText(e.target.value, 40) })}
+                      onChange={(e) => setForm({ ...form, lastName: sanitizeLiveInput(e.target.value, 40) })}
                       className="w-full pl-10 pr-4 py-3 bg-[#1a1a1a] border border-[#ffffff08] rounded-xl text-sm text-[#E5E5E5] placeholder-[#737373] focus:outline-none focus:border-[#0C8B44] transition-colors"
                       placeholder="Doe"
                       required
@@ -511,7 +511,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'login' }: Au
                   <input
                     type="text"
                     value={form.address}
-                    onChange={(e) => setForm({ ...form, address: sanitizeDisplayText(e.target.value, 200) })}
+                    onChange={(e) => setForm({ ...form, address: sanitizeLiveInput(e.target.value, 200) })}
                     className="w-full pl-3 pr-4 py-3 bg-[#1a1a1a] border border-[#ffffff08] rounded-xl text-sm text-[#E5E5E5] placeholder-[#737373] focus:outline-none focus:border-[#0C8B44] transition-colors"
                     placeholder="123 Main St, Apt 4B"
                     autoComplete="street-address"

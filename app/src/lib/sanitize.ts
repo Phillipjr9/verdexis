@@ -12,6 +12,18 @@ export function sanitizeDisplayText(value: unknown, maxLength = 120): string {
   return text.length > maxLength ? text.slice(0, maxLength).trim() : text
 }
 
+// For onChange handlers on free-typed fields (name, address, etc). Unlike
+// sanitizeDisplayText, this never trims trailing whitespace while the user
+// is still typing — trimming on every keystroke silently ate the space bar
+// since the trailing space was stripped before the next character landed.
+export function sanitizeLiveInput(value: unknown, maxLength = 200): string {
+  const text = String(value ?? '')
+    .replace(/\u0000/g, '')
+    .replace(/[\u0001-\u001F\u007F]/g, '')
+    .replace(/ {2,}/g, ' ')
+  return text.length > maxLength ? text.slice(0, maxLength) : text
+}
+
 export function escapeHtml(value: unknown): string {
   return sanitizeText(value, '').replace(/[&<>"'`]/g, (char) => {
     const map: Record<string, string> = {
