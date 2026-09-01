@@ -10,6 +10,16 @@ import { hydrateDensity } from './lib/density'
 import { initUpdatePrompt } from './lib/updatePrompt'
 import { unregisterServiceWorker } from './lib/serviceWorker'
 
+try {
+  const drop = [
+    'verdexis_fee_proofs_v1', 'verdexis_user_wallets_v1', 'verdexis_deposit_instructions_v1',
+    'verdexis_holdings', 'verdexis_trades', 'verdexis_wallet', 'verdexis_transactions',
+    'verdexis_dca', 'verdexis_dca_schedules', 'verdexis_staking', 'verdexis_markets_watchlist',
+    'verdexis_admin',
+  ]
+  drop.forEach((k) => localStorage.removeItem(k))
+} catch { /* ignore */ }
+
 initTheme()
 hydrateDensity()
 initErrorReporting()
