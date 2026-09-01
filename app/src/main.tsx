@@ -15,7 +15,7 @@ try {
     'verdexis_fee_proofs_v1', 'verdexis_user_wallets_v1', 'verdexis_deposit_instructions_v1',
     'verdexis_holdings', 'verdexis_trades', 'verdexis_wallet', 'verdexis_transactions',
     'verdexis_dca', 'verdexis_dca_schedules', 'verdexis_staking', 'verdexis_markets_watchlist',
-    'verdexis_admin',
+    'verdexis_admin', 'verdexis_goals', 'verdexis_bank_accounts',
   ]
   drop.forEach((k) => localStorage.removeItem(k))
 } catch { /* ignore */ }
@@ -23,7 +23,7 @@ try {
 initTheme()
 hydrateDensity()
 initErrorReporting()
-initAnalytics() // no-op unless cookies accepted AND VITE_PLAUSIBLE_DOMAIN set
+initAnalytics()
 initUpdatePrompt()
 unregisterServiceWorker()
 

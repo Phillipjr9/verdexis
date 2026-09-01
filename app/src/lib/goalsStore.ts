@@ -1,65 +1,61 @@
-// Inspired by Wealthfolio's goal-planning model.
-// Tracks user-defined financial goals locally with progress + projection.
+import { api } from './api'
 
 export interface Goal {
   id: string
   title: string
   target: number
   currency: 'USD'
-  deadline: string // ISO date
+  deadline: string
   category: 'wealth' | 'crypto' | 'retirement' | 'home' | 'other'
-  startedAt: string // ISO
+  startedAt: string
 }
 
-const STORAGE_KEY = 'verdexis_goals'
 const EVENT = 'verdexis:goals'
+let memory: Goal[] = []
+let hydrated = false
 
-const DEFAULT: Goal[] = [
-  {
-    id: 'starter',
-    title: 'Build $100k portfolio',
-    target: 100000,
-    currency: 'USD',
-    deadline: new Date(Date.now() + 1000 * 60 * 60 * 24 * 365).toISOString(),
-    category: 'wealth',
-    startedAt: new Date().toISOString(),
-  },
-]
-
-function load(): Goal[] {
-  if (typeof window === 'undefined') return DEFAULT
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return DEFAULT
-    const parsed = JSON.parse(raw) as Goal[]
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT
-  } catch {
-    return DEFAULT
-  }
+function emit() {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(EVENT))
 }
 
-function save(goals: Goal[]) {
-  if (typeof window === 'undefined') return
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(goals))
-  window.dispatchEvent(new Event(EVENT))
+async function persist(next: Goal[]) {
+  memory = next
+  emit()
+  try {
+    await api.patchProfile({ prefs: { goals: next } })
+  } catch (err) {
+    console.warn('[goalsStore] persist failed', err)
+  }
 }
 
 export const goalsStore = {
   list(): Goal[] {
-    return load()
+    return memory
+  },
+  async hydrate(): Promise<Goal[]> {
+    if (hydrated) return memory
+    try {
+      const me = await api.me()
+      const user = (me as { user?: { prefs?: { goals?: Goal[] } } }).user
+      const goals = user?.prefs?.goals
+      if (Array.isArray(goals)) memory = goals
+    } catch {
+      /* keep memory */
+    }
+    hydrated = true
+    emit()
+    return memory
   },
   add(input: Omit<Goal, 'id' | 'startedAt'>): Goal {
     const goal: Goal = { ...input, id: `g_${Date.now()}`, startedAt: new Date().toISOString() }
-    const next = [...load(), goal]
-    save(next)
+    void persist([...memory, goal])
     return goal
   },
   remove(id: string) {
-    save(load().filter((g) => g.id !== id))
+    void persist(memory.filter((g) => g.id !== id))
   },
   reset() {
-    if (typeof window !== 'undefined') localStorage.removeItem(STORAGE_KEY)
-    save(DEFAULT)
+    void persist([])
   },
 }
 
