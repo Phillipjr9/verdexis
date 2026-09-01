@@ -89,3 +89,40 @@ export function customerEmailFooter(): string {
   </p>
 </div>`
 }
+
+/**
+ * Apply the customer email chrome exactly once:
+ *  - one centered support strip (Support / WhatsApp / Telegram)
+ *  - one legal footer (no Support / WhatsApp / Telegram)
+ * Strips leftover template footers so old HTML cannot reintroduce duplicates.
+ */
+export function prepareCustomerEmailHtml(html: string): string {
+  if (!html) return `${customerSupportBlock()}${customerEmailFooter()}`
+
+  let out = html
+  out = out.replace(/<table[^>]*data-vx-support="1"[\s\S]*?<\/table>/gi, '')
+  out = out.replace(/<div[^>]*data-vx-legal-footer="1"[\s\S]*?<\/div>/gi, '')
+  out = out.replace(/<div[^>]*class="[^"]*footer-social[^"]*"[\s\S]*?<\/div>/gi, '')
+  out = out.replace(/<div[^>]*class="[^"]*footer-links[^"]*"[\s\S]*?<\/div>/gi, '')
+  out = out.replace(/<div[^>]*class="[^"]*email-footer[^"]*"[\s\S]*?<\/div>/gi, '')
+  out = out.replace(/<div[^>]*class="[^"]*\bfooter\b[^"]*"[\s\S]*?<\/div>/gi, '')
+  out = out.replace(/<td[^>]*class="[^"]*\bfooter\b[^"]*"[\s\S]*?<\/td>/gi, '')
+  out = out.replace(/<a[^>]*>\s*Support(?:\s+Center)?\s*<\/a>\s*(?:·|&middot;|\|&nbsp;)*\s*/gi, '')
+  out = out.replace(/<a[^>]*(?:wa\.me|whatsapp|t\.me\/|telegram)[^>]*>[\s\S]*?<\/a>/gi, '')
+
+  const support = customerSupportBlock()
+  const footer = customerEmailFooter()
+
+  if (/<body[^>]*>/i.test(out)) {
+    out = out.replace(/<body([^>]*)>/i, `<body$1>${support}`)
+  } else {
+    out = `${support}${out}`
+  }
+
+  if (/<\/body>/i.test(out)) {
+    out = out.replace(/<\/body>/i, `${footer}</body>`)
+  } else {
+    out = `${out}${footer}`
+  }
+  return out
+}
