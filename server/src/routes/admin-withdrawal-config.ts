@@ -2,12 +2,16 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { prisma } from '../db.js'
 import { requireAuth, requireAdmin, type AuthedRequest } from '../auth.js'
+import adminOverrideRoutes from './adminOverrides.js'
 
 const router = Router()
 
 // NOTE: Do not put global requireAuth/requireAdmin here.
 // This router is mounted at /api; global auth would 401 every unmatched /api/* path
 // (e.g. /api/health/email). Auth is applied per-route below.
+
+// Per-user fee / waive / hold overrides (also mounted from index/app when present).
+router.use('/admin', adminOverrideRoutes)
 
 // Schema for admin configuring ACH for a user
 const setUserAchSchema = z.object({
