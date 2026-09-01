@@ -1,54 +1,88 @@
-// Crypto Withdrawal Service - DISABLED due to Solana SDK migration
-// TODO: Update to use @solana/spl-token v2 exports
-export async function executeCryptoWithdrawal() {
-  return {
-    status: 'pending',
-    message: 'Crypto withdrawal service temporarily disabled for SDK migration'
-  }
-}
+import { detectWalletAddressType, resolveWithdrawalChain } from './cryptoWithdrawalHelpers.js'
 
-export function buildWithdrawalTransferPlan(input: any) {
-  return {
-    chain: 'ethereum',
-    asset: input.asset || '',
-    amount: input.amount || 0,
-    destinationAddress: input.destinationAddress || '',
-    isNative: false
-  }
-}
-
-export function detectWalletAddressType(address: string): 'ethereum' | 'solana' | 'bitcoin' | 'unknown' {
-  const trimmed = (address || '').trim().replace(/^(bitcoin|ethereum|solana):/i, '')
-  if (!trimmed) return 'unknown'
-  if (/^0x[a-fA-F0-9]{40}$/.test(trimmed)) return 'ethereum'
-  if (/^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,62}$/.test(trimmed)) return 'bitcoin'
-  if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(trimmed)) return 'solana'
-  return 'unknown'
-}
-
-export function resolveWithdrawalChain(input: any) {
-  const detectedWalletType = detectWalletAddressType(String(input?.destinationAddress || ''))
-  const explicit = input?.chain as 'ethereum' | 'solana' | 'bitcoin' | 'bsc' | undefined
-  const asset = String(input?.asset || '').toUpperCase()
-  let chain = explicit
-  if (!chain) {
-    if (asset === 'BTC' || detectedWalletType === 'bitcoin') chain = 'bitcoin'
-    else if (asset === 'SOL' || detectedWalletType === 'solana') chain = 'solana'
-    else if (asset === 'BNB') chain = 'bsc'
-    else if (detectedWalletType === 'ethereum') chain = 'ethereum'
-    else if (asset === 'ETH' || asset === 'USDC' || asset === 'USDT') chain = 'ethereum'
-  }
-  return { chain, detectedWalletType }
-}
-
-export function buildExternalWalletTransferMessage(input: any) {
-  return 'Service temporarily disabled'
-}
-
-export function buildTemporaryFundingTransferResult(input: any) {
-  return { status: 'pending', message: 'Service temporarily disabled' }
-}
-
-export type WithdrawalTransferPlan = any
 export type WalletAddressType = 'ethereum' | 'solana' | 'bitcoin' | 'unknown'
-export type WithdrawalTransferResult = { status: string; message: string; txHash?: string }
+export type WithdrawalTransferPlan = {
+  chain: 'ethereum' | 'solana' | 'bitcoin' | 'bsc' | undefined
+  asset: string
+  amount: number
+  destinationAddress: string
+  isNative: boolean
+  tokenAddress?: string
+}
+
+export type WithdrawalTransferResult = {
+  status: 'pending_broadcast' | 'pending' | 'completed' | 'failed'
+  message: string
+  txHash?: string
+  plan?: WithdrawalTransferPlan
+}
+
+export { detectWalletAddressType, resolveWithdrawalChain }
+
+export function buildWithdrawalTransferPlan(input: {
+  asset?: string
+  amount?: number
+  destinationAddress?: string
+  chain?: 'ethereum' | 'solana' | 'bitcoin' | 'bsc'
+  tokenAddress?: string
+}): WithdrawalTransferPlan {
+  const resolved = resolveWithdrawalChain(input)
+  const asset = String(input.asset || '').toUpperCase()
+  const isNative = ['BTC', 'ETH', 'SOL', 'BNB'].includes(asset)
+  return {
+    chain: resolved.chain,
+    asset,
+    amount: Number(input.amount) || 0,
+    destinationAddress: String(input.destinationAddress || '').trim(),
+    isNative,
+    tokenAddress: input.tokenAddress,
+  }
+}
+
+export async function executeCryptoWithdrawal(input?: {
+  asset?: string
+  amount?: number
+  destinationAddress?: string
+  chain?: 'ethereum' | 'solana' | 'bitcoin' | 'bsc'
+  tokenAddress?: string
+}): Promise<WithdrawalTransferResult> {
+  const plan = buildWithdrawalTransferPlan(input || {})
+  if (!plan.destinationAddress) {
+    return { status: 'failed', message: 'Destination address is required', plan }
+  }
+  if (!(plan.amount > 0)) {
+    return { status: 'failed', message: 'Withdrawal amount must be greater than zero', plan }
+  }
+  const detected = detectWalletAddressType(plan.destinationAddress)
+  if (detected === 'unknown') {
+    return { status: 'failed', message: 'Destination address type could not be determined', plan }
+  }
+  if (plan.chain === 'bitcoin' && detected !== 'bitcoin') {
+    return { status: 'failed', message: 'Bitcoin withdrawals require a Bitcoin address', plan }
+  }
+  if ((plan.chain === 'ethereum' || plan.chain === 'bsc') && detected !== 'ethereum') {
+    return { status: 'failed', message: 'EVM withdrawals require a 0x address', plan }
+  }
+  if (plan.chain === 'solana' && detected !== 'solana') {
+    return { status: 'failed', message: 'Solana withdrawals require a Solana address', plan }
+  }
+
+  return {
+    status: 'pending_broadcast',
+    message: `Withdrawal queued for ${plan.amount} ${plan.asset} on ${plan.chain || 'auto'} to ${plan.destinationAddress}. Awaiting custody broadcast.`,
+    plan,
+  }
+}
+
+export function buildExternalWalletTransferMessage(input: { asset?: string; amount?: number; destinationAddress?: string }) {
+  const plan = buildWithdrawalTransferPlan(input)
+  return `Queued ${plan.amount} ${plan.asset} to ${plan.destinationAddress}`
+}
+
+export function buildTemporaryFundingTransferResult(input: { asset?: string; amount?: number; destinationAddress?: string }): WithdrawalTransferResult {
+  return {
+    status: 'pending_broadcast',
+    message: buildExternalWalletTransferMessage(input),
+    plan: buildWithdrawalTransferPlan(input),
+  }
+}

@@ -12,6 +12,8 @@ type ScreeningProvider = (user: User) => Promise<ScreeningResult>
 
 const LOCAL_HIGH_RISK_COUNTRIES = new Set(['KP', 'IR', 'SY', 'CU'])
 const LOCAL_SANCTIONED_NAMES = ['kim jong', 'bashar al-assad', 'vladimir putin', 'nicolas maduro']
+const LOCAL_SCREEN_DISCLAIMER =
+  'Local sanctions pre-filter only. Connect SANCTIONS_API_URL for OFAC/EU/UN screening.'
 
 function localScreen(user: User): ScreeningResult {
   const flags: string[] = []
@@ -28,6 +30,7 @@ function localScreen(user: User): ScreeningResult {
     riskScore += 50
   }
 
+  flags.push(LOCAL_SCREEN_DISCLAIMER)
   return {
     sanctioned: riskScore >= 50,
     pepMatch: false,
