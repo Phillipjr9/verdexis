@@ -1,7 +1,20 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { toast } from 'sonner'
 import { ShieldCheck } from 'lucide-react'
-import { adminApi } from '../../lib/adminApi'
+import { getToken } from '../../lib/api'
+
+const BASE = (import.meta.env.VITE_API_URL as string | undefined) || ''
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers)
+  headers.set('Content-Type', 'application/json')
+  const token = getToken()
+  if (token) headers.set('Authorization', `Bearer ${token}`)
+  const res = await fetch(`${BASE}${path}`, { ...init, headers })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) throw { status: res.status, error: (body as { error?: string }).error || 'Request failed' }
+  return body as T
+}
 
 export default function WithdrawalOverridePanel({ userId }: { userId: string }) {
   const [feeRate, setFeeRate] = useState('')
@@ -13,7 +26,7 @@ export default function WithdrawalOverridePanel({ userId }: { userId: string }) 
 
   useEffect(() => {
     let alive = true
-    adminApi.getWithdrawalOverrides(userId)
+    request<{ feeRate: number | null; waiveFee: boolean; requireAdminApproval: boolean }>(`/api/admin/users/${userId}/withdrawal-overrides`)
       .then((r) => {
         if (!alive) return
         setFeeRate(r.feeRate == null ? '' : String(r.feeRate))
@@ -35,12 +48,15 @@ export default function WithdrawalOverridePanel({ userId }: { userId: string }) 
     }
     setBusy(true)
     try {
-      await adminApi.setWithdrawalOverrides(userId, {
-        feeRate: parsed,
-        waiveFee,
-        requireAdminApproval,
-        reason: reason.trim() || undefined,
-        notify: true,
+      await request(`/api/admin/users/${userId}/withdrawal-overrides`, {
+        method: 'POST',
+        body: JSON.stringify({
+          feeRate: parsed,
+          waiveFee,
+          requireAdminApproval,
+          reason: reason.trim() || undefined,
+          notify: true,
+        }),
       })
       toast.success('Admin override saved')
       setReason('')
