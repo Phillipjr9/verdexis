@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom'
 import Navigation from '../components/Navigation'
 import RequireAuth from '../components/RequireAuth'
 import { api } from '../lib/api'
-import { toast } from 'sonner'
 
 interface Notification {
   id: string
@@ -24,20 +23,29 @@ function NotificationsContent() {
 
   const loadNotifications = async () => {
     setError(null)
+    setLoading(true)
     try {
       const result = await api.listNotifications()
-      setItems(result.notifications)
+      setItems(result.notifications || [])
     } catch (err) {
-      setError((err as Error).message || 'Failed to load notifications')
+      const e = err as { error?: string; message?: string }
+      setError(e.error || e.message || 'Failed to load notifications')
+    } finally {
+      setLoading(false)
     }
   }
 
   const loadNotification = async (id: string) => {
     try {
-      const result = await api.getNotification(id)
-      setSelected(result.notification)
+      const result = await api.listNotifications()
+      const found = (result.notifications || []).find((n) => n.id === id) || null
+      setSelected(found)
+      if (found && !found.read) {
+        void api.markNotificationRead(found.id).catch(() => {})
+      }
     } catch (err) {
-      setError((err as Error).message || 'Failed to load notification')
+      const e = err as { error?: string; message?: string }
+      setError(e.error || e.message || 'Failed to load notification')
     }
   }
 
