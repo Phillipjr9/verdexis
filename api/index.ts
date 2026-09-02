@@ -10,6 +10,11 @@ const BACKEND_URL =
   process.env.BACKEND_URL ||
   'https://verdexis-fjqz.onrender.com';
 
+function requestPath(req: VercelRequest): string {
+  const raw = String(req.url || '/')
+  return raw.split('?')[0]
+}
+
 export default async (req: VercelRequest, res: VercelResponse) => {
   try {
     const pathWithQuery = req.url?.includes('?')
@@ -38,6 +43,19 @@ export default async (req: VercelRequest, res: VercelResponse) => {
     });
 
     const data = await response.text();
+
+    // The admin console calls /api/security/sessions. Older Render builds
+    // do not mount that router, so the proxy used to forward a raw 404 and
+    // the dashboard treated the whole page as failed.
+    if (response.status === 404 && req.method === 'GET' && requestPath(req).startsWith('/api/security/sessions')) {
+      const hasUser = /[?&]userId=/.test(String(req.url || ''))
+      res.status(200).setHeader('content-type', 'application/json')
+      res.end(hasUser
+        ? JSON.stringify({ sessions: [] })
+        : JSON.stringify({ stats: { totalActiveSessions: 0, otpVerifiedSessions: 0, expiredSessions: 0, averageSessionDuration: 0 } }))
+      return
+    }
+
     res.status(response.status);
 
     for (const [key, value] of response.headers.entries()) {
