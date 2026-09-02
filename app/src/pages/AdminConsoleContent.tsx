@@ -1,19 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { adminApi } from '../lib/adminApi'
-import { Banknote, ArrowUpRight, Link2 as LinkIcon } from 'lucide-react'
+import { Banknote } from 'lucide-react'
+import { AdminOnchainQueue } from './AdminOnchainQueue'
+import { AdminWithdrawalQueue } from './AdminWithdrawalQueue'
 
 export function AdminConsoleContent({ onPendingDepositsLoaded }: { onPendingDepositsLoaded?: (n: number) => void } = {}) {
   const [pendingDeposits, setPendingDeposits] = useState<Awaited<ReturnType<typeof adminApi.listPendingDeposits>>['deposits']>([])
   const [pendingLoading, setPendingLoading] = useState(true)
   const [busyTx, setBusyTx] = useState<string | null>(null)
-  const [onchain, setOnchain] = useState<Awaited<ReturnType<typeof adminApi.listOnchainDeposits>>['pendingDeposits']>([])
-  const [onchainLoading, setOnchainLoading] = useState(true)
-  const [busyOnchain, setBusyOnchain] = useState<string | null>(null)
-  const [pendingWithdrawals, setPendingWithdrawals] = useState<Awaited<ReturnType<typeof adminApi.listPendingWithdrawals>>['withdrawals']>([])
-  const [withdrawalsLoading, setWithdrawalsLoading] = useState(true)
-  const [busyWithdrawal, setBusyWithdrawal] = useState<string | null>(null)
 
   const refreshPending = () => {
     setPendingLoading(true)
@@ -26,31 +21,9 @@ export function AdminConsoleContent({ onPendingDepositsLoaded }: { onPendingDepo
       .finally(() => setPendingLoading(false))
   }
 
-  const refreshOnchain = () => {
-    setOnchainLoading(true)
-    adminApi.listOnchainDeposits('pending')
-      .then((r) => setOnchain(r.pendingDeposits))
-      .catch(() => {})
-      .finally(() => setOnchainLoading(false))
-  }
-
-  const refreshWithdrawals = () => {
-    setWithdrawalsLoading(true)
-    adminApi.listPendingWithdrawals()
-      .then((r) => setPendingWithdrawals(r.withdrawals))
-      .catch(() => {})
-      .finally(() => setWithdrawalsLoading(false))
-  }
-
   useEffect(() => {
     refreshPending()
-    refreshOnchain()
-    refreshWithdrawals()
-    const t = setInterval(() => {
-      refreshPending()
-      refreshOnchain()
-      refreshWithdrawals()
-    }, 30_000)
+    const t = setInterval(refreshPending, 30_000)
     return () => clearInterval(t)
   }, [])
 
@@ -78,78 +51,6 @@ export function AdminConsoleContent({ onPendingDepositsLoaded }: { onPendingDepo
       toast.error((e as { error?: string }).error || 'Rejection failed')
     } finally {
       setBusyTx(null)
-    }
-  }
-
-  async function handleApproveOnchain(d: typeof onchain[number]) {
-    const currencyInput = window.prompt(
-      `Credit user as which currency?\n(Default: ${d.asset}. Type USD to credit cash equivalent instead.)`,
-      d.asset,
-    )
-    if (currencyInput === null) return
-    const amountInput = window.prompt(
-      `Credit how much ${currencyInput}?\n(Default: ${d.amount} — the on-chain amount.)`,
-      String(d.amount),
-    )
-    if (amountInput === null) return
-    const amount = Number(amountInput)
-    if (!Number.isFinite(amount) || amount <= 0) {
-      toast.error('Invalid amount')
-      return
-    }
-    const note = window.prompt('Optional note for the audit log / user notification:', '') || undefined
-    setBusyOnchain(d.id)
-    try {
-      await adminApi.approveOnchainDeposit(d.id, { currency: currencyInput.trim().toUpperCase(), amount, note })
-      toast.success(`Credited ${amount} ${currencyInput} to ${d.user.email}`)
-      refreshOnchain()
-    } catch (e) {
-      toast.error((e as { error?: string }).error || 'Approval failed')
-    } finally {
-      setBusyOnchain(null)
-    }
-  }
-
-  async function handleRejectOnchain(d: typeof onchain[number]) {
-    const note = window.prompt('Reason for rejection (shown to user)?', '') || ''
-    setBusyOnchain(d.id)
-    try {
-      await adminApi.rejectOnchainDeposit(d.id, note)
-      toast.success('On-chain deposit rejected')
-      refreshOnchain()
-    } catch (e) {
-      toast.error((e as { error?: string }).error || 'Rejection failed')
-    } finally {
-      setBusyOnchain(null)
-    }
-  }
-
-  async function handleApproveWithdrawal(id: string) {
-    const txHash = window.prompt('Enter the on-chain transaction hash for this payout:')
-    if (!txHash) return
-    setBusyWithdrawal(id)
-    try {
-      await adminApi.approveWithdrawal(id, txHash)
-      toast.success('Withdrawal approved — user notified')
-      refreshWithdrawals()
-    } catch (e) {
-      toast.error((e as { error?: string }).error || 'Approval failed')
-    } finally {
-      setBusyWithdrawal(null)
-    }
-  }
-
-  async function handleRejectWithdrawal(id: string) {
-    const reason = window.prompt('Reason for rejection (shown to user)?', '') || ''
-    setBusyWithdrawal(id)
-    try {
-      await adminApi.rejectWithdrawal(id, reason)
-      toast.success('Withdrawal rejected — balance refunded to user')
-      refreshWithdrawals()
-    } catch (e) {
-      toast.error((e as { error?: string }).error || 'Rejection failed')
-    } finally {
-      setBusyWithdrawal(null)
     }
   }
 
@@ -187,6 +88,8 @@ export function AdminConsoleContent({ onPendingDepositsLoaded }: { onPendingDepo
           </div>
         )}
       </section>
+      <AdminOnchainQueue />
+      <AdminWithdrawalQueue />
     </>
   )
 }
