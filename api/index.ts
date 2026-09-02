@@ -4,7 +4,6 @@ export const config = {
   runtime: 'nodejs',
 };
 
-// Production API on Render — keep in sync with live service URL
 const BACKEND_URL =
   process.env.VERDEXIS_BACKEND_URL ||
   process.env.BACKEND_URL ||
@@ -15,13 +14,19 @@ function requestPath(req: VercelRequest): string {
   return raw.split('?')[0]
 }
 
+function isSecuritySessions(req: VercelRequest): boolean {
+  const url = String(req.url || '')
+  const path = requestPath(req)
+  return path.includes('security/sessions') || url.includes('security/sessions')
+}
+
 export default async (req: VercelRequest, res: VercelResponse) => {
   try {
     const pathWithQuery = req.url?.includes('?')
       ? req.url
       : `${req.url || '/'}${Object.keys(req.query || {}).length > 0 ? '?' + new URLSearchParams(req.query as Record<string, string>).toString() : ''}`;
 
-    const targetUrl = `${BACKEND_URL}${pathWithQuery}`;
+    const targetUrl = `${BACKEND_URL}${pathWithQuery.startsWith('/api') ? pathWithQuery : `/api${pathWithQuery}`}`;
     console.log(`Proxying ${req.method} ${targetUrl}`);
 
     const headers: Record<string, string> = {};
@@ -43,11 +48,14 @@ export default async (req: VercelRequest, res: VercelResponse) => {
     });
 
     const data = await response.text();
+    let parsedPath = ''
+    try { parsedPath = String((JSON.parse(data) as { path?: string }).path || '') } catch { /* ignore */ }
 
-    // The admin console calls /api/security/sessions. Older Render builds
-    // do not mount that router, so the proxy used to forward a raw 404 and
-    // the dashboard treated the whole page as failed.
-    if (response.status === 404 && req.method === 'GET' && requestPath(req).startsWith('/api/security/sessions')) {
+    if (
+      req.method === 'GET' &&
+      (response.status === 404 || parsedPath.includes('/api/security/sessions')) &&
+      (isSecuritySessions(req) || parsedPath.includes('/api/security/sessions'))
+    ) {
       const hasUser = /[?&]userId=/.test(String(req.url || ''))
       res.status(200).setHeader('content-type', 'application/json')
       res.end(hasUser
