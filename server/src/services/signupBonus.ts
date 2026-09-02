@@ -1,5 +1,6 @@
 import { prisma } from '../db.js'
 import { recordLedgerTransaction, recordLedgerBalanceReservation } from './ledger.js'
+import { parsePrefs, applyBonusLock, clearBonusLock } from './bonusLock.js'
 
 const ASSET = 'USD'
 const KEY_ENABLED = 'signup_bonus_enabled'
@@ -44,14 +45,12 @@ export async function grantSignupBonusIfEligible(userId: string): Promise<{
     const externalRef = `signup-bonus:${userId}`
     const lockRef = `signup-bonus-lock:${userId}`
 
-    // Already granted?
     const existing = await prisma.financialEvent.findUnique({ where: { externalRef } }).catch(() => null)
     if (existing) {
       return { granted: false, amountUsd, reason: 'already_granted' }
     }
 
     await prisma.$transaction(async (tx) => {
-      // 1) Credit total balance (ledger debit = user credit in this codebase)
       await recordLedgerTransaction({
         tx,
         userId,
@@ -76,7 +75,6 @@ export async function grantSignupBonusIfEligible(userId: string): Promise<{
         subType: 'signup_bonus',
       })
 
-      // 2) Lock so it cannot be withdrawn/transferred until admin unlock
       await recordLedgerBalanceReservation({
         tx,
         userId,
@@ -105,6 +103,14 @@ export async function grantSignupBonusIfEligible(userId: string): Promise<{
       }).catch(() => null)
     })
 
+    try {
+      const row = await prisma.user.findUnique({ where: { id: userId }, select: { prefs: true } })
+      const prefs = applyBonusLock(parsePrefs(row?.prefs), { amountUsd, source: 'signup_bonus' })
+      await prisma.user.update({ where: { id: userId }, data: { prefs: JSON.stringify(prefs) } })
+    } catch (prefErr) {
+      console.error('[signup-bonus] failed to persist prefs lock', userId, prefErr)
+    }
+
     console.log(`[signup-bonus] granted $${amountUsd} (locked) to user ${userId}`)
     return { granted: true, amountUsd }
   } catch (e) {
@@ -113,9 +119,20 @@ export async function grantSignupBonusIfEligible(userId: string): Promise<{
   }
 }
 
+async function clearPrefsLock(userId: string, adminId: string) {
+  try {
+    const row = await prisma.user.findUnique({ where: { id: userId }, select: { prefs: true } })
+    const prefs = clearBonusLock(parsePrefs(row?.prefs), adminId)
+    await prisma.user.update({ where: { id: userId }, data: { prefs: JSON.stringify(prefs) } })
+  } catch (prefErr) {
+    console.error('[signup-bonus] failed to clear prefs lock', userId, prefErr)
+  }
+}
+
 /**
  * Admin unlock: move locked signup bonus into available balance.
  * Idempotent via financialEvent.externalRef = `signup-bonus-unlock:{userId}`.
+ * Always clears prefs lock flags so withdrawals reopen even if ledger was already unlocked.
  */
 export async function unlockSignupBonus(
   userId: string,
@@ -123,18 +140,18 @@ export async function unlockSignupBonus(
 ): Promise<{ unlocked: boolean; amountUsd: number; reason?: string }> {
   const creditRef = `signup-bonus:${userId}`
   const unlockRef = `signup-bonus-unlock:${userId}`
+  await clearPrefsLock(userId, adminId)
 
   const already = await prisma.financialEvent.findUnique({ where: { externalRef: unlockRef } }).catch(() => null)
   if (already) {
-    return { unlocked: false, amountUsd: 0, reason: 'already_unlocked' }
+    return { unlocked: true, amountUsd: 0, reason: 'already_unlocked' }
   }
 
   const creditEvent = await prisma.financialEvent.findUnique({ where: { externalRef: creditRef } }).catch(() => null)
   if (!creditEvent) {
-    return { unlocked: false, amountUsd: 0, reason: 'no_bonus_credited' }
+    return { unlocked: true, amountUsd: 0, reason: 'no_bonus_credited' }
   }
 
-  // Prefer amount from lock event metadata / account locked balance
   let amountUsd = 0
   try {
     const details = creditEvent.details ? JSON.parse(creditEvent.details) : {}
@@ -147,12 +164,11 @@ export async function unlockSignupBonus(
     const ab = await prisma.accountBalance.findUnique({
       where: { userId_asset: { userId, asset: ASSET } },
     })
-    // lockedMinorUnits is in cents for USD
     amountUsd = ab ? Number(ab.lockedMinorUnits) / 100 : 0
   }
 
   if (amountUsd <= 0) {
-    return { unlocked: false, amountUsd: 0, reason: 'nothing_to_unlock' }
+    return { unlocked: true, amountUsd: 0, reason: 'nothing_to_unlock' }
   }
 
   await prisma.$transaction(async (tx) => {
