@@ -73,3 +73,20 @@ function publicUser(u: any) {
     prefs: typeof u.prefs === 'string' ? (() => { try { return JSON.parse(u.prefs) } catch { return {} } })() : (u.prefs || {}),
   }
 }
+
+function buildPendingVerificationPayload(opts: {
+  kind: 'signup' | 'login'
+  pendingToken: string
+  email: string
+}) {
+  return {
+    otpRequired: true as const,
+    pendingToken: opts.pendingToken,
+    verificationType: opts.kind,
+    email: opts.email,
+    message:
+      opts.kind === 'signup'
+        ? 'Check your email for a 6-digit verification code to complete registration.'
+        : 'Check your email for a 6-digit code to continue signing in.',
+  }
+}
