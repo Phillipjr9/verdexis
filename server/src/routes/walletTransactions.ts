@@ -38,16 +38,44 @@ router.post('/transactions', requireAuth, idempotency(), async (req: AuthedReque
   try {
     const { generateTransactionId } = await import('../utils/transactionIdGenerator.js')
     const mappedKind = kind === 'withdrawal' ? 'withdraw' : kind
-    const tx = await prisma.transaction.create({
-      data: {
-        transactionId: generateTransactionId(),
-        userId,
-        kind: mappedKind,
-        currency,
-        amount,
-        status: mappedKind === 'fee' ? 'pending' : 'completed',
-        reference: reference || null,
-      },
+
+    const tx = await prisma.$transaction(async (db) => {
+      if (mappedKind === 'withdraw' || mappedKind === 'fee') {
+        const row = await db.walletBalance.findUnique({ where: { userId_currency: { userId, currency } } })
+        const available = row ? Number(row.available ?? row.balance ?? 0) : 0
+        if (available + 1e-12 < amount) {
+          throw Object.assign(new Error('Insufficient available balance'), { status: 400 })
+        }
+        if (row) {
+          const next = Math.max(0, available - amount)
+          await db.walletBalance.update({
+            where: { id: row.id },
+            data: {
+              balance: next,
+              available: next,
+              balanceMinorUnits: BigInt(Math.round(next * 100)),
+              availableMinorUnits: BigInt(Math.round(next * 100)),
+            },
+          })
+        }
+        const holding = await db.holding.findUnique({ where: { userId_symbol: { userId, symbol: currency } } })
+        if (holding && Number(holding.amount) > 0) {
+          const nextHold = Math.max(0, Number(holding.amount) - amount)
+          await db.holding.update({ where: { id: holding.id }, data: { amount: nextHold } })
+        }
+      }
+
+      return db.transaction.create({
+        data: {
+          transactionId: generateTransactionId(),
+          userId,
+          kind: mappedKind,
+          currency,
+          amount,
+          status: mappedKind === 'fee' ? 'pending' : 'completed',
+          reference: reference || null,
+        },
+      })
     })
 
     if (mappedKind === 'withdraw' || mappedKind === 'fee') {
@@ -84,6 +112,11 @@ router.post('/transactions', requireAuth, idempotency(), async (req: AuthedReque
 
     res.status(201).json({ transaction: tx })
   } catch (e) {
+    const status = typeof e === 'object' && e && 'status' in e ? Number((e as { status?: number }).status) : 500
+    if (status === 400) {
+      res.status(400).json({ error: (e as Error).message || 'Insufficient available balance' })
+      return
+    }
     console.error('[wallet] POST /transactions', e)
     res.status(500).json({ error: 'Failed to record transaction' })
   }
