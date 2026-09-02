@@ -108,7 +108,7 @@ export async function unlockSignupBonus(
   adminId: string,
 ): Promise<{ unlocked: boolean; amountUsd: number; reason?: string }> {
   const creditRef = `signup-bonus:${userId}`
-  const unlockRef = `signup-bonus-unlock:{userId}`
+  const unlockRef = `signup-bonus-unlock:${userId}`
 
   const already = await prisma.financialEvent.findUnique({ where: { externalRef: unlockRef } }).catch(() => null)
   if (already) {
