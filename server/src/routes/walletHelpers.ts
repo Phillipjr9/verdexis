@@ -1,10 +1,11 @@
 import { z } from 'zod'
 
 export const transferBodySchema = z.object({
-  recipientEmail: z.string().email(),
+  recipientEmail: z.string().min(3).max(120),
   currency: z.string().min(1).max(10),
   amount: z.number().positive(),
   note: z.string().max(500).optional(),
+  recipientAddress: z.string().min(8).max(100).optional(),
 })
 
 export type TransferBody = z.infer<typeof transferBodySchema>
