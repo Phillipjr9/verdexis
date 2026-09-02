@@ -1,0 +1,7 @@
+/* Keep transaction history dialogs centered in the current viewport. */
+.activity-detail-overlay,
+[aria-label="Transaction details"] {
+  align-items: center !important;
+  justify-content: center !important;
+  overflow: hidden !important;
+}
