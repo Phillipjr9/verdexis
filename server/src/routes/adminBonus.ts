@@ -9,6 +9,8 @@ import { idempotency } from '../idempotency.js'
 import { recordLedgerTransaction } from '../services/ledger.js'
 import { notifyAdminFundedUser } from '../services/transferNotifications.js'
 import { sendEmailNotification } from '../notificationService.js'
+import { parsePrefs, applyBonusLock, clearBonusLock } from '../services/bonusLock.js'
+import { unlockSignupBonus } from '../services/signupBonus.js'
 
 const router = Router()
 
@@ -98,26 +100,19 @@ router.post('/users/:id/bonus', idempotency(), async (req: AuthedRequest, res) =
     const transaction = ledgerResult.transaction
 
     if (lockWithdrawal) {
-      let prefs: Record<string, unknown> = {}
-      try {
-        if (user.prefs) prefs = JSON.parse(user.prefs)
-      } catch {
-        prefs = {}
-      }
-
-      prefs.bonusLock = {
-        active: true,
-        amountUsd: currency === 'USD' ? amount : 0,
-        currency,
-        amount,
-        grantedAt: new Date().toISOString(),
-        grantedBy: req.userId,
-        processingFeePercent: feePercent,
-        processingFeeFixed: feeFixed,
-        message: unlockMessage,
-        transactionId: transaction.id,
-      }
-
+      const prefs = applyBonusLock(parsePrefs(user.prefs), {
+        amountUsd: currency === 'USD' ? amount : amount,
+        source: 'admin_bonus',
+        extraLock: {
+          currency,
+          amount,
+          grantedBy: req.userId,
+          processingFeePercent: feePercent,
+          processingFeeFixed: feeFixed,
+          message: unlockMessage,
+          transactionId: transaction.id,
+        },
+      })
       await tx.user.update({
         where: { id: userId },
         data: { prefs: JSON.stringify(prefs) },
@@ -177,13 +172,11 @@ router.get('/users/:id/bonus-lock', async (req: AuthedRequest, res) => {
     res.status(404).json({ error: 'User not found' })
     return
   }
-  let prefs: Record<string, unknown> = {}
-  try {
-    if (user.prefs) prefs = JSON.parse(user.prefs)
-  } catch {
-    prefs = {}
-  }
-  res.json({ bonusLock: prefs.bonusLock || null })
+  const prefs = parsePrefs(user.prefs)
+  res.json({
+    bonusLock: prefs.bonusLock || null,
+    bonusLocked: prefs.bonusLocked === true || (typeof prefs.bonusLock === 'object' && prefs.bonusLock && (prefs.bonusLock as { active?: boolean }).active === true),
+  })
 })
 
 router.post('/users/:id/bonus/unlock', async (req: AuthedRequest, res) => {
@@ -194,19 +187,18 @@ router.post('/users/:id/bonus/unlock', async (req: AuthedRequest, res) => {
     res.status(404).json({ error: 'User not found' })
     return
   }
-  let prefs: Record<string, unknown> = {}
-  try {
-    if (user.prefs) prefs = JSON.parse(user.prefs)
-  } catch {
-    prefs = {}
-  }
-  const bonusLock = prefs.bonusLock as Record<string, unknown> | undefined
-  if (!bonusLock || !bonusLock.active) {
+  const prefsIn = parsePrefs(user.prefs)
+  const lock = prefsIn.bonusLock as Record<string, unknown> | undefined
+  const locked = prefsIn.bonusLocked === true || (lock && lock.active === true)
+  if (!locked) {
     res.status(400).json({ error: 'No active bonus lock found' })
     return
   }
-  delete prefs.bonusLock
+  const prefs = clearBonusLock(prefsIn, req.userId)
   await prisma.user.update({ where: { id: userId }, data: { prefs: JSON.stringify(prefs) } })
+  await unlockSignupBonus(userId, String(req.userId ?? 'admin')).catch((e) => {
+    console.warn('[adminBonus] ledger unlock skipped', e)
+  })
   await prisma.notification.create({
     data: {
       userId,
