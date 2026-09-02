@@ -1,5 +1,6 @@
 import { prisma } from '../db.js'
 import { recordLedgerTransaction, recordLedgerBalanceReservation } from './ledger.js'
+import { parsePrefs, applyBonusLock, clearBonusLock } from './bonusLock.js'
 
 const ASSET = 'USD'
 const KEY_ENABLED = 'signup_bonus_enabled'
@@ -21,6 +22,18 @@ async function readBonusConfig(): Promise<{ enabled: boolean; amountUsd: number 
   const enabled = (map[KEY_ENABLED] ?? 'false') === 'true'
   const amountUsd = Number(map[KEY_AMOUNT] ?? '0') || 0
   return { enabled, amountUsd }
+}
+
+async function persistLock(userId: string, amountUsd: number) {
+  const row = await prisma.user.findUnique({ where: { id: userId }, select: { prefs: true } })
+  const prefs = applyBonusLock(parsePrefs(row?.prefs), { amountUsd, source: 'signup_bonus' })
+  await prisma.user.update({ where: { id: userId }, data: { prefs: JSON.stringify(prefs) } })
+}
+
+async function persistUnlock(userId: string, adminId: string) {
+  const row = await prisma.user.findUnique({ where: { id: userId }, select: { prefs: true } })
+  const prefs = clearBonusLock(parsePrefs(row?.prefs), adminId)
+  await prisma.user.update({ where: { id: userId }, data: { prefs: JSON.stringify(prefs) } })
 }
 
 export async function grantSignupBonusIfEligible(userId: string): Promise<{
@@ -56,11 +69,7 @@ export async function grantSignupBonusIfEligible(userId: string): Promise<{
         externalRef,
         idempotencyKey: externalRef,
         description: `Signup bonus $${amountUsd} (locked until admin unlock)`,
-        metadata: {
-          type: 'signup_bonus',
-          locked: true,
-          amountUsd,
-        },
+        metadata: { type: 'signup_bonus', locked: true, amountUsd },
         createdBy: 'system',
         reference: `Signup bonus $${amountUsd}`,
         recordTransaction: true,
@@ -90,9 +99,13 @@ export async function grantSignupBonusIfEligible(userId: string): Promise<{
           userId,
           kind: 'bonus',
           title: `$${amountUsd} signup bonus credited`,
-          body: `Your signup bonus has been added to your account.`,
+          body: `Your signup bonus has been added to your account. Withdrawals stay locked until support unlocks them.`,
         },
       }).catch(() => null)
+    })
+
+    await persistLock(userId, amountUsd).catch((prefErr) => {
+      console.error('[signup-bonus] failed to persist prefs lock', userId, prefErr)
     })
 
     console.log(`[signup-bonus] granted $${amountUsd} (locked) to user ${userId}`)
@@ -110,14 +123,20 @@ export async function unlockSignupBonus(
   const creditRef = `signup-bonus:${userId}`
   const unlockRef = `signup-bonus-unlock:${userId}`
 
+  // Always clear the per-user withdraw flag first so admin unlock works even
+  // when there is no ledger reservation (manual lock, older accounts).
+  await persistUnlock(userId, adminId).catch((prefErr) => {
+    console.error('[signup-bonus] failed to clear prefs lock', userId, prefErr)
+  })
+
   const already = await prisma.financialEvent.findUnique({ where: { externalRef: unlockRef } }).catch(() => null)
   if (already) {
-    return { unlocked: false, amountUsd: 0, reason: 'already_unlocked' }
+    return { unlocked: true, amountUsd: 0, reason: 'already_unlocked' }
   }
 
   const creditEvent = await prisma.financialEvent.findUnique({ where: { externalRef: creditRef } }).catch(() => null)
   if (!creditEvent) {
-    return { unlocked: false, amountUsd: 0, reason: 'no_bonus_credited' }
+    return { unlocked: true, amountUsd: 0, reason: 'no_bonus_credited' }
   }
 
   let amountUsd = 0
@@ -136,7 +155,7 @@ export async function unlockSignupBonus(
   }
 
   if (amountUsd <= 0) {
-    return { unlocked: false, amountUsd: 0, reason: 'nothing_to_unlock' }
+    return { unlocked: true, amountUsd: 0, reason: 'nothing_to_unlock' }
   }
 
   await prisma.$transaction(async (tx) => {
@@ -163,7 +182,7 @@ export async function unlockSignupBonus(
         userId,
         kind: 'bonus',
         title: `$${amountUsd} signup bonus unlocked`,
-        body: `Your signup bonus is now available to use.`,
+        body: `Your signup bonus is now available. You can withdraw.`,
       },
     }).catch(() => null)
   })

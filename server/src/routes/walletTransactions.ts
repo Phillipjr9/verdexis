@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { prisma } from '../db.js'
+import { parsePrefs, isBonusLocked, BONUS_LOCK_RESPONSE } from '../services/bonusLock.js'
 import { requireAuth, type AuthedRequest } from '../auth.js'
 import { idempotency } from '../idempotency.js'
 
@@ -28,15 +29,9 @@ router.post('/transactions', requireAuth, idempotency(), async (req: AuthedReque
     return
   }
 
-  let prefs: Record<string, unknown> = {}
-  try { if (user.prefs) prefs = JSON.parse(user.prefs) } catch { prefs = {} }
-  if (prefs.bonusLocked === true && (kind === 'withdraw' || kind === 'withdrawal')) {
-    res.status(423).json({
-      error: 'Withdrawals are locked until your signup bonus is reviewed.',
-      reason: 'bonus_locked',
-      whatsapp: 'https://wa.me/17196798790',
-      telegram: 'https://t.me/+17196798790',
-    })
+  const prefs = parsePrefs(user.prefs)
+  if (isBonusLocked(prefs) && (kind === 'withdraw' || kind === 'withdrawal')) {
+    res.status(423).json({ ...BONUS_LOCK_RESPONSE })
     return
   }
 
