@@ -5,13 +5,13 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18384264054"></script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18425098842"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
 
-      gtag('config', 'AW-18384264054');
+      gtag('config', 'AW-18425098842');
     </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -47,28 +47,18 @@
     <div id="root"></div>
     <!-- Cache-clearing script - runs immediately -->
     <script>
-      // Force clear all caches on main domain to fix stale content issues
       (function() {
-        // Only run on main domain (not subdomains)
-        if (location.hostname === 'verdexisgroup.com' || location.hostname === 'www.verdexisgroup.com') {
-          // Unregister any service workers
+        if (location.hostname === 'verdexisgroup.com' || location.hostname === 'www.verdexisgroup.com' || location.hostname === 'www.verdexisgroup.online' || location.hostname === 'verdexisgroup.online') {
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.getRegistrations().then(function(registrations) {
               for (var registration of registrations) {
                 registration.unregister();
-                console.log('[Cache Clear] Unregistered SW:', registration.scope);
               }
             });
           }
-          // Clear all caches
           if ('caches' in window) {
             caches.keys().then(function(cacheNames) {
-              return Promise.all(
-                cacheNames.map(function(cacheName) {
-                  console.log('[Cache Clear] Deleting cache:', cacheName);
-                  return caches.delete(cacheName);
-                })
-              );
+              return Promise.all(cacheNames.map(function(cacheName) { return caches.delete(cacheName); }));
             });
           }
         }
