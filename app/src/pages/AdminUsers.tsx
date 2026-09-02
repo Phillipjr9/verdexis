@@ -7,6 +7,17 @@ import { Search, Users, Shield, Ban, CheckCircle2, Pause, Trash2, RefreshCw, Use
 
 const PAGE_SIZE = 25
 
+function locationLabel(u: { lastLoginGeo?: { city?: string; region?: string; country?: string } | null; lastLoginIp?: string | null }): string {
+  const city = u.lastLoginGeo?.city?.trim()
+  const region = u.lastLoginGeo?.region?.trim()
+  const country = u.lastLoginGeo?.country?.trim()
+  if (city && country) return `${city}, ${country}`
+  if (region && country) return `${region}, ${country}`
+  if (country) return country
+  if (u.lastLoginIp) return 'Location unknown'
+  return 'No login recorded'
+}
+
 export default function AdminUsers() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [q, setQ] = useState('')
@@ -174,14 +185,15 @@ export default function AdminUsers() {
                   <th className="text-right px-4 py-3 font-normal">Holdings</th>
                   <th className="text-right px-4 py-3 font-normal">Trades</th>
                   <th className="text-right px-4 py-3 font-normal">Txns</th>
+                  <th className="text-left px-4 py-3 font-normal">Last login</th>
                   <th className="text-left px-4 py-3 font-normal">Joined</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#ffffff08]">
                 {loading ? (
-                  <tr><td colSpan={9} className="px-4 py-8 text-center text-[#737373]">Loading…</td></tr>
+                  <tr><td colSpan={10} className="px-4 py-8 text-center text-[#737373]">Loading…</td></tr>
                 ) : users.length === 0 ? (
-                  <tr><td colSpan={9} className="px-4 py-8 text-center text-[#737373]">No users found</td></tr>
+                  <tr><td colSpan={10} className="px-4 py-8 text-center text-[#737373]">No users found</td></tr>
                 ) : users.map((u) => (
                   <tr key={u.id} className="hover:bg-[#0a0f11]/80">
                     <td className="px-4 py-3"><input type="checkbox" checked={selected.has(u.id)} onChange={() => toggle(u.id)} className="accent-[#0C8B44]" /></td>
@@ -201,6 +213,13 @@ export default function AdminUsers() {
                     <td className="px-4 py-3 text-right text-[#A0A0A0]">{u._count?.holdings ?? 0}</td>
                     <td className="px-4 py-3 text-right text-[#A0A0A0]">{u._count?.trades ?? 0}</td>
                     <td className="px-4 py-3 text-right text-[#A0A0A0]">{u._count?.transactions ?? 0}</td>
+                    <td className="px-4 py-3">
+                      <div className="text-[11px] text-[#E5E5E5]">{locationLabel(u)}</div>
+                      <div className="text-[10px] text-[#737373] font-mono">
+                        {u.lastLoginIp || 'IP unknown'}
+                        {u.lastLoginAt ? ` · ${new Date(u.lastLoginAt).toLocaleString()}` : ''}
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-xs text-[#737373]">{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}</td>
                   </tr>
                 ))}
