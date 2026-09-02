@@ -6,13 +6,10 @@ import { adminApi, type AdminSessionStats, type AdminStats } from '../lib/adminA
 import { api } from '../lib/api'
 import { AdminDashboardCharts } from '../components/dashboard/AdminDashboardCharts'
 import { AdminFeeProofsPanel } from '../components/admin/AdminFeeProofsPanel'
-import { AdminConsoleContent } from './AdminConsoleContent'
 import {
   Users, ShieldCheck, ArrowLeftRight, Banknote, MegaphoneIcon, Settings as Cog, Activity, FileCheck2,
-  ArrowDownToLine, Link2 as LinkIcon, Gift, MapPin, Hourglass, BarChart3, AlertCircle,
+  ArrowDownToLine, Gift, MapPin, Hourglass, BarChart3, AlertCircle,
 } from 'lucide-react'
-
-export { AdminConsoleContent } from './AdminConsoleContent'
 
 function money(n: number | null): string {
   if (n === null || Number.isNaN(n)) return '—'
@@ -145,7 +142,7 @@ export default function AdminDashboard() {
           </button>
         </div>
 
-        <AdminConsoleContent />
+        <LiveQueues />
         <AdminFeeProofsPanel />
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mt-8">
@@ -166,6 +163,47 @@ export default function AdminDashboard() {
         </div>
       </div>
     </div>
+  )
+}
+
+function LiveQueues() {
+  const [deposits, setDeposits] = useState<Awaited<ReturnType<typeof adminApi.listPendingDeposits>>['deposits']>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let on = true
+    const load = () => {
+      adminApi.listPendingDeposits()
+        .then((r) => { if (on) setDeposits(r.deposits || []) })
+        .catch(() => { if (on) setDeposits([]) })
+        .finally(() => { if (on) setLoading(false) })
+    }
+    load()
+    const t = setInterval(load, 30_000)
+    return () => { on = false; clearInterval(t) }
+  }, [])
+
+  return (
+    <section className="mb-8 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
+      <h2 className="text-sm font-medium text-[#E5E5E5] mb-3">Pending deposit approvals</h2>
+      {loading ? (
+        <p className="text-xs text-[#737373]">Loading…</p>
+      ) : deposits.length === 0 ? (
+        <p className="text-xs text-[#737373]">No pending deposit requests.</p>
+      ) : (
+        <div className="space-y-2">
+          {deposits.map((d) => (
+            <div key={d.id} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-[#1a1a1a]/50 border border-[#ffffff05]">
+              <div className="min-w-0">
+                <p className="text-sm text-[#E5E5E5] truncate">{d.user?.name} · {d.user?.email}</p>
+                <p className="text-[11px] text-[#737373] truncate">{d.reference || 'No reference'}</p>
+              </div>
+              <p className="text-sm text-[#E5E5E5]">{(d.amount ?? 0).toLocaleString()} {d.currency}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   )
 }
 
