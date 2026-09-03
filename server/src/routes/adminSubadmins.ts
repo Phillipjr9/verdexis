@@ -1,11 +1,15 @@
 import { Router } from 'express'
 import { prisma } from '../db.js'
-import { requireAuth, requireFullAdmin, type AuthedRequest } from '../auth.js'
+import { requireAuth, requireAdmin, type AuthedRequest } from '../auth.js'
 import { sendEmailNotification } from '../notificationService.js'
 
 const router = Router()
 
-router.post('/users/:id/role', requireAuth, requireFullAdmin, async (req: AuthedRequest, res) => {
+router.post('/users/:id/role', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
+  if (req.userRole !== 'admin') {
+    res.status(403).json({ error: 'Full admin only' })
+    return
+  }
   const role = String((req.body as { role?: string })?.role || '').toLowerCase()
   if (role !== 'subadmin' && role !== 'user') {
     res.status(400).json({ error: 'Role must be subadmin or user' })
