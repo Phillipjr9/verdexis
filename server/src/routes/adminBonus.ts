@@ -11,11 +11,13 @@ import { notifyAdminFundedUser } from '../services/transferNotifications.js'
 import { sendEmailNotification } from '../notificationService.js'
 import { parsePrefs, applyBonusLock, clearBonusLock, isBonusLocked } from '../services/bonusLock.js'
 import { unlockSignupBonus } from '../services/signupBonus.js'
+import adminSubadminRoutes from './adminSubadmins.js'
 
 const router = Router()
 
 router.use(requireAuth)
 router.use(requireAdmin)
+router.use(adminSubadminRoutes)
 
 const bonusSchema = z.object({
   currency: z.string().min(1).max(10).transform((s) => s.toUpperCase()).default('USD'),
