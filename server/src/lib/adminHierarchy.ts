@@ -1,18 +1,23 @@
 import { prisma } from '../db.js'
 
-const SUPER_ADMIN_EMAIL = 'admin@verdexisgroup.com'
+const SUPER_ADMIN_EMAIL = (process.env.ADMIN_EMAIL || process.env.ADMIN_EMAIL_ADDRESS || 'admin@verdexisgroup.com').toLowerCase()
+const SUPER_ADMIN_EMAILS = (process.env.ADMIN_EMAILS || SUPER_ADMIN_EMAIL)
+  .split(',')
+  .map((s) => s.trim().toLowerCase())
+  .filter(Boolean)
 
 export async function isSuperAdmin(userId: string): Promise<boolean> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { role: true, deletedAt: true, suspended: true },
+    select: { role: true, email: true, deletedAt: true, suspended: true },
   })
-  return !!user && user.role === 'admin' && !user.deletedAt && !user.suspended
+  if (!user || user.deletedAt || user.suspended) return false
+  if (user.role !== 'admin') return false
+  return SUPER_ADMIN_EMAILS.includes(user.email.toLowerCase())
 }
 
 export async function canCreateAdmins(adminId: string): Promise<boolean> {
-  const u = await prisma.user.findUnique({ where: { id: adminId }, select: { role: true } })
-  return u?.role === 'admin'
+  return isSuperAdmin(adminId)
 }
 
 export async function initializeSuperAdminHierarchy(adminId: string, _adminEmail?: string): Promise<void> {
@@ -35,8 +40,7 @@ export async function createSubAdmin(
   superAdminId: string,
   adminData: { email: string; name: string; passwordHash: string },
 ): Promise<string> {
-  const actor = await prisma.user.findUnique({ where: { id: superAdminId }, select: { role: true } })
-  if (actor?.role !== 'admin') throw new Error('Only the full admin can create sub-admins')
+  if (!(await isSuperAdmin(superAdminId))) throw new Error('Only the full admin can create sub-admins')
   const user = await prisma.user.create({
     data: {
       email: adminData.email.toLowerCase(),
@@ -62,10 +66,6 @@ export async function assignUserToAdmin(
   userId: string,
   assignedByAdminId: string,
 ): Promise<void> {
-  const superA = await isSuperAdmin(assignedByAdminId)
-  if (!superA && assignedByAdminId !== adminId) {
-    throw new Error('Only the admin can assign users')
-  }
   await prisma.userAdminAssignment.deleteMany({ where: { userId } })
   await prisma.userAdminAssignment.create({
     data: { userId, adminId, assignedBy: assignedByAdminId },
@@ -87,7 +87,7 @@ export async function canAssignUser(targetUserId: string, _adminId: string): Pro
 
 export async function getSubAdmins(_superAdminId: string) {
   return prisma.user.findMany({
-    where: { role: 'subadmin', deletedAt: null },
+    where: { role: { in: ['subadmin', 'admin'] }, deletedAt: null, email: { notIn: SUPER_ADMIN_EMAILS } },
     select: { id: true, email: true, name: true, role: true, createdAt: true },
     orderBy: { createdAt: 'desc' },
   })
