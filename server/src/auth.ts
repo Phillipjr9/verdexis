@@ -144,6 +144,16 @@ export function requireAdmin(req: AuthedRequest, res: Response, next: NextFuncti
   const path = `${req.baseUrl || ''}${req.path || ''}`
   const idMatch = path.match(/\/users\/([^/]+)/)
   const targetId = idMatch?.[1]
+  const body = (req.body ?? {}) as Record<string, unknown>
+  if (
+    req.userRole === 'admin' &&
+    targetId &&
+    targetId !== req.userId &&
+    typeof body.role === 'string' &&
+    body.role.toLowerCase() === 'admin'
+  ) {
+    body.role = 'subadmin'
+  }
   if (req.userRole === 'subadmin' && req.method !== 'GET' && targetId && targetId === req.userId && SELF_FUND_RE.test(path)) {
     res.status(403).json({ error: 'Sub-admins cannot fund or adjust their own account' })
     return
@@ -153,7 +163,6 @@ export function requireAdmin(req: AuthedRequest, res: Response, next: NextFuncti
     return
   }
   if (req.userRole === 'subadmin' && req.method !== 'GET') {
-    const body = (req.body ?? {}) as Record<string, unknown>
     const dest = String(body.toUserId || body.userId || body.recipientId || '')
     if (dest && dest === req.userId) {
       res.status(403).json({ error: 'Sub-admins cannot fund their own account' })
