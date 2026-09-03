@@ -3,7 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import Navigation from '../components/Navigation'
 import { adminApi, type AdminUserSummary } from '../lib/adminApi'
-import { Search, Users, Shield, Ban, CheckCircle2, Pause, Trash2, RefreshCw, UserPlus, Lock } from 'lucide-react'
+import { getToken } from '../lib/api'
+import { Search, Users, RefreshCw, UserPlus } from 'lucide-react'
 
 const PAGE_SIZE = 25
 
@@ -18,11 +19,23 @@ function locationLabel(u: { lastLoginGeo?: { city?: string; region?: string; cou
   return 'No login recorded'
 }
 
+async function setRole(id: string, role: 'subadmin' | 'user') {
+  const token = getToken()
+  const res = await fetch(`/api/admin/users/${id}/role`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: JSON.stringify({ role }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error((data as { error?: string }).error || 'Could not update role')
+  return data
+}
+
 export default function AdminUsers() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [q, setQ] = useState('')
   const [page, setPage] = useState(1)
-  const [role, setRole] = useState<'all' | 'user' | 'admin'>((searchParams.get('role') as 'all' | 'user' | 'admin') || 'all')
+  const [role, setRoleFilter] = useState<'all' | 'user' | 'admin' | 'subadmin'>((searchParams.get('role') as 'all' | 'user' | 'admin' | 'subadmin') || 'all')
   const [suspended, setSuspended] = useState<'all' | 'true' | 'false'>((searchParams.get('suspended') as 'all' | 'true' | 'false') || 'all')
   const [kycStatus, setKycStatus] = useState<string>(searchParams.get('kycStatus') || 'all')
   const [users, setUsers] = useState<AdminUserSummary[]>([])
@@ -33,17 +46,16 @@ export default function AdminUsers() {
   const [bulkReason, setBulkReason] = useState('')
   const [bulkHoldType, setBulkHoldType] = useState<'all' | 'withdraw' | 'transfer'>('all')
   const [bulkBusy, setBulkBusy] = useState(false)
-  const [verifyingIds, setVerifyingIds] = useState<Set<string>>(new Set())
-  const [lockingIds, setLockingIds] = useState<Set<string>>(new Set())
+  const [busyId, setBusyId] = useState<string | null>(null)
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const allChecked = useMemo(() => users.length > 0 && users.every((u) => selected.has(u.id)), [users, selected])
 
   function load() {
     setLoading(true)
-    adminApi.listUsers({ q, page, limit: PAGE_SIZE, role, suspended, kycStatus: kycStatus !== 'all' ? kycStatus as 'none' | 'pending' | 'approved' | 'rejected' : undefined })
+    adminApi.listUsers({ q, page, limit: PAGE_SIZE, role: role === 'subadmin' ? 'all' : role, suspended, kycStatus: kycStatus !== 'all' ? kycStatus as 'none' | 'pending' | 'approved' | 'rejected' : undefined })
       .then((r) => {
-        const list = (r.users || []).map((u) => ({
+        let list = (r.users || []).map((u) => ({
           ...u,
           _count: {
             holdings: u._count?.holdings ?? 0,
@@ -52,6 +64,7 @@ export default function AdminUsers() {
             alerts: u._count?.alerts ?? 0,
           },
         }))
+        if (role === 'subadmin') list = list.filter((u) => u.role === 'subadmin')
         setUsers(list)
         setTotal(r.total ?? list.length)
       })
@@ -66,7 +79,6 @@ export default function AdminUsers() {
     if (suspended !== 'all') sp.set('suspended', suspended); else sp.delete('suspended')
     if (kycStatus !== 'all') sp.set('kycStatus', kycStatus); else sp.delete('kycStatus')
     setSearchParams(sp, { replace: true })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role, suspended, kycStatus])
 
   function toggle(id: string) {
@@ -101,6 +113,21 @@ export default function AdminUsers() {
     load()
   }
 
+  async function toggleSubadmin(u: AdminUserSummary) {
+    if (u.role === 'admin') return
+    const next = u.role === 'subadmin' ? 'user' : 'subadmin'
+    setBusyId(u.id)
+    try {
+      await setRole(u.id, next)
+      toast.success(next === 'subadmin' ? `${u.email} is now a sub-admin. They were emailed.` : `Sub-admin access removed from ${u.email}`)
+      setUsers((list) => list.map((row) => row.id === u.id ? { ...row, role: next } : row))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not update role')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#070C0E]">
       <Navigation />
@@ -110,7 +137,7 @@ export default function AdminUsers() {
             <h1 className="text-2xl font-light text-[#E5E5E5] flex items-center gap-3">
               <Users className="w-6 h-6 text-[#0C8B44]" />Users
             </h1>
-            <p className="text-xs text-[#737373] mt-1">{total} accounts</p>
+            <p className="text-xs text-[#737373] mt-1">{total} accounts — use Make sub-admin in the Role column</p>
           </div>
           <Link to="/admin/users/new" className="inline-flex items-center gap-2 rounded-xl bg-[#0C8B44] px-4 py-2 text-sm text-white hover:bg-[#0a7539]">
             <UserPlus className="w-4 h-4" />Create user
@@ -123,10 +150,11 @@ export default function AdminUsers() {
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search email, name, id…"
               className="w-full pl-10 pr-3 py-2 bg-[#0a0f11] border border-[#ffffff10] rounded-lg text-sm text-[#E5E5E5] focus:outline-none focus:border-[#0C8B44]" />
           </div>
-          <select value={role} onChange={(e) => { setRole(e.target.value as typeof role); setPage(1) }}
+          <select value={role} onChange={(e) => { setRoleFilter(e.target.value as typeof role); setPage(1) }}
             className="px-3 py-2 bg-[#0a0f11] border border-[#ffffff10] rounded-lg text-sm text-[#E5E5E5]">
             <option value="all">All roles</option>
             <option value="user">Users</option>
+            <option value="subadmin">Sub-admins</option>
             <option value="admin">Admins</option>
           </select>
           <select value={suspended} onChange={(e) => { setSuspended(e.target.value as typeof suspended); setPage(1) }}
@@ -204,7 +232,19 @@ export default function AdminUsers() {
                       </Link>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`text-[10px] uppercase px-2 py-0.5 rounded-full ${u.role === 'admin' ? 'bg-[#0C8B44]/20 text-[#0C8B44]' : 'bg-[#ffffff10] text-[#A0A0A0]'}`}>{u.role}</span>
+                      <div className="flex flex-col items-start gap-1.5">
+                        <span className={`text-[10px] uppercase px-2 py-0.5 rounded-full ${u.role === 'admin' ? 'bg-[#0C8B44]/20 text-[#0C8B44]' : u.role === 'subadmin' ? 'bg-[#f59e0b]/20 text-[#f59e0b]' : 'bg-[#ffffff10] text-[#A0A0A0]'}`}>{u.role}</span>
+                        {u.role !== 'admin' && (
+                          <button
+                            type="button"
+                            disabled={busyId === u.id}
+                            onClick={() => toggleSubadmin(u)}
+                            className="px-2.5 py-1 rounded-md text-[11px] font-medium bg-[#0C8B44] text-white hover:bg-[#0a7539] disabled:opacity-50"
+                          >
+                            {busyId === u.id ? 'Saving…' : u.role === 'subadmin' ? 'Remove sub-admin' : 'Make sub-admin'}
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-[#A0A0A0]">{u.kycStatus}</td>
                     <td className="px-4 py-3">
