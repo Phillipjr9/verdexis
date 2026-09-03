@@ -1,4 +1,13 @@
-import 'dotenv/config'
+/**
+ * Generate Prisma client. dotenv is optional — Vercel/CI already injects env vars.
+ * Avoids ERR_MODULE_NOT_FOUND when server node_modules is incomplete during install.
+ */
+try {
+  await import('dotenv/config')
+} catch {
+  // dotenv not installed yet or not needed; process.env is used as-is
+}
+
 import { spawnSync } from 'node:child_process'
 import { writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -14,7 +23,7 @@ const config = await resolvePrismaGenerationConfig({
 const { envs, schemaFile, shouldUseSqlite, sqliteSchema } = config
 
 console.warn('[generate-prisma-client] resolved config:', { shouldUseSqlite, schemaFile, hasSqliteSchema: !!sqliteSchema })
-console.warn('[generate-prisma-client] sample envs keys:', Object.keys(envs).slice(0,20))
+console.warn('[generate-prisma-client] sample envs keys:', Object.keys(envs).slice(0, 20))
 
 if (sqliteSchema) {
   await writeFile(schemaFile, sqliteSchema, 'utf8')
