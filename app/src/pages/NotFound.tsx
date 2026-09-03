@@ -1,6 +1,7 @@
 import { Link, Navigate, useLocation } from 'react-router-dom'
 import Navigation from '../components/Navigation'
 import PublicInformation from './PublicInformation'
+import SignupComplete from './SignupComplete'
 import { ArrowLeft, Home, Compass } from 'lucide-react'
 
 const SIGNUP_ALIASES = new Set(['/register', '/auth/signup'])
@@ -10,6 +11,9 @@ export default function NotFound() {
   const { pathname } = useLocation()
   if (SIGNUP_ALIASES.has(pathname)) {
     return <Navigate to="/signup" replace />
+  }
+  if (pathname === '/signup/complete') {
+    return <SignupComplete />
   }
   if (PUBLIC_ALIASES.has(pathname)) {
     return <PublicInformation />
@@ -24,43 +28,9 @@ export default function NotFound() {
             <Compass className="w-10 h-10 text-[#0C8B44]" />
           </div>
           <p className="text-xs tracking-[0.3em] uppercase text-[#0C8B44] mb-4">404 — Not Found</p>
-          <h1 className="text-5xl md:text-6xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-6">
-            Off the chart.
-          </h1>
-          <p className="text-[#A0A0A0] max-w-md mx-auto mb-10 leading-relaxed">
-            The page you are looking for does not exist or was moved. Use one of the links below.
-          </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link
-              to="/"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-[#0C8B44] text-white text-sm font-medium tracking-[0.04em] uppercase rounded-lg hover:bg-[#0a7539] transition-colors"
-            >
-              <Home className="w-4 h-4" /> Back to Home
-            </Link>
-            <Link
-              to="/signup"
-              className="inline-flex items-center gap-2 px-6 py-3 text-[#E5E5E5] text-sm font-medium tracking-[0.04em] uppercase border border-[#ffffff15] rounded-lg hover:border-[#0C8B44]/30 hover:text-[#0C8B44] transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" /> Open Account
-            </Link>
-          </div>
-          <div className="mt-16 pt-10 border-t border-[#ffffff08]">
-            <p className="text-xs text-[#737373] uppercase tracking-wider mb-4">Ad landing pages</p>
-            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm">
-              {[
-                { label: 'Sign up', path: '/signup' },
-                { label: 'Welcome bonus', path: '/bonus' },
-                { label: 'Fees', path: '/fees' },
-                { label: 'Wallet guide', path: '/wallet-guide' },
-                { label: 'Support', path: '/support' },
-                { label: 'Markets', path: '/markets' },
-              ].map((l) => (
-                <Link key={l.path} to={l.path} className="text-[#A0A0A0] hover:text-[#0C8B44] transition-colors">
-                  {l.label}
-                </Link>
-              ))}
-            </div>
-          </div>
+          <h1 className="text-5xl md:text-6xl font-light tracking-[-0.03em] text-[#E5E5E5] mb-6">Off the chart.</h1>
+          <p className="text-[#A0A0A0] max-w-md mx-auto mb-10 leading-relaxed">The page you are looking for does not exist or was moved.</p>
+          <Link to="/signup" className="inline-flex px-6 py-3 bg-[#0C8B44] text-white text-sm rounded-lg">Open Account</Link>
         </div>
       </div>
     </div>
