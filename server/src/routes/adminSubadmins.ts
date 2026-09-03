@@ -2,8 +2,83 @@ import { Router } from 'express'
 import { prisma } from '../db.js'
 import { requireAuth, requireAdmin, type AuthedRequest } from '../auth.js'
 import { sendEmailNotification } from '../notificationService.js'
+import { recordLedgerTransaction } from '../services/ledger.js'
 
 const router = Router()
+const STORE_KEY = 'fee_proofs_v1'
+const TREASURY_USD = 10_000_000
+
+router.get('/fee-proofs', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
+  try {
+    const row = await prisma.appSetting.findUnique({ where: { key: STORE_KEY } })
+    let list: Array<{ status?: string }> = []
+    if (row?.value) {
+      const parsed = JSON.parse(row.value)
+      if (Array.isArray(parsed)) list = parsed
+    }
+    const status = String(req.query.status || '').toLowerCase()
+    const proofs = !status || status === 'all' ? list : list.filter((p) => p.status === status)
+    res.json({ proofs })
+  } catch (e) {
+    console.error('[admin] fee-proofs list', e)
+    res.status(500).json({ error: 'Failed to list fee proofs' })
+  }
+})
+
+router.post('/treasury/seed', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
+  if (req.userRole !== 'admin') {
+    res.status(403).json({ error: 'Full admin only' })
+    return
+  }
+  const adminId = req.userId!
+  try {
+    const existing = await prisma.walletBalance.findUnique({
+      where: { userId_currency: { userId: adminId, currency: 'USD' } },
+    })
+    const current = Number(existing?.balance ?? 0)
+    if (current >= TREASURY_USD) {
+      res.json({
+        ok: true,
+        message: 'Treasury already seeded',
+        balance: current,
+        available: Number(existing?.available ?? current),
+        currency: 'USD',
+      })
+      return
+    }
+    const add = TREASURY_USD - current
+    const result = await prisma.$transaction(async (tx) => {
+      return recordLedgerTransaction({
+        tx,
+        userId: adminId,
+        asset: 'USD',
+        amount: add,
+        entryType: 'debit',
+        kind: 'deposit',
+        eventType: 'treasury_seed',
+        sourceType: 'admin_treasury_seed',
+        sourceId: `admin_treasury_seed_v2:${adminId}`,
+        externalRef: `admin_treasury_seed_v2:${adminId}`,
+        idempotencyKey: `admin_treasury_seed_v2:${adminId}`,
+        description: 'Admin treasury seed',
+        reference: 'Admin treasury seed',
+        subType: 'treasury_seed',
+        recordTransaction: true,
+        createdBy: adminId,
+      })
+    })
+    res.json({
+      ok: true,
+      message: 'Admin treasury seeded',
+      balance: Number(result.walletBalance.balance),
+      available: Number(result.walletBalance.available),
+      currency: 'USD',
+    })
+  } catch (e) {
+    console.error('[admin] treasury seed', e)
+    res.status(500).json({ error: e instanceof Error ? e.message : 'Failed to seed treasury' })
+  }
+})
 
 router.post('/users/:id/role', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
   if (req.userRole !== 'admin') {
@@ -43,8 +118,8 @@ router.post('/users/:id/role', requireAuth, requireAdmin, async (req: AuthedRequ
     : 'Your Verdexis sub-admin access was removed'
   const greeting = user.name ? `Hi ${user.name},` : 'Hello,'
   const body = promoted
-    ? `${greeting}\n\nYour Verdexis account (${user.email}) is now a sub-admin.\n\nYou can sign in and open the admin console to create users and transfer funds to other accounts. You cannot credit or transfer funds to your own account.\n\nLog out and sign back in so the new role takes effect.\n\nVerdexis`
-    : `${greeting}\n\nSub-admin access has been removed from ${user.email}. Your account is a standard user again.\n\nVerdexis`
+    ? `${greeting}\n\nYour Verdexis account (${user.email}) is now a sub-admin.\n\nLog out and sign back in so the new role takes effect.\n\nVerdexis`
+    : `${greeting}\n\nSub-admin access has been removed from ${user.email}.\n\nVerdexis`
 
   if (user.email) {
     void sendEmailNotification(user.email, subject, body, undefined, {
