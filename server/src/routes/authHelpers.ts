@@ -18,6 +18,7 @@ export const ADMIN_EMAILS = (env.ADMIN_EMAILS || '').split(',').map((s: string) 
 export const DEFAULT_ADMIN_EMAIL = 'admin@verdexisgroup.com'
 
 export function publicUser(u: any) {
+  const role = u.role === 'admin' ? 'admin' : u.role === 'subadmin' ? 'subadmin' : 'user'
   return {
     id: u.id,
     email: u.email,
@@ -25,7 +26,7 @@ export function publicUser(u: any) {
     name: u.name,
     avatar: u.avatar ?? null,
     twoFactor: !!u.twoFactor,
-    role: (u.role === 'admin' ? 'admin' : 'user') as 'user' | 'admin',
+    role,
     suspended: !!u.suspended,
     investmentId: u.investmentId ?? null,
     kycStatus: u.kycStatus || 'none',
