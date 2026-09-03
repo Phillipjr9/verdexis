@@ -3,10 +3,15 @@ import { prisma } from '../db.js'
 import { requireAuth, requireAdmin, type AuthedRequest } from '../auth.js'
 import { sendEmailNotification } from '../notificationService.js'
 import { recordLedgerTransaction } from '../services/ledger.js'
+import { rbacPayload } from '../rbac.js'
 
 const router = Router()
 const STORE_KEY = 'fee_proofs_v1'
 const TREASURY_USD = 10_000_000
+
+router.get('/rbac', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
+  res.json(rbacPayload(req.userRole))
+})
 
 router.get('/fee-proofs', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
   try {
@@ -140,7 +145,7 @@ router.post('/users/:id/role', requireAuth, requireAdmin, async (req: AuthedRequ
     },
   }).catch(() => {})
 
-  res.json({ user })
+  res.json({ user, rbac: rbacPayload(user.role) })
 })
 
 export default router
