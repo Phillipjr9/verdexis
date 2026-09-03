@@ -26,6 +26,17 @@ const extras = {
       '/api/admin/treasury/seed',
       { method: 'POST' },
     ),
+  stats: () => adminRequest('/api/admin/stats/scoped'),
 }
 
 Object.assign(adminApi, extras)
+
+const origFetch = window.fetch.bind(window)
+window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+  let url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+  if (/\/api\/admin\/stats(?:\?|$)/.test(url) && !url.includes('/stats/scoped')) {
+    url = url.replace('/api/admin/stats', '/api/admin/stats/scoped')
+    if (typeof input === 'string') return origFetch(url, init)
+  }
+  return origFetch(input, init)
+}
