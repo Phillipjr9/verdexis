@@ -186,7 +186,7 @@ router.get('/pending-deposits', requireAuth, requireAdmin, async (req: AuthedReq
   }
 })
 
-// --- Role switch: user ↔ subadmin (was missing — UI called dead endpoint) ---
+// --- Role switch: user ↔ subadmin ---
 const roleSchema = z.object({
   role: z.enum(['user', 'subadmin', 'admin']),
 })
@@ -219,16 +219,17 @@ router.post('/users/:id/role', requireAuth, requireAdmin, async (req: AuthedRequ
     return
   }
 
-  let nextRole = parsed.data.role
+  const requestedRole = parsed.data.role
   // Never create a second full admin via this endpoint — force subadmin
-  if (nextRole === 'admin') nextRole = 'subadmin'
+  const nextRole: 'user' | 'subadmin' = requestedRole === 'admin' ? 'subadmin' : requestedRole
 
   const superEmails = (process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL || 'admin@verdexisgroup.com')
     .split(',')
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean)
-  if (superEmails.includes(target.email.toLowerCase()) && nextRole !== 'admin') {
-    res.status(400).json({ error: 'Cannot demote the canonical super-admin account' })
+  // Canonical super-admin email cannot have its role changed via this endpoint
+  if (superEmails.includes(target.email.toLowerCase())) {
+    res.status(400).json({ error: 'Cannot change role of the canonical super-admin account' })
     return
   }
 
