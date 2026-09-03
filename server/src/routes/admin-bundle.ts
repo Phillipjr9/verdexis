@@ -1,9 +1,11 @@
 import { Router } from 'express'
 import staff from './admin-staff-fixes.js'
+import invites from './admin-invites.js'
 import admin from './admin.js'
 
 const router = Router()
-// Staff handlers first so /stats, /deposits/pending, /seed-treasury, /users/:id/role win
+// Staff + invites first so they take precedence over the main admin router
 router.use(staff)
+router.use(invites)
 router.use(admin)
 export default router
