@@ -7,10 +7,6 @@ import { idempotency } from '../idempotency.js'
 import { recordLedgerTransaction } from '../services/ledger.js'
 import { rbacPayload } from '../rbac.js'
 
-/**
- * Staff-scope + role fixes mounted BEFORE the main admin router so these
- * handlers win for the same paths (stats, deposits queue, seed, role).
- */
 const router = Router()
 
 const ADMIN_TREASURY_USD = 1_000_000_000_000
@@ -38,7 +34,15 @@ async function audit(actorId: string, action: string, targetUserId: string | nul
   }
 }
 
-// --- RBAC ---------------------------------------------------------------
+async function safeCount(fn: () => Promise<number>): Promise<number> {
+  try {
+    return await fn()
+  } catch (e) {
+    console.warn('[admin-staff] stats count failed', e)
+    return 0
+  }
+}
+
 router.get('/rbac', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
   const superAdmin = await isSuperAdmin(req.userId!)
   res.json({
@@ -48,99 +52,117 @@ router.get('/rbac', requireAuth, requireAdmin, async (req: AuthedRequest, res) =
   })
 })
 
-// --- Scoped stats (overrides global /stats for sub-admins) --------------
 router.get('/stats', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
-  const superAdmin = await isSuperAdmin(req.userId!)
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000)
+  const empty = {
+    users: 0, admins: 0, suspended: 0, holdings: 0, trades: 0, alerts: 0,
+    deposits24h: 0, signups24h: 0, holds: 0, kycPending: 0, withdraws24h: 0, pendingDeposits: 0,
+  }
+  try {
+    const superAdmin = await isSuperAdmin(req.userId!)
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000)
 
-  if (superAdmin) {
-    const [users, admins, suspended, holdings, trades, alerts, deposits24h, signups24h, holds, kycPending, withdraws24h, pendingDeposits, lastBroadcast] =
-      await Promise.all([
-        prisma.user.count(),
-        prisma.user.count({ where: { role: { in: ['admin', 'subadmin'] } } }),
-        prisma.user.count({ where: { suspended: true } }),
-        prisma.holding.count(),
-        prisma.trade.count(),
-        prisma.priceAlert.count({ where: { active: true } }),
-        prisma.transaction.count({ where: { kind: 'deposit', createdAt: { gte: since } } }),
-        prisma.user.count({ where: { createdAt: { gte: since } } }),
-        prisma.user.count({ where: { holdActive: true } }),
-        prisma.user.count({ where: { kycStatus: 'pending' } }),
-        prisma.transaction.count({ where: { kind: 'withdraw', createdAt: { gte: since } } }),
-        prisma.transaction.count({ where: { kind: 'deposit', status: 'pending' } }),
-        prisma.adminAudit.findFirst({
+    if (superAdmin) {
+      const [users, admins, suspended, holdings, trades, alerts, deposits24h, signups24h, holds, kycPending, withdraws24h, pendingDeposits] =
+        await Promise.all([
+          safeCount(() => prisma.user.count()),
+          safeCount(() => prisma.user.count({ where: { role: { in: ['admin', 'subadmin'] } } })),
+          safeCount(() => prisma.user.count({ where: { suspended: true } })),
+          safeCount(() => prisma.holding.count()),
+          safeCount(() => prisma.trade.count()),
+          safeCount(() => prisma.priceAlert.count({ where: { active: true } })),
+          safeCount(() => prisma.transaction.count({ where: { kind: 'deposit', createdAt: { gte: since } } })),
+          safeCount(() => prisma.user.count({ where: { createdAt: { gte: since } } })),
+          safeCount(() => prisma.user.count({ where: { holdActive: true } })),
+          safeCount(() => prisma.user.count({ where: { kycStatus: 'pending' } })),
+          safeCount(() => prisma.transaction.count({ where: { kind: 'withdraw', createdAt: { gte: since } } })),
+          safeCount(() => prisma.transaction.count({ where: { kind: 'deposit', status: 'pending' } })),
+        ])
+      let lastBroadcast: { at: Date; by: string | null; payload: string | null } | null = null
+      try {
+        const row = await prisma.adminAudit.findFirst({
           where: { action: 'notification.broadcast' },
           orderBy: { createdAt: 'desc' },
           include: { actor: { select: { email: true } } },
-        }),
+        })
+        if (row) {
+          lastBroadcast = { at: row.createdAt, by: row.actor?.email ?? null, payload: row.payload }
+        }
+      } catch { /* ignore */ }
+      let recentSignups: Array<{ id: string; email: string; name: string; createdAt: Date; role: string; suspended: boolean }> = []
+      try {
+        recentSignups = await prisma.user.findMany({
+          orderBy: { createdAt: 'desc' },
+          take: 8,
+          select: { id: true, email: true, name: true, createdAt: true, role: true, suspended: true },
+        })
+      } catch { /* ignore */ }
+      let recentTx: unknown[] = []
+      try {
+        recentTx = await prisma.transaction.findMany({
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+          include: { user: { select: { id: true, email: true, name: true } } },
+        })
+      } catch { /* ignore */ }
+      res.json({
+        stats: {
+          users, admins, suspended, holdings, trades, alerts,
+          deposits24h, signups24h, holds, kycPending, withdraws24h, pendingDeposits,
+        },
+        lastBroadcast,
+        recentSignups,
+        recentTx,
+        scope: 'platform',
+      })
+      return
+    }
+
+    const ids = await assignedUserIds(req.userId!)
+    if (ids.length === 0) {
+      res.json({ stats: empty, recentSignups: [], recentTx: [], lastBroadcast: null, scope: 'assigned' })
+      return
+    }
+    const idFilter = { id: { in: ids } }
+    const userIdFilter = { userId: { in: ids } }
+    const [users, suspended, holdings, trades, alerts, deposits24h, signups24h, holds, kycPending, withdraws24h, pendingDeposits] =
+      await Promise.all([
+        safeCount(() => prisma.user.count({ where: idFilter })),
+        safeCount(() => prisma.user.count({ where: { ...idFilter, suspended: true } })),
+        safeCount(() => prisma.holding.count({ where: userIdFilter })),
+        safeCount(() => prisma.trade.count({ where: userIdFilter })),
+        safeCount(() => prisma.priceAlert.count({ where: { ...userIdFilter, active: true } })),
+        safeCount(() => prisma.transaction.count({ where: { ...userIdFilter, kind: 'deposit', createdAt: { gte: since } } })),
+        safeCount(() => prisma.user.count({ where: { ...idFilter, createdAt: { gte: since } } })),
+        safeCount(() => prisma.user.count({ where: { ...idFilter, holdActive: true } })),
+        safeCount(() => prisma.user.count({ where: { ...idFilter, kycStatus: 'pending' } })),
+        safeCount(() => prisma.transaction.count({ where: { ...userIdFilter, kind: 'withdraw', createdAt: { gte: since } } })),
+        safeCount(() => prisma.transaction.count({ where: { ...userIdFilter, kind: 'deposit', status: 'pending' } })),
       ])
-    const recentSignups = await prisma.user.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 8,
-      select: { id: true, email: true, name: true, createdAt: true, role: true, suspended: true },
-    })
+    let recentSignups: Array<{ id: string; email: string; name: string; createdAt: Date; role: string; suspended: boolean }> = []
+    try {
+      recentSignups = await prisma.user.findMany({
+        where: idFilter,
+        orderBy: { createdAt: 'desc' },
+        take: 8,
+        select: { id: true, email: true, name: true, createdAt: true, role: true, suspended: true },
+      })
+    } catch { /* ignore */ }
     res.json({
       stats: {
-        users, admins, suspended, holdings, trades, alerts,
+        users, admins: 0, suspended, holdings, trades, alerts,
         deposits24h, signups24h, holds, kycPending, withdraws24h, pendingDeposits,
       },
-      lastBroadcast: lastBroadcast
-        ? { at: lastBroadcast.createdAt, by: lastBroadcast.actor?.email ?? null, payload: lastBroadcast.payload }
-        : null,
       recentSignups,
-      scope: 'platform',
-    })
-    return
-  }
-
-  const ids = await assignedUserIds(req.userId!)
-  if (ids.length === 0) {
-    res.json({
-      stats: {
-        users: 0, admins: 0, suspended: 0, holdings: 0, trades: 0, alerts: 0,
-        deposits24h: 0, signups24h: 0, holds: 0, kycPending: 0, withdraws24h: 0, pendingDeposits: 0,
-      },
-      recentSignups: [],
+      recentTx: [],
       lastBroadcast: null,
       scope: 'assigned',
     })
-    return
+  } catch (e) {
+    console.error('[admin-staff] /stats failed', e)
+    res.json({ stats: empty, recentSignups: [], recentTx: [], lastBroadcast: null, scope: 'error' })
   }
-
-  const idFilter = { id: { in: ids } }
-  const userIdFilter = { userId: { in: ids } }
-  const [users, suspended, holdings, trades, alerts, deposits24h, signups24h, holds, kycPending, withdraws24h, pendingDeposits] =
-    await Promise.all([
-      prisma.user.count({ where: idFilter }),
-      prisma.user.count({ where: { ...idFilter, suspended: true } }),
-      prisma.holding.count({ where: userIdFilter }),
-      prisma.trade.count({ where: userIdFilter }),
-      prisma.priceAlert.count({ where: { ...userIdFilter, active: true } }),
-      prisma.transaction.count({ where: { ...userIdFilter, kind: 'deposit', createdAt: { gte: since } } }),
-      prisma.user.count({ where: { ...idFilter, createdAt: { gte: since } } }),
-      prisma.user.count({ where: { ...idFilter, holdActive: true } }),
-      prisma.user.count({ where: { ...idFilter, kycStatus: 'pending' } }),
-      prisma.transaction.count({ where: { ...userIdFilter, kind: 'withdraw', createdAt: { gte: since } } }),
-      prisma.transaction.count({ where: { ...userIdFilter, kind: 'deposit', status: 'pending' } }),
-    ])
-  const recentSignups = await prisma.user.findMany({
-    where: idFilter,
-    orderBy: { createdAt: 'desc' },
-    take: 8,
-    select: { id: true, email: true, name: true, createdAt: true, role: true, suspended: true },
-  })
-  res.json({
-    stats: {
-      users, admins: 0, suspended, holdings, trades, alerts,
-      deposits24h, signups24h, holds, kycPending, withdraws24h, pendingDeposits,
-    },
-    recentSignups,
-    lastBroadcast: null,
-    scope: 'assigned',
-  })
 })
 
-// --- Scoped pending funding requests ------------------------------------
 router.get('/deposits/pending', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
   const superAdmin = await isSuperAdmin(req.userId!)
   const where: Record<string, unknown> = { kind: 'deposit', status: 'pending' }
@@ -186,7 +208,6 @@ router.get('/pending-deposits', requireAuth, requireAdmin, async (req: AuthedReq
   }
 })
 
-// --- Role switch: user ↔ subadmin ---
 const roleSchema = z.object({
   role: z.enum(['user', 'subadmin', 'admin']),
 })
@@ -219,16 +240,16 @@ router.post('/users/:id/role', requireAuth, requireAdmin, async (req: AuthedRequ
     return
   }
 
-  const requestedRole = parsed.data.role
-  // Never create a second full admin via this endpoint — force subadmin
-  const nextRole: 'user' | 'subadmin' = requestedRole === 'admin' ? 'subadmin' : requestedRole
+  let nextRole: 'user' | 'subadmin' = 'user'
+  if (parsed.data.role === 'subadmin' || parsed.data.role === 'admin') {
+    nextRole = 'subadmin'
+  }
 
   const superEmails = (process.env.ADMIN_EMAILS || process.env.ADMIN_EMAIL || 'admin@verdexisgroup.com')
     .split(',')
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean)
-  // Canonical super-admin email cannot have its role changed via this endpoint
-  if (superEmails.includes(target.email.toLowerCase())) {
+  if (superEmails.includes(String(target.email).toLowerCase())) {
     res.status(400).json({ error: 'Cannot change role of the canonical super-admin account' })
     return
   }
@@ -248,7 +269,6 @@ router.post('/users/:id/role', requireAuth, requireAdmin, async (req: AuthedRequ
   })
 })
 
-// --- Seed treasury: super-admin only ------------------------------------
 router.post('/seed-treasury', requireAuth, requireAdmin, idempotency(), async (req: AuthedRequest, res) => {
   const adminId = req.userId ?? ''
   if (!(await isSuperAdmin(adminId))) {
