@@ -34,11 +34,57 @@ export function AdminDashboardCharts() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const stats = await adminApi.stats()
-        setData({ stats, loading: false, error: null })
+        const payload = await adminApi.stats() as AdminStats & Record<string, unknown>
+        // Accept nested { stats: {...} } or flat stats object
+        const nested = payload?.stats
+        const looksFlat = nested == null && typeof (payload as { users?: unknown }).users === 'number'
+        const normalized: AdminStats = looksFlat
+          ? {
+              stats: {
+                users: n((payload as { users?: unknown }).users),
+                admins: n((payload as { admins?: unknown }).admins),
+                suspended: n((payload as { suspended?: unknown }).suspended),
+                holdings: n((payload as { holdings?: unknown }).holdings),
+                trades: n((payload as { trades?: unknown }).trades),
+                alerts: n((payload as { alerts?: unknown }).alerts),
+                deposits24h: n((payload as { deposits24h?: unknown }).deposits24h),
+                signups24h: n((payload as { signups24h?: unknown }).signups24h),
+                holds: n((payload as { holds?: unknown }).holds),
+                kycPending: n((payload as { kycPending?: unknown }).kycPending),
+                withdraws24h: n((payload as { withdraws24h?: unknown }).withdraws24h),
+                pendingDeposits: n((payload as { pendingDeposits?: unknown }).pendingDeposits),
+              },
+              lastBroadcast: null,
+              recentSignups: [],
+              recentTx: [],
+            }
+          : {
+              stats: {
+                users: n(nested?.users),
+                admins: n(nested?.admins),
+                suspended: n(nested?.suspended),
+                holdings: n(nested?.holdings),
+                trades: n(nested?.trades),
+                alerts: n(nested?.alerts),
+                deposits24h: n(nested?.deposits24h),
+                signups24h: n(nested?.signups24h),
+                holds: n(nested?.holds),
+                kycPending: n(nested?.kycPending),
+                withdraws24h: n(nested?.withdraws24h),
+                pendingDeposits: n(nested?.pendingDeposits),
+              },
+              lastBroadcast: payload.lastBroadcast ?? null,
+              recentSignups: payload.recentSignups ?? [],
+              recentTx: payload.recentTx ?? [],
+            }
+        setData({ stats: normalized, loading: false, error: null })
       } catch (err) {
-        const reason = err as { error?: string; status?: number }
-        setData({ stats: null, loading: false, error: reason?.error || 'Failed to load stats' })
+        const reason = err as { error?: string; status?: number; message?: string }
+        setData({
+          stats: null,
+          loading: false,
+          error: reason?.error || reason?.message || 'Failed to load stats',
+        })
       }
     }
     fetchStats()
@@ -50,12 +96,21 @@ export function AdminDashboardCharts() {
     return <div className="h-32 bg-[#0f1619]/50 border border-[#ffffff08] rounded-xl animate-pulse mb-8" />
   }
 
-  const raw = data.stats?.stats
-  if (data.error || !raw) {
+  if (data.error) {
     return (
       <div className="p-4 rounded-xl bg-[#ffffff08] border border-[#ffffff10] text-sm text-[#A0A0A0] mb-8">
         <AlertCircle className="w-4 h-4 inline mr-2" />
-        {data.error || 'No chart data'}
+        {data.error}
+      </div>
+    )
+  }
+
+  const raw = data.stats?.stats
+  if (!raw) {
+    return (
+      <div className="p-4 rounded-xl bg-[#ffffff08] border border-[#ffffff10] text-sm text-[#A0A0A0] mb-8">
+        <AlertCircle className="w-4 h-4 inline mr-2" />
+        No chart data — stats API returned an empty payload. Refresh or check /api/admin/stats.
       </div>
     )
   }
@@ -78,71 +133,94 @@ export function AdminDashboardCharts() {
     { name: 'Trades', value: stats.trades, fill: '#2196F3' },
     { name: 'Alerts', value: stats.alerts, fill: '#FF9800' },
   ]
+  const volumeData = [
+    { name: 'Deposits 24h', value: stats.deposits24h },
+    { name: 'Withdraw 24h', value: stats.withdraws24h },
+    { name: 'Pending', value: stats.pendingDeposits },
+    { name: 'Signups 24h', value: stats.signups24h },
+  ]
+  const statusData = [
+    { name: 'KYC pending', value: stats.kycPending },
+    { name: 'On hold', value: stats.holds },
+    { name: 'Suspended', value: stats.suspended },
+  ].filter((d) => d.value > 0)
+
+  const COLORS = ['#0C8B44', '#2196F3', '#FF9800', '#f44336', '#9C27B0']
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard icon={<Users className="w-5 h-5" />} label="Total Users" value={stats.users} change={stats.signups24h} changeLabel="signups (24h)" color="#0C8B44" />
-        <KPICard icon={<Activity className="w-5 h-5" />} label="Active Holdings" value={stats.holdings} change={stats.trades} changeLabel="trades" color="#2196F3" />
-        <KPICard icon={<DollarSign className="w-5 h-5" />} label="Deposits (24h)" value={stats.deposits24h} change={stats.withdraws24h} changeLabel="withdrawals" color="#4CAF50" />
-        <KPICard icon={<AlertCircle className="w-5 h-5" />} label="Pending Review" value={stats.kycPending + stats.holds} change={stats.pendingDeposits} changeLabel="pending deposits" color="#FF9800" />
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
-          <h3 className="text-sm font-medium text-[#E5E5E5] mb-4">User Distribution</h3>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={userGrowthData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
-              <XAxis dataKey="name" stroke="#737373" />
-              <YAxis stroke="#737373" tickFormatter={chartFmt} />
-              <Tooltip
-                contentStyle={{ background: '#0a0f11', border: '1px solid #ffffff10' }}
-                formatter={(value) => [chartFmt(value), '']}
-              />
-              <Bar dataKey="value" fill="#0C8B44" radius={[8, 8, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      <div className="rounded-xl border border-[#ffffff10] bg-[#0f1619]/50 p-4">
+        <div className="flex items-center gap-2 mb-4">
+          <Users className="w-4 h-4 text-[#0C8B44]" />
+          <h3 className="text-sm font-medium text-[#E5E5E5]">Users</h3>
         </div>
-        <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
-          <h3 className="text-sm font-medium text-[#E5E5E5] mb-4">Activity Overview</h3>
-          <ResponsiveContainer width="100%" height={280}>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={userGrowthData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
+            <XAxis dataKey="name" tick={{ fill: '#737373', fontSize: 11 }} />
+            <YAxis tick={{ fill: '#737373', fontSize: 11 }} tickFormatter={chartFmt} />
+            <Tooltip formatter={(v) => chartFmt(v)} contentStyle={{ background: '#0f1619', border: '1px solid #ffffff20' }} />
+            <Bar dataKey="value" fill="#0C8B44" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="rounded-xl border border-[#ffffff10] bg-[#0f1619]/50 p-4">
+        <div className="flex items-center gap-2 mb-4">
+          <Activity className="w-4 h-4 text-[#2196F3]" />
+          <h3 className="text-sm font-medium text-[#E5E5E5]">Activity</h3>
+        </div>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={activityData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
+            <XAxis dataKey="name" tick={{ fill: '#737373', fontSize: 11 }} />
+            <YAxis tick={{ fill: '#737373', fontSize: 11 }} tickFormatter={chartFmt} />
+            <Tooltip formatter={(v) => chartFmt(v)} contentStyle={{ background: '#0f1619', border: '1px solid #ffffff20' }} />
+            <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+              {activityData.map((entry, i) => (
+                <Cell key={entry.name} fill={entry.fill || COLORS[i % COLORS.length]} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="rounded-xl border border-[#ffffff10] bg-[#0f1619]/50 p-4">
+        <div className="flex items-center gap-2 mb-4">
+          <DollarSign className="w-4 h-4 text-[#FF9800]" />
+          <h3 className="text-sm font-medium text-[#E5E5E5]">24h volume signals</h3>
+        </div>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={volumeData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
+            <XAxis dataKey="name" tick={{ fill: '#737373', fontSize: 11 }} />
+            <YAxis tick={{ fill: '#737373', fontSize: 11 }} tickFormatter={chartFmt} />
+            <Tooltip formatter={(v) => chartFmt(v)} contentStyle={{ background: '#0f1619', border: '1px solid #ffffff20' }} />
+            <Bar dataKey="value" fill="#FF9800" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="rounded-xl border border-[#ffffff10] bg-[#0f1619]/50 p-4">
+        <div className="flex items-center gap-2 mb-4">
+          <TrendingUp className="w-4 h-4 text-[#9C27B0]" />
+          <h3 className="text-sm font-medium text-[#E5E5E5]">Risk / compliance</h3>
+        </div>
+        {statusData.length === 0 ? (
+          <p className="text-xs text-[#737373] py-16 text-center">No pending KYC, holds, or suspensions</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={220}>
             <PieChart>
-              <Pie
-                data={activityData}
-                cx="50%"
-                cy="50%"
-                outerRadius={80}
-                dataKey="value"
-                label={({ name, value }) => `${name}: ${chartFmt(value)}`}
-              >
-                {activityData.map((entry) => <Cell key={entry.name} fill={entry.fill} />)}
+              <Pie data={statusData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, value }) => `${name}: ${fmt(value)}`}>
+                {statusData.map((_, i) => (
+                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                ))}
               </Pie>
-              <Tooltip
-                contentStyle={{ background: '#0a0f11', border: '1px solid #ffffff10' }}
-                formatter={(value) => [chartFmt(value), '']}
-              />
+              <Tooltip formatter={(v) => chartFmt(v)} contentStyle={{ background: '#0f1619', border: '1px solid #ffffff20' }} />
             </PieChart>
           </ResponsiveContainer>
-        </div>
+        )}
       </div>
-    </div>
-  )
-}
-
-function KPICard({ icon, label, value, change, changeLabel, color }: { icon: React.ReactNode; label: string; value: number; change: number; changeLabel: string; color: string }) {
-  return (
-    <div className="rounded-xl bg-[#0f1619]/50 border border-[#ffffff08] p-4">
-      <div className="flex items-center justify-between mb-3">
-        <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: `${color}1f` }}>
-          <div style={{ color }}>{icon}</div>
-        </div>
-        <div className="flex items-center gap-1 text-xs text-[#4CAF50]">
-          <TrendingUp className="w-3 h-3" />{fmt(change)}
-        </div>
-      </div>
-      <p className="text-[10px] uppercase tracking-[0.05em] text-[#737373] mb-1">{label}</p>
-      <p className="text-2xl font-light text-[#E5E5E5]">{fmt(value)}</p>
-      <p className="text-[10px] text-[#737373] mt-1">{changeLabel}</p>
     </div>
   )
 }
