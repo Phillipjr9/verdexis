@@ -1,15 +1,25 @@
 import { useEffect, useState } from 'react'
-import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts'
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { adminApi, type AdminStats } from '../../lib/adminApi'
-import { TrendingUp, TrendingDown, Users, DollarSign, Activity, AlertCircle } from 'lucide-react'
+import { TrendingUp, Users, DollarSign, Activity, AlertCircle } from 'lucide-react'
 
-function n(v: unknown) {
-  const x = Number(v)
+function n(v: unknown): number {
+  if (v == null || v === '') return 0
+  const x = typeof v === 'number' ? v : Number(v)
   return Number.isFinite(x) ? x : 0
 }
 
-function fmt(v: unknown) {
-  return n(v).toLocaleString()
+function fmt(v: unknown): string {
+  try {
+    return n(v).toLocaleString()
+  } catch {
+    return String(n(v))
+  }
+}
+
+/** Recharts tick/tooltip formatter — never assumes value is a number. */
+function chartFmt(v: unknown): string {
+  return fmt(v)
 }
 
 interface ChartData {
@@ -84,8 +94,11 @@ export function AdminDashboardCharts() {
             <BarChart data={userGrowthData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
               <XAxis dataKey="name" stroke="#737373" />
-              <YAxis stroke="#737373" />
-              <Tooltip contentStyle={{ background: '#0a0f11', border: '1px solid #ffffff10' }} />
+              <YAxis stroke="#737373" tickFormatter={chartFmt} />
+              <Tooltip
+                contentStyle={{ background: '#0a0f11', border: '1px solid #ffffff10' }}
+                formatter={(value) => [chartFmt(value), '']}
+              />
               <Bar dataKey="value" fill="#0C8B44" radius={[8, 8, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -94,10 +107,20 @@ export function AdminDashboardCharts() {
           <h3 className="text-sm font-medium text-[#E5E5E5] mb-4">Activity Overview</h3>
           <ResponsiveContainer width="100%" height={280}>
             <PieChart>
-              <Pie data={activityData} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, value }) => `${name}: ${n(value)}`}>
+              <Pie
+                data={activityData}
+                cx="50%"
+                cy="50%"
+                outerRadius={80}
+                dataKey="value"
+                label={({ name, value }) => `${name}: ${chartFmt(value)}`}
+              >
                 {activityData.map((entry) => <Cell key={entry.name} fill={entry.fill} />)}
               </Pie>
-              <Tooltip contentStyle={{ background: '#0a0f11', border: '1px solid #ffffff10' }} />
+              <Tooltip
+                contentStyle={{ background: '#0a0f11', border: '1px solid #ffffff10' }}
+                formatter={(value) => [chartFmt(value), '']}
+              />
             </PieChart>
           </ResponsiveContainer>
         </div>
@@ -114,7 +137,7 @@ function KPICard({ icon, label, value, change, changeLabel, color }: { icon: Rea
           <div style={{ color }}>{icon}</div>
         </div>
         <div className="flex items-center gap-1 text-xs text-[#4CAF50]">
-          <TrendingUp className="w-3 h-3" />{n(change)}
+          <TrendingUp className="w-3 h-3" />{fmt(change)}
         </div>
       </div>
       <p className="text-[10px] uppercase tracking-[0.05em] text-[#737373] mb-1">{label}</p>

@@ -11,9 +11,24 @@ import {
   ArrowDownToLine, Gift, MapPin, Hourglass, BarChart3, AlertCircle,
 } from 'lucide-react'
 
-function money(n: number | null): string {
-  if (n === null || Number.isNaN(n)) return '—'
-  return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+/** Safe number for display — never calls toLocaleString on undefined/null/NaN. */
+function safeNum(v: unknown): number {
+  if (v == null || v === '') return 0
+  const x = typeof v === 'number' ? v : Number(v)
+  return Number.isFinite(x) ? x : 0
+}
+
+function money(v: unknown): string {
+  const n = safeNum(v)
+  try {
+    return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  } catch {
+    return `$${n.toFixed(2)}`
+  }
+}
+
+function count(v: unknown): string {
+  return String(safeNum(v))
 }
 
 export default function AdminDashboard() {
@@ -44,9 +59,9 @@ export default function AdminDashboard() {
       if (sessionOutcome.status === 'fulfilled') setSessionStats(sessionOutcome.value.stats)
       if (reviewOutcome.status === 'fulfilled') setPendingReviewCount(reviewOutcome.value.reviews.length)
       try {
-        const w = await api.get('/api/wallet')
-        const usd = w.balances?.find((b: { currency?: string; balance?: number }) => b.currency === 'USD')
-        if (usd) setTreasuryBalance(Number(usd.balance) || 0)
+        const w = await api.get('/api/wallet') as { balances?: Array<{ currency?: string; balance?: number }> }
+        const usd = w.balances?.find((b) => b.currency === 'USD')
+        if (usd) setTreasuryBalance(safeNum(usd.balance))
       } catch (e) {
         console.warn('Treasury balance load failed:', e)
       }
@@ -60,7 +75,7 @@ export default function AdminDashboard() {
     try {
       const result = await adminApi.seedTreasury()
       toast.success(result.message)
-      setTreasuryBalance(result.balance)
+      setTreasuryBalance(safeNum(result.balance))
     } catch (error: unknown) {
       const message = typeof error === 'object' && error !== null && 'error' in error ? (error as { error?: string }).error : 'Failed to seed treasury'
       toast.error(message)
@@ -105,37 +120,37 @@ export default function AdminDashboard() {
         )}
 
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-8">
-          <Tile label="Users" value={String(s.users)} />
-          <Tile label="Admins" value={String(s.admins)} />
-          <Tile label="Suspended" value={String(s.suspended)} />
-          <Tile label="Signups 24h" value={String(s.signups24h)} />
-          <Tile label="Deposits 24h" value={String(s.deposits24h)} />
-          <Tile label="Withdrawals 24h" value={String(s.withdraws24h)} />
-          <Tile label="Pending deposits" value={String(s.pendingDeposits)} />
-          <Tile label="KYC pending" value={String(s.kycPending)} />
-          <Tile label="On hold" value={String(s.holds)} />
-          <Tile label="Holdings" value={String(s.holdings)} />
-          <Tile label="Trades" value={String(s.trades)} />
-          <Tile label="Treasury" value={money(treasuryBalance)} />
+          <Tile label="Users" value={count(s.users)} />
+          <Tile label="Admins" value={count(s.admins)} />
+          <Tile label="Suspended" value={count(s.suspended)} />
+          <Tile label="Signups 24h" value={count(s.signups24h)} />
+          <Tile label="Deposits 24h" value={count(s.deposits24h)} />
+          <Tile label="Withdrawals 24h" value={count(s.withdraws24h)} />
+          <Tile label="Pending deposits" value={count(s.pendingDeposits)} />
+          <Tile label="KYC pending" value={count(s.kycPending)} />
+          <Tile label="On hold" value={count(s.holds)} />
+          <Tile label="Holdings" value={count(s.holdings)} />
+          <Tile label="Trades" value={count(s.trades)} />
+          <Tile label="Treasury" value={treasuryBalance === null ? '—' : money(treasuryBalance)} />
         </div>
 
         {sessionStats && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-            <Tile label="Active sessions" value={String(sessionStats.totalActiveSessions)} />
-            <Tile label="OTP verified" value={String(sessionStats.otpVerifiedSessions)} />
-            <Tile label="Expired sessions" value={String(sessionStats.expiredSessions)} />
-            <Tile label="Avg session sec" value={`${sessionStats.averageSessionDuration}s`} />
+            <Tile label="Active sessions" value={count(sessionStats.totalActiveSessions)} />
+            <Tile label="OTP verified" value={count(sessionStats.otpVerifiedSessions)} />
+            <Tile label="Expired sessions" value={count(sessionStats.expiredSessions)} />
+            <Tile label="Avg session sec" value={`${safeNum(sessionStats.averageSessionDuration)}s`} />
           </div>
         )}
 
         {pendingReviewCount !== null && (
-          <p className="text-sm text-[#A0A0A0] mb-6">Pending testimonials: {pendingReviewCount}</p>
+          <p className="text-sm text-[#A0A0A0] mb-6">Pending testimonials: {safeNum(pendingReviewCount)}</p>
         )}
 
         <div className="rounded-2xl bg-[#0C8B44]/10 border border-[#0C8B44]/20 px-5 py-4 mb-8 flex items-center justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-[#A0A0A0]">Admin treasury</p>
-            <p className="text-3xl font-light text-[#0C8B44]">{money(treasuryBalance)}</p>
+            <p className="text-3xl font-light text-[#0C8B44]">{treasuryBalance === null ? '—' : money(treasuryBalance)}</p>
           </div>
           <button onClick={handleSeedTreasury} disabled={seedLoading} className="px-4 py-2.5 bg-[#0C8B44] text-white text-sm rounded-lg disabled:opacity-50">
             {seedLoading ? 'Seeding…' : 'Seed Treasury'}
@@ -198,7 +213,7 @@ function LiveQueues() {
                 <p className="text-sm text-[#E5E5E5] truncate">{d.user?.name} · {d.user?.email}</p>
                 <p className="text-[11px] text-[#737373] truncate">{d.reference || 'No reference'}</p>
               </div>
-              <p className="text-sm text-[#E5E5E5]">{(d.amount ?? 0).toLocaleString()} {d.currency}</p>
+              <p className="text-sm text-[#E5E5E5]">{money(d.amount)} {d.currency || ''}</p>
             </div>
           ))}
         </div>
