@@ -6,6 +6,7 @@ declare global {
 }
 
 const AW_ID = 'AW-18425098842'
+const AW_SEND_TO = 'AW-18425098842/6dD-CIam2-wcENrk4tFE'
 const FIRED_KEY = 'verdexis_aw_signup_fired'
 
 function gtag(...args: unknown[]) {
@@ -25,15 +26,13 @@ export function fireSignupConversion(reason = 'signup') {
     sessionStorage.setItem(FIRED_KEY, '1')
   } catch { /* ignore */ }
 
-  const label = (() => {
-    try { return localStorage.getItem('verdexis_aw_label') || '' } catch { return '' }
-  })()
-  const sendTo = label ? `${AW_ID}/${label}` : AW_ID
-
   gtag('event', 'sign_up', { method: 'email', send_to: AW_ID })
-  gtag('event', 'conversion', { send_to: sendTo })
-  gtag('event', 'generate_lead', { currency: 'USD', value: 0 })
-  window.dataLayer.push({ event: 'verdexis_signup', reason })
+  gtag('event', 'conversion', {
+    send_to: AW_SEND_TO,
+    value: 10.0,
+    currency: 'USD',
+  })
+  window.dataLayer.push({ event: 'verdexis_signup', reason, send_to: AW_SEND_TO })
 }
 
 function urlOf(input: RequestInfo | URL): string {
