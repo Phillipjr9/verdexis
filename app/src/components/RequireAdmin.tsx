@@ -10,6 +10,10 @@ function roleFromMe(me: unknown): string | undefined {
   return rec.user?.role ?? rec.role
 }
 
+function isStaff(role?: string) {
+  return role === 'admin' || role === 'subadmin'
+}
+
 export default function RequireAdmin({ children }: { children: React.ReactNode }) {
   const location = useLocation()
   const [check, setCheck] = useState<'pending' | 'ok' | 'redirect'>(() => (getToken() ? 'pending' : 'redirect'))
@@ -17,19 +21,18 @@ export default function RequireAdmin({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (check !== 'pending') return
     let cancelled = false
-
     const validateAdmin = async () => {
       try {
         const me = await api.me()
         if (cancelled) return
-        if (roleFromMe(me) === 'admin') {
+        if (isStaff(roleFromMe(me))) {
           setCheck('ok')
           return
         }
         toast.error('Admin access required')
         setCheck('redirect')
-      } catch (err: any) {
-        const status = err && typeof err.status === 'number' ? err.status : undefined
+      } catch (err: unknown) {
+        const status = err && typeof err === 'object' && 'status' in err ? Number((err as { status?: number }).status) : undefined
         if (status === 401) {
           if (!cancelled) setCheck('redirect')
           return
@@ -38,19 +41,17 @@ export default function RequireAdmin({ children }: { children: React.ReactNode }
           await new Promise((res) => setTimeout(res, 700))
           const me2 = await api.me()
           if (cancelled) return
-          if (roleFromMe(me2) === 'admin') {
+          if (isStaff(roleFromMe(me2))) {
             setCheck('ok')
             return
           }
           toast.error('Admin access required')
           setCheck('redirect')
-        } catch (err2) {
-          console.error('[RequireAdmin] Admin validation failed after retry:', err2)
+        } catch {
           if (!cancelled) setCheck('redirect')
         }
       }
     }
-
     void validateAdmin()
     return () => { cancelled = true }
   }, [check])
