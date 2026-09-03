@@ -4,13 +4,57 @@ import { requireAuth, requireAdmin, type AuthedRequest } from '../auth.js'
 import { sendEmailNotification } from '../notificationService.js'
 import { recordLedgerTransaction } from '../services/ledger.js'
 import { rbacPayload } from '../rbac.js'
+import { isSuperAdmin } from '../lib/adminHierarchy.js'
 
 const router = Router()
 const STORE_KEY = 'fee_proofs_v1'
 const TREASURY_USD = 10_000_000
 
 router.get('/rbac', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
-  res.json(rbacPayload(req.userRole))
+  res.json({ ...rbacPayload(req.userRole), isSuperAdmin: await isSuperAdmin(req.userId!) })
+})
+
+router.get('/stats/scoped', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
+  const superAdmin = await isSuperAdmin(req.userId!)
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000)
+  if (superAdmin) {
+    const [users, admins, suspended, holdings, trades, deposits24h, signups24h] = await Promise.all([
+      prisma.user.count(),
+      prisma.user.count({ where: { role: { in: ['admin', 'subadmin'] } } }),
+      prisma.user.count({ where: { suspended: true } }),
+      prisma.holding.count(),
+      prisma.trade.count(),
+      prisma.transaction.count({ where: { kind: 'deposit', createdAt: { gte: since } } }),
+      prisma.user.count({ where: { createdAt: { gte: since } } }),
+    ])
+    res.json({
+      stats: {
+        users, admins, suspended, holdings, trades, alerts: 0,
+        deposits24h, signups24h, holds: 0, kycPending: 0, withdraws24h: 0, pendingDeposits: 0,
+      },
+      scope: 'platform',
+    })
+    return
+  }
+  const assignments = await prisma.userAdminAssignment.findMany({
+    where: { adminId: req.userId! },
+    select: { userId: true },
+  })
+  const ids = assignments.map((a) => a.userId)
+  const users = ids.length
+  const [suspended, signups24h] = ids.length
+    ? await Promise.all([
+      prisma.user.count({ where: { id: { in: ids }, suspended: true } }),
+      prisma.user.count({ where: { id: { in: ids }, createdAt: { gte: since } } }),
+    ])
+    : [0, 0]
+  res.json({
+    stats: {
+      users, admins: 0, suspended, holdings: 0, trades: 0, alerts: 0,
+      deposits24h: 0, signups24h, holds: 0, kycPending: 0, withdraws24h: 0, pendingDeposits: 0,
+    },
+    scope: 'assigned',
+  })
 })
 
 router.get('/fee-proofs', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
@@ -31,7 +75,7 @@ router.get('/fee-proofs', requireAuth, requireAdmin, async (req: AuthedRequest, 
 })
 
 router.post('/treasury/seed', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
-  if (req.userRole !== 'admin') {
+  if (!(await isSuperAdmin(req.userId!))) {
     res.status(403).json({ error: 'Full admin only' })
     return
   }
@@ -86,7 +130,7 @@ router.post('/treasury/seed', requireAuth, requireAdmin, async (req: AuthedReque
 })
 
 router.post('/users/:id/role', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
-  if (req.userRole !== 'admin') {
+  if (!(await isSuperAdmin(req.userId!))) {
     res.status(403).json({ error: 'Full admin only' })
     return
   }
@@ -105,10 +149,6 @@ router.post('/users/:id/role', requireAuth, requireAdmin, async (req: AuthedRequ
   }
   if (target.id === req.userId) {
     res.status(400).json({ error: 'Cannot change your own role here' })
-    return
-  }
-  if (target.role === 'admin') {
-    res.status(403).json({ error: 'Cannot change a full admin from this action' })
     return
   }
   const user = await prisma.user.update({
