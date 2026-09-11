@@ -5,8 +5,8 @@ declare global {
   }
 }
 
-const AW_ID = 'AW-18425098842'
-const AW_SEND_TO = 'AW-18425098842/6dD-CIam2-wcENrk4tFE'
+const AW_ID = 'AW-18438436362'
+const AW_SEND_TO = 'AW-18438436362'
 const FIRED_KEY = 'verdexis_aw_signup_fired'
 
 function gtag(...args: unknown[]) {
