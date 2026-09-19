@@ -99,8 +99,8 @@ const prismaClientOptions: any = {
 }
 
 if (provider !== 'sqlite') {
-  const poolSize = Math.min(parseInt(process.env.DATABASE_POOL_SIZE || '20'), 30)
-  const connectionTimeout = parseInt(process.env.DATABASE_CONNECTION_TIMEOUT || '10000')
+  const poolSize = Math.min(parseInt(process.env.DATABASE_POOL_SIZE || '5'), 10)
+  const connectionTimeout = parseInt(process.env.DATABASE_CONNECTION_TIMEOUT || '8000')
 
   if (databaseUrl.includes('rds.amazonaws.com')) {
     prismaClientOptions.datasources.db.url = `${databaseUrl}${databaseUrl.includes('?') ? '&' : '?'}sslmode=require&connection_limit=${poolSize}&connect_timeout=${connectionTimeout}`
@@ -178,14 +178,14 @@ function createPrismaOperationProxy<T extends object>(target: T): T {
 // Ensure connection on startup with retries, but do not crash the whole server if
 // the database is unavailable. The app can continue in a degraded local-auth mode.
 let connectionAttempts = 0
-const MAX_RETRIES = 3
+const MAX_RETRIES = 1
 export let dbUnavailable = false
 let databaseInitializationPromise: Promise<void> | null = null
 
 // Health check cache: avoid hitting DB on every operation
 let lastHealthCheckTime = 0
 let lastHealthCheckResult = false
-const HEALTH_CHECK_CACHE_TTL = 30000 // 30 seconds
+const HEALTH_CHECK_CACHE_TTL = 60000 // 60 seconds
 
 export const prisma = new Proxy({} as PrismaClient, {
   get(_target, prop, receiver) {
