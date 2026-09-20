@@ -1,5 +1,4 @@
-// Disabled temporarily - was causing build failures.
+// Disabled - stub only.
 export function startStakingYieldPoller(_opts: { intervalMs?: number } = {}) {
-  console.log('[stakingYield] Disabled')
   return () => {}
 }

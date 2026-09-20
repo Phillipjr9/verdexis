@@ -1,5 +1,4 @@
-// Disabled temporarily - was causing build failures.
+// Disabled - stub only.
 export function startOrderPoller(_opts: { intervalMs?: number } = {}) {
-  console.log('[orderPoller] Disabled')
   return () => {}
 }

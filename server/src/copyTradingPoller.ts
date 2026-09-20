@@ -1,5 +1,4 @@
-// Disabled temporarily - was causing build failures.
+// Disabled - stub only.
 export function startCopyTradingPoller(_opts: { intervalMs?: number } = {}) {
-  console.log('[copyTrading] Poller disabled')
   return () => {}
 }
