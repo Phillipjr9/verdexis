@@ -48,6 +48,7 @@ import stakingRoutes from './routes/staking.js'
 import { startAlertPoller } from './alertPoller.js'
 import { startDcaPoller } from './dcaPoller.js'
 import { startOrderPoller } from './orderPoller.js'
+import { startCopyTradingPoller } from './copyTradingPoller.js'
 import { startKeepAlive } from './keepAlive.js'
 import { isDbUnavailableError } from './dbError.js'
 import { requestContextMiddleware } from './logging.js'
@@ -546,6 +547,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       }
       // Start advanced order poller (check stop-loss, take-profit, limit orders)
       startOrderPoller({ intervalMs: 10_000 })
+      // Start copy trading poller (execute mirrored trades)
+      startCopyTradingPoller({ intervalMs: 5_000 })
 
       depositMonitor.initialize().then(() => depositMonitor.start()).catch(e => console.error('[deposit-monitor] init failed:', e))
       promoteAllAdminEmails().catch((e) => console.error('[verdexis-api] admin bootstrap failed:', e))
