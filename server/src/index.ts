@@ -544,25 +544,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       if (env.ALERT_POLL_ENABLED) {
         startDcaPoller({ intervalMs: 60_000 })
       }
-      // Pollers enabled conditionally
-      try {
-        const { startOrderPoller } = await import('./orderPoller.js')
-        startOrderPoller({ intervalMs: 10_000 })
-      } catch (e) {
-        console.warn('[startup] Order poller not available')
-      }
-      try {
-        const { startCopyTradingPoller } = await import('./copyTradingPoller.js')
-        startCopyTradingPoller({ intervalMs: 5_000 })
-      } catch (e) {
-        console.warn('[startup] Copy trading poller not available')
-      }
-      try {
-        const { startStakingYieldPoller } = await import('./stakingYieldPoller.js')
-        startStakingYieldPoller({ intervalMs: 60_000 })
-      } catch (e) {
-        console.warn('[startup] Staking yield poller not available')
-      }
 
       depositMonitor.initialize().then(() => depositMonitor.start()).catch(e => console.error('[deposit-monitor] init failed:', e))
       promoteAllAdminEmails().catch((e) => console.error('[verdexis-api] admin bootstrap failed:', e))
