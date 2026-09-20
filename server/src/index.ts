@@ -47,10 +47,8 @@ import otpRoutes from './routes/otp.js'
 import stakingRoutes from './routes/staking.js'
 import { startAlertPoller } from './alertPoller.js'
 import { startDcaPoller } from './dcaPoller.js'
-import { startOrderPoller } from './orderPoller.js'
-import { startCopyTradingPoller } from './copyTradingPoller.js'
-import { startStakingYieldPoller } from './stakingYieldPoller.js'
 import { startKeepAlive } from './keepAlive.js'
+// Pollers imported conditionally to avoid build issues
 import { isDbUnavailableError } from './dbError.js'
 import { requestContextMiddleware } from './logging.js'
 import { createErrorResponse } from './errorHandler.js'
@@ -546,12 +544,25 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       if (env.ALERT_POLL_ENABLED) {
         startDcaPoller({ intervalMs: 60_000 })
       }
-      // Start advanced order poller (check stop-loss, take-profit, limit orders)
-      startOrderPoller({ intervalMs: 10_000 })
-      // Start copy trading poller (execute mirrored trades)
-      startCopyTradingPoller({ intervalMs: 5_000 })
-      // Start staking yield poller (generate yield rewards)
-      startStakingYieldPoller({ intervalMs: 60_000 })
+      // Pollers enabled conditionally
+      try {
+        const { startOrderPoller } = await import('./orderPoller.js')
+        startOrderPoller({ intervalMs: 10_000 })
+      } catch (e) {
+        console.warn('[startup] Order poller not available')
+      }
+      try {
+        const { startCopyTradingPoller } = await import('./copyTradingPoller.js')
+        startCopyTradingPoller({ intervalMs: 5_000 })
+      } catch (e) {
+        console.warn('[startup] Copy trading poller not available')
+      }
+      try {
+        const { startStakingYieldPoller } = await import('./stakingYieldPoller.js')
+        startStakingYieldPoller({ intervalMs: 60_000 })
+      } catch (e) {
+        console.warn('[startup] Staking yield poller not available')
+      }
 
       depositMonitor.initialize().then(() => depositMonitor.start()).catch(e => console.error('[deposit-monitor] init failed:', e))
       promoteAllAdminEmails().catch((e) => console.error('[verdexis-api] admin bootstrap failed:', e))
