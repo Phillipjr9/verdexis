@@ -83,7 +83,7 @@ export async function generatePendingYieldRewards() {
 }
 
 export function startStakingYieldPoller(opts: { intervalMs?: number } = {}) {
-  const intervalMs = opts.intervalMs ?? 60_000 // Check every minute
+  const intervalMs = opts.intervalMs ?? 60_000
 
   console.log(`[stakingYield] Starting staking yield poller (interval: ${intervalMs}ms)`)
 
@@ -91,10 +91,8 @@ export function startStakingYieldPoller(opts: { intervalMs?: number } = {}) {
     await generatePendingYieldRewards()
   }
 
-  // Run on interval
   const intervalId = setInterval(poll, intervalMs)
 
-  // Return cleanup
   return () => {
     clearInterval(intervalId)
     console.log('[stakingYield] Stopped')

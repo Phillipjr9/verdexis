@@ -1,5 +1,4 @@
 import { prisma } from '../db.js'
-import { getCurrentCryptoPrice } from '../historicalPrice.js'
 
 /**
  * Copy Trading Execution Poller
@@ -26,7 +25,7 @@ export async function executePendingCopyTrades() {
         const traderRecentTrades = await prisma.trade.findMany({
           where: {
             userId: rel.traderId,
-            createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) }, // Last hour
+            createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
           },
           orderBy: { createdAt: 'asc' },
           take: 50,
@@ -181,7 +180,7 @@ export async function executePendingCopyTrades() {
 }
 
 export function startCopyTradingPoller(opts: { intervalMs?: number } = {}) {
-  const intervalMs = opts.intervalMs ?? 5_000 // Check every 5 seconds
+  const intervalMs = opts.intervalMs ?? 5_000
 
   console.log(`[copyTrading] Starting copy trading poller (interval: ${intervalMs}ms)`)
 
@@ -189,10 +188,8 @@ export function startCopyTradingPoller(opts: { intervalMs?: number } = {}) {
     await executePendingCopyTrades()
   }
 
-  // Run on interval
   const intervalId = setInterval(poll, intervalMs)
 
-  // Return cleanup
   return () => {
     clearInterval(intervalId)
     console.log('[copyTrading] Stopped')

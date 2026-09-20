@@ -1,7 +1,7 @@
 import { advancedOrdersService } from '../services/advancedOrdersService.js'
 
 export function startOrderPoller(opts: { intervalMs?: number } = {}) {
-  const intervalMs = opts.intervalMs ?? 10_000 // Default: check every 10 seconds
+  const intervalMs = opts.intervalMs ?? 10_000
   
   console.log(`[orderPoller] Starting advanced order poller (interval: ${intervalMs}ms)`)
   
@@ -16,13 +16,10 @@ export function startOrderPoller(opts: { intervalMs?: number } = {}) {
     }
   }
   
-  // Run immediately on startup
   poll().catch(err => console.error('[orderPoller] Initial poll failed:', err))
   
-  // Then run on interval
   const intervalId = setInterval(poll, intervalMs)
   
-  // Return cleanup function
   return () => {
     clearInterval(intervalId)
     console.log('[orderPoller] Stopped')

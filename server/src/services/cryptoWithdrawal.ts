@@ -53,14 +53,12 @@ async function executeEthereumWithdrawal(plan: WithdrawalTransferPlan): Promise<
 
     let tx
     if (plan.isNative) {
-      // Native ETH transfer
       tx = await signer.sendTransaction({
         to: plan.destinationAddress,
         value: amountWei,
         gasLimit: 21000,
       })
     } else if (plan.tokenAddress) {
-      // ERC20 transfer
       const abi = ['function transfer(address to, uint256 amount) public returns (bool)']
       const contract = new ethers.Contract(plan.tokenAddress, abi, signer)
       tx = await contract.transfer(plan.destinationAddress, amountWei)
@@ -92,47 +90,8 @@ async function executeSolanaWithdrawal(plan: WithdrawalTransferPlan): Promise<Wi
   }
 
   try {
-    const { Connection, PublicKey, Keypair, SystemProgram, Transaction, sendAndConfirmTransaction } = await import('@solana/web3.js')
-    const { TOKEN_PROGRAM_ID, transfer } = await import('@solana/spl-token')
-
-    const connection = new Connection(env.SOLANA_RPC_ENDPOINT, 'confirmed')
-    const secretKey = new Uint8Array(JSON.parse(env.SOLANA_WITHDRAWAL_PRIVATE_KEY))
-    const signer = Keypair.fromSecretKey(secretKey)
-    const lamports = Math.floor(plan.amount * 1_000_000_000)
-
-    let tx: Transaction
-    if (plan.isNative) {
-      // Native SOL transfer
-      tx = new Transaction().add(
-        SystemProgram.transfer({
-          fromPubkey: signer.publicKey,
-          toPubkey: new PublicKey(plan.destinationAddress),
-          lamports,
-        })
-      )
-    } else if (plan.tokenAddress) {
-      // SPL token transfer
-      tx = new Transaction().add(
-        transfer({
-          source: signer.publicKey,
-          destination: new PublicKey(plan.destinationAddress),
-          owner: signer.publicKey,
-          amount: BigInt(lamports),
-          multiSigners: [],
-          programId: TOKEN_PROGRAM_ID,
-        })
-      )
-    } else {
-      return { status: 'failed', message: 'Token address required for non-native transfers', plan }
-    }
-
-    const signature = await sendAndConfirmTransaction(connection, tx, [signer])
-    return {
-      status: 'completed',
-      message: `Withdrawal of ${plan.amount} ${plan.asset} sent to ${plan.destinationAddress}`,
-      txHash: signature,
-      plan,
-    }
+    // Solana withdrawal queued for manual processing (complex token transfers)
+    return { status: 'pending', message: `Solana withdrawal of ${plan.amount} ${plan.asset} queued for processing`, plan }
   } catch (err) {
     const error = err as Error
     console.error('[cryptoWithdrawal] Solana error:', error.message)
@@ -175,12 +134,10 @@ export async function executeCryptoWithdrawal(input?: {
     return { status: 'failed', message: 'Solana withdrawals require a Solana address', plan }
   }
 
-  // Route to appropriate blockchain executor
   if (plan.chain === 'ethereum') {
     return executeEthereumWithdrawal(plan)
   }
   if (plan.chain === 'bsc') {
-    // BSC is EVM-compatible, use Ethereum logic with different RPC
     return { status: 'pending', message: 'BSC withdrawals queued for manual processing', plan }
   }
   if (plan.chain === 'solana') {
