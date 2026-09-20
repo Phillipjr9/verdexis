@@ -14,32 +14,26 @@ export function verifyToken(token) {
     catch (err) {
         try {
             const e = err;
-            // Log the verification error name/message to help operators debug
-            // token failures (e.g. invalid signature vs expired). Do NOT log
-            // the token itself or any sensitive payload.
             console.warn('[auth] verifyToken failed:', e.name, e.message);
         }
         catch {
-            // ignore logging failure
+            // ignore
         }
         return null;
     }
 }
 export async function requireAuth(req, res, next) {
-    // Bearer-token only. The cookie path was a half-implemented dual-auth
-    // model with no CSRF protection \u2014 strictly worse than Bearer for an
-    // SPA. Keep things simple: client sends `Authorization: Bearer <jwt>`.
     const header = req.headers.authorization;
     let token;
     if (header?.startsWith('Bearer '))
         token = header.slice(7);
-    // Fallback to cookie `vdx_token` for browser-based logins
     if (!token) {
         try {
             const cookies = req.cookies;
-            if (cookies && typeof cookies.vdx_token === 'string') token = String(cookies.vdx_token);
+            if (cookies && typeof cookies.vdx_token === 'string')
+                token = String(cookies.vdx_token);
         }
-        catch (_a) {
+        catch {
             // ignore
         }
     }
@@ -52,21 +46,15 @@ export async function requireAuth(req, res, next) {
         res.status(401).json({ error: 'Invalid or expired token' });
         return;
     }
-    // Reject pending OTP tokens — they must not be used as real session tokens.
     if (payload.otpPending) {
         res.status(401).json({ error: 'OTP verification required to complete login' });
         return;
     }
-    // Cheap existence check; cache could be added later. Protect the DB
-    // call with a short timeout so a stalled Prisma/DB request doesn't hang
-    // the entire request (which was observed in production). We also log
-    // timing so operators can see which step is slow.
     const authStart = Date.now();
     const findUserPromise = prisma.user.findUnique({
         where: { id: payload.sub },
         select: { id: true, email: true, role: true, suspended: true, deletedAt: true, tokenVersion: true },
     });
-    // Timeout guard (ms). If this fires, respond quickly instead of hanging.
     const DB_TIMEOUT_MS = 10000;
     let user = null;
     try {
@@ -82,14 +70,12 @@ export async function requireAuth(req, res, next) {
         return;
     }
     finally {
-        const authDur = Date.now() - authStart;
-        console.log(`[auth] requireAuth: user lookup took ${authDur}ms for sub=${payload.sub}`);
+        console.log(`[auth] requireAuth: user lookup took ${Date.now() - authStart}ms for sub=${payload.sub}`);
     }
     if (!user) {
         res.status(401).json({ error: 'User not found' });
         return;
     }
-    // tokenVersion lets admins force-revoke all sessions for a user.
     if (typeof payload.v === 'number' && user.tokenVersion !== null && payload.v !== user.tokenVersion) {
         res.status(401).json({ error: 'Session revoked. Please log in again.' });
         return;
@@ -104,26 +90,59 @@ export async function requireAuth(req, res, next) {
     }
     req.userId = user.id;
     req.userEmail = user.email;
-    req.userRole = user.role === 'admin' ? 'admin' : 'user';
-    // Set RLS context but protect it with a short timeout as well so a
-    // failing `set_config` doesn't block the request lifecycle.
+    req.userRole = user.role === 'admin' ? 'admin' : user.role === 'subadmin' ? 'subadmin' : 'user';
     try {
-        const rlsStart = Date.now();
         await Promise.race([
             setRlsContext({ id: user.id, role: user.role }),
             new Promise((_, reject) => setTimeout(() => reject(new Error('RLS_TIMEOUT')), DB_TIMEOUT_MS)),
         ]);
-        console.log(`[auth] setRlsContext took ${Date.now() - rlsStart}ms for user=${user.id}`);
     }
     catch (err) {
         console.warn('[auth] RLS context setup failed for user', user.id, err instanceof Error ? err.message : String(err));
-        // Do not block the request if RLS failed; continue but log for ops.
     }
     next();
 }
+const SELF_FUND_RE = /(wallet|deposit|deduct|transactions|holdings|fee|bonus|seed-treasury)/i;
+const FULL_ADMIN_ONLY_RE = /(impersonate|seed-treasury|settings|hierarchy)/i;
+export function isStaffRole(role) {
+    return role === 'admin' || role === 'subadmin';
+}
 export function requireAdmin(req, res, next) {
-    if (req.userRole !== 'admin') {
+    if (!isStaffRole(req.userRole)) {
         res.status(403).json({ error: 'Admin only' });
+        return;
+    }
+    const path = `${req.baseUrl || ''}${req.path || ''}`;
+    const idMatch = path.match(/\/users\/([^/]+)/);
+    const targetId = idMatch?.[1];
+    const body = (req.body ?? {});
+    if (req.userRole === 'admin' &&
+        targetId &&
+        targetId !== req.userId &&
+        typeof body.role === 'string' &&
+        body.role.toLowerCase() === 'admin') {
+        body.role = 'subadmin';
+    }
+    if (req.userRole === 'subadmin' && req.method !== 'GET' && targetId && targetId === req.userId && SELF_FUND_RE.test(path)) {
+        res.status(403).json({ error: 'Sub-admins cannot fund or adjust their own account' });
+        return;
+    }
+    if (req.userRole === 'subadmin' && req.method !== 'GET' && FULL_ADMIN_ONLY_RE.test(path)) {
+        res.status(403).json({ error: 'Full admin only' });
+        return;
+    }
+    if (req.userRole === 'subadmin' && req.method !== 'GET') {
+        const dest = String(body.toUserId || body.userId || body.recipientId || '');
+        if (dest && dest === req.userId) {
+            res.status(403).json({ error: 'Sub-admins cannot fund their own account' });
+            return;
+        }
+    }
+    next();
+}
+export function requireFullAdmin(req, res, next) {
+    if (req.userRole !== 'admin') {
+        res.status(403).json({ error: 'Full admin only' });
         return;
     }
     next();
