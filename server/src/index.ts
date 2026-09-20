@@ -30,7 +30,7 @@ import notificationsRoutes from './routes/notifications.js'
 import aiRoutes from './routes/ai.js'
 import marketRoutes from './routes/market.js'
 import reviewsRoutes from './routes/reviews.js'
-import adminRoutes from './routes/admin.js'
+import adminRoutes from './routes/admin-bundle.js'
 import adminBonusRoutes from './routes/adminBonus.js'
 import adminSettingsRoutes from './routes/admin-settings.js'
 import swapRoutes from './routes/swap.js'
@@ -47,6 +47,7 @@ import otpRoutes from './routes/otp.js'
 import stakingRoutes from './routes/staking.js'
 import { startAlertPoller } from './alertPoller.js'
 import { startDcaPoller } from './dcaPoller.js'
+import { startOrderPoller } from './orderPoller.js'
 import { startKeepAlive } from './keepAlive.js'
 import { isDbUnavailableError } from './dbError.js'
 import { requestContextMiddleware } from './logging.js'
@@ -543,6 +544,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       if (env.ALERT_POLL_ENABLED) {
         startDcaPoller({ intervalMs: 60_000 })
       }
+      // Start advanced order poller (check stop-loss, take-profit, limit orders)
+      startOrderPoller({ intervalMs: 10_000 })
 
       depositMonitor.initialize().then(() => depositMonitor.start()).catch(e => console.error('[deposit-monitor] init failed:', e))
       promoteAllAdminEmails().catch((e) => console.error('[verdexis-api] admin bootstrap failed:', e))
