@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
 import Navigation from '../components/Navigation'
@@ -13,24 +13,39 @@ interface CalEvent {
   category: 'crypto' | 'macro' | 'earnings' | 'fed'
 }
 
-const EVENTS: CalEvent[] = [
-  { date: '2026-05-12', time: '08:30', title: 'US CPI (Apr)', importance: 'high', forecast: '3.1%', previous: '3.5%', category: 'macro' },
-  { date: '2026-05-12', time: '10:00', title: 'Bitcoin Halving Countdown Update', importance: 'medium', category: 'crypto' },
-  { date: '2026-05-13', time: '14:00', title: 'FOMC Meeting Minutes', importance: 'high', forecast: 'N/A', previous: 'N/A', category: 'fed' },
-  { date: '2026-05-14', time: '08:30', title: 'US PPI (Apr)', importance: 'medium', forecast: '2.8%', previous: '3.1%', category: 'macro' },
-  { date: '2026-05-14', time: '09:00', title: 'Ethereum ETF Staking Approval Deadline', importance: 'high', category: 'crypto' },
-  { date: '2026-05-15', time: '09:30', title: 'US Retail Sales (Apr)', importance: 'high', forecast: '+0.4%', previous: '-0.1%', category: 'macro' },
-  { date: '2026-05-15', time: 'All Day', title: 'Coinbase Quarterly Earnings', importance: 'high', category: 'earnings' },
-  { date: '2026-05-16', time: '11:00', title: 'Bitcoin Options Expiry ($3.2B)', importance: 'high', category: 'crypto' },
-  { date: '2026-05-19', time: '08:30', title: 'US Housing Starts (Apr)', importance: 'low', forecast: '1.42M', previous: '1.39M', category: 'macro' },
-  { date: '2026-05-20', time: '14:00', title: 'Fed Chair Powell Speech', importance: 'high', category: 'fed' },
-  { date: '2026-05-20', time: 'All Day', title: 'Crypto Summit — Singapore', importance: 'medium', category: 'crypto' },
-  { date: '2026-05-21', time: '08:30', title: 'US Jobless Claims', importance: 'medium', forecast: '215K', previous: '228K', category: 'macro' },
-  { date: '2026-05-22', time: 'All Day', title: 'MicroStrategy Earnings', importance: 'medium', category: 'earnings' },
-  { date: '2026-05-27', time: '09:00', title: 'SEC Crypto Hearing', importance: 'high', category: 'crypto' },
-  { date: '2026-05-28', time: '08:30', title: 'US GDP (Q1 Final)', importance: 'high', forecast: '2.3%', previous: '2.1%', category: 'macro' },
-  { date: '2026-05-30', time: '20:00', title: 'Ethereum Network Upgrade Vote', importance: 'medium', category: 'crypto' },
+/** Illustrative placeholders only — not a live economic-data feed. */
+const EVENT_TEMPLATES: Omit<CalEvent, 'date'>[] = [
+  { time: '08:30', title: 'US CPI', importance: 'high', forecast: '—', previous: '—', category: 'macro' },
+  { time: '10:00', title: 'Crypto options expiry window', importance: 'medium', category: 'crypto' },
+  { time: '14:00', title: 'FOMC minutes / policy remarks', importance: 'high', forecast: 'N/A', previous: 'N/A', category: 'fed' },
+  { time: '08:30', title: 'US PPI', importance: 'medium', forecast: '—', previous: '—', category: 'macro' },
+  { time: '09:00', title: 'ETF / staking regulatory deadline', importance: 'high', category: 'crypto' },
+  { time: '08:30', title: 'US Retail Sales', importance: 'high', forecast: '—', previous: '—', category: 'macro' },
+  { time: 'All Day', title: 'Major exchange earnings window', importance: 'high', category: 'earnings' },
+  { time: '11:00', title: 'Large options expiry', importance: 'high', category: 'crypto' },
+  { time: '08:30', title: 'US Housing Starts', importance: 'low', forecast: '—', previous: '—', category: 'macro' },
+  { time: '14:00', title: 'Fed Chair speech window', importance: 'high', category: 'fed' },
+  { time: 'All Day', title: 'Industry conference window', importance: 'medium', category: 'crypto' },
+  { time: '08:30', title: 'US Jobless Claims', importance: 'medium', forecast: '—', previous: '—', category: 'macro' },
+  { time: 'All Day', title: 'Treasury-heavy public company earnings', importance: 'medium', category: 'earnings' },
+  { time: '09:00', title: 'SEC crypto hearing window', importance: 'high', category: 'crypto' },
+  { time: '08:30', title: 'US GDP print', importance: 'high', forecast: '—', previous: '—', category: 'macro' },
+  { time: '20:00', title: 'Network upgrade / vote window', importance: 'medium', category: 'crypto' },
 ]
+
+const TEMPLATE_DAYS = [12, 12, 13, 14, 14, 15, 15, 16, 19, 20, 20, 21, 22, 27, 28, 30]
+
+function pad(n: number) {
+  return String(n).padStart(2, '0')
+}
+
+function eventsForMonth(year: number, month: number): CalEvent[] {
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  return EVENT_TEMPLATES.map((tpl, i) => {
+    const day = Math.min(TEMPLATE_DAYS[i] ?? 1, daysInMonth)
+    return { ...tpl, date: `${year}-${pad(month + 1)}-${pad(day)}` }
+  })
+}
 
 const IMPORTANCE_COLOR: Record<string, string> = {
   high: 'text-red-400 bg-red-400/10',
@@ -61,9 +76,9 @@ export default function EconomicCalendar() {
   const firstDay = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
 
-  const visibleEvents = EVENTS.filter(e => {
-    const d = new Date(e.date)
-    if (d.getFullYear() !== year || d.getMonth() !== month) return false
+  const monthEvents = useMemo(() => eventsForMonth(year, month), [year, month])
+
+  const visibleEvents = monthEvents.filter(e => {
     if (filter !== 'all' && e.category !== filter) return false
     if (importanceFilter === 'high' && e.importance !== 'high') return false
     return true
@@ -71,7 +86,7 @@ export default function EconomicCalendar() {
 
   const eventsByDay: Record<number, CalEvent[]> = {}
   visibleEvents.forEach(e => {
-    const day = parseInt(e.date.split('-')[2])
+    const day = parseInt(e.date.split('-')[2], 10)
     if (!eventsByDay[day]) eventsByDay[day] = []
     eventsByDay[day].push(e)
   })
@@ -89,17 +104,20 @@ export default function EconomicCalendar() {
             <ArrowLeft className="w-3 h-3" />Back to dashboard
           </Link>
 
-          <div className="flex items-center gap-3 mb-8">
+          <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 rounded-xl bg-[#0C8B44]/15 flex items-center justify-center">
               <Calendar className="w-5 h-5 text-[#0C8B44]" />
             </div>
             <div>
               <h1 className="text-2xl font-light text-[#E5E5E5]">Economic Calendar</h1>
-              <p className="text-xs text-[#737373]">Key macro events, crypto catalysts & earnings.</p>
+              <p className="text-xs text-[#737373]">Key macro windows, crypto catalysts & earnings.</p>
             </div>
           </div>
 
-          {/* Filters */}
+          <p className="text-[11px] text-[#737373] mb-6 rounded-lg border border-[#ffffff10] bg-[#0f1619] px-3 py-2">
+            Illustrative schedule for the month you are viewing — not a live data vendor feed.
+          </p>
+
           <div className="flex flex-wrap gap-2 mb-6">
             {(['all', 'crypto', 'macro', 'earnings', 'fed'] as const).map(cat => (
               <button key={cat} onClick={() => setFilter(cat)} className={`px-3 py-1.5 rounded-full text-xs transition-colors ${filter === cat ? 'bg-[#0C8B44] text-white' : 'bg-[#0f1619] border border-[#ffffff10] text-[#737373] hover:text-[#E5E5E5]'}`}>
@@ -112,7 +130,6 @@ export default function EconomicCalendar() {
           </div>
 
           <div className="grid lg:grid-cols-3 gap-6">
-            {/* Calendar Grid */}
             <div className="lg:col-span-2 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
               <div className="flex items-center justify-between mb-4">
                 <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-[#ffffff08] transition-colors"><ChevronLeft className="w-4 h-4 text-[#737373]" /></button>
@@ -142,7 +159,6 @@ export default function EconomicCalendar() {
               </div>
             </div>
 
-            {/* Day Events */}
             <div className="rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
               <h2 className="text-sm font-medium text-[#E5E5E5] mb-4">
                 {selectedDay ? `${MONTHS[month]} ${selectedDay}` : 'Select a day'}
@@ -174,7 +190,6 @@ export default function EconomicCalendar() {
             </div>
           </div>
 
-          {/* Upcoming high-impact list */}
           <div className="mt-6 rounded-2xl bg-[#0f1619]/50 border border-[#ffffff08] p-6">
             <h2 className="text-sm font-medium text-[#E5E5E5] mb-4">All Events This Month</h2>
             <div className="overflow-x-auto">
