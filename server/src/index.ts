@@ -48,7 +48,11 @@ import stakingRoutes from './routes/staking.js'
 import { startAlertPoller } from './alertPoller.js'
 import { startDcaPoller } from './dcaPoller.js'
 import { startKeepAlive } from './keepAlive.js'
-// Pollers imported conditionally to avoid build issues
+import { startOrderPoller } from './orderPoller.js'
+import { startCopyTradingPoller } from './copyTradingPoller.js'
+import { startStakingYieldPoller } from './stakingYieldPoller.js'
+import copyTradingRoutes from './routes/copyTrading.js'
+import nftRoutes from './routes/nft.js'
 import { isDbUnavailableError } from './dbError.js'
 import { requestContextMiddleware } from './logging.js'
 import { createErrorResponse } from './errorHandler.js'
@@ -377,6 +381,10 @@ app.get('/api/health/email', async (_req, res) => {
 })
 
 app.get('/__routes', (_req, res) => {
+  if (IS_PROD) {
+    res.status(404).json(createErrorResponse('Not found'))
+    return
+  }
   try {
     const routes: string[] = []
     const stack = (app as any)._router.stack || []
@@ -430,6 +438,8 @@ app.use('/api/withdrawals', withdrawalsRoutes)
 app.use('/api/fee-proofs', feeProofsRoutes)
 app.use('/api/otp', otpRoutes)
 app.use('/api/staking', stakingRoutes)
+app.use('/api/copy-trading', copyTradingRoutes)
+app.use('/api/nft', nftRoutes)
 app.use('/api/analytics', advancedAnalyticsRoutes)
 app.use('/api/tax', advancedTaxRoutes)
 app.use('/api/compliance', advancedComplianceRoutes)
@@ -543,6 +553,22 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       }
       if (env.ALERT_POLL_ENABLED) {
         startDcaPoller({ intervalMs: 60_000 })
+      }
+
+      // Opt-in only. These pollers can move balances / create yield.
+      // Set JOB_POLLERS_ENABLED=true after verifying DB models and staging.
+      const jobPollersEnabled = String(process.env.JOB_POLLERS_ENABLED || '').toLowerCase() === 'true'
+      if (jobPollersEnabled) {
+        try {
+          startOrderPoller({ intervalMs: 10_000 })
+          startCopyTradingPoller({ intervalMs: 5_000 })
+          startStakingYieldPoller({ intervalMs: 60_000 })
+          console.log('[verdexis-api] JOB_POLLERS_ENABLED=true — order/copy/staking pollers started')
+        } catch (err) {
+          console.error('[verdexis-api] job pollers failed to start:', err)
+        }
+      } else {
+        console.log('[verdexis-api] JOB_POLLERS_ENABLED is not true — order/copy/staking pollers idle')
       }
 
       depositMonitor.initialize().then(() => depositMonitor.start()).catch(e => console.error('[deposit-monitor] init failed:', e))
