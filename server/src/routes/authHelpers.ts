@@ -74,9 +74,19 @@ export async function promoteAllAdminEmails(): Promise<void> {
         const investmentId = await generateInvestmentId().catch(() => `VDX-${crypto.randomBytes(4).toString('hex').toUpperCase()}`)
         u = await createUser({ email, name: 'Admin', passwordHash, investmentId, role: 'admin', emailVerified: true, emailVerifiedAt: new Date() } as any)
         console.log(`[verdexis-api] created admin user ${email}`)
-      } else if (!u.passwordHash || u.passwordHash.length < 20) {
-        const passwordHash = await bcrypt.hash(seedPassword, 12)
-        await updateUser(u.id, { passwordHash, tokenVersion: (u.tokenVersion ?? 0) + 1 })
+      } else {
+        const updates: any = { role: 'admin', emailVerified: true }
+        if (!u.emailVerifiedAt) updates.emailVerifiedAt = new Date()
+        if (u.suspended && u.suspendedReason === 'Repeated failed login attempts') {
+          updates.suspended = false
+          updates.suspendedReason = null
+        }
+        if (!u.passwordHash || u.passwordHash.length < 20) {
+          const passwordHash = await bcrypt.hash(seedPassword, 12)
+          updates.passwordHash = passwordHash
+          updates.tokenVersion = (u.tokenVersion ?? 0) + 1
+        }
+        await updateUser(u.id, updates)
       }
       await autoPromoteIfAdminEmail(u.id, u.email, u.role)
     } catch (e) {

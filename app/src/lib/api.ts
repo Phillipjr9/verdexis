@@ -199,9 +199,17 @@ export const api = {
   verificationStatus: () =>
     request<{ emailVerified: boolean; emailVerifiedAt: string | null; phoneVerified: boolean; phoneVerifiedAt: string | null; phone: string | null; allVerified: boolean; verificationRequired: boolean; message: string }>('/api/otp/verification-status'),
   signupVerifyOtp: (pendingToken: string, code: string) =>
-    request('/api/auth/signup/verify-otp', { method: 'POST', body: JSON.stringify({ pendingToken, code }) }),
+    request<{ token: string; user: ApiUser; verified?: boolean; message?: string }>('/api/auth/signup/verify-otp', { method: 'POST', body: JSON.stringify({ pendingToken, code }) }),
   signupResendOtp: (email: string) =>
-    request('/api/auth/signup/resend-otp', { method: 'POST', body: JSON.stringify({ email }) }),
+    request<{ pendingToken: string; email: string; message: string; otpRequired?: boolean }>('/api/auth/signup/resend-otp', { method: 'POST', body: JSON.stringify({ email }) }),
+  loginVerifyOtp: (pendingToken: string, code: string) =>
+    request<{ token: string; user: ApiUser; verified?: boolean; message?: string }>('/api/auth/login/verify-otp', { method: 'POST', body: JSON.stringify({ pendingToken, code }) }),
+  loginResendOtp: (pendingToken: string) =>
+    request<{ pendingToken: string; email: string; message: string; otpRequired?: boolean }>('/api/auth/login/resend-otp', { method: 'POST', body: JSON.stringify({ pendingToken }) }),
+  verifyEmail: (code: string) =>
+    request<{ verified: boolean; emailVerified: boolean; message: string; user?: ApiUser; token?: string }>('/api/otp/verify-email-otp', { method: 'POST', body: JSON.stringify({ code }) }),
+  supabaseAuth: (accessToken: string) =>
+    request<{ token: string; user: ApiUser }>('/api/auth/supabase', { method: 'POST', body: JSON.stringify({ accessToken }) }),
 
   patchProfile: (patch: Partial<{ name: string; username: string | null; email: string; phone: string; avatar: string | null; prefs: Record<string, unknown>; twoFactor: boolean }>) =>
     request<{ user: ApiUser }>('/api/profile', { method: 'PATCH', body: JSON.stringify(patch) }),
@@ -290,6 +298,28 @@ export const api = {
     request<{ kycStatus: string; kycTier: string }>('/api/kyc/status'),
   listKycDocuments: () =>
     request<{ documents: Array<{ id: string; type: string; uploaded: boolean; fileName?: string; size?: number }> }>('/api/kyc/documents'),
+  uploadKycDocument: (documentType: string, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const token = getToken()
+    return fetch(`${BASE}/api/kyc/upload/${encodeURIComponent(documentType)}`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    }).then(async (res) => {
+      let body: any = {}
+      try { body = await res.json() } catch { /* ignore */ }
+      if (!res.ok) throw { status: res.status, error: body.error || 'Upload failed' }
+      return body as { ok: boolean; document: { id: string; type: string; name: string } }
+    })
+  },
+  deleteKycDocument: (documentId: string) =>
+    request<{ ok: boolean }>(`/api/kyc/document/${encodeURIComponent(documentId)}`, { method: 'DELETE' }),
+
+  getUserDepositAddresses: (userId: string) =>
+    request<{ addresses: any }>(`/api/admin/users/${encodeURIComponent(userId)}/deposit-addresses`),
+  updateUserDepositAddresses: (userId: string, addresses: any) =>
+    request<{ ok: boolean; addresses: any }>(`/api/admin/users/${encodeURIComponent(userId)}/deposit-addresses`, { method: 'POST', body: JSON.stringify({ addresses }) }),
 
   userSettings: {
     getNotifications: () => request<Record<string, unknown>>('/api/user-settings/notifications'),
