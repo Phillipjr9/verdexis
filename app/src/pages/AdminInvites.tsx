@@ -65,6 +65,16 @@ type HistoryItem = {
 
 const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'GBP', 'USDT', 'BTC', 'ETH', 'SOL']
 
+// Mirrors server-side caps in server/src/routes/admin-invites.ts (inviteSchema).
+// Enforced client-side so a "Too long" value can never reach the server and
+// come back as an opaque "Invalid input" 400.
+const FIELD_LIMITS = {
+  subject: 200,
+  message: 2000,
+  note: 1000,
+  maxAmount: 1_000_000_000,
+} as const
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 // Matches an email embedded inside a larger token, e.g. `Jane Doe <jane@x.com>,`
 const LOOSE_EMAIL_RE = /[^\s@<>()[\]"',;]+@[^\s@<>()[\]"',;]+\.[^\s@<>()[\]"',;]+/
@@ -233,6 +243,22 @@ export default function AdminInvites() {
       toast.error('Enter a valid amount (0 or higher)')
       return
     }
+    if (amt > FIELD_LIMITS.maxAmount) {
+      toast.error(`Credit amount cannot exceed ${FIELD_LIMITS.maxAmount.toLocaleString('en-US')}`)
+      return
+    }
+    if (singleSubject.trim().length > FIELD_LIMITS.subject) {
+      toast.error(`Subject line is limited to ${FIELD_LIMITS.subject} characters`)
+      return
+    }
+    if (singleMessage.trim().length > FIELD_LIMITS.message) {
+      toast.error(`Welcome message is limited to ${FIELD_LIMITS.message.toLocaleString('en-US')} characters`)
+      return
+    }
+    if (singleNote.trim().length > FIELD_LIMITS.note) {
+      toast.error(`Admin note is limited to ${FIELD_LIMITS.note.toLocaleString('en-US')} characters`)
+      return
+    }
 
     setBusy(true)
     setLast(null)
@@ -281,6 +307,18 @@ export default function AdminInvites() {
     const amt = Number(bulkAmount)
     if (isNaN(amt) || amt < 0) {
       toast.error('Enter a valid credit amount per invitee')
+      return
+    }
+    if (amt > FIELD_LIMITS.maxAmount) {
+      toast.error(`Credit amount cannot exceed ${FIELD_LIMITS.maxAmount.toLocaleString('en-US')}`)
+      return
+    }
+    if (bulkMessage.trim().length > FIELD_LIMITS.message) {
+      toast.error(`Campaign message is limited to ${FIELD_LIMITS.message.toLocaleString('en-US')} characters`)
+      return
+    }
+    if (bulkNote.trim().length > FIELD_LIMITS.note) {
+      toast.error(`Campaign note is limited to ${FIELD_LIMITS.note.toLocaleString('en-US')} characters`)
       return
     }
 
@@ -509,26 +547,38 @@ export default function AdminInvites() {
             )}
 
             <div>
-              <label className="text-xs uppercase tracking-wider text-[#A0A0A0] block mb-2">
-                Custom Subject Line (Optional)
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs uppercase tracking-wider text-[#A0A0A0]">
+                  Custom Subject Line (Optional)
+                </label>
+                <span className={`text-[10px] ${singleSubject.length >= FIELD_LIMITS.subject ? 'text-[#f44336]' : 'text-[#525252]'}`}>
+                  {singleSubject.length}/{FIELD_LIMITS.subject}
+                </span>
+              </div>
               <input
                 type="text"
                 value={singleSubject}
                 onChange={(e) => setSingleSubject(e.target.value)}
+                maxLength={FIELD_LIMITS.subject}
                 placeholder={`You're invited to Verdexis — ${formatMoney(Number(singleAmount) || 0, singleCurrency)} credited`}
                 className="w-full rounded-xl bg-[#070C0E] border border-[#ffffff15] px-4 py-3 text-sm text-[#E5E5E5] outline-none focus:border-[#0C8B44] transition-colors"
               />
             </div>
 
             <div>
-              <label className="text-xs uppercase tracking-wider text-[#A0A0A0] block mb-2">
-                Personal Welcome Message (Included in Email)
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs uppercase tracking-wider text-[#A0A0A0]">
+                  Personal Welcome Message (Included in Email)
+                </label>
+                <span className={`text-[10px] ${singleMessage.length >= FIELD_LIMITS.message ? 'text-[#f44336]' : 'text-[#525252]'}`}>
+                  {singleMessage.length}/{FIELD_LIMITS.message.toLocaleString('en-US')}
+                </span>
+              </div>
               <textarea
                 value={singleMessage}
                 onChange={(e) => setSingleMessage(e.target.value)}
                 rows={3}
+                maxLength={FIELD_LIMITS.message}
                 placeholder="Leave blank — a complete personalized welcome message is generated automatically…"
                 className="w-full rounded-xl bg-[#070C0E] border border-[#ffffff15] px-4 py-3 text-sm text-[#E5E5E5] outline-none focus:border-[#0C8B44] transition-colors"
               />
@@ -546,6 +596,7 @@ export default function AdminInvites() {
                 type="text"
                 value={singleNote}
                 onChange={(e) => setSingleNote(e.target.value)}
+                maxLength={FIELD_LIMITS.note}
                 placeholder="Q1 Executive onboarding batch"
                 className="w-full rounded-xl bg-[#070C0E] border border-[#ffffff15] px-4 py-3 text-sm text-[#E5E5E5] outline-none focus:border-[#0C8B44] transition-colors"
               />
@@ -656,13 +707,19 @@ export default function AdminInvites() {
             </div>
 
             <div>
-              <label className="text-xs uppercase tracking-wider text-[#A0A0A0] block mb-2">
-                Campaign / Welcome Message (Optional)
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs uppercase tracking-wider text-[#A0A0A0]">
+                  Campaign / Welcome Message (Optional)
+                </label>
+                <span className={`text-[10px] ${bulkMessage.length >= FIELD_LIMITS.message ? 'text-[#f44336]' : 'text-[#525252]'}`}>
+                  {bulkMessage.length}/{FIELD_LIMITS.message.toLocaleString('en-US')}
+                </span>
+              </div>
               <textarea
                 value={bulkMessage}
                 onChange={(e) => setBulkMessage(e.target.value)}
                 rows={2}
+                maxLength={FIELD_LIMITS.message}
                 placeholder="Leave blank — a complete personalized welcome message is generated automatically…"
                 className="w-full rounded-xl bg-[#070C0E] border border-[#ffffff15] px-4 py-3 text-sm text-[#E5E5E5] outline-none focus:border-[#0C8B44] transition-colors"
               />
@@ -680,6 +737,7 @@ export default function AdminInvites() {
                 type="text"
                 value={bulkNote}
                 onChange={(e) => setBulkNote(e.target.value)}
+                maxLength={FIELD_LIMITS.note}
                 placeholder="Institutional Partners Q1"
                 className="w-full rounded-xl bg-[#070C0E] border border-[#ffffff15] px-4 py-3 text-sm text-[#E5E5E5] outline-none focus:border-[#0C8B44] transition-colors"
               />
