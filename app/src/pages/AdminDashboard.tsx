@@ -162,7 +162,7 @@ export default function AdminDashboard() {
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mt-8">
           <Op to="/admin/users" icon={<Users className="w-5 h-5" />} label="Users" />
-          <Op to="/admin/invites" icon={<Mail className="w-5 h-5" />} label="Invites" />
+          <Op to="/admin/invites" icon={<Mail className="w-5 h-5" />} label="Bulk & Email Invites" />
           <Op to="/admin/transfer" icon={<ArrowLeftRight className="w-5 h-5" />} label="Transfer" />
           <Op to="/admin/deposits" icon={<Banknote className="w-5 h-5" />} label="Deposits" />
           <Op to="/admin/broadcast" icon={<MegaphoneIcon className="w-5 h-5" />} label="Broadcast" />

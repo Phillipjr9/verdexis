@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import Navigation from '../components/Navigation'
 import { adminApi, type AdminUserSummary } from '../lib/adminApi'
 import { getToken } from '../lib/api'
-import { Search, Users, RefreshCw, UserPlus } from 'lucide-react'
+import { Search, Users, RefreshCw, UserPlus, Mail } from 'lucide-react'
 
 const PAGE_SIZE = 25
 
@@ -139,9 +139,14 @@ export default function AdminUsers() {
             </h1>
             <p className="text-xs text-[#737373] mt-1">{total} accounts — use Make sub-admin in the Role column</p>
           </div>
-          <Link to="/admin/users/new" className="inline-flex items-center gap-2 rounded-xl bg-[#0C8B44] px-4 py-2 text-sm text-white hover:bg-[#0a7539]">
-            <UserPlus className="w-4 h-4" />Create user
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link to="/admin/invites" className="inline-flex items-center gap-2 rounded-xl bg-[#0C8B44]/20 border border-[#0C8B44]/40 px-4 py-2 text-sm text-[#0C8B44] hover:bg-[#0C8B44]/30 transition-colors">
+              <Mail className="w-4 h-4" />Bulk & Email Invites
+            </Link>
+            <Link to="/admin/users/new" className="inline-flex items-center gap-2 rounded-xl bg-[#0C8B44] px-4 py-2 text-sm text-white hover:bg-[#0a7539] transition-colors">
+              <UserPlus className="w-4 h-4" />Create user
+            </Link>
+          </div>
         </div>
 
         <form onSubmit={onSearch} className="flex flex-wrap gap-3 mb-4">
