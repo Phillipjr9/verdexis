@@ -312,6 +312,10 @@ export const adminApi = {
     request<{ balance: AdminWalletBalance; transaction: AdminTransaction; pending: { id: string; status: string } }>(`/api/admin/pending-deposits/${id}/approve`, { method: 'POST', body: JSON.stringify(payload) }),
   rejectOnchainDeposit: (id: string, note?: string) =>
     request<{ pendingDeposit: { id: string; status: string } }>(`/api/admin/pending-deposits/${id}/reject`, { method: 'POST', body: JSON.stringify({ note: note || '' }) }),
+  approvePendingDeposit: (id: string, payload: { currency?: string; amount?: number; note?: string } = {}) =>
+    request<{ balance: AdminWalletBalance; transaction: AdminTransaction; pending: { id: string; status: string } }>(`/api/admin/pending-deposits/${id}/approve`, { method: 'POST', body: JSON.stringify(payload) }),
+  rejectPendingDeposit: (id: string, note?: string) =>
+    request<{ pendingDeposit: { id: string; status: string } }>(`/api/admin/pending-deposits/${id}/reject`, { method: 'POST', body: JSON.stringify({ note: note || '' }) }),
 
   listUsers: (params: { q?: string; page?: number; limit?: number; role?: 'user' | 'admin' | 'all'; suspended?: 'true' | 'false' | 'all'; kycStatus?: 'none' | 'pending' | 'approved' | 'rejected' } = {}) => {
     const q = new URLSearchParams()
@@ -500,4 +504,72 @@ export const adminApi = {
       method: 'PATCH',
       body: JSON.stringify(input),
     }),
+
+  // Email invitations (Single and Bulk)
+  sendInvites: (payload: {
+    emails: string | string[] | Array<{ email: string; name?: string; amount?: number }>
+    amount?: number
+    currency?: string
+    subject?: string
+    customMessage?: string
+    note?: string
+    creditExisting?: boolean
+  }) => request<{
+    ok: boolean
+    summary: {
+      total: number
+      created: number
+      credited: number
+      skipped: number
+      failed: number
+      emailsSent: number
+      amountPerInvite: number
+      currency: string
+    }
+    results: Array<{
+      email: string
+      name?: string
+      status: 'created' | 'credited' | 'skipped' | 'failed'
+      userId?: string
+      amount?: number
+      currency?: string
+      emailSent?: boolean
+      plainPassword?: string
+      error?: string
+    }>
+  }>('/api/admin/invites', { method: 'POST', body: JSON.stringify(payload) }),
+
+  previewInvite: (payload: {
+    emails?: string | string[]
+    amount?: number
+    currency?: string
+    subject?: string
+    customMessage?: string
+    note?: string
+    creditExisting?: boolean
+  }) => request<{
+    ok: boolean
+    subject: string
+    html: string
+    sample: {
+      email: string
+      name: string
+      amount: number
+      currency: string
+      amountLabel: string
+      tempPassword?: string
+    }
+  }>('/api/admin/invites/preview', { method: 'POST', body: JSON.stringify(payload) }),
+
+  getInviteHistory: () => request<{
+    ok: boolean
+    history: Array<{
+      id: string
+      action: string
+      createdAt: string
+      actor: { id: string; email: string; name: string }
+      targetUser?: { id: string; email: string; name: string } | null
+      details: Record<string, unknown>
+    }>
+  }>('/api/admin/invites/history', { method: 'POST' }),
 }

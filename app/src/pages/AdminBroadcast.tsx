@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import Navigation from '../components/Navigation'
 import { adminApi } from '../lib/adminApi'
-import { ArrowLeft, MegaphoneIcon, Send, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, MegaphoneIcon, Send, AlertTriangle, Mail } from 'lucide-react'
 
 const KINDS: Array<{ value: 'system' | 'alert' | 'trade' | 'deposit'; label: string; tone: string }> = [
   { value: 'system', label: 'System', tone: 'text-[#A0A0A0] bg-[#A0A0A0]/10' },
@@ -41,9 +41,14 @@ export default function AdminBroadcast() {
     <div className="min-h-screen bg-[#070C0E]">
       <Navigation />
       <div className="max-w-[900px] mx-auto px-6 py-8">
-        <Link to="/admin" className="inline-flex items-center gap-2 text-xs text-[#A0A0A0] hover:text-[#0C8B44] mb-4">
-          <ArrowLeft className="w-4 h-4" />Back to admin
-        </Link>
+        <div className="flex items-center justify-between gap-4 mb-4">
+          <Link to="/admin" className="inline-flex items-center gap-2 text-xs text-[#A0A0A0] hover:text-[#0C8B44]">
+            <ArrowLeft className="w-4 h-4" />Back to admin
+          </Link>
+          <Link to="/admin/invites" className="inline-flex items-center gap-1.5 text-xs text-[#0C8B44] hover:underline">
+            <Mail className="w-3.5 h-3.5" />Looking for Bulk Email Invites?
+          </Link>
+        </div>
         <div className="mb-6">
           <h1 className="text-2xl font-light text-[#E5E5E5] flex items-center gap-3">
             <MegaphoneIcon className="w-6 h-6 text-[#0C8B44]" />Broadcast notification

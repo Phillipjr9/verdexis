@@ -41,6 +41,7 @@ const userMoreLinks = [
 const adminPrivateLinks = [
   { label: 'Dashboard', path: '/dashboard' },
   { label: 'Users', path: '/admin/users' },
+  { label: 'Email Invites', path: '/admin/invites' },
   { label: 'Audit', path: '/admin/audit' },
   { label: 'Settings', path: '/settings' },
 ]

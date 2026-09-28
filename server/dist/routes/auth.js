@@ -3,8 +3,9 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import rateLimit from 'express-rate-limit';
+import { z } from 'zod';
 import { prisma } from '../db.js';
-import { signToken, requireAuth } from '../auth.js';
+import { signToken, verifyToken, requireAuth } from '../auth.js';
 import { env } from '../env.js';
 import { getUserByEmail, getUserById, findUserByEmailOrUsername, updateUser } from '../services/userStore.js';
 import { emailService } from '../services/email.js';
@@ -12,7 +13,7 @@ import { otpService } from '../services/otp.js';
 import { isDbUnavailableError } from '../dbError.js';
 import { notifyPasswordChanged } from '../services/emailHooks.js';
 import { recordLastLogin } from '../services/loginMeta.js';
-import { failedLoginAttempts, clearFailedLoginAttempts, publicUser, buildPendingVerificationPayload, autoPromoteIfAdminEmail, promoteAllAdminEmails, loginSchema, forgotSchema, resetSchema, } from './authHelpers.js';
+import { failedLoginAttempts, clearFailedLoginAttempts, publicUser, buildPendingVerificationPayload, autoPromoteIfAdminEmail, promoteAllAdminEmails, loginSchema, forgotSchema, resetSchema, verifySignupOtpSchema, markEmailVerifiedAndNotifyAdmin, } from './authHelpers.js';
 import { registerSignupRoutes } from './authSignup.js';
 const router = Router();
 export { clearFailedLoginAttempts, autoPromoteIfAdminEmail, promoteAllAdminEmails };
@@ -70,13 +71,16 @@ router.post('/login', authLimiter, async (req, res) => {
             const nextCount = previous.count + 1;
             const lockUntil = nextCount >= 5 ? Date.now() + 15 * 60 * 1000 : 0;
             failedLoginAttempts.set(userKey, { count: nextCount, lockedUntil: lockUntil });
-            if (nextCount >= 5) {
-                await updateUser(user.id, { suspended: true, suspendedReason: 'Repeated failed login attempts' });
-            }
             res.status(401).json({ error: 'Invalid credentials' });
             return;
         }
         failedLoginAttempts.delete(user.email.toLowerCase());
+        // Auto-recover if suspended solely due to past failed login attempts
+        if (user.suspended && user.suspendedReason === 'Repeated failed login attempts') {
+            await updateUser(user.id, { suspended: false, suspendedReason: null });
+            user.suspended = false;
+            user.suspendedReason = null;
+        }
         if (user.suspended) {
             res.status(403).json({ error: 'Account suspended' });
             return;
@@ -84,21 +88,23 @@ router.post('/login', authLimiter, async (req, res) => {
         if (!user.emailVerified) {
             const otpResult = await otpService.create(user.id, 'email_verification');
             if (otpResult.error || !otpResult.code) {
-                res.status(403).json({
+                res.status(429).json({
                     error: 'Email verification required',
                     code: 'EMAIL_NOT_VERIFIED',
-                    message: otpResult.error || 'Please verify your email. Request a new code from the signup screen.',
+                    message: otpResult.error || 'Please wait before requesting a new verification code.',
                 });
                 return;
             }
-            const emailSent = await emailService.sendOTP(user.email, user.name, otpResult.code, 10, user.id);
-            if (!emailSent) {
-                res.status(500).json({
-                    error: 'Verification email failed',
-                    code: 'EMAIL_NOT_VERIFIED',
-                    message: 'Unable to send verification code. Please try again.',
-                });
-                return;
+            const isDev = (env.NODE_ENV || 'development') !== 'production';
+            let emailSent = false;
+            try {
+                emailSent = await emailService.sendOTP(user.email, user.name, otpResult.code, 10, user.id);
+            }
+            catch (err) {
+                console.warn('[auth] Failed to send login OTP email:', err);
+            }
+            if (!emailSent && !isDev) {
+                console.warn('[auth] OTP email not sent in production; check SMTP configuration');
             }
             const pendingToken = signToken({
                 sub: user.id,
@@ -107,11 +113,11 @@ router.post('/login', authLimiter, async (req, res) => {
                 otpPending: true,
                 signupVerification: true,
             });
-            const isDev = (env.NODE_ENV || 'development') !== 'production';
-            res.status(403).json({
-                error: 'Email verification required',
+            res.status(200).json({
+                ok: true,
+                otpRequired: true,
                 code: 'EMAIL_NOT_VERIFIED',
-                ...buildPendingVerificationPayload({ kind: 'signup', pendingToken, email: user.email }),
+                ...buildPendingVerificationPayload({ kind: 'login', pendingToken, email: user.email }),
                 ...(isDev ? { devCode: otpResult.code } : {}),
             });
             return;
@@ -140,6 +146,114 @@ router.post('/login', authLimiter, async (req, res) => {
             return;
         }
         res.status(500).json({ error: 'Login failed' });
+    }
+});
+router.post('/login/verify-otp', authLimiter, async (req, res) => {
+    try {
+        const parsed = verifySignupOtpSchema.safeParse(req.body);
+        if (!parsed.success) {
+            res.status(400).json({ error: 'Invalid input' });
+            return;
+        }
+        const payload = verifyToken(parsed.data.pendingToken);
+        if (!payload?.sub || !payload.otpPending) {
+            res.status(401).json({ error: 'Invalid or expired session. Please sign in again.' });
+            return;
+        }
+        const result = await otpService.verify(payload.sub, parsed.data.code, 'email_verification');
+        if (!result.success) {
+            res.status(400).json({ error: result.error });
+            return;
+        }
+        const user = await getUserById(payload.sub);
+        if (!user) {
+            res.status(404).json({ error: 'User not found' });
+            return;
+        }
+        if (user.suspended) {
+            res.status(403).json({ error: 'Account suspended' });
+            return;
+        }
+        if (user.deletedAt) {
+            res.status(403).json({ error: 'Account deleted. Please contact support to restore access.' });
+            return;
+        }
+        await markEmailVerifiedAndNotifyAdmin(user.id);
+        const role = await autoPromoteIfAdminEmail(user.id, user.email, user.role);
+        const token = signToken({ sub: user.id, email: user.email, v: user.tokenVersion ?? 0 });
+        try {
+            const decoded = jwt.decode(token);
+            const expires = decoded?.exp ? new Date(decoded.exp * 1000) : undefined;
+            res.cookie('vdx_token', token, { httpOnly: true, secure: (env.NODE_ENV || 'development') === 'production', sameSite: 'lax', path: '/', expires });
+        }
+        catch { /* ignore */ }
+        void recordLastLogin(user.id, req).catch((e) => console.warn('[login] last-login meta failed', e));
+        res.json({ token, user: publicUser({ ...user, role, emailVerified: true, emailVerifiedAt: new Date() }), verified: true, emailVerified: true, message: 'Signed in successfully.' });
+    }
+    catch (err) {
+        console.error('[auth] /login/verify-otp crashed:', err);
+        res.status(500).json({ error: 'Verification failed' });
+    }
+});
+router.post('/login/resend-otp', authLimiter, async (req, res) => {
+    try {
+        const body = (req.body ?? {});
+        let userId = null;
+        let email = null;
+        if (body.pendingToken) {
+            const payload = verifyToken(body.pendingToken);
+            if (payload?.sub) {
+                userId = payload.sub;
+                email = payload.email || null;
+            }
+        }
+        if (!userId && body.email) {
+            const u = await getUserByEmail(body.email.trim().toLowerCase());
+            if (u) {
+                userId = u.id;
+                email = u.email;
+            }
+        }
+        if (!userId) {
+            res.status(400).json({ error: 'Session expired. Please sign in again.' });
+            return;
+        }
+        const user = await getUserById(userId);
+        if (!user) {
+            res.status(404).json({ error: 'User not found' });
+            return;
+        }
+        if (user.emailVerified) {
+            res.status(409).json({ error: 'Email already verified. Please sign in.' });
+            return;
+        }
+        const otpResult = await otpService.create(user.id, 'email_verification');
+        if (otpResult.error || !otpResult.code) {
+            res.status(429).json({ error: otpResult.error || 'Could not create verification code' });
+            return;
+        }
+        const isDev = (env.NODE_ENV || 'development') !== 'production';
+        try {
+            await emailService.sendOTP(user.email, user.name, otpResult.code, 10, user.id);
+        }
+        catch (e) {
+            console.warn('[auth] Resend OTP email failed:', e);
+        }
+        const pendingToken = signToken({
+            sub: user.id,
+            email: user.email,
+            v: user.tokenVersion ?? 0,
+            otpPending: true,
+            signupVerification: true,
+        });
+        res.status(200).json({
+            ...buildPendingVerificationPayload({ kind: 'login', pendingToken, email: user.email }),
+            ...(isDev ? { devCode: otpResult.code } : {}),
+        });
+    }
+    catch (err) {
+        console.error('[auth] /login/resend-otp crashed:', err);
+        res.status(500).json({ error: 'Failed to resend code' });
     }
 });
 router.post('/forgot', passwordResetLimiter, async (req, res) => {
@@ -209,6 +323,42 @@ router.post('/reset', authLimiter, async (req, res) => {
     res.clearCookie('verdexis_token', { httpOnly: true, sameSite: 'lax', secure: secureCookie });
     res.clearCookie('vdx_token', { httpOnly: true, sameSite: 'lax', secure: secureCookie, path: '/' });
     res.json({ ok: true, token: signToken({ sub: updated.id, email: updated.email, v: updated.tokenVersion }) });
+});
+router.post('/change-password', requireAuth, async (req, res) => {
+    try {
+        const changePasswordSchema = z.object({
+            currentPassword: z.string().min(1),
+            newPassword: z.string().min(8).max(200),
+        });
+        const parsed = changePasswordSchema.safeParse(req.body);
+        if (!parsed.success) {
+            res.status(400).json({ error: 'Invalid input. New password must be at least 8 characters.' });
+            return;
+        }
+        const user = await getUserById(req.userId);
+        if (!user) {
+            res.status(404).json({ error: 'User not found' });
+            return;
+        }
+        const ok = await bcrypt.compare(parsed.data.currentPassword, user.passwordHash);
+        if (!ok) {
+            res.status(401).json({ error: 'Current password is incorrect' });
+            return;
+        }
+        const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
+        const tokenVersion = (user.tokenVersion ?? 0) + 1;
+        const updated = await updateUser(user.id, {
+            passwordHash,
+            tokenVersion,
+        });
+        const token = signToken({ sub: updated.id, email: updated.email, v: tokenVersion });
+        void notifyPasswordChanged(updated, { ip: req.ip });
+        res.json({ ok: true, token, message: 'Password changed successfully' });
+    }
+    catch (err) {
+        console.error('[auth] /change-password error:', err);
+        res.status(500).json({ error: 'Failed to change password' });
+    }
 });
 router.get('/me', requireAuth, async (req, res) => {
     try {

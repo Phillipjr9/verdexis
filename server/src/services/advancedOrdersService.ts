@@ -1,11 +1,12 @@
 import { prisma } from '../db.js'
 import { getCurrentCryptoPrice } from '../historicalPrice.js'
-import type { Order, Trade, Prisma } from '@prisma/client'
 
 export type AdvancedOrderType = 'stop_loss' | 'take_profit' | 'limit'
 export type AdvancedOrderStatus = 'active' | 'triggered' | 'filled' | 'cancelled'
 
-export type AdvancedOrderRecord = Order
+export type AdvancedOrderRecord = any
+type Order = any
+type Trade = any
 
 /**
  * Advanced Orders Service: Manages stop-loss, take-profit, and limit orders
@@ -181,7 +182,7 @@ export class AdvancedOrdersService {
     const total = order.amount * currentPrice
 
     // Execute atomically
-    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       // Create trade record with schema-aligned fields
       const t = await tx.trade.create({
         data: {

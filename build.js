@@ -37,7 +37,11 @@ try {
   execSync('node scripts/patch-wallet-balance-tx.mjs', { cwd: rootDir, stdio: 'inherit' });
 
   console.log('Running vite build...');
-  execSync('npm run build', { cwd: appDir, stdio: 'inherit' });
+  execSync('npm run build', {
+    cwd: appDir,
+    stdio: 'inherit',
+    env: { ...process.env, NODE_OPTIONS: process.env.NODE_OPTIONS || '--max-old-space-size=4096' },
+  });
 
   console.log('Build complete!');
 } catch (error) {

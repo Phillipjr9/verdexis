@@ -15,6 +15,9 @@ import {
 } from './walletHelpers.js'
 import { notifyPeerTransfer } from '../services/transferNotifications.js'
 import walletUserExtrasRoutes from './wallet-user-extras.js'
+import walletLinksRoutes from './walletLinks.js'
+import walletAddressValidationRoutes from './wallet-address-validation.js'
+import walletVerificationRoutes from './wallet-verification.js'
 
 const router = Router()
 
@@ -81,11 +84,11 @@ router.get('/', requireAuth, async (req: AuthedRequest, res) => {
   // (which only look at WalletBalance). Self-heal that drift here so the
   // asset always shows a single, correct, transferable balance.
   try {
-    const holdings = await withTimeout(
+    const holdings = (await withTimeout(
       prisma.holding.findMany({ where: { userId } }),
       5_000,
       'holdings_reconcile',
-    )
+    )) as Array<{ symbol: string; amount: number | string }>
     const byCurrency = new Map(balances.map((b) => [b.currency.toUpperCase(), b]))
     for (const h of holdings) {
       const currency = h.symbol.toUpperCase()
@@ -486,31 +489,6 @@ router.delete('/saved-wallet', requireAuth, async (req: AuthedRequest, res) => {
   }
 })
 
-router.get('/links', requireAuth, async (req: AuthedRequest, res) => {
-  const userId = req.userId!
-  try {
-    const links = await prisma.walletLink.findMany({
-      where: { userId },
-      orderBy: [{ isPrimary: 'desc' }, { linkedAt: 'desc' }],
-    })
-    res.json({ links })
-  } catch (e) {
-    res.status(500).json({ error: e instanceof Error ? e.message : 'Failed' })
-  }
-})
-
-router.post('/link', requireAuth, async (req: AuthedRequest, res) => {
-  res.status(501).json({ error: 'Wallet link not available in this build' })
-})
-
-router.delete('/links/:id', requireAuth, async (req: AuthedRequest, res) => {
-  res.status(501).json({ error: 'Not implemented' })
-})
-
-router.post('/links/:id/primary', requireAuth, async (req: AuthedRequest, res) => {
-  res.status(501).json({ error: 'Not implemented' })
-})
-
 router.post('/convert', requireAuth, idempotency(), async (req: AuthedRequest, res) => {
   const userId = req.userId!
   const fromCurrency = String(req.body?.fromCurrency || '').toUpperCase()
@@ -599,6 +577,9 @@ router.post('/convert', requireAuth, idempotency(), async (req: AuthedRequest, r
   }
 })
 
+router.use(walletLinksRoutes)
+router.use(walletAddressValidationRoutes)
+router.use(walletVerificationRoutes)
 router.use(walletUserExtrasRoutes)
 
 export default router

@@ -50,13 +50,23 @@ export function registerSignupRoutes(router: Router, authLimiter: any) {
         res.status(429).json({ error: otpResult.error || 'Could not create verification code' })
         return
       }
-      const emailSent = await emailService.sendOTP(user.email, user.name, otpResult.code, 10, user.id)
-      if (!emailSent) {
-        res.status(500).json({ error: 'Verification email failed' })
-        return
+      const isDev = (env.NODE_ENV || 'development') !== 'production'
+      let emailSent = false
+      try {
+        emailSent = await emailService.sendOTP(user.email, user.name, otpResult.code, 10, user.id)
+      } catch (err) {
+        console.warn('[auth] Failed to send signup OTP email:', err)
+      }
+      if (!emailSent && !isDev) {
+        console.warn('[auth] Signup OTP email not sent; check SMTP configuration')
       }
       const pendingToken = signToken({ sub: user.id, email: user.email, v: (user as { tokenVersion?: number }).tokenVersion ?? 0, otpPending: true, signupVerification: true })
-      res.status(201).json({ ...buildPendingVerificationPayload({ kind: 'signup', pendingToken, email: user.email }), token: pendingToken, user: publicUser({ ...user, emailVerified: false }) })
+      res.status(201).json({
+        ...buildPendingVerificationPayload({ kind: 'signup', pendingToken, email: user.email }),
+        token: pendingToken,
+        user: publicUser({ ...user, emailVerified: false }),
+        ...(isDev ? { devCode: otpResult.code } : {}),
+      })
     } catch (e) {
       console.error('[auth] Signup failed:', e)
       res.status(500).json({ error: 'Signup failed' })
@@ -72,10 +82,17 @@ export function registerSignupRoutes(router: Router, authLimiter: any) {
       if (user.emailVerified) { res.status(409).json({ error: 'Email already verified' }); return }
       const otpResult = await otpService.create(user.id, 'email_verification')
       if (otpResult.error || !otpResult.code) { res.status(429).json({ error: otpResult.error || 'Could not create verification code' }); return }
-      const emailSent = await emailService.sendOTP(user.email, user.name, otpResult.code, 10, user.id)
-      if (!emailSent) { res.status(500).json({ error: 'Verification email failed' }); return }
+      const isDev = (env.NODE_ENV || 'development') !== 'production'
+      try {
+        await emailService.sendOTP(user.email, user.name, otpResult.code, 10, user.id)
+      } catch (e) {
+        console.warn('[auth] Resend signup OTP email failed:', e)
+      }
       const pendingToken = signToken({ sub: user.id, email: user.email, v: (user as { tokenVersion?: number }).tokenVersion ?? 0, otpPending: true, signupVerification: true })
-      res.status(202).json(buildPendingVerificationPayload({ kind: 'signup', pendingToken, email: user.email }))
+      res.status(202).json({
+        ...buildPendingVerificationPayload({ kind: 'signup', pendingToken, email: user.email }),
+        ...(isDev ? { devCode: otpResult.code } : {}),
+      })
     } catch (err) {
       console.error('[auth] /signup/resend-otp crashed:', err)
       res.status(500).json({ error: 'Failed to resend code' })

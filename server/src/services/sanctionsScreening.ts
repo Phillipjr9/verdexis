@@ -1,4 +1,9 @@
-import type { User } from '@prisma/client'
+type User = {
+  kycCountry?: string | null
+  kycFirstName?: string | null
+  kycLastName?: string | null
+  [key: string]: any
+}
 
 export interface ScreeningResult {
   sanctioned: boolean

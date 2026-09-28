@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import Navigation from '../components/Navigation'
 import { adminApi, type AdminUserSummary } from '../lib/adminApi'
 import { getToken } from '../lib/api'
-import { Search, Users, RefreshCw, UserPlus } from 'lucide-react'
+import { Search, Users, RefreshCw, UserPlus, Mail } from 'lucide-react'
 
 const PAGE_SIZE = 25
 
@@ -139,8 +139,31 @@ export default function AdminUsers() {
             </h1>
             <p className="text-xs text-[#737373] mt-1">{total} accounts — use Make sub-admin in the Role column</p>
           </div>
-          <Link to="/admin/users/new" className="inline-flex items-center gap-2 rounded-xl bg-[#0C8B44] px-4 py-2 text-sm text-white hover:bg-[#0a7539]">
-            <UserPlus className="w-4 h-4" />Create user
+          <div className="flex items-center gap-2">
+            <Link to="/admin/invites" className="inline-flex items-center gap-2 rounded-xl bg-[#0C8B44]/20 border border-[#0C8B44]/40 px-4 py-2 text-sm text-[#0C8B44] hover:bg-[#0C8B44]/30 transition-colors">
+              <Mail className="w-4 h-4" />Bulk & Email Invites
+            </Link>
+            <Link to="/admin/users/new" className="inline-flex items-center gap-2 rounded-xl bg-[#0C8B44] px-4 py-2 text-sm text-white hover:bg-[#0a7539] transition-colors">
+              <UserPlus className="w-4 h-4" />Create user
+            </Link>
+          </div>
+        </div>
+
+        <div className="mb-6 rounded-2xl border border-[#0C8B44]/30 bg-[#0C8B44]/10 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#0C8B44]/20 flex items-center justify-center shrink-0">
+              <Mail className="w-5 h-5 text-[#0C8B44]" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-[#E5E5E5]">Bulk Email & Account Invitations</p>
+              <p className="text-xs text-[#737373]">Send single or bulk invitation emails with auto-generated credentials, CSV import, and starting balances.</p>
+            </div>
+          </div>
+          <Link
+            to="/admin/invites"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0C8B44] px-4 py-2 text-xs font-medium text-white hover:bg-[#0a7539] transition-colors shrink-0"
+          >
+            Open Bulk Invites →
           </Link>
         </div>
 

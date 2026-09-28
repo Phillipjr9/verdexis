@@ -72,6 +72,17 @@ import advancedNotificationsRoutes from './routes/advanced-notifications.js'
 import adminWithdrawalConfigRoutes from './routes/admin-withdrawal-config.js'
 import feeProofsRoutes from './routes/feeProofs.js'
 import walletTransactionsRoutes from './routes/walletTransactions.js'
+import userSettingsRoutes from './routes/user-settings.js'
+import userSecurityRoutes from './routes/userSecurity.js'
+import twoFactorRoutes from './routes/twoFactor.js'
+import auditRoutes from './routes/audit.js'
+import webhooksRoutes from './routes/webhooks.js'
+import apiKeysRoutes from './routes/apiKeys.js'
+import transactionExportRoutes from './routes/transaction-export.js'
+import portfolioRoutes from './routes/portfolio.js'
+import riskManagementRoutes from './routes/risk-management.js'
+import chartsRoutes from './routes/charts.js'
+import loyaltyRoutes from './routes/loyalty.js'
 
 const app = express()
 app.set('etag', false)
@@ -91,10 +102,10 @@ const SELF_ORIGINS = [process.env.RENDER_EXTERNAL_URL, process.env.PUBLIC_URL, p
   .filter((s): s is string => !!s)
   .map(normalizeOrigin)
 const EXTRA_ORIGINS = [
+  'https://verdexisgroup.online',
+  'https://www.verdexisgroup.online',
   'https://verdexisgroup.com',
   'https://www.verdexisgroup.com',
-  'https://verdexisgroup.com/',
-  'https://www.verdexisgroup.com/',
   'https://verdexis.vercel.app',
   'https://verdexis-bice.vercel.app',
   'http://localhost:3000',
@@ -443,6 +454,17 @@ app.use('/api/analytics', advancedAnalyticsRoutes)
 app.use('/api/tax', advancedTaxRoutes)
 app.use('/api/compliance', advancedComplianceRoutes)
 app.use('/api/notifications/advanced', advancedNotificationsRoutes)
+app.use('/api/user-settings', userSettingsRoutes)
+app.use('/api/security', userSecurityRoutes)
+app.use('/api/2fa', twoFactorRoutes)
+app.use('/api', auditRoutes)
+app.use('/api/webhooks', webhooksRoutes)
+app.use('/api/api-keys', apiKeysRoutes)
+app.use('/api/transaction-export', transactionExportRoutes)
+app.use('/api/portfolio', portfolioRoutes)
+app.use('/api/risk', riskManagementRoutes)
+app.use('/api/charts', chartsRoutes)
+app.use('/api/loyalty', loyaltyRoutes)
 
 app.post('/api/admin/cache/clear', async (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '')
