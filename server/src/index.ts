@@ -102,10 +102,10 @@ const SELF_ORIGINS = [process.env.RENDER_EXTERNAL_URL, process.env.PUBLIC_URL, p
   .filter((s): s is string => !!s)
   .map(normalizeOrigin)
 const EXTRA_ORIGINS = [
+  'https://verdexisgroup.online',
+  'https://www.verdexisgroup.online',
   'https://verdexisgroup.com',
   'https://www.verdexisgroup.com',
-  'https://verdexisgroup.com/',
-  'https://www.verdexisgroup.com/',
   'https://verdexis.vercel.app',
   'https://verdexis-bice.vercel.app',
   'http://localhost:3000',
