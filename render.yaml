@@ -20,11 +20,11 @@ services:
       - key: JWT_EXPIRES_IN
         value: 7d
       - key: CORS_ORIGIN
-        value: "https://verdexisgroup.com,https://www.verdexisgroup.com,https://verdexis.pages.dev,https://www.verdexis.pages.dev,https://verdexis-bice.vercel.app,https://verdexis-h97f6m9cl-dianas-projects-32e424a3.vercel.app,https://verdexis-fjqz.onrender.com,http://localhost:5173,http://localhost:3000"
+        value: "https://verdexisgroup.online,https://www.verdexisgroup.online,https://verdexisgroup.com,https://www.verdexisgroup.com,https://verdexis.pages.dev,https://www.verdexis.pages.dev,https://verdexis-bice.vercel.app,https://verdexis-h97f6m9cl-dianas-projects-32e424a3.vercel.app,https://verdexis-fjqz.onrender.com,http://localhost:5173,http://localhost:3000"
       - key: APP_BASE_URL
-        value: "https://verdexisgroup.com"
+        value: "https://www.verdexisgroup.online"
       - key: PRODUCTION_ORIGIN
-        value: "https://verdexisgroup.com"
+        value: "https://www.verdexisgroup.online"
       - key: ALERT_POLL_ENABLED
         value: "true"
       - key: ALERT_POLL_INTERVAL_MS
@@ -56,7 +56,7 @@ services:
       - key: ADMIN_EMAIL
         value: "admin@verdexisgroup.com"
       - key: APP_URL
-        value: "https://www.verdexisgroup.com"
+        value: "https://www.verdexisgroup.online"
       - key: COINGECKO_API_KEY
         sync: false
       - key: OPENAI_API_KEY
