@@ -13,11 +13,30 @@ import { generateInvestmentId } from '../investmentId.js'
 const router = Router()
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+// Matches an email embedded inside a larger token, e.g. `Jane Doe <jane@x.com>,`
+const LOOSE_EMAIL_RE = /[^\s@<>()[\]"',;]+@[^\s@<>()[\]"',;]+\.[^\s@<>()[\]"',;]+/
 
 export interface ParsedInviteRecipient {
   email: string
   name?: string
   amount?: number
+}
+
+/**
+ * Coerce an amount that may arrive as a number, a numeric string, or a
+ * formatted currency string ("1,000.00", "$500"). Returns undefined when the
+ * value cannot be interpreted as a finite number.
+ */
+export function coerceAmountValue(raw: unknown): number | undefined {
+  if (raw == null || raw === '') return undefined
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : undefined
+  if (typeof raw === 'string') {
+    const cleaned = raw.replace(/[$€£¥\s,_]/g, '')
+    if (!cleaned) return undefined
+    const n = Number(cleaned)
+    return Number.isFinite(n) ? n : undefined
+  }
+  return undefined
 }
 
 export function parseEmailsAndRecipients(raw: unknown): ParsedInviteRecipient[] {
@@ -31,63 +50,87 @@ export function parseEmailsAndRecipients(raw: unknown): ParsedInviteRecipient[] 
     recipients.push({
       email: e,
       name: nameStr?.trim() || undefined,
-      amount: typeof amountNum === 'number' && Number.isFinite(amountNum) && amountNum >= 0 ? amountNum : undefined,
+      amount:
+        typeof amountNum === 'number' && Number.isFinite(amountNum) && amountNum >= 0 && amountNum <= 1_000_000_000
+          ? amountNum
+          : undefined,
     })
+  }
+
+  const extractEmail = (token: string): string | undefined => {
+    const m = token.match(LOOSE_EMAIL_RE)
+    const candidate = (m?.[0] ?? '').toLowerCase()
+    return EMAIL_RE.test(candidate) ? candidate : undefined
+  }
+
+  const parseLine = (line: string) => {
+    const trimmed = line.trim()
+    if (!trimmed) return
+
+    // Mail-client paste format: `Full Name <user@example.com>` — a line can
+    // hold several such entries separated by `;` or `,`.
+    const angleMatches = [...trimmed.matchAll(/<([^>]*)>/g)]
+    if (angleMatches.length) {
+      let added = 0
+      for (const m of angleMatches) {
+        const emailInBrackets = extractEmail(m[1] ?? '')
+        if (!emailInBrackets) continue
+        const before = trimmed.slice(0, m.index).replace(/^[\s,;]+/, '').replace(/[\s,;]+$/, '')
+        const name = (before.split(/[;,]/).pop() ?? '').replace(/^["']+|["']+$/g, '').trim()
+        addOne(emailInBrackets, name || undefined)
+        added++
+      }
+      if (added) return
+    }
+
+    if (trimmed.includes(',') || trimmed.includes(';')) {
+      const cols = trimmed.split(/[,;]+/).map((s) => s.trim()).filter(Boolean)
+      const emails = cols.map((c) => extractEmail(c)).filter((c): c is string => Boolean(c))
+      const firstIsEmail = cols.length > 0 && extractEmail(cols[0]) !== undefined
+
+      if (emails.length === 1 && firstIsEmail) {
+        // CSV row: `email, [name], [amount]`
+        const rest = cols.slice(1)
+        const amount = rest.map(coerceAmountValue).find((v): v is number => typeof v === 'number')
+        const name = rest.find((c) => !extractEmail(c) && coerceAmountValue(c) === undefined)
+        addOne(emails[0], name, amount)
+        return
+      }
+      // Otherwise treat every column containing an email as its own recipient,
+      // e.g. `a@x.com,b@x.com;c@x.com` no longer drops all but the first.
+      for (const col of cols) {
+        const email = extractEmail(col)
+        if (email) addOne(email)
+      }
+      return
+    }
+
+    // Whitespace / newline separated list — every email-like token counts.
+    for (const token of trimmed.split(/\s+/)) {
+      const email = extractEmail(token)
+      if (email) addOne(email)
+    }
+  }
+
+  const parseObjectEntry = (obj: Record<string, unknown>) => {
+    if (typeof obj.email === 'string') {
+      addOne(obj.email, typeof obj.name === 'string' ? obj.name : undefined, coerceAmountValue(obj.amount))
+    }
   }
 
   if (Array.isArray(raw)) {
     for (const item of raw) {
       if (typeof item === 'string') {
-        const lines = item.split(/[\r\n]+/)
-        for (const line of lines) {
-          const trimmed = line.trim()
-          if (!trimmed) continue
-          // Support CSV lines like: "john@example.com, John Doe, 500"
-          if (trimmed.includes(',') || trimmed.includes(';')) {
-            const cols = trimmed.split(/[,;]+/).map((s) => s.trim())
-            if (cols.length >= 1 && EMAIL_RE.test(cols[0])) {
-              const email = cols[0]
-              const name = cols[1] && !EMAIL_RE.test(cols[1]) && isNaN(Number(cols[1])) ? cols[1] : undefined
-              const amountCol = cols.find((c, idx) => idx > 0 && !isNaN(Number(c)))
-              const amount = amountCol ? Number(amountCol) : undefined
-              addOne(email, name, amount)
-              continue
-            }
-          }
-          // Fallback to space/comma split
-          const parts = trimmed.split(/[\s,;]+/)
-          for (const p of parts) {
-            addOne(p)
-          }
-        }
+        item.split(/[\r\n]+/).forEach(parseLine)
       } else if (item && typeof item === 'object') {
-        const obj = item as Record<string, unknown>
-        if (typeof obj.email === 'string') {
-          addOne(obj.email, typeof obj.name === 'string' ? obj.name : undefined, typeof obj.amount === 'number' ? obj.amount : undefined)
-        }
+        parseObjectEntry(item as Record<string, unknown>)
       }
     }
   } else if (typeof raw === 'string') {
-    const lines = raw.split(/[\r\n]+/)
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (!trimmed) continue
-      if (trimmed.includes(',') || trimmed.includes(';')) {
-        const cols = trimmed.split(/[,;]+/).map((s) => s.trim())
-        if (cols.length >= 1 && EMAIL_RE.test(cols[0])) {
-          const email = cols[0]
-          const name = cols[1] && !EMAIL_RE.test(cols[1]) && isNaN(Number(cols[1])) ? cols[1] : undefined
-          const amountCol = cols.find((c, idx) => idx > 0 && !isNaN(Number(c)))
-          const amount = amountCol ? Number(amountCol) : undefined
-          addOne(email, name, amount)
-          continue
-        }
-      }
-      const parts = trimmed.split(/[\s,;]+/)
-      for (const p of parts) {
-        addOne(p)
-      }
-    }
+    raw.split(/[\r\n]+/).forEach(parseLine)
+  } else if (raw && typeof raw === 'object') {
+    // Single `{ email, name?, amount? }` object — previously rejected outright.
+    parseObjectEntry(raw as Record<string, unknown>)
   }
 
   return recipients
@@ -238,14 +281,37 @@ function buildInviteEmailHtml(opts: {
 }
 
 const inviteSchema = z.object({
-  emails: z.union([z.string().min(3), z.array(z.union([z.string().min(3), z.record(z.unknown())]))]),
-  amount: z.number().finite().min(0).max(1_000_000_000).optional().default(0),
-  currency: z.string().min(1).max(10).default('USD').transform((s) => s.toUpperCase()),
-  subject: z.string().max(200).optional(),
-  customMessage: z.string().max(2000).optional(),
-  note: z.string().max(1000).optional(),
+  // Accept a raw string, a single `{ email, name?, amount? }` object, or an
+  // array of either — previously a bare object was rejected as "Invalid input".
+  emails: z.union([
+    z.string().min(3),
+    z.record(z.unknown()),
+    z.array(z.union([z.string().min(3), z.record(z.unknown())])),
+  ]),
+  // Accept numbers, plain numeric strings and formatted amounts like "1,000.00".
+  amount: z.preprocess(
+    (v) => coerceAmountValue(v) ?? (v == null || v === '' ? 0 : v),
+    z.number().finite().min(0).max(1_000_000_000).optional().default(0),
+  ),
+  // Tolerate an empty/blank currency instead of failing validation.
+  currency: z
+    .string()
+    .max(10)
+    .default('USD')
+    .transform((s) => s.trim().toUpperCase() || 'USD'),
+  subject: z.coerce.string().max(200).optional(),
+  customMessage: z.coerce.string().max(2000).optional(),
+  note: z.coerce.string().max(1000).optional(),
   creditExisting: z.boolean().default(true),
 })
+
+/** Human-readable summary of the first validation issue, e.g. "Invalid input: emails — Required". */
+function invalidInputMessage(error: z.ZodError): string {
+  const issue = error.issues[0]
+  if (!issue) return 'Invalid input'
+  const path = issue.path.join('.')
+  return path ? `Invalid input: ${path} — ${issue.message}` : `Invalid input: ${issue.message}`
+}
 
 export type InviteResultItem = {
   email: string
@@ -266,7 +332,7 @@ export type InviteResultItem = {
 router.post('/invites/preview', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
   const parsed = inviteSchema.safeParse({
     emails: req.body?.emails || 'investor@example.com',
-    amount: Number(req.body?.amount ?? 1000),
+    amount: req.body?.amount ?? 1000,
     currency: req.body?.currency ?? 'USD',
     subject: req.body?.subject,
     customMessage: req.body?.customMessage,
@@ -401,7 +467,7 @@ router.get('/invites/history', requireAuth, requireAdmin, async (req: AuthedRequ
 router.post('/invites', requireAuth, requireAdmin, async (req: AuthedRequest, res) => {
   const parsed = inviteSchema.safeParse({
     emails: req.body?.emails,
-    amount: Number(req.body?.amount ?? 0),
+    amount: req.body?.amount,
     currency: req.body?.currency ?? 'USD',
     subject: req.body?.subject,
     customMessage: req.body?.customMessage,
@@ -410,7 +476,7 @@ router.post('/invites', requireAuth, requireAdmin, async (req: AuthedRequest, re
   })
 
   if (!parsed.success) {
-    res.status(400).json({ error: 'Invalid input', details: parsed.error.flatten() })
+    res.status(400).json({ error: invalidInputMessage(parsed.error), details: parsed.error.flatten() })
     return
   }
 

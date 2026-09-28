@@ -66,19 +66,35 @@ type HistoryItem = {
 const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'GBP', 'USDT', 'BTC', 'ETH', 'SOL']
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+// Matches an email embedded inside a larger token, e.g. `Jane Doe <jane@x.com>,`
+const LOOSE_EMAIL_RE = /[^\s@<>()[\]"',;]+@[^\s@<>()[\]"',;]+\.[^\s@<>()[\]"',;]+/
 
 function parseEmailsCount(text: string): string[] {
-  const lines = text.split(/[\r\n,;]+/)
   const unique = new Set<string>()
-  for (const l of lines) {
-    const trimmed = l.trim().toLowerCase()
-    // If line is "email, name", get the email part
-    const emailCandidate = trimmed.split(/[\s,]+/)[0]
-    if (emailCandidate && EMAIL_RE.test(emailCandidate)) {
-      unique.add(emailCandidate)
+  for (const line of text.split(/[\r\n]+/)) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    for (const token of trimmed.split(/[,;\s]+/)) {
+      const m = token.match(LOOSE_EMAIL_RE)
+      const candidate = (m?.[0] ?? '').toLowerCase()
+      if (candidate && EMAIL_RE.test(candidate)) {
+        unique.add(candidate)
+      }
     }
   }
   return Array.from(unique)
+}
+
+/** Prefer the server's field-level validation message over a generic failure string. */
+function formatApiError(err: unknown, fallback: string): string {
+  const e = err as { error?: string; message?: string; details?: { fieldErrors?: Record<string, string[]> } }
+  const fieldErrors = e?.details?.fieldErrors
+  if (fieldErrors) {
+    for (const [field, messages] of Object.entries(fieldErrors)) {
+      if (Array.isArray(messages) && messages.length) return `${field}: ${messages[0]}`
+    }
+  }
+  return e?.error || e?.message || fallback
 }
 
 function formatMoney(n: number, currency = 'USD') {
@@ -234,7 +250,7 @@ export default function AdminInvites() {
       setSingleEmail('')
       setSingleName('')
     } catch (err: any) {
-      toast.error(err.error || err.message || 'Invitation failed')
+      toast.error(formatApiError(err, 'Invitation failed'))
     } finally {
       setBusy(false)
     }
@@ -278,7 +294,7 @@ export default function AdminInvites() {
       )
       setBulkEmails('')
     } catch (err: any) {
-      toast.error(err.error || err.message || 'Bulk invitation failed')
+      toast.error(formatApiError(err, 'Bulk invitation failed'))
     } finally {
       setBusy(false)
     }

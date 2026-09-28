@@ -1702,7 +1702,9 @@ router.delete('/watchlist/:wid', async (req: AuthedRequest, res) => {
 
 const notifSchema = z.object({
   kind: z.enum(['alert', 'trade', 'deposit', 'system']).default('system'),
-  title: z.string().min(1).max(120),
+  // Max length must match the admin broadcast UI limit (140 chars) so titles
+  // typed up to the input cap are not rejected with "Invalid input".
+  title: z.string().min(1).max(140),
   body: z.string().max(2000).optional(),
 })
 
@@ -1734,9 +1736,17 @@ router.post('/broadcast', async (req: AuthedRequest, res) => {
     res.status(404).json({ error: 'Endpoint not found' })
     return
   }
-  
+
   const parsed = notifSchema.safeParse(req.body)
-  if (!parsed.success) { res.status(400).json({ error: 'Invalid input' }); return }
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0]
+    const path = issue?.path?.join('.')
+    res.status(400).json({
+      error: path ? `Invalid input: ${path} — ${issue.message}` : 'Invalid input',
+      details: parsed.error.flatten(),
+    })
+    return
+  }
   const users = await prisma.user.findMany({ where: { suspended: false }, select: { id: true } })
   // Explicitly pass required fields to ensure type safety
   const notificationData = {
