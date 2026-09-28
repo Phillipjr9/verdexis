@@ -1,6 +1,8 @@
 import { prisma } from '../db.js'
-import type { User, Transaction } from '@prisma/client'
 import { screenUser as screenWithProvider } from './sanctionsScreening.js'
+
+type User = any
+type Transaction = any
 
 export interface ComplianceCheckResult {
   passed: boolean

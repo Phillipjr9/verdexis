@@ -796,6 +796,12 @@ export default function WalletPage() {
   // On mount, pull the admin-curated deposit instructions from the server
   // so the user sees current addresses even on a fresh device / cleared cache.
   useEffect(() => { void hydrateFromServer() }, [])
+  // Pull wallet + transactions promptly so Total Balance is not waiting on the 15s poll.
+  useEffect(() => {
+    void portfolioStore.hydrate(true)
+    const t = window.setTimeout(() => setIsMarketReady(true), 2500)
+    return () => window.clearTimeout(t)
+  }, [])
 
   // Read the cached `prefs.bonusLocked` flag (set client-side by api.ts on
   // login/me) so the Withdraw tab can show a proactive WhatsApp/Telegram
@@ -1650,6 +1656,15 @@ export default function WalletPage() {
     }
   }
 
+  // Normalize amount sign for history: deposits/credits positive, withdraw/fee
+  // negative. Transfer keeps stored sign (out = negative, in = positive).
+  const signedTxAmount = (tx: WalletTransaction): number => {
+    const abs = Math.abs(typeof tx.amount === 'number' && isFinite(tx.amount) ? tx.amount : 0)
+    if (tx.type === 'withdraw' || (tx.type as string) === 'fee') return -abs
+    if (tx.type === 'deposit' || tx.type === 'dividend' || tx.type === 'interest') return abs
+    return typeof tx.amount === 'number' && isFinite(tx.amount) ? tx.amount : 0
+  }
+
   const getTransactionIcon = (type: string) => {
     switch (type) {
       case 'deposit':
@@ -1792,28 +1807,6 @@ export default function WalletPage() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-[#ffffff08] bg-[#0f1619]/50 p-4 sm:p-5 mb-6">
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.16em] text-[#737373]">Quick start</p>
-                <h2 className="text-base font-medium text-[#E5E5E5] mt-1">Move money in and out without losing context</h2>
-                <p className="text-sm text-[#A0A0A0] mt-1">Use the shortcuts below to fund your account, move assets, or review incoming income.</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {[
-                  { label: 'Deposit', tab: 'deposit' as TabType, hint: 'Add cash or crypto' },
-                  { label: 'Transfer', tab: 'transfer' as TabType, hint: 'Move between wallets' },
-                  { label: 'Income', tab: 'income' as TabType, hint: 'View dividends and interest' },
-                ].map((action, i) => (
-                  <button key={`wallet-quick-${action.label}-${i}`} onClick={() => setActiveTab(action.tab)} className="rounded-full border border-[#ffffff08] bg-[#1a1a1a]/70 px-3 py-2 text-left transition-colors hover:border-[#0C8B44]/30 hover:bg-[#0C8B44]/10">
-                    <p className="text-sm font-medium text-[#E5E5E5]">{action.label}</p>
-                    <p className="text-xs text-[#737373]">{action.hint}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
           {/* Main Balance */}
           <div className="liquid-card p-8 mb-6" style={{ '--fill-color': 'rgba(12,139,68,0.15)' } as React.CSSProperties}>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -1821,10 +1814,7 @@ export default function WalletPage() {
                 <p className="text-sm text-[#A0A0A0] mb-2">Total Balance</p>
                 <div className="flex items-center gap-3 flex-wrap">
                   {(() => {
-                    const hasUnpricedHoldings = holdings.length > 0 && !isMarketReady
-                    const formatted = hasUnpricedHoldings
-                      ? 'Loading…'
-                      : `$${totalBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    const formatted = `$${totalBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                     const display = showBalance ? formatted : formatted.replace(/\d/g, '*')
                     const sizeClass = headlineAmountClass(display)
                     return (
@@ -1839,9 +1829,9 @@ export default function WalletPage() {
                   </button>
                 </div>
                 <p className="text-sm text-[#737373] mt-2 flex items-center gap-2 flex-wrap">
-                  <span>Cash <span className="text-[#A0A0A0]">${cashUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></span>
+                  <span>Cash <span className="text-[#A0A0A0]">{(() => { const v = `${cashUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}`; return showBalance ? v : v.replace(/\d/g, '*') })()}</span></span>
                   <span className="text-[#3a3a3a]">·</span>
-                  <span>Crypto <span className="text-[#A0A0A0]">${holdingsUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span></span>
+                  <span>Crypto <span className="text-[#A0A0A0]">{(() => { const v = `${holdingsUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}`; return showBalance ? v : v.replace(/\d/g, '*') })()}</span></span>
                 </p>
               </div>
               <div className="flex items-center gap-3">

@@ -6,6 +6,9 @@ import { idempotency } from '../idempotency.js';
 import { mapBalances, clampTransactionLimit, normalizeEmail, evaluateTransferGate, buildTransferKeyBase, transferBodySchema, } from './walletHelpers.js';
 import { notifyPeerTransfer } from '../services/transferNotifications.js';
 import walletUserExtrasRoutes from './wallet-user-extras.js';
+import walletLinksRoutes from './walletLinks.js';
+import walletAddressValidationRoutes from './wallet-address-validation.js';
+import walletVerificationRoutes from './wallet-verification.js';
 const router = Router();
 function getIdempotencyKey(req) {
     const raw = req.headers?.['idempotency-key'] ?? req.headers?.['Idempotency-Key'];
@@ -63,7 +66,7 @@ router.get('/', requireAuth, async (req, res) => {
     // (which only look at WalletBalance). Self-heal that drift here so the
     // asset always shows a single, correct, transferable balance.
     try {
-        const holdings = await withTimeout(prisma.holding.findMany({ where: { userId } }), 5_000, 'holdings_reconcile');
+        const holdings = (await withTimeout(prisma.holding.findMany({ where: { userId } }), 5_000, 'holdings_reconcile'));
         const byCurrency = new Map(balances.map((b) => [b.currency.toUpperCase(), b]));
         for (const h of holdings) {
             const currency = h.symbol.toUpperCase();
@@ -445,28 +448,6 @@ router.delete('/saved-wallet', requireAuth, async (req, res) => {
         res.status(500).json({ error: 'Failed to clear saved wallet' });
     }
 });
-router.get('/links', requireAuth, async (req, res) => {
-    const userId = req.userId;
-    try {
-        const links = await prisma.walletLink.findMany({
-            where: { userId },
-            orderBy: [{ isPrimary: 'desc' }, { linkedAt: 'desc' }],
-        });
-        res.json({ links });
-    }
-    catch (e) {
-        res.status(500).json({ error: e instanceof Error ? e.message : 'Failed' });
-    }
-});
-router.post('/link', requireAuth, async (req, res) => {
-    res.status(501).json({ error: 'Wallet link not available in this build' });
-});
-router.delete('/links/:id', requireAuth, async (req, res) => {
-    res.status(501).json({ error: 'Not implemented' });
-});
-router.post('/links/:id/primary', requireAuth, async (req, res) => {
-    res.status(501).json({ error: 'Not implemented' });
-});
 router.post('/convert', requireAuth, idempotency(), async (req, res) => {
     const userId = req.userId;
     const fromCurrency = String(req.body?.fromCurrency || '').toUpperCase();
@@ -557,5 +538,8 @@ router.post('/convert', requireAuth, idempotency(), async (req, res) => {
         res.status(e?.status || 500).json({ error: e?.message || 'Convert failed' });
     }
 });
+router.use(walletLinksRoutes);
+router.use(walletAddressValidationRoutes);
+router.use(walletVerificationRoutes);
 router.use(walletUserExtrasRoutes);
 export default router;
