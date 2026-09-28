@@ -3,8 +3,9 @@ import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
 import crypto from 'node:crypto'
 import rateLimit from 'express-rate-limit'
+import { z } from 'zod'
 import { prisma } from '../db.js'
-import { signToken, requireAuth, type AuthedRequest } from '../auth.js'
+import { signToken, verifyToken, requireAuth, type AuthedRequest } from '../auth.js'
 import { env } from '../env.js'
 import { getUserByEmail, getUserById, findUserByEmailOrUsername, updateUser } from '../services/userStore.js'
 import { emailService } from '../services/email.js'
@@ -22,6 +23,8 @@ import {
   loginSchema,
   forgotSchema,
   resetSchema,
+  verifySignupOtpSchema,
+  markEmailVerifiedAndNotifyAdmin,
 } from './authHelpers.js'
 import { registerSignupRoutes } from './authSignup.js'
 

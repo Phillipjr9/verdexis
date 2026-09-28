@@ -30,7 +30,10 @@ if (sqliteSchema) {
 }
 
 const spawnPrisma = (args) => {
-  const result = spawnSync('npx', ['prisma', ...args], { stdio: 'inherit', shell: true, env: envs })
+  const isWindows = process.platform === 'win32'
+  const result = isWindows
+    ? spawnSync('npx', ['prisma', ...args], { stdio: 'inherit', shell: true, env: envs })
+    : spawnSync('npx', ['prisma', ...args], { stdio: 'inherit', shell: false, env: envs })
   if (result.status !== 0) {
     console.warn('[generate-prisma-client] prisma command failed with status', result.status, ' — continuing for local dev')
     return false
