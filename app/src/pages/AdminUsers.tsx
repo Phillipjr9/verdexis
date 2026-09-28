@@ -149,6 +149,24 @@ export default function AdminUsers() {
           </div>
         </div>
 
+        <div className="mb-6 rounded-2xl border border-[#0C8B44]/30 bg-[#0C8B44]/10 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#0C8B44]/20 flex items-center justify-center shrink-0">
+              <Mail className="w-5 h-5 text-[#0C8B44]" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-[#E5E5E5]">Bulk Email & Account Invitations</p>
+              <p className="text-xs text-[#737373]">Send single or bulk invitation emails with auto-generated credentials, CSV import, and starting balances.</p>
+            </div>
+          </div>
+          <Link
+            to="/admin/invites"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#0C8B44] px-4 py-2 text-xs font-medium text-white hover:bg-[#0a7539] transition-colors shrink-0"
+          >
+            Open Bulk Invites →
+          </Link>
+        </div>
+
         <form onSubmit={onSearch} className="flex flex-wrap gap-3 mb-4">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#737373]" />
