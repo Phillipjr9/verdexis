@@ -340,6 +340,34 @@ app.get('/api/health', async (_req, res) => {
   })
 })
 
+// Reports the exact code the running instance was built from, so a stale deploy
+// (e.g. an old build still serving /api) can be spotted immediately. Render,
+// Vercel and most CI systems inject the commit SHA/branch as env vars at build.
+app.get('/api/version', (_req, res) => {
+  const commit =
+    process.env.RENDER_GIT_COMMIT ||
+    process.env.VERCEL_GIT_COMMIT_SHA ||
+    process.env.GIT_COMMIT_SHA ||
+    process.env.SOURCE_VERSION ||
+    process.env.COMMIT_SHA ||
+    'unknown'
+  const branch =
+    process.env.RENDER_GIT_BRANCH ||
+    process.env.VERCEL_GIT_COMMIT_REF ||
+    process.env.GIT_BRANCH ||
+    'unknown'
+  res.json({
+    ok: true,
+    service: 'verdexis-api',
+    commit,
+    commitShort: commit === 'unknown' ? 'unknown' : commit.slice(0, 8),
+    branch,
+    buildTime: process.env.BUILD_TIME || null,
+    bootTime: new Date(SERVER_BOOT_TIME).toISOString(),
+    nodeEnv: process.env.NODE_ENV || 'development',
+  })
+})
+
 app.get('/api/health/email', async (_req, res) => {
   try {
     const { resolveEmailTransportConfig } = await import('./notificationService.js')
