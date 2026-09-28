@@ -65,20 +65,46 @@ type HistoryItem = {
 
 const SUPPORTED_CURRENCIES = ['USD', 'EUR', 'GBP', 'USDT', 'BTC', 'ETH', 'SOL']
 
+// Mirrors server-side caps in server/src/routes/admin-invites.ts (inviteSchema).
+// Enforced client-side so a "Too long" value can never reach the server and
+// come back as an opaque "Invalid input" 400.
+const FIELD_LIMITS = {
+  subject: 200,
+  message: 2000,
+  note: 1000,
+  maxAmount: 1_000_000_000,
+} as const
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+// Matches an email embedded inside a larger token, e.g. `Jane Doe <jane@x.com>,`
+const LOOSE_EMAIL_RE = /[^\s@<>()[\]"',;]+@[^\s@<>()[\]"',;]+\.[^\s@<>()[\]"',;]+/
 
 function parseEmailsCount(text: string): string[] {
-  const lines = text.split(/[\r\n,;]+/)
   const unique = new Set<string>()
-  for (const l of lines) {
-    const trimmed = l.trim().toLowerCase()
-    // If line is "email, name", get the email part
-    const emailCandidate = trimmed.split(/[\s,]+/)[0]
-    if (emailCandidate && EMAIL_RE.test(emailCandidate)) {
-      unique.add(emailCandidate)
+  for (const line of text.split(/[\r\n]+/)) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    for (const token of trimmed.split(/[,;\s]+/)) {
+      const m = token.match(LOOSE_EMAIL_RE)
+      const candidate = (m?.[0] ?? '').toLowerCase()
+      if (candidate && EMAIL_RE.test(candidate)) {
+        unique.add(candidate)
+      }
     }
   }
   return Array.from(unique)
+}
+
+/** Prefer the server's field-level validation message over a generic failure string. */
+function formatApiError(err: unknown, fallback: string): string {
+  const e = err as { error?: string; message?: string; details?: { fieldErrors?: Record<string, string[]> } }
+  const fieldErrors = e?.details?.fieldErrors
+  if (fieldErrors) {
+    for (const [field, messages] of Object.entries(fieldErrors)) {
+      if (Array.isArray(messages) && messages.length) return `${field}: ${messages[0]}`
+    }
+  }
+  return e?.error || e?.message || fallback
 }
 
 function formatMoney(n: number, currency = 'USD') {
@@ -119,8 +145,10 @@ export default function AdminInvites() {
   const [searchQuery, setSearchQuery] = useState('')
 
   // Preview state
-  const [previewData, setPreviewData] = useState<{ subject: string; html: string } | null>(null)
+  const [previewData, setPreviewData] = useState<{ subject: string; html: string; autoMessage: string | null } | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+  // Which compose form the preview reflects (opened from Single vs Bulk tab)
+  const [previewSource, setPreviewSource] = useState<'single' | 'bulk'>('single')
 
   // History state
   const [history, setHistory] = useState<HistoryItem[]>([])
@@ -137,25 +165,33 @@ export default function AdminInvites() {
     }
   }, [tab])
 
+  function openPreview(source?: 'single' | 'bulk') {
+    setPreviewSource(source ?? (tab === 'bulk' ? 'bulk' : 'single'))
+    setTab('preview')
+  }
+
   async function loadPreview() {
     setPreviewLoading(true)
     try {
-      const isSingle = tab === 'single' || tab === 'preview'
+      const isSingle = previewSource === 'single'
       const amount = Number(isSingle ? singleAmount : bulkAmount) || 1000
       const currency = isSingle ? singleCurrency : bulkCurrency
       const subject = isSingle ? singleSubject : bulkSubject
       const customMessage = isSingle ? singleMessage : bulkMessage
       const note = isSingle ? singleNote : bulkNote
+      const previewEmail = isSingle
+        ? singleEmail.trim() || 'investor@example.com'
+        : detectedBulkEmails[0] || 'investor@example.com'
 
       const res = await adminApi.previewInvite({
-        emails: singleEmail.trim() || 'investor@example.com',
+        emails: previewEmail,
         amount,
         currency,
         subject: subject.trim() || undefined,
         customMessage: customMessage.trim() || undefined,
         note: note.trim() || undefined,
       })
-      setPreviewData({ subject: res.subject, html: res.html })
+      setPreviewData({ subject: res.subject, html: res.html, autoMessage: res.autoMessage ?? null })
     } catch (err) {
       console.warn('Preview failed', err)
     } finally {
@@ -207,6 +243,22 @@ export default function AdminInvites() {
       toast.error('Enter a valid amount (0 or higher)')
       return
     }
+    if (amt > FIELD_LIMITS.maxAmount) {
+      toast.error(`Credit amount cannot exceed ${FIELD_LIMITS.maxAmount.toLocaleString('en-US')}`)
+      return
+    }
+    if (singleSubject.trim().length > FIELD_LIMITS.subject) {
+      toast.error(`Subject line is limited to ${FIELD_LIMITS.subject} characters`)
+      return
+    }
+    if (singleMessage.trim().length > FIELD_LIMITS.message) {
+      toast.error(`Welcome message is limited to ${FIELD_LIMITS.message.toLocaleString('en-US')} characters`)
+      return
+    }
+    if (singleNote.trim().length > FIELD_LIMITS.note) {
+      toast.error(`Admin note is limited to ${FIELD_LIMITS.note.toLocaleString('en-US')} characters`)
+      return
+    }
 
     setBusy(true)
     setLast(null)
@@ -234,7 +286,7 @@ export default function AdminInvites() {
       setSingleEmail('')
       setSingleName('')
     } catch (err: any) {
-      toast.error(err.error || err.message || 'Invitation failed')
+      toast.error(formatApiError(err, 'Invitation failed'))
     } finally {
       setBusy(false)
     }
@@ -255,6 +307,18 @@ export default function AdminInvites() {
     const amt = Number(bulkAmount)
     if (isNaN(amt) || amt < 0) {
       toast.error('Enter a valid credit amount per invitee')
+      return
+    }
+    if (amt > FIELD_LIMITS.maxAmount) {
+      toast.error(`Credit amount cannot exceed ${FIELD_LIMITS.maxAmount.toLocaleString('en-US')}`)
+      return
+    }
+    if (bulkMessage.trim().length > FIELD_LIMITS.message) {
+      toast.error(`Campaign message is limited to ${FIELD_LIMITS.message.toLocaleString('en-US')} characters`)
+      return
+    }
+    if (bulkNote.trim().length > FIELD_LIMITS.note) {
+      toast.error(`Campaign note is limited to ${FIELD_LIMITS.note.toLocaleString('en-US')} characters`)
       return
     }
 
@@ -278,7 +342,7 @@ export default function AdminInvites() {
       )
       setBulkEmails('')
     } catch (err: any) {
-      toast.error(err.error || err.message || 'Bulk invitation failed')
+      toast.error(formatApiError(err, 'Bulk invitation failed'))
     } finally {
       setBusy(false)
     }
@@ -347,7 +411,7 @@ export default function AdminInvites() {
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => { setTab('preview'); loadPreview() }}
+              onClick={() => openPreview()}
               className="px-3.5 py-2 rounded-xl bg-[#0f1619] border border-[#ffffff15] hover:border-[#0C8B44]/40 text-xs text-[#E5E5E5] flex items-center gap-2 transition-colors"
             >
               <Eye className="w-4 h-4 text-[#00E676]" /> Live Email Preview
@@ -386,7 +450,7 @@ export default function AdminInvites() {
           </button>
           <button
             type="button"
-            onClick={() => setTab('preview')}
+            onClick={() => openPreview()}
             className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-all whitespace-nowrap ${
               tab === 'preview'
                 ? 'border-[#0C8B44] text-[#00E676] bg-[#0C8B44]/10 rounded-t-lg'
@@ -483,29 +547,45 @@ export default function AdminInvites() {
             )}
 
             <div>
-              <label className="text-xs uppercase tracking-wider text-[#A0A0A0] block mb-2">
-                Custom Subject Line (Optional)
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs uppercase tracking-wider text-[#A0A0A0]">
+                  Custom Subject Line (Optional)
+                </label>
+                <span className={`text-[10px] ${singleSubject.length >= FIELD_LIMITS.subject ? 'text-[#f44336]' : 'text-[#525252]'}`}>
+                  {singleSubject.length}/{FIELD_LIMITS.subject}
+                </span>
+              </div>
               <input
                 type="text"
                 value={singleSubject}
                 onChange={(e) => setSingleSubject(e.target.value)}
+                maxLength={FIELD_LIMITS.subject}
                 placeholder={`You're invited to Verdexis — ${formatMoney(Number(singleAmount) || 0, singleCurrency)} credited`}
                 className="w-full rounded-xl bg-[#070C0E] border border-[#ffffff15] px-4 py-3 text-sm text-[#E5E5E5] outline-none focus:border-[#0C8B44] transition-colors"
               />
             </div>
 
             <div>
-              <label className="text-xs uppercase tracking-wider text-[#A0A0A0] block mb-2">
-                Personal Welcome Message (Included in Email)
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs uppercase tracking-wider text-[#A0A0A0]">
+                  Personal Welcome Message (Included in Email)
+                </label>
+                <span className={`text-[10px] ${singleMessage.length >= FIELD_LIMITS.message ? 'text-[#f44336]' : 'text-[#525252]'}`}>
+                  {singleMessage.length}/{FIELD_LIMITS.message.toLocaleString('en-US')}
+                </span>
+              </div>
               <textarea
                 value={singleMessage}
                 onChange={(e) => setSingleMessage(e.target.value)}
                 rows={3}
-                placeholder="We are thrilled to welcome you as a private client to our investment platform..."
+                maxLength={FIELD_LIMITS.message}
+                placeholder="Leave blank — a complete personalized welcome message is generated automatically…"
                 className="w-full rounded-xl bg-[#070C0E] border border-[#ffffff15] px-4 py-3 text-sm text-[#E5E5E5] outline-none focus:border-[#0C8B44] transition-colors"
               />
+              <p className="text-[11px] text-[#737373] mt-1.5 flex items-center gap-1.5">
+                <Sparkles className="w-3 h-3 text-[#00E676] flex-shrink-0" />
+                Optional. When left blank, each recipient automatically receives a complete message covering their invitation, credited balance, and sign-in steps.
+              </p>
             </div>
 
             <div>
@@ -516,6 +596,7 @@ export default function AdminInvites() {
                 type="text"
                 value={singleNote}
                 onChange={(e) => setSingleNote(e.target.value)}
+                maxLength={FIELD_LIMITS.note}
                 placeholder="Q1 Executive onboarding batch"
                 className="w-full rounded-xl bg-[#070C0E] border border-[#ffffff15] px-4 py-3 text-sm text-[#E5E5E5] outline-none focus:border-[#0C8B44] transition-colors"
               />
@@ -552,7 +633,7 @@ export default function AdminInvites() {
 
               <button
                 type="button"
-                onClick={() => { setTab('preview'); loadPreview() }}
+                onClick={() => openPreview('single')}
                 className="px-5 py-3.5 rounded-xl bg-[#070C0E] border border-[#ffffff15] hover:border-[#ffffff30] text-sm text-[#E5E5E5] transition-colors"
               >
                 Preview Email
@@ -626,16 +707,26 @@ export default function AdminInvites() {
             </div>
 
             <div>
-              <label className="text-xs uppercase tracking-wider text-[#A0A0A0] block mb-2">
-                Campaign / Welcome Message (Optional)
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs uppercase tracking-wider text-[#A0A0A0]">
+                  Campaign / Welcome Message (Optional)
+                </label>
+                <span className={`text-[10px] ${bulkMessage.length >= FIELD_LIMITS.message ? 'text-[#f44336]' : 'text-[#525252]'}`}>
+                  {bulkMessage.length}/{FIELD_LIMITS.message.toLocaleString('en-US')}
+                </span>
+              </div>
               <textarea
                 value={bulkMessage}
                 onChange={(e) => setBulkMessage(e.target.value)}
                 rows={2}
-                placeholder="Welcome to the Verdexis institutional onboarding campaign..."
+                maxLength={FIELD_LIMITS.message}
+                placeholder="Leave blank — a complete personalized welcome message is generated automatically…"
                 className="w-full rounded-xl bg-[#070C0E] border border-[#ffffff15] px-4 py-3 text-sm text-[#E5E5E5] outline-none focus:border-[#0C8B44] transition-colors"
               />
+              <p className="text-[11px] text-[#737373] mt-1.5 flex items-center gap-1.5">
+                <Sparkles className="w-3 h-3 text-[#00E676] flex-shrink-0" />
+                Optional. When left blank, every recipient in the batch automatically receives a complete personalized welcome message.
+              </p>
             </div>
 
             <div>
@@ -646,6 +737,7 @@ export default function AdminInvites() {
                 type="text"
                 value={bulkNote}
                 onChange={(e) => setBulkNote(e.target.value)}
+                maxLength={FIELD_LIMITS.note}
                 placeholder="Institutional Partners Q1"
                 className="w-full rounded-xl bg-[#070C0E] border border-[#ffffff15] px-4 py-3 text-sm text-[#E5E5E5] outline-none focus:border-[#0C8B44] transition-colors"
               />
@@ -682,7 +774,7 @@ export default function AdminInvites() {
 
               <button
                 type="button"
-                onClick={() => { setTab('preview'); loadPreview() }}
+                onClick={() => openPreview('bulk')}
                 className="px-5 py-3.5 rounded-xl bg-[#070C0E] border border-[#ffffff15] hover:border-[#ffffff30] text-sm text-[#E5E5E5] transition-colors"
               >
                 Preview Email
@@ -719,6 +811,15 @@ export default function AdminInvites() {
                   <span className="text-[#737373]">Subject line: </span>
                   <span className="font-semibold text-[#FFFFFF]">{previewData.subject}</span>
                 </div>
+
+                {previewData.autoMessage && (
+                  <div className="p-3.5 rounded-xl bg-[#0C8B44]/5 border border-[#0C8B44]/25 text-xs">
+                    <span className="text-[#00E676] font-medium flex items-center gap-1.5 mb-1.5">
+                      <Sparkles className="w-3.5 h-3.5" /> Auto message (sent when the message field is left blank)
+                    </span>
+                    <p className="text-[#A0A0A0] whitespace-pre-wrap leading-relaxed">{previewData.autoMessage}</p>
+                  </div>
+                )}
 
                 <div className="rounded-xl border border-[#ffffff15] bg-[#070C0E] p-4 overflow-hidden">
                   <iframe
