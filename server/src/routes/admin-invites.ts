@@ -156,6 +156,44 @@ function generateSecureTempPassword(): string {
   return `${bytes}!9A`
 }
 
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+/**
+ * Fully composed welcome message used when the admin leaves the message field
+ * blank — covers the invitation, any credited balance, and sign-in steps so an
+ * invite can be dispatched with zero typing. The greeting and sign-off are
+ * excluded (they are rendered separately per channel).
+ */
+export function buildAutoInviteParagraphs(opts: {
+  hasCredit: boolean
+  amountLabel: string
+  hasTempPassword: boolean
+  companyName: string
+}): string[] {
+  const { hasCredit, amountLabel, hasTempPassword, companyName } = opts
+  const paragraphs = [
+    `You have been personally invited to join ${companyName} — institutional-grade portfolio management and trading. Your account has already been created for you, so there is nothing extra to set up.`,
+  ]
+  if (hasCredit) {
+    paragraphs.push(
+      `To get you started, your new wallet has been credited with ${amountLabel}. The balance is available the moment you sign in — no waiting period and no extra steps required.`,
+    )
+  }
+  paragraphs.push(
+    hasTempPassword
+      ? 'Getting started takes less than a minute: sign in with your email and the temporary password shown below, then update your password from your security settings. If you ever need a hand, simply reply to this email — our team is happy to help.'
+      : 'Getting started takes less than a minute: sign in with your existing credentials and head to your dashboard to explore the platform. If you ever need a hand, simply reply to this email — our team is happy to help.',
+  )
+  return paragraphs
+}
+
+/** Branded closing line shown at the very end of every invite (after credentials/notes). */
+export function buildAutoInviteSignOff(companyName: string): string {
+  return `Welcome aboard,\nThe ${companyName} Team`
+}
+
 function buildInviteEmailHtml(opts: {
   recipientName: string
   recipientEmail: string
@@ -181,6 +219,20 @@ function buildInviteEmailHtml(opts: {
 
   const hasCredit = amount > 0
   const companyName = companyInfo.name || 'Verdexis'
+  const autoParagraphs = buildAutoInviteParagraphs({
+    hasCredit,
+    amountLabel,
+    hasTempPassword: Boolean(plainPassword),
+    companyName,
+  })
+  const messageBlock = customMessage?.trim()
+    ? `<div class="custom-msg">${escapeHtml(customMessage.trim()).replace(/\n/g, '<br/>')}</div>`
+    : autoParagraphs
+        .map(
+          (p) =>
+            `<p style="font-size: 14px; color: #A0A0A0; line-height: 1.6; margin: 0 0 16px;">${escapeHtml(p).replace(/\n/g, '<br/>')}</p>`,
+        )
+        .join('\n      ')
 
   return `
 <!DOCTYPE html>
@@ -224,12 +276,9 @@ function buildInviteEmailHtml(opts: {
     </div>
 
     <div class="content">
-      <p class="greeting">Hello ${recipientName || 'there'},</p>
-      
-      ${customMessage ? `<div class="custom-msg">${customMessage.replace(/</g, '&lt;')}</div>` : `
-      <p style="font-size: 14px; color: #A0A0A0; line-height: 1.6; margin: 0 0 16px;">
-        You have been exclusively invited by an administrator to join <strong>${companyName}</strong>.
-      </p>`}
+      <p class="greeting">Hello ${escapeHtml(recipientName || 'there')},</p>
+
+      ${messageBlock}
 
       ${hasCredit ? `
       <div class="credit-box">
@@ -264,8 +313,12 @@ function buildInviteEmailHtml(opts: {
 
       ${note?.trim() ? `
       <div style="font-size: 12px; color: #737373; border-top: 1px solid #ffffff0a; padding-top: 14px; margin-top: 14px;">
-        <strong>Admin Note:</strong> ${note.trim().replace(/</g, '&lt;')}
+        <strong>Admin Note:</strong> ${escapeHtml(note.trim())}
       </div>` : ''}
+
+      <p style="font-size: 14px; color: #A0A0A0; line-height: 1.6; margin: 20px 0 0;">
+        ${escapeHtml(buildAutoInviteSignOff(companyName)).replace(/\n/g, '<br/>')}
+      </p>
     </div>
 
     <div class="footer">
@@ -354,6 +407,19 @@ router.post('/invites/preview', requireAuth, requireAdmin, async (req: AuthedReq
   const subject = parsed.success && parsed.data.subject ? parsed.data.subject : defaultSubject
   const loginUrl = `${appUrl}/login`
 
+  const companyName = companyInfo.name || 'Verdexis'
+  const autoMessage = customMessage?.trim()
+    ? null
+    : [
+        ...buildAutoInviteParagraphs({
+          hasCredit: amount > 0,
+          amountLabel,
+          hasTempPassword: true,
+          companyName,
+        }),
+        buildAutoInviteSignOff(companyName),
+      ].join('\n\n')
+
   const html = buildInviteEmailHtml({
     recipientName: sampleName,
     recipientEmail: sampleEmail,
@@ -370,6 +436,9 @@ router.post('/invites/preview', requireAuth, requireAdmin, async (req: AuthedReq
     ok: true,
     subject,
     html,
+    // Complete auto-generated welcome message shown to invitees when no custom
+    // message is provided (null when a custom message is set).
+    autoMessage,
     sample: {
       email: sampleEmail,
       name: sampleName,
@@ -589,36 +658,32 @@ router.post('/invites', requireAuth, requireAdmin, async (req: AuthedRequest, re
           ? `You're invited to Verdexis — ${amountLabel} credited`
           : `You're invited to join Verdexis`
 
-      const plainTextLines = [
-        `Hello${user.name ? ` ${user.name}` : ''},`,
-        '',
-        `You have been invited to Verdexis.`,
-      ]
-      if (userAmount > 0) {
-        plainTextLines.push(`Your account balance has been credited with ${amountLabel}.`)
-        plainTextLines.push(`You can log in and see this amount in your wallet immediately.`)
+      const plainTextLines = [`Hello${user.name ? ` ${user.name}` : ''},`, '']
+      if (customMessage?.trim()) {
+        plainTextLines.push(customMessage.trim(), '')
+      } else {
+        // Complete auto welcome message when the admin leaves the field blank.
+        const companyName = companyInfo.name || 'Verdexis'
+        for (const paragraph of buildAutoInviteParagraphs({
+          hasCredit: userAmount > 0,
+          amountLabel,
+          hasTempPassword: Boolean(plainPassword),
+          companyName,
+        })) {
+          plainTextLines.push(paragraph, '')
+        }
       }
-      plainTextLines.push('')
       plainTextLines.push(`Login: ${loginUrl}`)
       plainTextLines.push(`Email: ${email}`)
       if (plainPassword) {
         plainTextLines.push(`Temporary password: ${plainPassword}`)
-        plainTextLines.push('')
-        plainTextLines.push('Please sign in and update your password.')
-      } else {
-        plainTextLines.push('')
-        plainTextLines.push('Sign in using your existing account credentials.')
-      }
-      if (customMessage?.trim()) {
-        plainTextLines.push('')
-        plainTextLines.push(customMessage.trim())
       }
       if (note?.trim()) {
         plainTextLines.push('')
         plainTextLines.push(`Note: ${note.trim()}`)
       }
       plainTextLines.push('')
-      plainTextLines.push('— Verdexis Team')
+      plainTextLines.push(buildAutoInviteSignOff(companyInfo.name || 'Verdexis'))
 
       const body = plainTextLines.join('\n')
       const html = buildInviteEmailHtml({

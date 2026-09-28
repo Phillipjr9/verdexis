@@ -551,6 +551,7 @@ export const adminApi = {
     ok: boolean
     subject: string
     html: string
+    autoMessage: string | null
     sample: {
       email: string
       name: string

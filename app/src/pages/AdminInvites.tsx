@@ -135,8 +135,10 @@ export default function AdminInvites() {
   const [searchQuery, setSearchQuery] = useState('')
 
   // Preview state
-  const [previewData, setPreviewData] = useState<{ subject: string; html: string } | null>(null)
+  const [previewData, setPreviewData] = useState<{ subject: string; html: string; autoMessage: string | null } | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+  // Which compose form the preview reflects (opened from Single vs Bulk tab)
+  const [previewSource, setPreviewSource] = useState<'single' | 'bulk'>('single')
 
   // History state
   const [history, setHistory] = useState<HistoryItem[]>([])
@@ -153,25 +155,33 @@ export default function AdminInvites() {
     }
   }, [tab])
 
+  function openPreview(source?: 'single' | 'bulk') {
+    setPreviewSource(source ?? (tab === 'bulk' ? 'bulk' : 'single'))
+    setTab('preview')
+  }
+
   async function loadPreview() {
     setPreviewLoading(true)
     try {
-      const isSingle = tab === 'single' || tab === 'preview'
+      const isSingle = previewSource === 'single'
       const amount = Number(isSingle ? singleAmount : bulkAmount) || 1000
       const currency = isSingle ? singleCurrency : bulkCurrency
       const subject = isSingle ? singleSubject : bulkSubject
       const customMessage = isSingle ? singleMessage : bulkMessage
       const note = isSingle ? singleNote : bulkNote
+      const previewEmail = isSingle
+        ? singleEmail.trim() || 'investor@example.com'
+        : detectedBulkEmails[0] || 'investor@example.com'
 
       const res = await adminApi.previewInvite({
-        emails: singleEmail.trim() || 'investor@example.com',
+        emails: previewEmail,
         amount,
         currency,
         subject: subject.trim() || undefined,
         customMessage: customMessage.trim() || undefined,
         note: note.trim() || undefined,
       })
-      setPreviewData({ subject: res.subject, html: res.html })
+      setPreviewData({ subject: res.subject, html: res.html, autoMessage: res.autoMessage ?? null })
     } catch (err) {
       console.warn('Preview failed', err)
     } finally {
@@ -363,7 +373,7 @@ export default function AdminInvites() {
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => { setTab('preview'); loadPreview() }}
+              onClick={() => openPreview()}
               className="px-3.5 py-2 rounded-xl bg-[#0f1619] border border-[#ffffff15] hover:border-[#0C8B44]/40 text-xs text-[#E5E5E5] flex items-center gap-2 transition-colors"
             >
               <Eye className="w-4 h-4 text-[#00E676]" /> Live Email Preview
@@ -402,7 +412,7 @@ export default function AdminInvites() {
           </button>
           <button
             type="button"
-            onClick={() => setTab('preview')}
+            onClick={() => openPreview()}
             className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-all whitespace-nowrap ${
               tab === 'preview'
                 ? 'border-[#0C8B44] text-[#00E676] bg-[#0C8B44]/10 rounded-t-lg'
@@ -519,9 +529,13 @@ export default function AdminInvites() {
                 value={singleMessage}
                 onChange={(e) => setSingleMessage(e.target.value)}
                 rows={3}
-                placeholder="We are thrilled to welcome you as a private client to our investment platform..."
+                placeholder="Leave blank — a complete personalized welcome message is generated automatically…"
                 className="w-full rounded-xl bg-[#070C0E] border border-[#ffffff15] px-4 py-3 text-sm text-[#E5E5E5] outline-none focus:border-[#0C8B44] transition-colors"
               />
+              <p className="text-[11px] text-[#737373] mt-1.5 flex items-center gap-1.5">
+                <Sparkles className="w-3 h-3 text-[#00E676] flex-shrink-0" />
+                Optional. When left blank, each recipient automatically receives a complete message covering their invitation, credited balance, and sign-in steps.
+              </p>
             </div>
 
             <div>
@@ -568,7 +582,7 @@ export default function AdminInvites() {
 
               <button
                 type="button"
-                onClick={() => { setTab('preview'); loadPreview() }}
+                onClick={() => openPreview('single')}
                 className="px-5 py-3.5 rounded-xl bg-[#070C0E] border border-[#ffffff15] hover:border-[#ffffff30] text-sm text-[#E5E5E5] transition-colors"
               >
                 Preview Email
@@ -649,9 +663,13 @@ export default function AdminInvites() {
                 value={bulkMessage}
                 onChange={(e) => setBulkMessage(e.target.value)}
                 rows={2}
-                placeholder="Welcome to the Verdexis institutional onboarding campaign..."
+                placeholder="Leave blank — a complete personalized welcome message is generated automatically…"
                 className="w-full rounded-xl bg-[#070C0E] border border-[#ffffff15] px-4 py-3 text-sm text-[#E5E5E5] outline-none focus:border-[#0C8B44] transition-colors"
               />
+              <p className="text-[11px] text-[#737373] mt-1.5 flex items-center gap-1.5">
+                <Sparkles className="w-3 h-3 text-[#00E676] flex-shrink-0" />
+                Optional. When left blank, every recipient in the batch automatically receives a complete personalized welcome message.
+              </p>
             </div>
 
             <div>
@@ -698,7 +716,7 @@ export default function AdminInvites() {
 
               <button
                 type="button"
-                onClick={() => { setTab('preview'); loadPreview() }}
+                onClick={() => openPreview('bulk')}
                 className="px-5 py-3.5 rounded-xl bg-[#070C0E] border border-[#ffffff15] hover:border-[#ffffff30] text-sm text-[#E5E5E5] transition-colors"
               >
                 Preview Email
@@ -735,6 +753,15 @@ export default function AdminInvites() {
                   <span className="text-[#737373]">Subject line: </span>
                   <span className="font-semibold text-[#FFFFFF]">{previewData.subject}</span>
                 </div>
+
+                {previewData.autoMessage && (
+                  <div className="p-3.5 rounded-xl bg-[#0C8B44]/5 border border-[#0C8B44]/25 text-xs">
+                    <span className="text-[#00E676] font-medium flex items-center gap-1.5 mb-1.5">
+                      <Sparkles className="w-3.5 h-3.5" /> Auto message (sent when the message field is left blank)
+                    </span>
+                    <p className="text-[#A0A0A0] whitespace-pre-wrap leading-relaxed">{previewData.autoMessage}</p>
+                  </div>
+                )}
 
                 <div className="rounded-xl border border-[#ffffff15] bg-[#070C0E] p-4 overflow-hidden">
                   <iframe
