@@ -1507,3 +1507,23 @@ model TwoFactorRecoveryCode {
 
   @@index([userId])
 }
+
+// Magic link invites
+model InviteToken {
+  id             String    @id @default(cuid())
+  email          String
+  token          String    @unique
+  amount         Float     @default(0)
+  currency       String    @default("USD")
+  isReferral     Boolean   @default(false)
+  createdBy      String    // Admin ID who sent the invite
+  usedAt         DateTime?
+  expiresAt      DateTime
+  createdAt      DateTime  @default(now())
+
+  @@unique([email, token])
+  @@index([email])
+  @@index([token])
+  @@index([expiresAt])
+  @@index([usedAt])
+}

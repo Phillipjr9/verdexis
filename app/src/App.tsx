@@ -109,6 +109,7 @@ const LinkedWallets = withLazyErrorBoundary(() => import('./pages/LinkedWallets'
 const Limits = withLazyErrorBoundary(() => import('./pages/Limits'), 'Limits')
 const WalletVerification = withLazyErrorBoundary(() => import('./pages/WalletVerification'), 'Wallet Verification')
 const Login = withLazyErrorBoundary(() => import('./pages/Login'), 'Login')
+const InviteSignup = withLazyErrorBoundary(() => import('./pages/InviteSignup'), 'Invite Signup')
 const PublicInformation = withLazyErrorBoundary(() => import('./pages/PublicInformation'), 'Public information')
 
 export default function App() {
@@ -169,6 +170,7 @@ function RoutedPages() {
       <Routes location={location}>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/invite/:token" element={<InviteSignup />} />
           <Route path="/signup" element={<Login />} />
           <Route path="/auth/login" element={<Login />} />
           <Route path="/auth/register" element={<Login />} />

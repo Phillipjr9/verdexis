@@ -67,6 +67,7 @@ import advancedNotificationsRoutes from './routes/advanced-notifications.js'
 import adminWithdrawalConfigRoutes from './routes/admin-withdrawal-config.js'
 import feeProofsRoutes from './routes/feeProofs.js'
 import walletTransactionsRoutes from './routes/walletTransactions.js'
+import inviteRoutes from './routes/invite.js'
 
 const app = express()
 app.set('etag', false)
@@ -434,6 +435,7 @@ app.use('/api/analytics', advancedAnalyticsRoutes)
 app.use('/api/tax', advancedTaxRoutes)
 app.use('/api/compliance', advancedComplianceRoutes)
 app.use('/api/notifications/advanced', advancedNotificationsRoutes)
+app.use('/api', inviteRoutes)
 
 app.post('/api/admin/cache/clear', async (req, res) => {
   const token = req.headers.authorization?.replace('Bearer ', '')
