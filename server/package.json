@@ -36,7 +36,7 @@
     "@solana/web3.js": "^1.98.4",
     "@supabase/supabase-js": "^2.43.0",
     "@types/aws-sdk": "^0.0.42",
-    "@types/nodemailer": "^8.0.1",
+    "@types/nodemailer": "^8.0.2",
     "aws-sdk": "^1.18.0",
     "aws-serverless-express": "^3.4.0",
     "axios": "^1.18.1",
@@ -56,7 +56,7 @@
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
     "multer": "^2.2.0",
-    "nodemailer": "^9.0.1",
+    "nodemailer": "^9.1.1",
     "twilio": "^6.0.2",
     "ws": "^8.21.0",
     "zod": "^3.23.8"
