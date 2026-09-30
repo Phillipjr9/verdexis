@@ -56,6 +56,7 @@ const Disclosures = withLazyErrorBoundary(() => import('./pages/Disclosures'), '
 const Help = withLazyErrorBoundary(() => import('./pages/Help'), 'Help')
 const AssetDetail = withLazyErrorBoundary(() => import('./pages/AssetDetail'), 'Asset Detail')
 const Activity = withLazyErrorBoundary(() => import('./pages/Activity'), 'Activity')
+const AdminDashboardUnified = withLazyErrorBoundary(() => import('./pages/AdminDashboardUnified'), 'Admin Dashboard')
 const AdminDashboard = withLazyErrorBoundary(() => import('./pages/AdminDashboard'), 'Admin Dashboard')
 const AdminDeposits = withLazyErrorBoundary(() => import('./pages/AdminDeposits'), 'Admin Deposits')
 const AdminUsers = withLazyErrorBoundary(() => import('./pages/AdminUsers'), 'Admin Users')
@@ -209,7 +210,7 @@ function RoutedPages() {
           <Route path="/help" element={<Help />} />
           <Route path="/asset/:id" element={<AssetDetail />} />
           <Route path="/coin/:id" element={<AssetDetail />} />
-          <Route path="/admin" element={<RequireAdmin><AdminDashboard /></RequireAdmin>} />
+          <Route path="/admin" element={<RequireAdmin><AdminDashboardUnified /></RequireAdmin>} />
           <Route path="/admin/users" element={<RequireAdmin><AdminUsers /></RequireAdmin>} />
           <Route path="/admin/users/new" element={<RequireAdmin><AdminUserCreate /></RequireAdmin>} />
           <Route path="/admin/users/:id" element={<RequireAdmin><AdminUserDetail /></RequireAdmin>} />
