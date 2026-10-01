@@ -90,3 +90,5 @@ export function AdminInvitesContent() {
     </div>
   )
 }
+
+export default AdminInvitesContent

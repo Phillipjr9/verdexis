@@ -130,3 +130,5 @@ export function AdminSettingsContent() {
     </div>
   )
 }
+
+export default AdminSettingsContent

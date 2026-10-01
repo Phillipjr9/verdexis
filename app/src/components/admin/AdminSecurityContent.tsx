@@ -90,3 +90,5 @@ export function AdminSecurityContent() {
     </div>
   )
 }
+
+export default AdminSecurityContent

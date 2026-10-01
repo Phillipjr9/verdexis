@@ -111,3 +111,5 @@ export function AdminFinancialContent() {
     </div>
   )
 }
+
+export default AdminFinancialContent

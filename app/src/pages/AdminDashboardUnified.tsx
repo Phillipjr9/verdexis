@@ -116,3 +116,5 @@ export function AdminDashboardUnified() {
     </div>
   )
 }
+
+export default AdminDashboardUnified

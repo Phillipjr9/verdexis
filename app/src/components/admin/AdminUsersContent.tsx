@@ -94,3 +94,5 @@ export function AdminUsersContent() {
     </div>
   )
 }
+
+export default AdminUsersContent
